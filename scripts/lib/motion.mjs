@@ -307,8 +307,8 @@ export function buildScene(b, id, t0, t1, ctx) {
       // the speaker plate shrinks into a round window, above the type
       const fx = 540, fy = ctx.faceY ?? 700, R = 560, sc = 0.34, tx = b.pipX ?? 820, ty = b.pipY ?? 1330;
       tl.push(`tl.set("#pip", { zIndex: 7 }, ${t0});`);
-      tl.push(`ft("#pip", { x: 0, y: 0, scale: 1, clipPath: "circle(1400px at ${fx}px ${fy}px)" }, { x: ${tx - fx}, y: ${ty - fy}, scale: ${sc}, clipPath: "circle(${R}px at ${fx}px ${fy}px)", duration: 0.5, ease: "power3.inOut" }, ${t0});`);
-      tl.push(`tl.to("#pip", { x: 0, y: 0, scale: 1, clipPath: "circle(1400px at ${fx}px ${fy}px)", duration: 0.45, ease: "power3.inOut" }, ${r3(t1 - 0.45)});`);
+      tl.push(`ft("#pip", { x: 0, y: 0, scale: 1, clipPath: "circle(2400px at ${fx}px ${fy}px)" }, { x: ${tx - fx}, y: ${ty - fy}, scale: ${sc}, clipPath: "circle(${R}px at ${fx}px ${fy}px)", duration: 0.5, ease: "power3.inOut" }, ${t0});`);
+      tl.push(`tl.to("#pip", { x: 0, y: 0, scale: 1, clipPath: "circle(2400px at ${fx}px ${fy}px)", duration: 0.45, ease: "power3.inOut" }, ${r3(t1 - 0.45)});`);
       tl.push(`tl.set("#pip", { zIndex: 1 }, ${t1});`);
     }
     customBg = kbg;

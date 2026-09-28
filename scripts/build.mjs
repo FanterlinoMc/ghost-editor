@@ -131,6 +131,8 @@ for (const [from, to] of Object.entries(spec.captions?.phrases || {})) {
     }
   }
 }
+// A phrase mapped to "" removes it: grunts and noise whisper heard as words.
+for (let i = words.length - 1; i >= 0; i--) if (core(words[i].word) === "") words.splice(i, 1);
 
 // ---------- assets ----------
 const A = path.join(proj, "assets");
@@ -701,6 +703,16 @@ fs.mkdirSync(path.join(proj, "build"), { recursive: true });
 fs.writeFileSync(path.join(proj, "build", "sfx_events.json"), JSON.stringify({ total: TOTAL, speech: SPEECH, voiceP95: r3(voiceP95), roleDb: ROLE_DB, events: sfxEvents }, null, 2));
 fs.writeFileSync(path.join(proj, "build", "words.edit.json"), JSON.stringify(words));
 fs.writeFileSync(path.join(proj, "build", "caption_layout.json"), JSON.stringify({ platform: placer.platform, safeTop: placer.safeTop, safeBottom: placer.safeBottom, blocks: placer.log }, null, 1));
+// Resolved edit-time motion events, for the style-study accuracy harness (A1). Beat times in
+// reel.json are SOURCE seconds; these are what the render actually contains, after E() maps them
+// through the takes. Ground truth must come from here, never from the input spec.
+fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
+  total: TOTAL, speech: SPEECH, fps: FPS,
+  takes: takes.map((t) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames })),
+  snaps: snaps.map(([t, z]) => ({ t: r3(t), scale: z })),
+  pushes: pushesEdit.map((p) => ({ start: r3(p.a), end: r3(p.b), z: p.z, up: p.up, down: p.down })),
+  beats: (spec.beats || []).map((b) => ({ type: b.type, at: r3(E(b.at, `${b.type} at`)) })),
+}, null, 2));
 {
   const modes = {};
   for (const b of placer.log) modes[b.mode] = (modes[b.mode] || 0) + 1;

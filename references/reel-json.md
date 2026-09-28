@@ -69,7 +69,7 @@ the build warns on a double booking).
 - `sfxProfile`: `restrained` (structural hits only), `standard`, `rich` (adds a whoosh to every snap).
 - `look`: `{grade: "<css filter>", grain: 0.07, vignette: 0.45}`, the film look over the speaker plate.
 - `matte: true`: cut the speaker out once (`hyperframes remove-background`, cached as `assets/talk-matte.webm`, ~4 fps) for `behind` beats.
-- `captions.phrases: {"a call for reach": "Coffer Reach"}` fixes multi-word whisper errors.
+- `captions.phrases: {"a call for reach": "Coffer Reach"}` fixes multi-word whisper errors. Map a phrase to `""` to drop noise whisper heard as words (e.g. grunts during a montage).
 - `captions.upper: true`: uppercase captions. `captions.keywordStyle: "serif"`: highlight words become a glowing serif italic (cinematic).
 - `face`: the path to the face track, default `build/face.json` (run `scripts/face_track.py`). Without it, captions sit at a fixed height and the build warns.
 
