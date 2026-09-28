@@ -711,7 +711,14 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
   takes: takes.map((t) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames })),
   snaps: snaps.map(([t, z]) => ({ t: r3(t), scale: z })),
   pushes: pushesEdit.map((p) => ({ start: r3(p.a), end: r3(p.b), z: p.z, up: p.up, down: p.down })),
-  beats: (spec.beats || []).map((b) => ({ type: b.type, at: r3(E(b.at, `${b.type} at`)) })),
+  // `to` matters as much as `at`: a scene animates in at `at` and out near `to`, so both are
+  // events a frame-level analyzer should see.
+  beats: (spec.beats || []).map((b) => ({
+    type: b.type, kind: b.kind ?? null,
+    at: r3(E(b.at, `${b.type} at`)),
+    to: b.to === undefined ? null : r3(E(b.to, `${b.type} to`)),
+    in: b.in ?? null, out: b.out ?? null,
+  })),
 }, null, 2));
 {
   const modes = {};
