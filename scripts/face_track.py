@@ -67,6 +67,9 @@ def main():
             samples.append([t, round(max(0, top)), round(min(H, bottom)), round(max(0, left)), round(min(W, right)), round(eyes_y), round(mouth_y)])
             found += 1
         f += step
+    # Create the output directory, as transcribe.py already does. Without it a fresh project fails
+    # with a bare FileNotFoundError at the very end, after the whole scan has run.
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     json.dump({"fps": a.fps, "w": W, "h": H, "samples": samples}, open(a.out, "w"))
     tops = [s[1] for s in samples if s[1] is not None]
     bots = [s[2] for s in samples if s[1] is not None]
