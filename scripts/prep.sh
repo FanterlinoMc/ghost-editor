@@ -17,8 +17,13 @@ set -euo pipefail
 src="$1"; proj="$2"; out="$proj/assets/talk.mp4"
 mkdir -p "$proj/assets"
 
-read -r w h < <(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$src" | tr ',' ' ')
-rot=$(ffprobe -v error -select_streams v:0 -show_entries stream_side_data=rotation -of csv=p=0 "$src" | head -1 | tr -d ',- ')
+# tr -d '\r': ffprobe writes CRLF on Windows, so without this $h is "720\r", the -lt test below
+# fails with "integer expression expected", and a PORTRAIT phone video silently takes the landscape
+# branch and gets centre-cropped as though it were 16:9.
+read -r w h < <(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$src" | tr ',' ' ' | tr -d '\r')
+# '-' must be first or last in a tr set: ',- ' reads as the range ',' to ' ', which GNU tr rejects
+# as reversed ("range-endpoints ... in reverse collating sequence order"). BSD tr tolerates it.
+rot=$(ffprobe -v error -select_streams v:0 -show_entries stream_side_data=rotation -of csv=p=0 "$src" | head -1 | tr -d ' ,-')
 if [ "${rot:-0}" = "90" ] || [ "${rot:-0}" = "270" ]; then t=$w; w=$h; h=$t; fi
 echo "source ${w}x${h} (rotation ${rot:-none}), $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$src") s"
 if [ "$w" -lt "$h" ]; then vf="scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30"
@@ -26,7 +31,11 @@ else vf="crop=ih*9/16:ih,scale=1080:1920,fps=30"; echo "landscape source: centre
 
 echo "== measuring voice loudness"
 stats=$(ffmpeg -hide_banner -nostats -i "$src" -vn -af loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json -f null - 2>&1 | sed -n '/^{/,/^}/p')
-g() { echo "$stats" | python3 -c "import json,sys;print(json.load(sys.stdin)['$1'])"; }
+# loudnorm's JSON is flat and every value is a quoted string, so sed reads it directly. This used to
+# shell out to `python3`, which fails on Windows: there `python3` is the Microsoft Store stub, and a
+# venv provides python.exe but no python3.exe, so even an activated venv does not help. prep.sh now
+# needs nothing but ffmpeg.
+g() { printf '%s' "$stats" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"; }
 echo "input: $(g input_i) LUFS, true peak $(g input_tp) dBTP"
 af="loudnorm=I=-16:TP=-1.5:LRA=11:measured_I=$(g input_i):measured_TP=$(g input_tp):measured_LRA=$(g input_lra):measured_thresh=$(g input_thresh):offset=$(g target_offset):linear=true,aresample=48000"
 
