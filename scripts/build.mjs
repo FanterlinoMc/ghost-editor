@@ -543,12 +543,14 @@ const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.05 : SPEECH;
   const e = Math.min(g.at(-1).end + 0.3, nextS, SPEECH);
   g.forEach((w, wi) => {
-    tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: 1.08, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
+    // The serif style is deliberately still: no per-word pop. "No effects, no stickers."
+    if (cap.style !== "serif") tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: 1.08, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
     if (cap.highlight) tl.push(`tl.set("#cg${gi}w${wi}", { color: "${cap.highlight}" }, ${r3(w.start)}); tl.set("#cg${gi}w${wi}", { color: "#fff" }, ${r3(Math.min(w.end + 0.02, e - 0.01))});`);
   });
-  const capSize = cap.style === "pill" ? 66 : cap.style === "clean" ? (cap.size ?? brand.capSize) : (cap.size ?? 56);
+  const capSize = cap.style === "pill" ? 66 : cap.style === "clean" ? (cap.size ?? brand.capSize)
+    : cap.style === "serif" ? (cap.size ?? 46) : (cap.size ?? 56);
   const pl = placer.place(s, e, capSize * (cap.style === "pill" ? 1.6 : 1.3));
-  return `<div id="cg${gi}" class="cap-group clip${pl.mode === "lower-face" && cap.style !== "pill" ? " cap-backed" : ""}" style="top:${pl.y}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(w.word)}</span>`).join("")}</div>`;
+  return `<div id="cg${gi}" class="cap-group clip${pl.mode === "lower-face" && cap.style !== "pill" && cap.style !== "serif" ? " cap-backed" : ""}" style="top:${pl.y}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(w.word)}</span>`).join("")}</div>`;
 }).join("\n      ");
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
@@ -557,6 +559,12 @@ const capCss = cap.style === "clean"
   ? `.cap-group { font-family: ${UI_FONT}, system-ui, sans-serif; font-size: ${cap.size ?? brand.capSize}px; font-weight: 800; color: #fff; letter-spacing: -1px; text-shadow: 0 4px 18px rgba(0,0,0,.55), 0 1px 3px rgba(0,0,0,.6); }`
   : cap.style === "pill"
   ? `.cap-group { font-family: ${UI_FONT}, system-ui, sans-serif; font-size: 66px; font-weight: 800; color: #fff; background: rgba(12,12,14,.88); border-radius: 22px; padding: 16px 32px; max-width: 900px; }`
+  : cap.style === "serif"
+  // Quiet, essayistic captions: small lowercase serif in muted gold, no stroke, no box, no pop.
+  // The soft shadow is the only concession, and only so the text survives a light background.
+  ? `.cap-group { font-family: "Playfair Display", Georgia, serif; font-size: ${cap.size ?? 46}px; font-weight: 500;
+      color: ${cap.color ?? "#C8A96A"}; text-transform: lowercase; letter-spacing: 0.2px; max-width: 820px;
+      text-shadow: 0 2px 10px rgba(0,0,0,.45); }`
   : `.cap-group { font-family: Arial, Helvetica, sans-serif; font-size: ${cap.size ?? 56}px; font-weight: 700; color: #fff; max-width: 900px;
       -webkit-text-stroke: 8px #000; paint-order: stroke fill; text-shadow: 0 4px 10px rgba(0,0,0,.35); }`;
 
