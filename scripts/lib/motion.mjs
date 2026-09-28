@@ -196,6 +196,23 @@ export function buildScene(b, id, t0, t1, ctx) {
     tl.push(`ft("#${id}-img", { scale: ${z0} }, { scale: ${z1}, duration: ${r3(t1 - t0)}, ease: "none" }, ${t0});`);
   }
 
+  else if (b.kind === "clip") {
+    // Cut to a video the user supplies - a screen recording, B-roll, a second angle - full frame.
+    // `image` is the same idea for stills. `meme` also renders video, but only from the library,
+    // and draws a tilted overlay with a pop-in rather than a straight cut.
+    // Muted by default: B-roll normally runs under the speaker's continuing voice, and silence
+    // keeps this feature independent of the SFX library.
+    const src = userAsset(b.src);
+    const fit = b.fit === "contain" ? "contain" : "cover";
+    body = `<video id="${id}-v" class="img-fill" style="object-fit:${fit}${b.grade ? `;filter:${b.grade}` : ""}"`
+      + ` src="${src}" data-start="${r3(t0)}" data-duration="${r3(t1 - t0)}" data-media-start="${b.in ?? 0}"`
+      + `${b.audio === true ? "" : " muted"} playsinline></video>`;
+    if (b.zoom) {
+      const [z0, z1] = b.zoom;
+      tl.push(`ft("#${id}-v", { scale: ${z0} }, { scale: ${z1}, duration: ${r3(t1 - t0)}, ease: "none" }, ${t0});`);
+    }
+  }
+
   else if (b.kind === "sentence") {
     // align the scene's line words to the spoken words inside [t0, t1]
     const spoken = words.filter((w) => w.start >= t0 - 0.05 && w.start < t1);
