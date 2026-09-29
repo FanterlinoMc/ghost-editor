@@ -254,10 +254,18 @@ export function buildScene(b, id, t0, t1, ctx) {
     for (const it of items.slice(1)) addSfx(it.at, "whoosh", "fly3d word", { db: -6 });
   }
 
-  else if (b.kind === "image") {
-    const src = userAsset(b.src);
+  else if (b.kind === "image" || b.kind === "window") {
+    // image: full-screen B-roll. window: the same inside a rounded vintage frame on black.
+    // src can be a still or a video clip; { self: <source seconds> } uses the speaker's own footage.
     const [z0, z1] = b.zoom ?? [1.0, 1.12];
-    body = `<img id="${id}-img" class="img-fill" src="${src}" style="${b.grade ? `filter:${b.grade};` : ""}" />`;
+    const grade = b.grade ?? (b.kind === "window" ? "sepia(.18) contrast(1.06) saturate(.9)" : "");
+    const media = b.self !== undefined ? ctx.source : userAsset(b.src);
+    const isVideo = b.self !== undefined || /\.(mp4|mov|webm)$/i.test(media);
+    const tag = isVideo
+      ? `<video id="${id}-img" class="img-fill" src="${media}" data-start="${t0}" data-duration="${r3(t1 - t0)}" data-media-start="${b.self ?? b.media ?? 0}" data-track-index="19" muted playsinline style="${grade ? `filter:${grade};` : ""}"></video>`
+      : `<img id="${id}-img" class="img-fill" src="${media}" style="${grade ? `filter:${grade};` : ""}" />`;
+    body = b.kind === "window" ? `<div class="win-frame" style="top:${b.y ?? 330}px">${tag}<div class="tv-scan" style="opacity:.35"></div></div>` : tag;
+    if (b.kind === "window") customBg = "#000";
     tl.push(`ft("#${id}-img", { scale: ${z0} }, { scale: ${z1}, duration: ${r3(t1 - t0)}, ease: "none" }, ${t0});`);
   }
 
@@ -396,9 +404,126 @@ export function buildScene(b, id, t0, t1, ctx) {
     customBg = kbg;
   }
 
+  else if (b.kind === "paper") {
+    // Editorial collage on grid paper: lines in serif, an accent box (italic serif, white) or marker handwriting.
+    // lines: [{ text, style: "serif"|"box"|"marker", at?, size?, rotate? }], optional arrow: true
+    const lines = (b.lines || []).map((ln, i) => {
+      // the first line is on the paper from the scene's first frame: never open on blank paper
+      const at = i === 0 ? t0 : (ln.at !== undefined ? Math.max(t0, E(ln.at, "paper line")) : r3(t0 + 0.15 + i * 0.35));
+      const sid2 = `${id}-p${i}`;
+      const size = ln.size ?? (ln.style === "box" ? 132 : ln.style === "marker" ? 96 : 118);
+      const css = ln.style === "box"
+        ? `display:inline-block;background:${brand.accent};color:#fff;font-family:'Instrument Serif',Georgia,serif;font-style:italic;padding:0 20px 10px;line-height:1`
+        : ln.style === "marker"
+        ? `color:#1e1e1e;font-family:'Caveat Brush',cursive;line-height:.9`
+        : `color:#1b1b1d;font-family:'Instrument Serif',Georgia,serif;letter-spacing:-2px;line-height:.92`;
+      tl.push(`ft("#${sid2}", { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.1, ease: "power2.out" }, ${r3(at - 0.03)});`);
+      if (ln.style !== "serif") lineSfx(ctx, at, ln.style === "marker" ? "pop" : "whoosh", "paper line", { db: -10 });
+      if (i > 0) penTick(ctx, at, ln.style, "pen tick (paper line)");
+      return `<div id="${sid2}" style="font-size:${size}px;${css};transform:rotate(${ln.rotate ?? (ln.style === "marker" ? -4 : 0)}deg);margin:${ln.style === "marker" ? "-10px 0 -6px 30px" : "0"}">${esc(ln.text)}</div>`;
+    }).join("");
+    body = `<div class="paper-bg"></div><div class="col" style="top:${b.y ?? 700}px;align-items:${b.align ?? "center"}">${lines}</div>`;
+    customBg = "#eeede8";
+  }
+
+  else if (b.kind === "tv") {
+    // A vintage CRT in a dark room; the screen flips through clips or stills (a montage for "distraction",
+    // "noise", "everyone else"). Items: { src } image or video, or { self: <source seconds> } for the
+    // speaker's own footage (rights-clean by default). Each item holds for dur (default: an even split).
+    const items = (b.items || []).length ? b.items : [{ self: 0 }];
+    const span = t1 - t0 - 0.1;
+    const each = Math.max(0.12, Math.min(0.8, span / items.length));
+    const screens = items.map((it, i) => {
+      const s0 = r3(t0 + 0.05 + i * each), d = r3(Math.min(it.dur ?? each, t1 - s0));
+      if (d <= 0) return "";
+      const style = `style="visibility:hidden"`;
+      tl.push(`tl.set("#${id}-tv${i}", { visibility: "visible" }, ${s0}); tl.set("#${id}-tv${i}", { visibility: "hidden" }, ${r3(s0 + d)});`);
+      if (i > 0) addSfx(s0, b.flipSfx ?? "tick-1", "tv channel flip", { db: -8 });
+      if (it.self !== undefined) return `<video id="${id}-tv${i}" src="${ctx.source}" data-start="${s0}" data-duration="${d}" data-media-start="${it.self}" data-track-index="${20 + (i % 6)}" muted playsinline ${style}></video>`;
+      const src = userAsset(it.src);
+      if (/\.(mp4|mov|webm)$/i.test(src)) return `<video id="${id}-tv${i}" src="${src}" data-start="${s0}" data-duration="${d}" data-media-start="${it.media ?? 0}" data-track-index="${20 + (i % 6)}" muted playsinline ${style}></video>`;
+      return `<img id="${id}-tv${i}" src="${src}" ${style} />`;
+    }).join("");
+    // a light flicker on the tube, stepped so any frame can be sought
+    for (let t = t0, k = 0; t < t1; t += 1 / 12, k++) tl.push(`tl.set("#${id}-scr", { opacity: ${(0.9 + ((k * 37) % 10) / 100).toFixed(2)} }, ${r3(t)});`);
+    body = `<div class="tv-room"></div>
+      <div class="tv-side" style="left:40px;top:250px"><i></i></div><div class="tv-side" style="right:30px;top:180px"><i></i></div>
+      <div class="tv-main" id="${id}-set"><div class="tv-screen" id="${id}-scr">${screens}<div class="tv-scan"></div><div class="tv-glare"></div></div>
+      <div class="tv-knobs"><b></b><b></b><s></s></div></div>`;
+    tl.push(`ft("#${id}-set", { scale: 0.94 }, { scale: 1.02, duration: ${r3(t1 - t0)}, ease: "none" }, ${t0});`);
+    customBg = "#0b0806";
+  }
+
+  else if (b.kind === "collage") {
+    // Vintage editorial collage (the "old school" look): public-domain engravings multiplied onto paper, mixed
+    // type (lowercase serif, tiny condensed caps, a dark box word, marker, huge italic caps), app-style stickers,
+    // all seen through a screen: RGB fringe, pixel mesh, a slight fisheye bulge.
+    // items: [{ type: "text"|"image"|"sticker"|"glasses", at?, x, y, ... }]  (x/y in px, top-left of the item)
+    const paper = b.paper ?? "grid";
+    const fringe = b.screen === false ? "" : "text-shadow:2.5px 0 0 rgba(230,40,60,.38),-2.5px 0 0 rgba(20,170,230,.38);";
+    const imgFringe = b.screen === false ? "" : "drop-shadow(2.5px 0 0 rgba(230,40,60,.35)) drop-shadow(-2.5px 0 0 rgba(20,170,230,.35))";
+    const TEXT = {
+      serif: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-size:${sz ?? 150}px;color:#1b1b1d;letter-spacing:-4px;line-height:.9`,
+      caps: (sz) => `font-family:Oswald,'Arial Narrow',sans-serif;font-weight:300;text-transform:uppercase;font-size:${sz ?? 64}px;color:#2a2a2c;letter-spacing:-1px;line-height:.9;transform:scaleY(1.25);transform-origin:0 0`,
+      dark: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-size:${sz ?? 170}px;color:#f1efe8;background:#1d1d22;padding:0 18px 12px;letter-spacing:-5px;line-height:1`,
+      box: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:${sz ?? 150}px;color:#fff;background:${brand.accent};padding:0 22px 12px;letter-spacing:-3px;line-height:1`,
+      marker: (sz) => `font-family:'Caveat Brush',cursive;font-size:${sz ?? 130}px;color:#1e1e22;line-height:.8`,
+      italic: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-style:italic;text-transform:uppercase;font-size:${sz ?? 210}px;color:#26302a;letter-spacing:-6px;line-height:.9`,
+    };
+    const items = (b.items || []).map((it, i) => {
+      const iid = `${id}-c${i}`;
+      // the first item is on the paper from the scene's first frame: never open on blank paper
+      const at = i === 0 ? t0 : it.at !== undefined ? Math.max(t0, E(it.at, "collage item")) : r3(t0 + 0.12 * i);
+      const pos = `position:absolute;left:${it.x ?? 120}px;top:${it.y ?? 600}px;transform:rotate(${it.rotate ?? 0}deg)`;
+      let html = "";
+      if (it.type === "image") {
+        const key = it.src || "";
+        const file = /[\/.]/.test(key) ? key : path.join(ctx.LIB, "engravings", "png", `${key}.png`);
+        html = `<img src="${userAsset(file)}" style="display:block;width:${it.w ?? 760}px;filter:contrast(1.15) ${imgFringe}" />`;
+        tl.push(`ft("#${iid}", { autoAlpha: 0, scale: 0.92 }, { autoAlpha: 1, scale: 1, duration: 0.18, ease: "back.out(2)" }, ${r3(at)});`);
+        if (soundOf(ctx).lines === false) objectSfx(ctx, at, it.src, "collage object");
+        else addSfx(at, "pop", "collage image", { db: -12 });
+      } else if (it.type === "glasses") {
+        // bold black frames dropped onto an engraving (a modern prop on a vintage cut-out)
+        const w = it.w ?? 640;
+        html = `<svg width="${w}" viewBox="0 0 640 200" style="display:block;filter:drop-shadow(0 8px 10px rgba(0,0,0,.35))"><g fill="none" stroke="#111" stroke-width="30" stroke-linejoin="round"><path d="M44 70 Q46 36 100 36 H236 Q284 36 282 80 Q278 150 236 168 Q200 180 120 176 Q62 172 52 128 Z"/><path d="M358 80 Q356 36 404 36 H540 Q594 36 596 70 L588 128 Q578 172 520 176 Q440 180 404 168 Q362 150 358 80 Z"/><path d="M284 72 Q320 52 356 72"/><path d="M40 62 L4 48 M600 62 L636 48"/></g></svg>`;
+        tl.push(`ft("#${iid}", { autoAlpha: 0, y: -160, rotation: -8 }, { autoAlpha: 1, y: 0, rotation: ${it.rotate ?? -4}, duration: 0.26, ease: "bounce.out" }, ${r3(at)});`);
+        lineSfx(ctx, at, "whoosh", "collage glasses", { db: -10 });
+      } else if (it.type === "sticker") {
+        // app-icon sticker: rounded square, white speech bubble, a number or a word inside
+        const sz = it.size ?? 420, col = it.color ?? "#5ccf5a";
+        html = `<div style="width:${sz}px;height:${sz}px;border-radius:${sz * 0.2}px;background:linear-gradient(180deg, ${col}, ${col}dd);box-shadow:0 18px 40px rgba(0,0,0,.25);position:relative">
+          <div style="position:absolute;left:12%;top:16%;width:76%;height:58%;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;font-weight:800;font-style:italic;font-size:${sz * 0.26}px;color:#111;letter-spacing:-4px">${esc(it.text ?? "")}</div>
+          <div style="position:absolute;left:24%;top:66%;width:0;height:0;border-left:${sz * 0.04}px solid transparent;border-right:${sz * 0.1}px solid transparent;border-top:${sz * 0.12}px solid #fff;transform:rotate(18deg)"></div></div>`;
+        tl.push(`ft("#${iid}", { autoAlpha: 0, scale: 0.4 }, { autoAlpha: 1, scale: 1, duration: 0.24, ease: "back.out(2.2)" }, ${r3(at)});`);
+        if (soundOf(ctx).lines === false) objectSfx(ctx, at, "phone", "collage sticker");
+        else addSfx(at, "pop", "collage sticker", { db: -8 });
+      } else {
+        const style = (TEXT[it.style ?? "serif"] || TEXT.serif)(it.size);
+        html = `<div style="${style};white-space:nowrap;${it.style === "dark" || it.style === "box" ? "" : fringe}">${esc(it.text ?? "")}</div>`;
+        tl.push(`ft("#${iid}", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.06 }, ${r3(at)});`);
+        if (it.style === "marker" || it.style === "dark" || it.style === "box") lineSfx(ctx, at, it.style === "marker" ? "pop" : "whoosh", "collage word", { db: -12 });
+        if (i > 0) penTick(ctx, at, it.style, "pen tick (collage word)");
+      }
+      // engravings are ink-only PNGs (alpha from darkness), so they layer like any sticker
+      const layer = `z-index:${it.z ?? (it.type === "glasses" ? 5 : it.type === "image" ? 1 : 3)}`;
+      return `<div id="${iid}" style="${pos};${layer}">${html}</div>`;
+    }).join("");
+    const paperBg = paper === "grid"
+      ? `<div class="paper-bg" style="background-color:#ecebe4;background-image:linear-gradient(rgba(40,40,50,.28) 2px, transparent 2px), linear-gradient(90deg, rgba(40,40,50,.28) 2px, transparent 2px);background-size:96px 96px"></div>`
+      : `<div class="paper-bg" style="background-color:#e9e6dc;background-image:none"></div>`;
+    const screenFx = b.screen === false ? "" : `<div style="position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, rgba(255,0,0,.035) 0 1px, rgba(0,255,0,.035) 1px 2px, rgba(0,0,255,.035) 2px 3px);mix-blend-mode:multiply"></div>
+      <div style="position:absolute;inset:0;pointer-events:none;z-index:9;box-shadow:inset 0 0 180px rgba(40,30,20,.45)"></div>`;
+    body = `<div id="${id}-cw" style="position:absolute;inset:0;${b.screen === false ? "" : "filter:url(#phx-bulge) blur(0.5px)"}">${paperBg}${items}</div>${screenFx}
+      <svg width="0" height="0" style="position:absolute"><filter id="phx-bulge" x="0" y="0" width="100%" height="100%"><feImage href="${userAsset(path.join(ctx.LIB, "engravings", "bulge.png"))}" result="m" preserveAspectRatio="none" x="0" y="0" width="1080" height="1920"/><feDisplacementMap in="SourceGraphic" in2="m" scale="${b.bulge ?? 70}" xChannelSelector="R" yChannelSelector="G"/></filter></svg>`;
+    tl.push(`ft("#${id}-cw", { scale: 1 }, { scale: ${b.zoom ?? 1.06}, duration: ${r3(t1 - t0)}, ease: "none" }, ${t0});`);
+    customBg = "#e9e6dc";
+  }
+
   else throw new Error(`unknown scene kind '${b.kind}'`);
 
   transIn(ctx, `#${sid}`, inKind, t0);
+  if (soundOf(ctx).paperIn && (b.kind === "paper" || b.kind === "collage")) ctx.addSfx(Math.max(0, t0 - 0.06), PAPER_IN[paperN++ % PAPER_IN.length], "paper in (page arrives)", { db: soundOf(ctx).paperDb ?? -2 });
   if (inKind === "expand" || inKind === "wipe") addSfx(t0, "whoosh", `scene in (${inKind})`);
   transOut(ctx, `#${sid}`, outKind, t1);
   return `<div id="${sid}" class="scene" style="background:${customBg ?? bg};background-size:220% 220%">${body}</div>`;
