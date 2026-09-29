@@ -1,0 +1,8 @@
+{
+  "_about": "The Monk (studied from minimalist-philosophy Shorts): one locked shot, small lowercase serif captions in muted gold, no pops, no effects, no music.",
+  "brand": { "accent": "#E7C66B", "accentDark": "#C9A646", "ink": "#111111", "capSize": 52, "font": "Montserrat" },
+  "captions": { "style": "serif", "group": 4, "y": 1250 },
+  "sfxProfile": "restrained",
+  "music": null,
+  "look": {}
+}

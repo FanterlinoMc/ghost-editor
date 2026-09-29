@@ -1,0 +1,30 @@
+{
+  "_about": "The Closer (studied from 5 top Hormozi Shorts, frame by frame): whole phrase in ALL CAPS on a solid yellow box on the chest, a new caption every ~1 s, the frame changes every ~2.4 s (punch-ins alternate two framings, bigger on emphasis words), a whoosh on every 3rd, no music, no scenes.",
+  "brand": {
+    "accent": "#FFC61A",
+    "accentDark": "#E0A800",
+    "ink": "#111111",
+    "capSize": 60,
+    "font": "Montserrat"
+  },
+  "captions": {
+    "style": "box",
+    "group": 3,
+    "y": 1150
+  },
+  "sfxProfile": "restrained",
+  "music": null,
+  "look": {},
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.0,
+    "scales": [
+      1.0,
+      1.12
+    ],
+    "emphasisScale": 1.2,
+    "sfx": "whoosh",
+    "sfxEvery": 3,
+    "sfxDb": -6
+  }
+}
