@@ -562,7 +562,8 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
   const html = blocks.map((bl, bi) => {
     const s = bl[0].words[0].start - 0.05;
     const nextS = bi + 1 < blocks.length ? blocks[bi + 1][0].words[0].start - 0.05 : ctx.SPEECH;
-    const e = Math.min(bl.at(-1).words.at(-1).end + 0.5, nextS);
+    // maxHold: never keep a finished block up longer than this after its last word
+    const e = Math.min(bl.at(-1).words.at(-1).end + Math.min(0.5, cap.maxHold ?? 0.5), nextS, bl.at(-1).words.at(-1).end + (cap.maxHold ?? 99));
     const h = bl.reduce((n, ln) => n + (ln.tag ? brand.capSize * 1.35 : brand.capSize * 1.1), 0);
     const pl = ctx.placeCaption ? ctx.placeCaption(Math.max(0, s), e, h) : { y: cap.y ?? 1150, mode: "fixed" };
     const y = pl.y;
@@ -573,12 +574,32 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
         tl.push(`ft("#${lid}", { autoAlpha: 0, scale: 0.5, rotation: -16 }, { autoAlpha: 1, scale: 1, rotation: -6, duration: 0.3, ease: "back.out(1.7)" }, ${r3(t)});`);
         return `<span class="eline"><span id="${lid}" class="etag">${esc(ln.words.map((w) => w.word.replace(/[.,!?]$/, "")).join(" "))}</span></span>`;
       }
-      if (li > 0 && !bl[li - 1].tag && bl[li - 1].words) tl.push(`tl.to("#eb${bi}l${li - 1} .ew:not(.eser)", { fontWeight: 300, color: "rgba(255,255,255,0.86)", duration: 0.2, ease: "power2.out" }, ${r3(ln.words[0].start - 0.03)});`);
+      if (li > 0 && !bl[li - 1].tag && bl[li - 1].words) tl.push(`tl.to("#eb${bi}l${li - 1} .ew:not(.eser):not(.ebold):not(.ealarm)", { fontWeight: 300, color: "rgba(255,255,255,0.86)", duration: 0.2, ease: "power2.out" }, ${r3(ln.words[0].start - 0.03)});`);
       return `<span id="${lid}" class="eline">${ln.words.map((w, wi) => {
         const wid = `${lid}w${wi}`;
         tl.push(`ft("#${wid}", { autoAlpha: 0, y: 10, filter: "blur(10px)" }, { autoAlpha: 1, y: 0, filter: "blur(0px)", duration: 0.26, ease: "power3.out" }, ${r3(w.start - 0.03)});`);
         const txt = cap.upper ? w.word.toUpperCase() : cap.lowercase === false ? w.word : w.word.toLowerCase();
-        if (hl.has(norm(w.word)) && cap.keywordStyle === "serif") return `<span id="${wid}" class="ew eser">${esc(txt)}</span>`;
+        // per-word treatments (captions.keywords): script = gold handwritten, bold = huge accent sans,
+        // alarm = red while the frame drains to black and white
+        const kw = (cap.keywords || {})[norm(w.word)];
+        if (kw === "script" || (!kw && hl.has(norm(w.word)) && cap.keywordStyle === "serif")) {
+          // handwriting: the script word writes itself on, left to right
+          tl.push(`ft("#${wid}", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% -10% 0% 0%)", duration: ${r3(Math.max(0.35, Math.min(0.7, w.end - w.start + 0.2)))}, ease: "power1.inOut" }, ${r3(w.start - 0.02)});`);
+          if (cap.keywordSfx !== false && ctx.addSfx) ctx.addSfx(w.start, "whoosh", "keyword script", { db: -8 });
+          return `<span id="${wid}" class="ew eser">${esc(txt)}</span>`;
+        }
+        if (kw === "bold") {
+          tl.push(`ft("#${wid}", { scale: 0.6 }, { scale: 1, duration: 0.3, ease: "back.out(2)" }, ${r3(w.start - 0.02)});`);
+          if (cap.keywordSfx !== false && ctx.addSfx) ctx.addSfx(w.start, "impact", "keyword bold", { db: -6 });
+          return `<span id="${wid}" class="ew ebold">${esc(txt)}</span>`;
+        }
+        if (kw === "alarm") {
+          const hold = Math.max(0.9, (w.end - w.start) + 0.8);
+          tl.push(`tl.to("#base", { filter: "grayscale(1) contrast(1.1)", duration: 0.12, ease: "none" }, ${r3(w.start - 0.05)});`);
+          tl.push(`tl.to("#base", { filter: "grayscale(0) contrast(1)", duration: 0.25, ease: "power1.out" }, ${r3(w.start + hold)});`);
+          if (cap.keywordSfx !== false && ctx.addSfx) ctx.addSfx(w.start, "impact", "keyword alarm", { db: -4 });
+          return `<span id="${wid}" class="ew ealarm">${esc(txt)}</span>`;
+        }
         if (hl.has(norm(w.word))) {
           tl.push(`ft("#${wid}b", { scaleX: 0 }, { scaleX: 1, duration: 0.28, ease: "power3.out" }, ${r3(w.start)});`);
           return `<span class="ehl"><i id="${wid}b"></i><span id="${wid}" class="ew">${esc(txt)}</span></span>`;
@@ -619,6 +640,14 @@ export function buildMusic(m, ctx, execFileSync, path, fs) {
   const target = -16 + (m.db ?? -20);
   const vol = r3(Math.min(3.98, Math.pow(10, (target - I) / 20)));
   const fi = m.fadeIn ?? 0.6, fo = m.fadeOut ?? 1.2;
-  const lane = JSON.stringify({ version: 1, lanes: [{ target: "volume", points: [{ t: 0, v: 0 }, { t: fi, v: vol }, { t: r3(TOTAL - fo), v: vol }, { t: r3(TOTAL), v: 0 }] }] });
+  // drops: the beat stops for ~0.5 s right before a payoff line and comes back ON it (Alif: 1-2 per reel)
+  const pts = [{ t: 0, v: fi > 0.02 ? 0 : vol }, { t: Math.max(0.01, fi), v: vol }];
+  for (const d of [...(m.dropTimes || [])].sort((a, b) => a - b)) {
+    const len = m.dropLen ?? 0.5;
+    if (d - len < fi + 0.2 || d > TOTAL - fo - 0.1) continue;
+    pts.push({ t: r3(d - len - 0.03), v: vol }, { t: r3(d - len), v: 0 }, { t: r3(d - 0.02), v: 0 }, { t: r3(d), v: vol });
+  }
+  pts.push({ t: r3(TOTAL - Math.max(0.02, fo)), v: vol }, { t: r3(TOTAL), v: fo > 0.02 ? 0 : vol });
+  const lane = JSON.stringify({ version: 1, lanes: [{ target: "volume", points: pts }] });
   return { html: `<audio id="music-bed" src="${src}" data-start="0" data-duration="${TOTAL}" data-media-start="${m.start ?? 0}" data-track-index="20" data-automation='${lane}'></audio>`, vol, I };
 }
