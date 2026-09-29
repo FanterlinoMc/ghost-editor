@@ -684,13 +684,204 @@ const capCss = cap.style === "clean"
   : `.cap-group { font-family: Arial, Helvetica, sans-serif; font-size: ${cap.size ?? 56}px; font-weight: 700; color: #fff; max-width: 900px;
       -webkit-text-stroke: 8px #000; paint-order: stroke fill; text-shadow: 0 4px 10px rgba(0,0,0,.35); }`;
 
+// ---------- asset packs (library/packs/<pack>/<kind>/*.mp4), gated by spec.packs ----------
+// A pack is used only when the style or reel turns it on (e.g. "packs": { "editorsinventory": true }) and its
+// row in engine/assets/LEDGER.md says it may ship. Clips are picked round-robin so repeats are spread out.
+// This fork does not yet have library/packs/ (out of scope for this port - a separate asset-restore task),
+// so packClip always returns null here and every caller below degrades to its asset-free fallback.
+const packRR = {};
+const packClip = (pack, kind) => {
+  if (!spec.packs?.[pack]) return null;
+  const dir = path.join(LIB, "packs", pack, kind);
+  if (!fs.existsSync(dir)) return null;
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".mp4")).sort();
+  if (!files.length) return null;
+  const key = `${pack}/${kind}`;
+  packRR[key] = ((packRR[key] ?? -1) + 1) % files.length;
+  const f = files[packRR[key]];
+  fs.mkdirSync(path.join(A, "pack"), { recursive: true });
+  const dst = path.join(A, "pack", `${pack}-${kind}-${f}`);
+  if (!fs.existsSync(dst)) fs.copyFileSync(path.join(dir, f), dst);
+  return `assets/pack/${pack}-${kind}-${f}`;
+};
+const packOf = spec.packs ? Object.keys(spec.packs).find((k) => spec.packs[k]) : null;
+const topOverlays = [];
+let packN = 0;
+const packOverlay = (src, t0, dur, { blend = "screen", z = 7, opacity = 1, media = 0, fadeIn = 0.15, fadeOut = 0.3, filter = "" } = {}) => {
+  const id = `pk${packN++}`;
+  topOverlays.push(`<video id="${id}" class="clip" src="${src}" data-start="${r3(Math.max(0, t0))}" data-duration="${r3(dur)}" data-media-start="${media}" data-track-index="${30 + (packN % 8)}" muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:${z};mix-blend-mode:${blend};opacity:0;pointer-events:none${filter ? `;filter:${filter}` : ""}"></video>`);
+  tl.push(`ft("#${id}", { opacity: 0 }, { opacity: ${opacity}, duration: ${fadeIn}, ease: "power1.in" }, ${r3(Math.max(0, t0))});`);
+  tl.push(`tl.to("#${id}", { opacity: 0, duration: ${fadeOut}, ease: "power1.out" }, ${r3(Math.max(0, t0) + dur - fadeOut)});`);
+};
+
+// ---------- watermark (spec.watermark = { text, opacity?, font? }) and colour tint (spec.look.tint) ----------
+let brandHtml = "";
+if (spec.watermark?.text) brandHtml += `<div style="position:absolute;top:${spec.watermark.y ?? 120}px;right:${spec.watermark.x ?? 60}px;z-index:9;font-family:'${spec.watermark.font ?? "Instrument Serif"}',Georgia,serif;font-size:${spec.watermark.size ?? 54}px;letter-spacing:-0.5px;color:#fff;opacity:${spec.watermark.opacity ?? 0.38};pointer-events:none">${esc(spec.watermark.text)}</div>`;
+if (spec.look?.tint) brandHtml += `<div style="position:absolute;inset:0;z-index:3;pointer-events:none;background:${spec.look.tint.color ?? "#1d6b75"};mix-blend-mode:${spec.look.tint.blend ?? "soft-light"};opacity:${spec.look.tint.opacity ?? 0.22}"></div>`;
+if (spec.look?.grade) tl.push(`tl.set("#base", { filter: "${spec.look.grade}" }, 0);`);
+
+// ---------- light leaks (spec.leaks = { every, color?, at? }) ----------
+// A warm burn-through flash that hides a cut between sections. Auto: on take joins, spaced by `every` seconds.
+let leakHtml = "";
+if (spec.leaks) {
+  const every = spec.leaks.every ?? 8, color = spec.leaks.color ?? "255,176,64";
+  const times = spec.leaks.at ? spec.leaks.at.map((t) => E(t, "leak")) : [];
+  if (!spec.leaks.at) {
+    let last = -Infinity;
+    for (const k of takes.slice(1)) if (k.start - last >= every && k.start > 2 && k.start < SPEECH - 2) { times.push(r3(k.start)); last = k.start; }
+  }
+  times.forEach((t, i) => {
+    const clip = packOf && packClip(packOf, "leaks");
+    // Alif: a flash is never silent; the whoosh rides it
+    if (spec.sound?.leaks) addSfx(t - 0.3, spec.sound.leakSfx ?? "whoosh-cine", "light leak", { db: spec.sound.leakDb ?? -12 });
+    if (clip) { packOverlay(clip, t - 0.35, 1.3, { blend: "screen", z: 7, opacity: 1, media: spec.leaks.media ?? 1.2, fadeIn: 0.25, fadeOut: 0.5, filter: spec.leaks.boost ?? "brightness(1.9) saturate(1.25)" }); return; }
+    leakHtml += `<div id="leak${i}" class="clip" data-start="${r3(Math.max(0, t - 0.25))}" data-duration="0.9" data-track-index="10" style="position:absolute;inset:0;z-index:7;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(ellipse 120% 90% at 30% 40%, rgba(${color},0.95) 0%, rgba(${color},0.55) 35%, rgba(255,90,20,0.18) 70%, rgba(0,0,0,0) 100%)"></div>`;
+    tl.push(`ft("#leak${i}", { opacity: 0 }, { opacity: 1, duration: 0.22, ease: "power2.in" }, ${r3(Math.max(0, t - 0.22))});`);
+    tl.push(`tl.to("#leak${i}", { opacity: 0, duration: 0.55, ease: "power2.out" }, ${r3(t + 0.05)});`);
+  });
+  if (times.length) console.log(`light leaks: ${times.length} at ${times.join(", ")}`);
+}
+
+// ---------- 8mm film gate over B-roll scenes (scene option gate: "8mm", or spec.scenes.<kind>.gate) ----------
+if (packOf) for (const b of beatsList) {
+  const sd = (spec.scenes || {})[b.kind] || {};
+  if (b.type !== "scene" || (b.gate ?? sd.gate) !== "8mm") continue;
+  const t0 = E(b.at), t1 = E(b.to);
+  const matte = packClip(packOf, "8mm-gate"), dust = packClip(packOf, "8mm-dust");
+  if (matte) packOverlay(matte, t0, t1 - t0, { blend: "multiply", z: 6, opacity: 1, fadeIn: 0.05, fadeOut: 0.1 });
+  if (dust) packOverlay(dust, t0, t1 - t0, { blend: "screen", z: 6, opacity: 0.7, fadeIn: 0.05, fadeOut: 0.1 });
+}
+
+// ---------- film burns (spec.burns = { at?, onScenes? }) ----------
+if (spec.burns && packOf) {
+  const times = (spec.burns.at || []).map((t) => E(t, "burn"));
+  if (spec.burns.onScenes) for (const b of beatsList) if (b.type === "scene" && ["image", "window", "tv"].includes(b.kind)) times.push(E(b.at));
+  for (const t of [...new Set(times.map(r3))].sort((a, b) => a - b)) {
+    const clip = packClip(packOf, "burns");
+    if (clip) packOverlay(clip, t - 0.2, 0.9, { blend: "screen", z: 9, opacity: 1, fadeIn: 0.08, fadeOut: 0.35 });
+  }
+}
+
+// ---------- opening flash (spec.openFlash = { at?, dur?, color?, clip?, sfx?, db? }) ----------
+// The hook: a split-second warm film burn that sweeps in from the left edge on the first frame (Alif reels),
+// with a soft film-flash sound under the voice. A glow, not a whiteout: the face stays readable.
+let flashN = 0;
+const brandFlash = (f, t, why, { side = "left" } = {}) => {
+  const dur = f.dur ?? 0.4, fid = `oflash${flashN++}`;
+  const [c1, c2] = f.color ?? ["255,92,40", "255,150,120"];
+  const x = side === "left" ? [4, 0, 90] : [96, 100, 270];
+  leakHtml += `<div id="${fid}" class="clip" data-start="${r3(t)}" data-duration="${r3(dur)}" data-track-index="11" style="position:absolute;inset:0;z-index:12;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(ellipse 70% 55% at ${x[0]}% 74%, rgba(${c1},1) 0%, rgba(${c1},.85) 40%, rgba(${c1},0) 100%), radial-gradient(ellipse 45% 70% at ${x[1]}% 30%, rgba(${c2},.85) 0%, rgba(${c2},0) 100%), linear-gradient(${x[2]}deg, rgba(${c1},.55) 0%, rgba(${c1},0) 45%)"></div>`;
+  const dir = side === "left" ? -1 : 1;
+  tl.push(`ft("#${fid}", { opacity: 0.6, xPercent: ${dir * 25} }, { opacity: 1, xPercent: 0, duration: ${r3(dur * 0.25)}, ease: "power2.out" }, ${r3(t)});`);
+  tl.push(`tl.to("#${fid}", { opacity: 0, xPercent: ${dir * 20}, duration: ${r3(dur * 0.55)}, ease: "power2.in" }, ${r3(t + dur * 0.4)});`);
+  addSfx(t, f.sfx ?? "cinematic-film-flash", why, { db: f.db ?? -8 });
+};
+// Alif: a burn carries the picture INTO a cutaway and back OUT to the speaker, and the whoosh rides it
+if (spec.sceneFlash && spec.openFlash) {
+  const sf = spec.sceneFlash, kinds = sf.kinds ?? ["collage", "paper"];
+  const scenes = beatsList.filter((b) => b.type === "scene" && kinds.includes(b.kind));
+  const chosen = sf.which === "all" ? scenes : sf.which === "last" ? scenes.slice(-1) : scenes.slice(0, sf.count ?? 1);
+  for (const b of chosen) {
+    brandFlash({ ...spec.openFlash, dur: sf.dur ?? 0.35, db: sf.db ?? -10, sfx: sf.sfxIn ?? spec.openFlash.sfx }, r3(Math.max(0, E(b.at) - 0.12)), "burn into cutaway");
+    if (sf.out !== false) brandFlash({ ...spec.openFlash, dur: sf.dur ?? 0.35, db: (sf.db ?? -10) - 3, sfx: sf.sfxOut ?? spec.openFlash.sfx }, r3(E(b.to) - 0.2), "burn out to speaker", { side: "right" });
+  }
+}
+if (spec.openFlash) {
+  const f = spec.openFlash, t = E(f.at ?? 0, "open flash"), dur = f.dur ?? 0.4;
+  const [c1, c2] = f.color ?? ["255,92,40", "255,150,120"];
+  leakHtml += `<div id="oflash" class="clip" data-start="${r3(t)}" data-duration="${r3(dur)}" data-track-index="11" style="position:absolute;inset:0;z-index:8;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(ellipse 70% 55% at 4% 74%, rgba(${c1},1) 0%, rgba(${c1},.85) 40%, rgba(${c1},0) 100%), radial-gradient(ellipse 45% 70% at 0% 30%, rgba(${c2},.85) 0%, rgba(${c2},0) 100%), linear-gradient(90deg, rgba(${c1},.55) 0%, rgba(${c1},0) 45%)"></div>`;
+  tl.push(`ft("#oflash", { opacity: 0.6, xPercent: -25 }, { opacity: 1, xPercent: 0, duration: ${r3(dur * 0.25)}, ease: "power2.out" }, ${r3(t)});`);
+  tl.push(`tl.to("#oflash", { opacity: 0, xPercent: -20, duration: ${r3(dur * 0.55)}, ease: "power2.in" }, ${r3(t + dur * 0.4)});`);
+  const pickBurn = (name) => {
+    const src = path.join(LIB, "packs", packOf, "burns", name);
+    if (!fs.existsSync(src)) die(`openFlash.clip '${name}' is not in packs/${packOf}/burns`);
+    fs.mkdirSync(path.join(A, "pack"), { recursive: true });
+    fs.copyFileSync(src, path.join(A, "pack", `${packOf}-burns-${name}`));
+    return `assets/pack/${packOf}-burns-${name}`;
+  };
+  const clip = f.clip !== false && packOf && spec.packs?.[packOf] && (f.clip ? pickBurn(f.clip) : packClip(packOf, "burns"));
+  if (clip) packOverlay(clip, t, dur, { blend: "screen", z: 8, opacity: f.texture ?? 0.8, media: f.media ?? 0.1, fadeIn: 0.05, fadeOut: dur * 0.5,
+    filter: f.textureFilter ?? "saturate(1.4) hue-rotate(-18deg) brightness(.9)" });
+  if (clip) topOverlays[topOverlays.length - 1] = topOverlays.at(-1).replace("pointer-events:none", "pointer-events:none;-webkit-mask-image:linear-gradient(90deg,#000 0%,#000 18%,transparent 55%);mask-image:linear-gradient(90deg,#000 0%,#000 18%,transparent 55%)");
+  addSfx(t, f.sfx ?? "cinematic-film-flash", "open flash", { db: f.db ?? -8 });
+  console.log(`open flash at ${t}s (${dur}s)`);
+}
+
+// ---------- list marks (spec.listMarks) ----------
+// When the speaker enumerates ("number one", "secondly", "step two"), a numbered card lands beside them: a small
+// handwritten label, a brand box that wipes in left -> right, a big serif numeral. Paper + pen sounds carry it.
+if (spec.listMarks) {
+  const L = spec.listMarks === true ? {} : spec.listMarks;
+  const NUM = { one: 1, first: 1, firstly: 1, two: 2, second: 2, secondly: 2, three: 3, third: 3, thirdly: 3, four: 4, fourth: 4, five: 5, fifth: 5, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 };
+  const bare = (w) => w.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const marks = [];
+  for (let i = 0; i < words.length; i++) {
+    const a = bare(words[i].word), b = bare(words[i + 1]?.word || ""), prev = bare(words[i - 1]?.word || "");
+    let n = null, label = null;
+    if (/^(number|step|tip|rule)$/.test(a) && NUM[b]) { n = NUM[b]; label = a; }
+    else if (/^(firstly|secondly|thirdly|second|third)$/.test(a) && !/^(at|the|a|every|one)$/.test(prev) && /[,.]$/.test(words[i].word.trim())) { n = NUM[a]; label = "step"; }
+    else if (a === "first" && /[,]$/.test(words[i].word.trim()) && !/^(at|the|a)$/.test(prev)) { n = 1; label = "step"; }
+    if (!n) continue;
+    if (marks.some((m) => m.n === n)) continue;                      // a restated "number one" is not a new point
+    if (marks.length && label === "step") label = marks[0].label;    // "number one ... secondly" stays "number 02"
+    marks.push({ n, label, t: r3(Math.max(0, words[i].start - 0.05)) });
+  }
+  const scenes = beatsList.filter((b) => b.type === "scene").map((b) => [E(b.at), E(b.to)]);
+  marks.forEach((m, k) => {
+    if (scenes.some(([a, b]) => m.t >= a - 0.3 && m.t <= b)) return;  // a full-screen page is up: it already carries the point
+    const id = `lm${k}`, hold = L.hold ?? 1.8, x = L.x ?? 70, y = L.y ?? 300;
+    leakHtml += `<div id="${id}" class="clip" data-start="${m.t}" data-duration="${r3(hold + 0.35)}" data-track-index="13" style="position:absolute;left:${x}px;top:${y}px;z-index:9;pointer-events:none">
+      <div id="${id}-lab" style="font-family:'Caveat Brush',cursive;font-size:${L.labelSize ?? 70}px;color:#fff;line-height:.9;transform:rotate(-6deg);transform-origin:0 100%;margin:0 0 6px 8px;text-shadow:0 3px 12px rgba(0,0,0,.45)">${esc(m.label)}</div>
+      <div style="display:inline-block;position:relative;isolation:isolate;padding:0 26px 14px 20px;font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:${L.size ?? 190}px;letter-spacing:-6px;line-height:1;color:#fff"><span id="${id}-bg" style="position:absolute;inset:0;z-index:-1;background:${L.color ?? brand.accent};transform-origin:0 50%;box-shadow:0 14px 34px rgba(0,0,0,.28)"></span><span id="${id}-num" style="display:inline-block">${String(m.n).padStart(2, "0")}</span></div></div>`;
+    tl.push(`ft("#${id}-bg", { scaleX: 0 }, { scaleX: 1, duration: 0.32, ease: "power3.out" }, ${m.t});`);
+    tl.push(`ft("#${id}-num", { autoAlpha: 0, y: 26, rotation: -4 }, { autoAlpha: 1, y: 0, rotation: 0, duration: 0.3, ease: "back.out(2)" }, ${r3(m.t + 0.08)});`);
+    tl.push(`ft("#${id}-lab", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.32, ease: "none" }, ${r3(m.t + 0.14)});`);
+    tl.push(`tl.to("#${id}", { autoAlpha: 0, x: -40, duration: 0.25, ease: "power2.in" }, ${r3(m.t + hold)});`);
+    addSfx(m.t, "paper-quick", `list mark ${m.n}`, { db: spec.sound?.paperDb ?? -2 });
+    addSfx(m.t + 0.14, "pen-scribble", `list mark ${m.n} label`, { db: spec.sound?.penDb ?? -4 });
+  });
+  if (marks.length) console.log(`list marks: ${marks.map((m) => `${m.label} ${m.n} @${m.t}`).join(", ")}`);
+}
+
+// ---------- title banner (spec.banner) ----------
+// A headline that stays on screen for the whole reel (or from..to), top of the frame, inside the safe area.
+let titleHtml = "";
+if (spec.banner?.text) {
+  const from = spec.banner.from ?? 0, to = Math.min(spec.banner.to ?? TOTAL, TOTAL);
+  titleHtml = `<div id="title-banner" class="clip" data-start="${r3(from)}" data-duration="${r3(Math.max(0.1, to - from))}" data-track-index="9" style="position:absolute;left:60px;right:60px;top:${spec.banner.y ?? 250}px;text-align:center;z-index:9;font-family:${brand.font || "Montserrat"},system-ui,sans-serif;font-size:${spec.banner.size ?? 64}px;font-weight:900;line-height:1.05;color:#fff;-webkit-text-stroke:10px #000;paint-order:stroke fill;text-transform:uppercase">${esc(spec.banner.text)}</div>`;
+}
+
 // ---------- music bed ----------
 let musicHtml = "";
+// Alif: a punch-in is barely audible, a tiny air swish ~20 dB under the voice (not during full-screen scenes)
+if (spec.sound?.zoom && cadenceSnaps.size) {
+  const sceneWins = beatsList.filter((b) => b.type === "scene").map((b) => [E(b.at) - 0.1, E(b.to) + 0.1]);
+  let zn = 0;
+  for (const t of [...cadenceSnaps].sort((a, b) => a - b)) {
+    if (t < 0.6 || sceneWins.some(([a, b]) => t >= a && t <= b)) continue;   // the open flash owns the first beat
+    addSfx(t - 0.03, zn++ % 2 ? "zoom-sweep-short" : "zoom-sweep-small", "zoom swish", { db: spec.sound.zoomDb ?? -8 });
+  }
+}
+
 if (spec.music) {
   if (spec.music.id === "auto") {
     const man = JSON.parse(fs.readFileSync(path.join(LIB, "music", "manifest.json"), "utf8"));
     const pickId = Object.keys(man).find((k) => (man[k].styles || []).includes(spec.style)) || "deep-techno-ambience";
     spec.music = { ...spec.music, id: pickId };
+  }
+  const drops = spec.music.drops;
+  if (drops) {
+    const times = [];
+    if (drops === "auto" || drops.auto) {
+      const scenes = beatsList.filter((b) => b.type === "scene").map((b) => E(b.at));
+      if (scenes.length) times.push(scenes.at(-1));
+      // the call to action: "comment ...", "follow ...", "subscribe", "link in bio", in the last quarter only
+      const cta = words.find((w) => w.start > SPEECH * 0.75 && /^(comment|follow|subscribe|link)\b/i.test(w.word.trim().replace(/[^a-z ]/gi, "")));
+      if (cta) times.push(r3(cta.start));
+    }
+    for (const t of Array.isArray(drops) ? drops : (typeof drops === "object" && Array.isArray(drops.at) ? drops.at : [])) times.push(E(t, "music drop"));
+    spec.music = { ...spec.music, dropTimes: [...new Set(times.map(r3))] };
+    console.log(`music drops at ${spec.music.dropTimes.join(", ")}s`);
   }
   const m = buildMusic(spec.music, motionCtx, execFileSync, path, fs);
   musicHtml = m.html;
@@ -707,6 +898,7 @@ const fontFaces = fs.readdirSync(path.join(A, "fonts")).filter((f) => /-(latin|c
   return `@font-face { font-family: "${fam}"; src: url(assets/fonts/${f}) format("woff2"); font-weight: 100 900;${m[3] ? " font-style: italic;" : ""} unicode-range: ${RANGES[m[2]]}; }`;
 }).join("\n  ");
 const look = spec.look || {};
+if (look.exposure && look.exposure !== 1) tl.push(`tl.set("#pip", { filter: "brightness(${look.exposure}) contrast(${look.contrast ?? 1.04})" }, 0);`);
 const grainHtml = look.grain ? `<div id="grain" class="look-grain" style="opacity:${look.grain}"></div>` : "";
 const vignetteHtml = look.vignette ? `<div class="look-vignette" style="background:radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 45%, rgba(0,0,0,${look.vignette}) 100%)"></div>` : "";
 if (look.grain) for (let t = 0, k = 0; t < TOTAL; t += 1 / 12, k++) tl.push(`tl.set("#grain", { backgroundPosition: "${(k * 137) % 400}px ${(k * 251) % 400}px" }, ${r3(t)});`);
@@ -806,6 +998,10 @@ const html = `<!doctype html>
   <div id="caps">
       ${capHtml}
   </div>
+  ${titleHtml}
+  ${brandHtml}
+  ${leakHtml}
+  ${topOverlays.join("\n  ")}
   ${edit ? edit.html : ""}
   ${takeAudio}
   ${overlays.filter((o) => o.audio).map((o) => o.audio).join("\n  ")}
