@@ -262,7 +262,10 @@ if (spec.matte) {
   const mp = path.join(A, "talk-matte.webm");
   if (!fs.existsSync(mp)) {
     console.log("cutting the speaker out (hyperframes remove-background, ~4 fps; cached in assets/talk-matte.webm)...");
-    execFileSync("npx", ["hyperframes", "remove-background", path.resolve(proj, SRC), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 }); console.log("  matte done");
+    // npx is a .cmd shim on Windows and CreateProcess cannot launch it directly, so this
+    // threw ENOENT and took every `behind` beat with it (they die() without a matte).
+    const npx = process.platform === "win32" ? ["cmd", ["/c", "npx"]] : ["npx", []];
+    execFileSync(npx[0], [...npx[1], "hyperframes", "remove-background", path.resolve(proj, SRC), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 }); console.log("  matte done");
   }
   matteHtml = takes.map((k, i) => `
       <video id="matte-${i}" class="matte" src="assets/talk-matte.webm" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="2" muted playsinline></video>`).join("");
