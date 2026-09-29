@@ -16,6 +16,19 @@ recording (`examples/gallery/`) to check that they read as different.
 | `launch` | dark UI windows with typed prompts, phone frames with chats, glitch transitions, violet accent | product and AI launches, feature demos | `ui` (the pain or the prompt), `device` (the product answering), `sentence` hero for the name, cursor CTA card | standard | upbeat electronic |
 | `kinetic` | full-screen word-by-word type on a solid colour, a camera gliding between words, speaker in a round picture-in-picture | hooks, quotes, manifestos, lists | `kinetic` scenes (`*keyword*`, `_filler_`), `pip: true`, 1-2 per reel | standard | percussive |
 | `pop` | giant display words BEHIND the speaker (person cut-out), uppercase captions with hot colour boxes | personal brand, lifestyle, bold claims | `behind` beats on the 2-4 biggest words, colour-block CTA | standard | upbeat pop |
+| `closer` | whole phrase in ALL CAPS on a solid yellow box, automatic punch-ins every ~2.4 s | high-energy sales, Hormozi-style shorts | no scenes; `cadence` does the framing, a whoosh every 3rd cut | restrained | none |
+| `headline` | 1-2 word tall condensed ALL CAPS captions, punch-ins every ~1.4 s | news-style hooks, B-roll of whatever is named | `window`/`tv`/`image` B-roll for the named thing | standard | none |
+| `keynote` | two framings alternating on `cadence`, lowercase editorial captions with a gold handwritten keyword, warm light leaks, an opening push | cinematic speaker edits with a problem/answer arc | `tv` (distraction/noise), `window` (doing something), `image` (a vivid moment), `icon` tiles, `nametag` | restrained | soft cinematic bed |
+| `alif` | soft teal grade, translucent word-box captions filling in one at a time, name tag with a hand-drawn arrow, grid-paper cutaways | calm premium interviews ("Sessions" look) | `paper`/`collage` cutaways, `nametag`, `listMarks` for enumerations | restrained | none shipped (see below) |
+| `monk` | one locked shot, small lowercase serif captions in muted gold, no pops, no effects | minimalist philosophy / one-idea shorts | none - the point is stillness | none | none |
+
+`closer`, `headline`, `keynote`, `monk` and `alif` were ported from main's
+`engine/core` (BRANCH-AUDIT.md R1) rather than rendered from
+`examples/gallery/` here, so step 4 below (render to confirm the look) is
+still open for all five - a follow-up, not part of that port. `alif.json`'s
+`openFlash`/`packs`/`leaks` degrade to an asset-free CSS flash without
+`library/packs/`, and its `music` is `null` (no cleared track) rather than
+main's Mixkit reference - see the style file's `_about`.
 
 ## Picking a style
 
