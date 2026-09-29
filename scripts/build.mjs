@@ -221,13 +221,55 @@ const beatSfx = (b, t, def, why, opts) => {
 const zoom = spec.zoom || {};
 const tl = []; // GSAP lines
 const snaps = (zoom.snaps || []).map(([t, z]) => [E(t, "snap"), z]).sort((a, b) => a[0] - b[0]);
+// cadence: automatic punch-in rhythm (The Closer: the frame changes every 1-1.5 s).
+// Snaps land on a word start, at every jump cut between takes, and on emphasis words;
+// they alternate between the framings in `scales`. Every `sfxEvery`-th snap gets a sound.
+const cadence = spec.cadence;
+const cadenceSnaps = new Set();
+if (cadence) {
+  const every = cadence.every ?? 1.3, minGap = cadence.minGap ?? 0.6;
+  const scales = cadence.scales ?? [1, 1.12];
+  const emphasis = new Set([].concat(spec.captions?.highlight || []).filter((h) => typeof h === "string").map((h) => h.toLowerCase()));
+  const joins = takes.slice(1).map((k) => r3(k.start));
+  let last = -Infinity, n = 0;
+  const add = (t, why) => {
+    if (t - last < minGap || t >= SPEECH - 0.3) return;
+    if (snaps.some(([u]) => Math.abs(u - t) < minGap)) { last = t; return; }
+    const z = why === "emphasis" ? (cadence.emphasisScale ?? Math.max(...scales) + 0.06) : scales[n % scales.length];
+    snaps.push([r3(t), z]); cadenceSnaps.add(r3(t)); last = t; n++;
+  };
+  let joinIndex = 0;
+  for (const w of words) {
+    const t = r3(Math.max(0, w.start - 0.02));
+    const before = last;
+    while (joinIndex < joins.length && joins[joinIndex] <= w.start + 0.05) add(joins[joinIndex++], "jump cut");
+    if (last !== before) continue;
+    if (emphasis.has(core(w.word).toLowerCase()) || /!$/.test(w.word)) add(t, "emphasis");
+    else if (t - last >= every) add(t, "cadence");
+  }
+  snaps.sort((a, b) => a[0] - b[0]);
+  console.log(`cadence: ${cadenceSnaps.size} punch-ins added (~${(cadenceSnaps.size / Math.max(SPEECH, 1) * 60).toFixed(0)}/min)`);
+}
 tl.push(`tl.set("#snap", { scale: 1 }, 0);`);
+let cadenceIndex = 0;
 for (const [t, z] of snaps) {
   tl.push(`tl.set("#snap", { scale: ${z} }, ${t});`);
-  if (zoom.snapSfx || SFX_PROFILE === "rich") addSfx(t, !zoom.snapSfx || zoom.snapSfx === true ? "whoosh" : zoom.snapSfx, "snap", { db: -6, lead: 0.05 });
+  if (cadenceSnaps.has(t)) {
+    const every = cadence.sfxEvery ?? 4;
+    if (cadence.sfx && cadenceIndex % every === 0) addSfx(t, cadence.sfx, "cadence snap", { db: cadence.sfxDb ?? -6, lead: 0.04 });
+    cadenceIndex++;
+  } else if (zoom.snapSfx || SFX_PROFILE === "rich") addSfx(t, !zoom.snapSfx || zoom.snapSfx === true ? "whoosh" : zoom.snapSfx, "snap", { db: -6, lead: 0.05 });
 }
 let lastPushEnd = -1;
 const pushesEdit = [];
+// openPush: a slow push-in on the speaker over the opening seconds (the hook breathes in)
+if (spec.openPush && !(zoom.pushes || []).some((p) => E(p.at, "push") < (spec.openPush.dur ?? 2.5))) {
+  const d = spec.openPush.dur ?? 2.5;
+  tl.push(`ft("#push", { scale: 1 }, { scale: ${spec.openPush.z ?? 1.08}, duration: ${d}, ease: "sine.inOut" }, 0);`);
+  tl.push(`tl.to("#push", { scale: 1, duration: 0.01 }, ${r3(d + 0.05)});`);
+  pushesEdit.push({ a: 0, b: d, z: spec.openPush.z ?? 1.08, up: d, down: 0 });
+  lastPushEnd = d;
+}
 for (const p of zoom.pushes || []) {
   const a = E(p.at, "push"), up = p.up ?? 0.4, down = p.down ?? 0;
   const b = p.until === "end" ? TOTAL : E(p.until, "push until");
