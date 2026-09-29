@@ -14,6 +14,7 @@
 //   sentence  kinetic sentence: words ink in as they are spoken, then a big
 //             accent hero word lands and a "not X" line gets a hand-drawn X
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 
 // Transitions in/out: blur (0.2 s dissolve through blur), expand (rounded
 // panel grows from the centre), wipe (left to right), cut.
@@ -39,6 +40,20 @@ export const MOTION_CSS = (brand) => `
   .fly-item .t { font-weight: 600; letter-spacing: -2px; line-height: .95; }
   .fly-item .u { font-weight: 400; letter-spacing: -1px; margin-top: 6px; }
   .img-fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 45%; }
+  /* paper / tv / window scenes (ported from main: The Keynote, Alif) */
+  .paper-bg { position: absolute; inset: 0; background-color: #eeede8; background-image: linear-gradient(rgba(60,60,70,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(60,60,70,.09) 1px, transparent 1px); background-size: 38px 38px; box-shadow: inset 0 0 220px rgba(80,70,50,.22); }
+  .win-frame { position: absolute; left: 70px; width: 940px; height: 860px; border-radius: 46px; overflow: hidden; box-shadow: 0 30px 90px rgba(0,0,0,.8); }
+  .tv-room { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 55% at 50% 42%, #3a2a1f 0%, #1c140f 55%, #0b0806 100%); }
+  .tv-side { position: absolute; width: 250px; height: 190px; border-radius: 26px; background: linear-gradient(160deg, #3b3632, #1d1a18); box-shadow: 0 20px 50px rgba(0,0,0,.6); filter: blur(3px); opacity: .7; }
+  .tv-side i { position: absolute; inset: 22px 60px 22px 22px; border-radius: 22px/16px; background: repeating-linear-gradient(0deg, rgba(255,255,255,.18) 0 2px, rgba(0,0,0,.25) 2px 4px), #8a9aa0; }
+  .tv-main { position: absolute; left: 40px; top: 360px; width: 1000px; height: 780px; border-radius: 60px; background: linear-gradient(165deg, #4a443e 0%, #2b2724 45%, #171513 100%); box-shadow: 0 60px 120px rgba(0,0,0,.75), inset 0 2px 0 rgba(255,255,255,.12); }
+  .tv-screen { position: absolute; left: 52px; top: 56px; width: 720px; height: 600px; border-radius: 70px/52px; overflow: hidden; background: #0c0f10; box-shadow: inset 0 0 60px rgba(0,0,0,.9), 0 0 0 10px #151311; }
+  .tv-screen img, .tv-screen video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(1.15) contrast(1.08); }
+  .tv-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 2px, rgba(0,0,0,0) 2px 4px), radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,.65) 100%); mix-blend-mode: multiply; }
+  .tv-glare { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(160deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,0) 35%); }
+  .tv-knobs { position: absolute; right: 52px; top: 90px; width: 130px; display: flex; flex-direction: column; align-items: center; gap: 38px; }
+  .tv-knobs b { width: 92px; height: 92px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #6d665f, #1f1c1a 70%); box-shadow: 0 8px 18px rgba(0,0,0,.6); }
+  .tv-knobs s { width: 100px; height: 130px; border-radius: 10px; background: repeating-linear-gradient(0deg, #1a1816 0 6px, #3a3531 6px 9px); }
   .sent-lines { position: absolute; left: 0; right: 0; top: 800px; text-align: center; }
   .sent-line { font-size: 64px; font-weight: 500; color: ${brand.ink}; letter-spacing: -1.5px; line-height: 1.08; white-space: nowrap; }
   .sent-line span { display: inline-block; margin: 0 0.12em; }
@@ -71,8 +86,11 @@ export const MOTION_CSS = (brand) => `
   .kin-text span { display: inline-block; margin: 0 0.14em; }
   .kin-text .em { color: ${brand.accent}; }
   .kin-text .it { font-style: italic; font-weight: 400; }
-  /* serif keyword captions (cinematic) */
-  .eser { display: inline-block; margin: 0 0.13em; font-family: "${brand.serif || "Georgia"}", Georgia, serif; font-style: italic; font-weight: 500; color: ${brand.accent}; text-shadow: 0 0 22px ${brand.accent}99, 0 2px 12px rgba(0,0,0,.4); letter-spacing: 0; }
+  /* per-word keyword treatments in editorial captions (captions.keywords, The Keynote) */
+  .eline:has(.ebold) { white-space: normal; max-width: 960px; margin: 0 auto; text-align: center; }
+  .ew.ebold { font-size: ${brand.boldScale ?? 1.9}em; font-weight: 900; line-height: .92; letter-spacing: -2px; color: ${brand.accent}; text-shadow: 0 6px 24px rgba(0,0,0,.45); }
+  .ew.ealarm { color: ${brand.alarm ?? "#E23B3B"}; font-weight: 800; text-shadow: 0 4px 18px rgba(0,0,0,.5); }
+  .ew.eser { display: inline-block; margin: 0 0.13em; font-family: "${brand.serif || "Georgia"}", Georgia, serif; font-style: italic; font-weight: 500; font-size: ${brand.serifScale ?? 1}em; line-height: .9; color: ${brand.accent}; text-shadow: 0 0 22px ${brand.accent}99, 0 2px 12px rgba(0,0,0,.4); letter-spacing: 0; }
   /* editorial captions */
   #ecaps { position: absolute; left: 0; right: 0; top: 0; height: 0; }
   .eblock { position: absolute; left: 130px; right: 130px; text-align: center; }
@@ -126,6 +144,36 @@ function transOut(ctx, sel, kind, t1) {
     tl.push(`tl.set("${sel}", { autoAlpha: 0, x: 0 }, ${r3(t1)});`);
   }
 }
+
+// object sounds (Alif rule: a sound says what the object IS; plain text lands silently) ----------
+// concept -> [sfx, hero]; hero sounds (money) sit near the voice, the rest ~10 dB under it
+export const OBJECT_SFX = {
+  moneybag: ["kaching-1", true], coins: ["kaching-1", true], money: ["kaching-1", true],
+  watch: ["tick-1", false], clock: ["tick-1", false], hourglass: ["tick-1", false],
+  lightbulb: ["ding-1", false], brain: ["ding-1", false],
+  gears: ["click-1", false], typewriter: ["typing-1", false], robot: ["tech-ui-confirm", false],
+  magnifier: ["whoosh-2", false], hand: ["whoosh-1", false], ladder: ["whoosh-3", false],
+  chess: ["impact-2", false], trophy: ["ding-1", false], rocket: ["riser-1", false],
+  chart: ["riser-1", false], check: ["tick-1", false], phone: ["tech-notification-2", false], mail: ["tech-notification-2", false],
+};
+const soundOf = (ctx) => ctx.sound || {};
+const objectSfx = (ctx, at, key, why) => {
+  const snd = soundOf(ctx);
+  if (snd.objects === false) return;
+  const concept = String(key).replace(/-\d+$/, "").replace(/^.*[\\/]/, "").replace(/\.png$/, "");
+  const [id, hero] = OBJECT_SFX[concept] || [null, false];
+  if (id) ctx.addSfx(at + (snd.objectLead ?? 0.04), id, `${why}: ${concept}`, { db: hero ? (snd.heroDb ?? -2) : (snd.objectDb ?? -8) });
+};
+const lineSfx = (ctx, at, id, why, opts) => { if (soundOf(ctx).lines !== false) ctx.addSfx(at, id, why, opts); };
+// Alif's paper-texture layer: quiet (~15-20 dB under the voice) and bright, so it reads over lo-fi music
+const PAPER_IN = ["paper-quick", "paper-page-turn", "paper-pages"];
+let paperN = 0, penN = 0;
+const penTick = (ctx, at, style, why) => {
+  const snd = soundOf(ctx);
+  if (!snd.pen) return;
+  const id = style === "marker" ? (penN++ % 2 ? "pen-scribble-2" : "pen-scribble") : (penN++ % 2 ? "pen-letters" : "pen-short");
+  ctx.addSfx(at, id, why, { db: snd.penDb ?? -4 });
+};
 
 // scenes ---------------------------------------------------------------------
 export function buildScene(b, id, t0, t1, ctx) {
