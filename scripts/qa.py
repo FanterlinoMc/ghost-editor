@@ -50,7 +50,9 @@ def render_sfx_stem(project):
     open(os.path.join(td, "index.html"), "w").write(html)
     out = os.path.abspath(os.path.join(project, "build", "sfx_stem.mp4"))
     print("rendering the SFX-only stem for the level check...")
-    r = subprocess.run(["npx", "hyperframes", "render", "-o", out, "--quiet"], cwd=td, capture_output=True, text=True)
+    # npx is a .cmd shim on Windows and CreateProcess will not launch it directly.
+    npx = ["cmd", "/c", "npx"] if os.name == "nt" else ["npx"]
+    r = subprocess.run([*npx, "hyperframes", "render", "-o", out, "--quiet"], cwd=td, capture_output=True, text=True)
     if r.returncode != 0:
         sys.exit("stem render failed: " + r.stderr[-500:])
     shutil.rmtree(td, ignore_errors=True)
@@ -92,7 +94,11 @@ def main():
     # words, the SFX from a second render with the take audio stripped.
     # Measuring hits inside the finished mix is useless: most overlap speech.
     print(f"voice p95 peak {ev['voiceP95']:.1f} dBFS (from build); role targets vs voice {ev['roleDb']}")
-    if not a.no_stem:
+    # A reel with no SFX has nothing to level-check, and the stem is a full second render - minutes
+    # of work to measure an empty list. Skip it rather than make the caller pass --no-stem.
+    if not ev["events"]:
+        print("no SFX hits in this build - skipping the stem render")
+    elif not a.no_stem:
         stem = render_sfx_stem(a.project)
         sx = np.frombuffer(subprocess.run(["ffmpeg", "-v", "error", "-i", stem, "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"],
                                           capture_output=True).stdout, np.float32)
