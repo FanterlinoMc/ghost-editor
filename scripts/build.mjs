@@ -346,7 +346,7 @@ const faceY = (() => {
   const ys = JSON.parse(fs.readFileSync(faceFile, "utf8")).samples.filter((x) => x[1] != null).map((x) => (x[1] + x[2]) / 2).sort((a, b) => a - b);
   return ys.length ? Math.round(ys[Math.floor(ys.length / 2)]) : 700;
 })();
-const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, words, proj, LIB, faceY, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
+const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, words, proj, LIB, faceY, sound: spec.sound || {}, source: SRC, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
 // a scene that hands over to an expand/wipe scene stays underneath until the
 // incoming panel has covered it
@@ -358,7 +358,7 @@ for (const b of beatsList) {
   let t1 = b.to === undefined ? (b.type === "endcard" ? TOTAL : t0 + (b.type === "meme" ? 1.8 : 2.5)) : E(b.to, `${b.type} to`);
   if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(E(o.at) - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
   const dur = r3(t1 - t0);
-  const inSlot = ["emoji", "logo", "meme"].includes(b.type);
+  const inSlot = ["emoji", "logo", "meme", "icon"].includes(b.type);
   if (inSlot) {
     for (const [s, e] of slotUsed) if (t0 < e && t1 > s) warn.push(`reaction slot double-booked at ${b.at} (${b.type})`);
     slotUsed.push([t0, t1]);
@@ -380,8 +380,8 @@ for (const b of beatsList) {
     } else warn.push(`${b.type} at ${b.at}: no room beside the face for a card (close-up); make it a full-screen scene`);
   }
   let slotPos = null;
-  if (["emoji", "logo", "meme"].includes(b.type) && b.x === undefined && b.y === undefined && face) {
-    slotPos = placer.slot(t0, t1, b.type === "emoji" ? 360 : b.type === "logo" ? 280 : (b.w ?? 320), b.type === "emoji" ? 360 : 300);
+  if (["emoji", "logo", "meme", "icon"].includes(b.type) && b.x === undefined && b.y === undefined && face) {
+    slotPos = placer.slot(t0, t1, b.type === "emoji" ? 360 : b.type === "logo" || b.type === "icon" ? 280 : (b.w ?? 320), b.type === "emoji" ? 360 : 300);
     if (!slotPos) { warn.push(`${b.type} at ${b.at}: the face fills the frame, no room beside it: skipped`); continue; }
   }
   const box = (html, x = CARD.x, y = cy, w = CARD.w) => `<div id="${id}-in" class="ov card" style="left:${x}px;top:${y}px;width:${w}px">${html}</div>`;
@@ -453,6 +453,40 @@ for (const b of beatsList) {
       tl.push(enter(`#${id}-in`, t0));
       tl.push(`ft("#${id}-in", { rotation: -14 }, { rotation: 0, duration: 0.6, ease: "elastic.out(1.2,0.35)" }, ${t0});`);
       beatSfx(b, t0, "pop", "emoji");
+      break;
+    }
+    case "nametag": {
+      // Measured against Alif's tags at the same scale: an extra-bold grotesque name with the letters touching,
+      // a condensed serif title (every line the same size, packed tight) in a snug box that sweeps in from the
+      // left, and a thin hand-drawn hook from the end of the name down into the box.
+      const x = b.x ?? 64, y = b.y ?? 1310;
+      const nameSize = b.nameSize ?? 66, titleSize = b.titleSize ?? 72;
+      const nameW = (b.name || "").length * nameSize * 0.5;          // rough width of the tight bold name
+      const arrow = `<svg width="64" height="84" viewBox="0 0 64 84" fill="none" style="position:absolute;left:${Math.round(nameW - 8)}px;top:-18px;overflow:visible"><path d="M6 14 C 22 -2, 54 2, 52 30 C 51 46, 44 58, 36 70" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/><path d="M27 60 L35 72 L46 63" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      const lines = [b.title, b.subtitle].filter(Boolean).map((l) => `<div>${esc(l)}</div>`).join("");
+      inner = `<div id="${id}-in" class="ov" style="left:${x}px;top:${y}px;position:absolute">
+        <div style="position:relative;display:inline-block;font-family:'Inter',system-ui,sans-serif;font-size:${nameSize}px;font-weight:800;letter-spacing:-0.075em;line-height:1;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.45);white-space:nowrap">${esc(b.name || "")}${arrow}</div>
+        <div style="position:relative;isolation:isolate;display:inline-block;margin:2px 0 0 6px;padding:6px 26px 14px 10px;font-family:'Instrument Serif',Georgia,serif;font-size:${titleSize}px;letter-spacing:-0.06em;line-height:.88;color:#f4efe6;white-space:nowrap;transform:scaleX(.94);transform-origin:0 0"><span id="${id}-bg" style="position:absolute;inset:0;z-index:-1;background:${b.color ?? brand.accent};transform-origin:0 50%"></span>${lines}</div></div>`;
+      tl.push(`ft("#${id}-in", { autoAlpha: 0, x: -30 }, { autoAlpha: 1, x: 0, duration: 0.35, ease: "power3.out" }, ${t0});`);
+      // the box fills from the left once the words are up, like ink being laid down (Alif)
+      if (b.wipe !== false) tl.push(`ft("#${id}-bg", { scaleX: 0 }, { scaleX: 1, duration: ${b.wipeDur ?? 0.42}, ease: "power2.out" }, ${r3(t0 + 0.08)});`);
+      if (spec.sound?.nametag !== false) beatSfx(b, t0, "whoosh", "nametag", { db: -10 });
+      break;
+    }
+    case "icon": {
+      // a gold glass tile with a line icon (Lucide, ISC licence) for a named concept: "working towards" -> signpost
+      const svgPath = path.join(A, "icons", `lucide-${b.name}.svg`);
+      if (!fs.existsSync(svgPath)) {
+        try { execFileSync("curl", ["-sfL", "-o", svgPath, `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${b.name}.svg`]); }
+        catch { die(`no Lucide icon '${b.name}' (see https://lucide.dev/icons)`); }
+      }
+      const svg = fs.readFileSync(svgPath, "utf8").replace(/<!--[\s\S]*?-->/g, "").replace(/width="24"/, 'width="120"').replace(/height="24"/, 'height="120"')
+        .replace(/stroke="currentColor"/, `stroke="${b.ink ?? "#fff8e6"}"`).replace(/stroke-width="2"/, 'stroke-width="1.6"');
+      const x = b.x ?? (slotPos ? slotPos.x : SLOT.x), y = b.y ?? (slotPos ? slotPos.y : SLOT.y);
+      inner = `<div id="${id}-in" class="ov icon-tile" style="left:${x}px;top:${y}px">${svg}</div>`;
+      tl.push(enter(`#${id}-in`, t0));
+      tl.push(`tl.to("#${id}-in", { y: -12, duration: ${r3(Math.max(0.4, t1 - t0 - 0.3))}, ease: "sine.inOut" }, ${r3(t0 + 0.3)});`);
+      beatSfx(b, t0, "ding-1", "icon tile", { db: -6 });
       break;
     }
     case "logo": {
@@ -627,7 +661,7 @@ if (spec.music) {
 }
 
 // ---------- write ----------
-const FONT_NAMES = { "playfair-display": "Playfair Display", "jetbrains-mono": "JetBrains Mono", "geist-mono": "GeistMono" };
+const FONT_NAMES = { "instrument-serif": "Instrument Serif", "caveat-brush": "Caveat Brush", "yellowtail": "Yellowtail", "eb-garamond": "EB Garamond", "playfair-display": "Playfair Display", "jetbrains-mono": "JetBrains Mono", "geist-mono": "GeistMono" };
 const RANGES = { latin: "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD", cyrillic: "U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116" };
 const fontFaces = fs.readdirSync(path.join(A, "fonts")).filter((f) => /-(latin|cyrillic)(-italic)?\.woff2$/.test(f)).map((f) => {
   const m = /^(.*)-(latin|cyrillic)(-italic)?\.woff2$/.exec(f);
@@ -690,6 +724,10 @@ const html = `<!doctype html>
   .l-strike { position: absolute; left: -4px; right: -4px; top: 55%; height: 6px; background: #FF453A; transform-origin: 0 50%; display: block; }
   .stamp { position: absolute; right: 30px; top: 40%; border: 8px solid #FF453A; color: #FF453A; font-size: 78px; font-weight: 900; padding: 4px 26px; border-radius: 16px; text-transform: uppercase; background: rgba(0,0,0,.25); }
   .emoji { width: 400px; height: 400px; font-size: 320px; line-height: 400px; text-align: center; filter: drop-shadow(0 20px 30px rgba(0,0,0,.35)); }
+  .icon-tile { width: 220px; height: 220px; border-radius: 44px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(145deg, rgba(255,214,120,.92) 0%, rgba(226,166,44,.88) 55%, rgba(170,112,20,.9) 100%);
+    border: 2px solid rgba(255,238,196,.75); box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 60px rgba(242,193,78,.45), inset 0 2px 0 rgba(255,255,255,.55); }
+  .icon-tile svg { filter: drop-shadow(0 3px 6px rgba(120,70,0,.45)); }
   .logo { width: 280px; height: 280px; border-radius: 62px; display: flex; align-items: center; justify-content: center; box-shadow: 0 18px 50px rgba(0,0,0,.35); }
   .logo img { width: 60%; height: 60%; object-fit: contain; }
   .meme-img { background: #fff; padding: 8px; border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.4); }
