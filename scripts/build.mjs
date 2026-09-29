@@ -597,14 +597,44 @@ motionCtx.sidePad = placer.sidePad;
 // ---------- captions ----------
 const cap = { style: "house", group: 3, highlight: null, ...(spec.captions || {}) };
 if (cap.style === "clean" && !cap.highlight) cap.highlight = brand.accent;
+// box: the Closer (whole phrase on a solid accent box); condensed: the Headline (tall 1-2 word caps);
+// serif: the Monk (small lowercase serif, no motion)
+const CAP_SIZES = { pill: 66, box: cap.size ?? 60, condensed: cap.size ?? 104, serif: cap.size ?? 52, sessions: cap.size ?? 64 };
+if (cap.style === "sessions") { cap.pop ??= false; cap.reveal ??= "word"; }
+if (cap.style === "serif") { cap.pop ??= false; cap.lowercase ??= true; }
+if (["box", "condensed"].includes(cap.style)) cap.upper ??= true;
+const caseOf = (word) => cap.upper ? word.toUpperCase() : cap.lowercase === true ? word.toLowerCase() : word;
+const WEAK_END = /^(a|an|the|to|of|and|or|but|in|on|at|for|with|my|your|his|her|their|our|is|are|was|he's|she's|it's|i'm|you're|we're|they're|i|you|he|she|we|they|gonna|wanna|have|has|had|be|so|if|that|this|just)$/i;
 const groups = [];
 let cur = [];
 for (const w of words) {
   if (cur.length && (w.start - cur.at(-1).end > 0.6)) { groups.push(cur); cur = []; }
   cur.push(w);
-  if (cur.length >= cap.group || /[.?!,]$/.test(w.word)) { groups.push(cur); cur = []; }
+  // don't strand a phrase on a weak word ("GONNA HAVE TO" / "OKAY OKAY HE'S"): allow one extra word
+  const bare = w.word.replace(/[^a-z']/gi, "");
+  const weak = cap.smartBreaks !== false && (WEAK_END.test(bare) || /[a-z]'s$/i.test(bare)) && cur.length <= cap.group;
+  const size = cur.reduce((n, x) => n + x.word.trim().split(/\s+/).length, 0);
+  if ((size >= cap.group && !weak) || size > cap.group + 1 || /[.?!,]$/.test(w.word)) { groups.push(cur); cur = []; }
 }
 if (cur.length) groups.push(cur);
+// no one-word orphans ("it." / "okay," / "ChatGPT?"): fold into the phrase they belong to
+const wc = (g) => g.reduce((n, x) => n + x.word.trim().split(/\s+/).length, 0);
+for (let i = 0; i < groups.length; i++) {
+  if (cap.smartBreaks === false || wc(groups[i]) !== 1 || groups.length < 2) continue;
+  const g = groups[i], prev = groups[i - 1], next = groups[i + 1];
+  const joinsPrev = prev && !/[.?!]$/.test(prev.at(-1).word) && g[0].start - prev.at(-1).end < 0.6 && wc(prev) <= cap.group + 1;
+  const joinsNext = next && !/[.?!]$/.test(g[0].word) && next[0].start - g[0].end < 0.6 && wc(next) <= cap.group;
+  if (joinsPrev) { prev.push(...g); groups.splice(i--, 1); }
+  else if (joinsNext) { next.unshift(...g); groups.splice(i--, 1); }
+}
+// fast talk: a phrase on screen for under ~0.5 s can't be read; give it the next phrase's words too
+const MIN_READ = cap.minRead ?? 0.5;
+for (let i = 0; i < groups.length - 1; i++) {
+  const g = groups[i], next = groups[i + 1];
+  if (cap.smartBreaks === false || next[0].start - g[0].start >= MIN_READ || /[.?!]$/.test(g.at(-1).word)) continue;
+  if (wc(g) + wc(next) > cap.group + 4) continue;
+  g.push(...next); groups.splice(i + 1, 1); i--;
+}
 // captions.onlyInScenes: the recording already has burned-in captions, so ours
 // appear only over scenes that cover them (e.g. an image scene)
 const complement = (wins) => { const out = []; let c = 0; for (const [a, b] of [...wins].sort((x, y) => x[0] - y[0])) { if (a > c) out.push([c, a]); c = Math.max(c, b); } if (c < TOTAL) out.push([c, TOTAL + 1]); return out; };
@@ -614,22 +644,23 @@ if (cap.style !== "editorial" && cap.style !== "none") {
   const merged = [];
   for (const [a, b] of [...wins].sort((x, y) => x[0] - y[0])) { if (merged.length && a <= merged.at(-1)[1] + 0.05) merged.at(-1)[1] = Math.max(merged.at(-1)[1], b); else merged.push([a, b]); }
   tl.push(`tl.set("#caps", { autoAlpha: 1 }, 0);`);
-  for (const [a, b] of merged) { tl.push(`tl.to("#caps", { autoAlpha: 0, duration: 0.08 }, ${r3(a)});`); tl.push(`tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, ${r3(b - 0.05)});`); }
+  for (const [a, b] of merged) { tl.push(`tl.to("#caps", { autoAlpha: 0, duration: 0.06 }, ${r3(Math.max(0, a - 0.06))});`); tl.push(`tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, ${r3(b - 0.05)});`); }
 }
 const edit = cap.style === "editorial" ? buildEditorialCaptions(words, cap, motionCtx, cap.onlyInScenes ? complement(shownCaps) : hiddenCaps) : null;
 const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
   const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.05 : SPEECH;
-  const e = Math.min(g.at(-1).end + 0.3, nextS, SPEECH);
+  const e = Math.min(g.at(-1).end + 0.3, nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99));
   g.forEach((w, wi) => {
-    // The serif style is deliberately still: no per-word pop. "No effects, no stickers."
-    if (cap.style !== "serif") tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: 1.08, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
+    if (cap.pop !== false) tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: 1.08, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
+    // reveal: word -> each word appears when it's spoken; the box is already sized for the whole phrase
+    if (cap.reveal === "word" && wi > 0) tl.push(`ft("#cg${gi}w${wi}", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.05 }, ${r3(Math.max(s, w.start - 0.02))});`);
     if (cap.highlight) tl.push(`tl.set("#cg${gi}w${wi}", { color: "${cap.highlight}" }, ${r3(w.start)}); tl.set("#cg${gi}w${wi}", { color: "#fff" }, ${r3(Math.min(w.end + 0.02, e - 0.01))});`);
   });
-  const capSize = cap.style === "pill" ? 66 : cap.style === "clean" ? (cap.size ?? brand.capSize)
-    : cap.style === "serif" ? (cap.size ?? 46) : (cap.size ?? 56);
-  const pl = placer.place(s, e, capSize * (cap.style === "pill" ? 1.6 : 1.3));
-  return `<div id="cg${gi}" class="cap-group clip${pl.mode === "lower-face" && cap.style !== "pill" && cap.style !== "serif" ? " cap-backed" : ""}" style="top:${pl.y}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(w.word)}</span>`).join("")}</div>`;
+  const capSize = CAP_SIZES[cap.style] ?? (cap.style === "clean" ? (cap.size ?? brand.capSize) : (cap.size ?? 56));
+  const pl = placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
+  const backed = pl.mode === "lower-face" && !["pill", "box", "sessions"].includes(cap.style);
+  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : ""}" style="top:${pl.y}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(caseOf(w.word))}</span>`).join("<wbr>")}</div>`;
 }).join("\n      ");
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
@@ -638,12 +669,18 @@ const capCss = cap.style === "clean"
   ? `.cap-group { font-family: ${UI_FONT}, system-ui, sans-serif; font-size: ${cap.size ?? brand.capSize}px; font-weight: 800; color: #fff; letter-spacing: -1px; text-shadow: 0 4px 18px rgba(0,0,0,.55), 0 1px 3px rgba(0,0,0,.6); }`
   : cap.style === "pill"
   ? `.cap-group { font-family: ${UI_FONT}, system-ui, sans-serif; font-size: 66px; font-weight: 800; color: #fff; background: rgba(12,12,14,.88); border-radius: 22px; padding: 16px 32px; max-width: 900px; }`
+  : cap.style === "box"
+  ? `.cap-group { font-family: ${brand.font || "Montserrat"}, system-ui, sans-serif; font-size: ${CAP_SIZES.box}px; font-weight: 900; line-height: 1.08; color: ${cap.ink ?? brand.ink ?? "#111"}; background: ${cap.boxColor ?? brand.accent}; border-radius: 12px; padding: 10px 24px 14px; max-width: 860px; text-align: center; box-shadow: 0 10px 28px rgba(0,0,0,.28); }
+  .cap-group .w { margin: 0 0.14em; }`
+  : cap.style === "condensed"
+  ? `.cap-group { font-family: ${cap.font ?? "Oswald"}, sans-serif; font-size: ${CAP_SIZES.condensed}px; font-weight: 700; line-height: .95; letter-spacing: 1px; color: #fff; max-width: 920px; text-align: center; text-shadow: 0 6px 22px rgba(0,0,0,.6), 0 2px 4px rgba(0,0,0,.7); }`
+  : cap.style === "sessions"
+  ? `.cap-group { font-family: "${cap.font ?? "Instrument Serif"}", Georgia, serif; font-size: ${CAP_SIZES.sessions}px; font-weight: 400; line-height: 1.12; letter-spacing: -0.045em; color: #f4f1ea; max-width: 860px; text-align: center; text-shadow: 0 0 14px rgba(255,255,255,.22); }
+  .cap-group .w { margin: 0; background: rgba(78,78,84,.6); padding: 2px 0.065em 8px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .cap-group .w:first-child { padding-left: 16px; } .cap-group .w:last-child { padding-right: 16px; }`
   : cap.style === "serif"
-  // Quiet, essayistic captions: small lowercase serif in muted gold, no stroke, no box, no pop.
-  // The soft shadow is the only concession, and only so the text survives a light background.
-  ? `.cap-group { font-family: "Playfair Display", Georgia, serif; font-size: ${cap.size ?? 46}px; font-weight: 500;
-      color: ${cap.color ?? "#C8A96A"}; text-transform: lowercase; letter-spacing: 0.2px; max-width: 820px;
-      text-shadow: 0 2px 10px rgba(0,0,0,.45); }`
+  ? `.cap-group { font-family: ${cap.font ?? "EB Garamond"}, Georgia, serif; font-size: ${CAP_SIZES.serif}px; font-weight: 500; line-height: 1.15; color: ${cap.color ?? "#E7C66B"}; max-width: 900px; text-align: center; text-shadow: 0 2px 12px rgba(0,0,0,.55); }
+  .cap-group .w { margin: 0 0.12em; }`
   : `.cap-group { font-family: Arial, Helvetica, sans-serif; font-size: ${cap.size ?? 56}px; font-weight: 700; color: #fff; max-width: 900px;
       -webkit-text-stroke: 8px #000; paint-order: stroke fill; text-shadow: 0 4px 10px rgba(0,0,0,.35); }`;
 
