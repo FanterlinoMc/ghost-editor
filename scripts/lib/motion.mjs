@@ -107,7 +107,24 @@ function transIn(ctx, sel, kind, t0) {
 }
 function transOut(ctx, sel, kind, t1) {
   const { tl, r3 } = ctx;
+  // Each out mirrors its in and runs a little faster - the ratio blur already uses (0.18 out
+  // against 0.22 in). An exit as slow as its entrance reads as hesitation.
+  // No SFX here by design: the expand/wipe whoosh is added once in buildScene, so a second on the
+  // way out would double up - and would make every out-transition depend on the SFX library.
   if (kind === "blur") tl.push(`tl.to("${sel}", { autoAlpha: 0, filter: "blur(28px)", duration: 0.18, ease: "power2.in" }, ${r3(t1 - 0.18)});`);
+  if (kind === "expand") tl.push(`tl.to("${sel}", { clipPath: "inset(40% 26% 40% 26% round 120px)", autoAlpha: 0, duration: 0.34, ease: "expo.inOut" }, ${r3(t1 - 0.34)});`);
+  // in opens the right edge (revealing left to right); out keeps travelling the same way by closing
+  // the left edge, so a wipe in/out pair reads as one gesture rather than a bounce.
+  if (kind === "wipe") tl.push(`tl.to("${sel}", { clipPath: "inset(0% 0% 0% 100%)", duration: 0.25, ease: "power3.inOut" }, ${r3(t1 - 0.25)});`);
+  if (kind === "glitch") {
+    // the in-transition's stepped frames, reversed, then gone. Deterministic: no random.
+    const steps = [[-6, "inset(62% 0% 4% 0%)", 180], [14, "inset(30% 0% 30% 0%)", 300],
+                   [-10, "inset(0% 0% 70% 0%)", 60], [18, "inset(55% 0% 12% 0%)", 250],
+                   [-26, "inset(18% 0% 52% 0%)", 120]];
+    const span = 0.035 * steps.length;
+    steps.forEach(([x, clip, hue], i) => tl.push(`tl.set("${sel}", { x: ${x}, clipPath: "${clip}", filter: "hue-rotate(${hue}deg) saturate(2.2)" }, ${r3(t1 - span + i * 0.035)});`));
+    tl.push(`tl.set("${sel}", { autoAlpha: 0, x: 0 }, ${r3(t1)});`);
+  }
 }
 
 // scenes ---------------------------------------------------------------------

@@ -96,7 +96,7 @@ Top-level fields:
 
 `scene` beats are full-screen graphic scenes over the continuing voice. Captions hide during a scene unless `captions: true`.
 
-- **Transitions:** `in` is `blur` (default), `expand`, `wipe`, `glitch` or `cut`. A style can set `scenes.default_in`. `out` is `blur` (default) or `cut`. A scene that ends where an expand or wipe scene starts stays underneath for 0.45 s.
+- **Transitions:** `in` is `blur` (default), `expand`, `wipe`, `glitch` or `cut`. A style can set `scenes.default_in`. `out` takes the same set: `blur` (default), `expand`, `wipe`, `glitch` or `cut`. Each out mirrors its in and runs slightly faster, and `wipe` out closes the left edge so a wipe in/out pair travels one way rather than bouncing back. **Out transitions add no sound** - the whoosh on expand and wipe is played once, on the way in. A scene that ends where an expand or wipe scene starts stays underneath for 0.45 s.
 - **Sound:** default sounds are listed per kind below; expand and wipe also get a whoosh.
 
 | kind | fields | what it looks like |
