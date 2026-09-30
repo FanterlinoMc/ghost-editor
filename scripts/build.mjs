@@ -178,6 +178,12 @@ for (const [from, to] of Object.entries(spec.captions?.phrases || {})) {
 // A phrase mapped to "" removes it: grunts and noise whisper heard as words.
 for (let i = words.length - 1; i >= 0; i--) if (core(words[i].word) === "") words.splice(i, 1);
 
+// rtl (I-18): mirrors the cyr check further down (build.mjs, near capCss) but for scripts that
+// read right-to-left (Arabic, Hebrew, ...). Computed here, before motionCtx, because
+// buildEditorialCaptions (motion.mjs) needs it for the per-word "script" write-on animation and
+// the highlight underline, both of which mirror their sweep direction under rtl.
+const rtl = /[֐-ࣿיִ-﷿ﹰ-﻿]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
+
 // ---------- assets ----------
 const A = path.join(proj, "assets");
 for (const d of ["sfx", "memes", "icons", "fonts"]) fs.mkdirSync(path.join(A, d), { recursive: true });
@@ -390,7 +396,7 @@ const faceY = (() => {
   const ys = JSON.parse(fs.readFileSync(faceFile, "utf8")).samples.filter((x) => x[1] != null).map((x) => (x[1] + x[2]) / 2).sort((a, b) => a - b);
   return ys.length ? Math.round(ys[Math.floor(ys.length / 2)]) : 700;
 })();
-const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, words, proj, LIB, faceY, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
+const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, words, proj, LIB, faceY, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
 // a scene that hands over to an expand/wipe scene stays underneath until the
 // incoming panel has covered it
@@ -759,27 +765,27 @@ const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
 const UI_FONT = brand.font || (cyr ? "Inter" : "Geist");
 const capCss = cap.style === "clean"
-  ? `.cap-group { font-family: ${UI_FONT}, system-ui, sans-serif; font-size: ${cap.size ?? brand.capSize}px; font-weight: 800; color: #fff; letter-spacing: -1px; text-shadow: 0 4px 18px rgba(0,0,0,.55), 0 1px 3px rgba(0,0,0,.6); }`
+  ? `.cap-group { font-family: ${UI_FONT}, "Noto Sans Arabic", system-ui, sans-serif; font-size: ${cap.size ?? brand.capSize}px; font-weight: 800; color: #fff; letter-spacing: -1px; text-shadow: 0 4px 18px rgba(0,0,0,.55), 0 1px 3px rgba(0,0,0,.6); }`
   : cap.style === "pill"
-  ? `.cap-group { font-family: ${UI_FONT}, system-ui, sans-serif; font-size: 66px; font-weight: 800; color: #fff; background: rgba(12,12,14,.88); border-radius: 22px; padding: 16px 32px; max-width: 900px; }`
+  ? `.cap-group { font-family: ${UI_FONT}, "Noto Sans Arabic", system-ui, sans-serif; font-size: 66px; font-weight: 800; color: #fff; background: rgba(12,12,14,.88); border-radius: 22px; padding: 16px 32px; max-width: 900px; }`
   : cap.style === "box"
-  ? `.cap-group { font-family: ${brand.font || "Montserrat"}, system-ui, sans-serif; font-size: ${CAP_SIZES.box}px; font-weight: 900; line-height: 1.08; color: ${cap.ink ?? brand.ink ?? "#111"}; background: ${cap.boxColor ?? brand.accent}; border-radius: 12px; padding: 10px 24px 14px; max-width: 860px; text-align: center; box-shadow: 0 10px 28px rgba(0,0,0,.28); }
+  ? `.cap-group { font-family: ${brand.font || "Montserrat"}, "Noto Sans Arabic", system-ui, sans-serif; font-size: ${CAP_SIZES.box}px; font-weight: 900; line-height: 1.08; color: ${cap.ink ?? brand.ink ?? "#111"}; background: ${cap.boxColor ?? brand.accent}; border-radius: 12px; padding: 10px 24px 14px; max-width: 860px; text-align: center; box-shadow: 0 10px 28px rgba(0,0,0,.28); }
   .cap-group .w { margin: 0 0.14em; }`
   : cap.style === "condensed"
-  ? `.cap-group { font-family: ${cap.font ?? "Oswald"}, sans-serif; font-size: ${CAP_SIZES.condensed}px; font-weight: 700; line-height: .95; letter-spacing: 1px; color: #fff; max-width: 920px; text-align: center; text-shadow: 0 6px 22px rgba(0,0,0,.6), 0 2px 4px rgba(0,0,0,.7); }`
+  ? `.cap-group { font-family: ${cap.font ?? "Oswald"}, "Noto Sans Arabic", sans-serif; font-size: ${CAP_SIZES.condensed}px; font-weight: 700; line-height: .95; letter-spacing: 1px; color: #fff; max-width: 920px; text-align: center; text-shadow: 0 6px 22px rgba(0,0,0,.6), 0 2px 4px rgba(0,0,0,.7); }`
   : cap.style === "clipping"
-  ? `.cap-group { font-family: Gloock, Georgia, serif; font-size: ${cap.size ?? 58}px; line-height: 1.08; letter-spacing: -0.01em; color: #fbf8f1; background: #141210; padding: 6px 20px 12px; max-width: 900px; text-align: center; box-shadow: 0 10px 22px rgba(0,0,0,.35); }
+  ? `.cap-group { font-family: Gloock, "Noto Sans Arabic", Georgia, serif; font-size: ${cap.size ?? 58}px; line-height: 1.08; letter-spacing: -0.01em; color: #fbf8f1; background: #141210; padding: 6px 20px 12px; max-width: 900px; text-align: center; box-shadow: 0 10px 22px rgba(0,0,0,.35); }
   .cap-group .w { margin: 0 0.12em; }`
   : cap.style === "sessions"
   // R1b port: restyled to match editorial-collage's locked look (shares this style key with alif.json,
   // which had no CATALOG.md-tracked caption rate and no fixture dependency - see R1b's report for the tradeoff)
-  ? `.cap-group { font-family: "${cap.font ?? "Instrument Serif"}", Georgia, serif; font-size: ${CAP_SIZES.sessions}px; font-weight: 400; line-height: 1.12; letter-spacing: -0.05em; color: #fff; max-width: 860px; text-align: center; -webkit-text-stroke: 0.2px #fff; text-shadow: 0 0 8px rgba(255,255,255,.4), 0 0 1px rgba(255,255,255,.85); }
+  ? `.cap-group { font-family: "${cap.font ?? "Instrument Serif"}", "Noto Sans Arabic", Georgia, serif; font-size: ${CAP_SIZES.sessions}px; font-weight: 400; line-height: 1.12; letter-spacing: -0.05em; color: #fff; max-width: 860px; text-align: center; -webkit-text-stroke: 0.2px #fff; text-shadow: 0 0 8px rgba(255,255,255,.4), 0 0 1px rgba(255,255,255,.85); }
   .cap-group { background: rgba(98,98,104,.6); padding: 5px 14px 10px; border-radius: 1px; }
   .cap-group .w { margin: 0 0.055em; }`
   : cap.style === "serif"
-  ? `.cap-group { font-family: ${cap.font ?? "EB Garamond"}, Georgia, serif; font-size: ${CAP_SIZES.serif}px; font-weight: 500; line-height: 1.15; color: ${cap.color ?? "#E7C66B"}; max-width: 900px; text-align: center; text-shadow: 0 2px 12px rgba(0,0,0,.55); }
+  ? `.cap-group { font-family: ${cap.font ?? "EB Garamond"}, "Noto Sans Arabic", Georgia, serif; font-size: ${CAP_SIZES.serif}px; font-weight: 500; line-height: 1.15; color: ${cap.color ?? "#E7C66B"}; max-width: 900px; text-align: center; text-shadow: 0 2px 12px rgba(0,0,0,.55); }
   .cap-group .w { margin: 0 0.12em; }`
-  : `.cap-group { font-family: Arial, Helvetica, sans-serif; font-size: ${cap.size ?? 56}px; font-weight: 700; color: #fff; max-width: 900px;
+  : `.cap-group { font-family: Arial, "Noto Sans Arabic", Helvetica, sans-serif; font-size: ${cap.size ?? 56}px; font-weight: 700; color: #fff; max-width: 900px;
       -webkit-text-stroke: 8px #000; paint-order: stroke fill; text-shadow: 0 4px 10px rgba(0,0,0,.35); }`;
 
 // ---------- asset packs (library/packs/<pack>/<kind>/*.mp4), gated by spec.packs ----------
@@ -1148,10 +1154,22 @@ if (spec.music) {
 
 // ---------- write ----------
 const FONT_NAMES = { "instrument-serif": "Instrument Serif", "caveat-brush": "Caveat Brush", "yellowtail": "Yellowtail", "eb-garamond": "EB Garamond", "playfair-display": "Playfair Display", "jetbrains-mono": "JetBrains Mono", "geist-mono": "GeistMono" };
-const RANGES = { latin: "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD", cyrillic: "U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116" };
-const fontFaces = fs.readdirSync(path.join(A, "fonts")).filter((f) => /-(latin|cyrillic)(-italic)?\.woff2$/.test(f)).map((f) => {
-  const m = /^(.*)-(latin|cyrillic)(-italic)?\.woff2$/.exec(f);
+// latin-ext (I-18, N4): Google's own CSS2 API value, so Romanian/Slovak/Czech captions don't
+// drop to a system font mid-word. arabic: Google's own CSS2 API value for Noto Sans Arabic.
+const RANGES = {
+  latin: "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+  cyrillic: "U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116",
+  "latin-ext": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF",
+  arabic: "U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1",
+};
+// order matters: latin-ext must be tried before latin, or the alternation matches "latin" inside
+// "latin-ext" first and leaves "-ext" unconsumed against the "\.woff2$" anchor, failing the match.
+const fontFaces = fs.readdirSync(path.join(A, "fonts")).filter((f) => /-(latin-ext|latin|cyrillic|arabic)(-italic)?\.woff2$/.test(f)).map((f) => {
+  const m = /^(.*)-(latin-ext|latin|cyrillic|arabic)(-italic)?\.woff2$/.exec(f);
   const fam = FONT_NAMES[m[1]] || m[1].split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+  // Geist/Inter/Montserrat's latin+cyrillic faces are hand-declared below (legacy, predates this
+  // loop); their latin-ext faces are declared there too now, so still skip them here to avoid a
+  // duplicate (harmless but redundant) @font-face for the same family+range.
   if (["Geist", "Inter", "Montserrat"].includes(fam)) return "";
   return `@font-face { font-family: "${fam}"; src: url(assets/fonts/${f}) format("woff2"); font-weight: 100 900;${m[3] ? " font-style: italic;" : ""} unicode-range: ${RANGES[m[2]]}; }`;
 }).join("\n  ");
@@ -1170,11 +1188,14 @@ const html = `<!doctype html>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
 <style>
   @font-face { font-family: Geist; src: url(assets/fonts/geist-latin.woff2) format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: Geist; src: url(assets/fonts/geist-latin-ext.woff2) format("woff2"); font-weight: 100 900; unicode-range: ${RANGES["latin-ext"]}; }
   @font-face { font-family: GeistMono; src: url(assets/fonts/geist-mono-latin.woff2) format("woff2"); }
   @font-face { font-family: Inter; src: url(assets/fonts/inter-cyrillic.woff2) format("woff2"); font-weight: 100 900; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
   @font-face { font-family: Inter; src: url(assets/fonts/inter-latin.woff2) format("woff2"); font-weight: 100 900; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: Inter; src: url(assets/fonts/inter-latin-ext.woff2) format("woff2"); font-weight: 100 900; unicode-range: ${RANGES["latin-ext"]}; }
   @font-face { font-family: Montserrat; src: url(assets/fonts/montserrat-cyrillic.woff2) format("woff2"); font-weight: 100 900; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
   @font-face { font-family: Montserrat; src: url(assets/fonts/montserrat-latin.woff2) format("woff2"); font-weight: 100 900; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+  @font-face { font-family: Montserrat; src: url(assets/fonts/montserrat-latin-ext.woff2) format("woff2"); font-weight: 100 900; unicode-range: ${RANGES["latin-ext"]}; }
   ${fontFaces}
   body { margin: 0; background: #000; }
   #root { position: relative; width: ${W}px; height: ${H}px; overflow: hidden; background: #000; font-family: ${UI_FONT}, system-ui, sans-serif; }
@@ -1231,6 +1252,7 @@ const html = `<!doctype html>
   .cap-group { position: absolute; left: 50%; transform: translateX(-50%); width: max-content; max-width: ${W - 2 * placer.sidePad}px !important; text-align: center; line-height: 1.18; }
   .cap-backed { background: rgba(8,8,10,.55); border-radius: 20px; padding: 6px 22px; -webkit-text-stroke: 0 !important; }
   ${capCss}
+  ${rtl ? `#caps, .cap-group { direction: rtl; unicode-bidi: plaintext; }` : ""}
   /* layout.compact: a smaller card grammar for a narrow band (e.g. under burned-in captions) */
   .compact .card { padding: 18px 28px; border-radius: 22px; }
   .compact .big-text { font-size: 70px; letter-spacing: -1px; }
@@ -1244,7 +1266,7 @@ const html = `<!doctype html>
   .compact .l-line { font-size: 36px; margin: 2px 0; }
   .compact .strike-x { font-size: 80px; top: 8px; }
   .w { display: inline-block; margin: 0 0.2em; transform-origin: 50% 80%; }
-  ${MOTION_CSS(brand)}
+  ${MOTION_CSS(brand, rtl)}
 </style>
 </head>
 <body>

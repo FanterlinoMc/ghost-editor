@@ -20,7 +20,7 @@ import fs from "node:fs";
 // Transitions in/out: blur (0.2 s dissolve through blur), expand (rounded
 // panel grows from the centre), wipe (left to right), cut.
 
-export const MOTION_CSS = (brand) => `
+export const MOTION_CSS = (brand, rtl) => `
   .scene { position: absolute; inset: 0; overflow: hidden; }
   .scene .col { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; }
   .sc-line { font-weight: 400; letter-spacing: -1px; line-height: 1.05; white-space: nowrap; }
@@ -91,7 +91,7 @@ export const MOTION_CSS = (brand) => `
   .eline:has(.ebold) { white-space: normal; max-width: 960px; margin: 0 auto; text-align: center; }
   .ew.ebold { font-size: ${brand.boldScale ?? 1.9}em; font-weight: 900; line-height: .92; letter-spacing: -2px; color: ${brand.accent}; text-shadow: 0 6px 24px rgba(0,0,0,.45); }
   .ew.ealarm { color: ${brand.alarm ?? "#E23B3B"}; font-weight: 800; text-shadow: 0 4px 18px rgba(0,0,0,.5); }
-  .ew.eser { display: inline-block; margin: 0 0.13em; font-family: "${brand.serif || "Georgia"}", Georgia, serif; font-style: italic; font-weight: 500; font-size: ${brand.serifScale ?? 1}em; line-height: .9; color: ${brand.accent}; text-shadow: 0 0 22px ${brand.accent}99, 0 2px 12px rgba(0,0,0,.4); letter-spacing: 0; }
+  .ew.eser { display: inline-block; margin: 0 0.13em; font-family: "${brand.serif || "Georgia"}", "Noto Sans Arabic", Georgia, serif; font-style: italic; font-weight: 500; font-size: ${brand.serifScale ?? 1}em; line-height: .9; color: ${brand.accent}; text-shadow: 0 0 22px ${brand.accent}99, 0 2px 12px rgba(0,0,0,.4); letter-spacing: 0; }
   /* editorial captions */
   #ecaps { position: absolute; left: 0; right: 0; top: 0; height: 0; }
   .eblock { position: absolute; left: 130px; right: 130px; text-align: center; }
@@ -100,8 +100,9 @@ export const MOTION_CSS = (brand) => `
   .ew { display: inline-block; margin: 0 0.13em; color: #fff; font-weight: 700; text-shadow: 0 3px 14px rgba(0,0,0,.35); }
   .etag { display: inline-block; background: ${brand.accent}; color: #fff; font-weight: 700; border-radius: 16px; padding: 2px 18px 8px; margin-bottom: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.25); font-size: ${Math.round(brand.capSize * 0.95)}px; }
   .ehl { position: relative; display: inline-block; margin: 0 0.13em; }
-  .ehl i { position: absolute; left: -8px; right: -8px; top: 12%; bottom: 2%; background: ${brand.accent}; transform-origin: 0 50%; }
+  .ehl i { position: absolute; left: -8px; right: -8px; top: 12%; bottom: 2%; background: ${brand.accent}; transform-origin: ${rtl ? "100% 50%" : "0 50%"}; }
   .ehl .ew { position: relative; margin: 0; }
+  ${rtl ? `#ecaps, .eline { direction: rtl; unicode-bidi: plaintext; }` : ""}
 `;
 
 const CURSOR_SVG = `<svg viewBox="0 0 64 64"><path d="M22 6c-2.8 0-5 2.2-5 5v25l-4.6-4.3c-2-1.9-5.2-1.7-7 .4-1.7 2-1.5 5 .3 6.8l13.8 13.8C23.6 56.9 28.4 59 33.5 59H38c9.4 0 17-7.6 17-17V30c0-2.8-2.2-5-5-5-.9 0-1.8.3-2.5.7-.6-2.2-2.6-3.7-4.9-3.7-1.2 0-2.3.4-3.2 1.1-.8-1.9-2.7-3.1-4.8-3.1-.9 0-1.8.2-2.6.7V11c0-2.8-2.2-5-5-5z" fill="#fff" stroke="#111" stroke-width="3" stroke-linejoin="round"/></svg>`;
@@ -593,7 +594,7 @@ export function buildScene(b, id, t0, t1, ctx) {
 // starts, the previous one relaxes to a light weight. Tag phrases become a
 // tilted accent pill on their own line; highlight words get an accent box wipe.
 export function buildEditorialCaptions(words, cap, ctx, hidden) {
-  const { tl, r3, esc, brand } = ctx;
+  const { tl, r3, esc, brand, rtl } = ctx;
   const tags = (cap.tags || []).map((p) => p.split(/\s+/).map(norm));
   const hl = new Set((cap.highlight || []).map(norm));
   const lines = [];
@@ -641,8 +642,11 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
         // alarm = red while the frame drains to black and white
         const kw = (cap.keywords || {})[norm(w.word)];
         if (kw === "script" || (!kw && hl.has(norm(w.word)) && cap.keywordStyle === "serif")) {
-          // handwriting: the script word writes itself on, left to right
-          tl.push(`ft("#${wid}", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% -10% 0% 0%)", duration: ${r3(Math.max(0.35, Math.min(0.7, w.end - w.start + 0.2)))}, ease: "power1.inOut" }, ${r3(w.start - 0.02)});`);
+          // handwriting: the script word writes itself on, in reading direction (left to right
+          // normally; mirrored for rtl scripts so the reveal still tracks how the word is read)
+          const clipFrom = rtl ? "inset(0% 0% 0% 100%)" : "inset(0% 100% 0% 0%)";
+          const clipTo = rtl ? "inset(0% 0% 0% -10%)" : "inset(0% -10% 0% 0%)";
+          tl.push(`ft("#${wid}", { clipPath: "${clipFrom}" }, { clipPath: "${clipTo}", duration: ${r3(Math.max(0.35, Math.min(0.7, w.end - w.start + 0.2)))}, ease: "power1.inOut" }, ${r3(w.start - 0.02)});`);
           if (cap.keywordSfx !== false && ctx.addSfx) ctx.addSfx(w.start, "whoosh", "keyword script", { db: -8 });
           return `<span id="${wid}" class="ew eser">${esc(txt)}</span>`;
         }
