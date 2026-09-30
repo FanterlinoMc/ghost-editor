@@ -21,6 +21,9 @@ recording (`examples/gallery/`) to check that they read as different.
 | `keynote` | two framings alternating on `cadence`, lowercase editorial captions with a gold handwritten keyword, warm light leaks, an opening push | cinematic speaker edits with a problem/answer arc | `tv` (distraction/noise), `window` (doing something), `image` (a vivid moment), `icon` tiles, `nametag` | restrained | soft cinematic bed |
 | `alif` | soft teal grade, translucent word-box captions filling in one at a time, name tag with a hand-drawn arrow, grid-paper cutaways | calm premium interviews ("Sessions" look) | `paper`/`collage` cutaways, `nametag`, `listMarks` for enumerations | restrained | none shipped (see below) |
 | `monk` | one locked shot, small lowercase serif captions in muted gold, no pops, no effects | minimalist philosophy / one-idea shorts | none - the point is stillness | none | none |
+| `editorial-collage` | vintage engraving collage pages (CRT screen fringe) on the speaker's own words, name tag from frame 1 to the hook page, one type "slam" per video, condensed serif captions in a phrase-sized box that fill in word by word | calm premium founder interviews, brand-neutral base template | `paper` scenes with `engraving` + `lines` (auto-converted to `collage`), `slam`, `nametag`, automatic tool logos / object pop-ups | restrained | none shipped (see below) |
+| `ak-consulting-content` | `editorial-collage` + the `ak-consulting` brand kit (navy accent, watermark, auto name tag from the kit's `person`) | Ahmed Karrar's own reels | same as `editorial-collage`; the name tag is automatic (from `brands/ak-consulting.json`, no `nametag` beat needed) | restrained | none shipped (see below) |
+| `broadsheet` | `editorial-collage`'s engine with a newsprint page (heavy display headline, brand-colour kicker, italic deck) slapped in from the right, white serif-on-black tilted "clipping" captions, byline name tag ("By \<name\>"), fast punch-ins | newsroom energy, fast-cut talking heads | `paper` scenes (auto-remapped serif/box/marker lines to deck/headline/kicker via `pageMap`), `slam`, byline `nametag` | restrained | none shipped (see below) |
 
 `closer`, `headline`, `keynote`, `monk` and `alif` were ported from main's
 `engine/core` (BRANCH-AUDIT.md R1) rather than rendered from
@@ -29,6 +32,33 @@ still open for all five - a follow-up, not part of that port. `alif.json`'s
 `openFlash`/`packs`/`leaks` degrade to an asset-free CSS flash without
 `library/packs/`, and its `music` is `null` (no cleared track) rather than
 main's Mixkit reference - see the style file's `_about`.
+
+`editorial-collage`, `ak-consulting-content` and `broadsheet` were ported the
+same way, in BRANCH-AUDIT.md R1b (main added them after R1's port landed), so
+they carry the same open follow-up and the same `openFlash.clip`/`music: null`
+treatment as `alif.json` - see each style file's `_about` for specifics.
+Unlike the five R1 styles, all three were also build-tested against a real
+recording during the port (not just `node --check`) - see R1b's commit
+messages for what was verified.
+
+## Style layering: `extends` and brand kits
+
+A style can `"extends": "<base-style>"`: the base style loads first, then this
+style's own keys deep-merge on top (only the keys this style sets are
+overridden; everything else comes from the base). `broadsheet.json` extends
+`editorial-collage.json` this way to reuse its whole beat/scene/sound
+vocabulary while swapping the paper look, captions and transitions.
+
+A style (or a reel.json) can also name a `"brandKit": "<id>"`
+(`brands/<id>.json`): accent/accentDark colours, an optional `watermark`, an
+optional `person` (auto-generates a `nametag` beat with `until: "hook"` - on
+screen from the first frame until the first `scene` beat cuts in, or 2.4 s if
+there is none), an optional `music` override, and a flash tint. If the kit
+gives no explicit flash colour/filter, one is derived from the accent hue so
+every brand gets its own burn rather than the shipped orange. `ak-consulting-
+content.json` is `"extends": "editorial-collage", "brandKit": "ak-consulting"`
+- both mechanisms at once: the base style's look, the brand's colours and
+auto name tag.
 
 ## Picking a style
 
