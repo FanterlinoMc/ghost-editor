@@ -1,5 +1,5 @@
 {
-  "_about": "Editorial Collage: a calm, premium talking-head template. Collage pages (an engraving on every page, CRT screen look) land on the speaker's own words; hook page at 2-4 s; name tag from the first frame until the hook page; number cards, logo tiles, object pop-ups; one type slam per video; condensed serif captions in a phrase-sized box that fill in word by word; face-centred framing; rich grade; opening burn in the brand colour; a lo-fi bed with drops before the payoff and the call to action; a quiet paper/pen/zoom sound layer. Brand-neutral: colours, watermark and name tag come from the brand kit.",
+  "_about": "Editorial Collage: a calm, premium talking-head template. Collage pages (an engraving on every page, CRT screen look) land on the speaker's own words; hook page at 2-4 s; name tag from the first frame until the hook page; number cards, logo tiles, object pop-ups; one type slam per video; condensed serif captions in a phrase-sized box that fill in word by word; face-centred framing; rich grade; opening burn in the brand colour; a lo-fi bed with drops before the payoff and the call to action; a quiet paper/pen/zoom sound layer. Brand-neutral: colours, watermark and name tag come from the brand kit. R1b port note: `openFlash.clip` ('burn-04.mp4', from library/packs/editorsinventory/) is dropped, same as alif.json - this fork has no library/packs/ yet (decision 4 / E1, separate task) and pickBurn() dies on a missing file; without `clip` it falls back to the asset-free CSS-gradient flash (packClip() returns null gracefully when packs/ is absent). `music` is null here, not main's 'alif-match-a' - that id only exists in main's library/music/manifest.json, a Mixkit track this port deliberately does not bring over (BRANCH-AUDIT.md decision 4), same as alif.json.",
   "brand": {
     "accent": "#1F2A44",
     "accentDark": "#141C30",
@@ -33,17 +33,7 @@
     "onScenes": true
   },
   "sfxProfile": "restrained",
-  "music": {
-    "id": "alif-match-a",
-    "db": -13,
-    "fadeIn": 0,
-    "fadeOut": 0,
-    "drops": "auto",
-    "dropLen": 0.5,
-    "reveal": false,
-    "revealHz": 650,
-    "payoff": false
-  },
+  "music": null,
   "look": {
     "grade": "saturate(1.1) contrast(1.08) brightness(1.02)",
     "tint": {
@@ -76,7 +66,6 @@
   "openFlash": {
     "dur": 0.4,
     "db": 0,
-    "clip": "burn-04.mp4",
     "media": 0.15,
     "color": [
       "38,92,235",

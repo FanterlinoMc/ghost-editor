@@ -1,5 +1,5 @@
 {
-  "_about": "Broadsheet: a talking head cut like a newspaper coming alive. Fast punch-ins every ~1.6 s across three framings, a newsprint page every 6-8 s (heavy display headline, a brand-colour kicker, an italic deck, the engraving printed like a news photo) slapped in from the right and whipped out, captions as white serif on black paper strips each tilted like a pasted clipping, a byline name tag, a warm punchy newsprint grade, a groovy bed. Built on the same engine as Editorial Collage.",
+  "_about": "Broadsheet: a talking head cut like a newspaper coming alive. Fast punch-ins every ~1.6 s across three framings, a newsprint page every 6-8 s (heavy display headline, a brand-colour kicker, an italic deck, the engraving printed like a news photo) slapped in from the right and whipped out, captions as white serif on black paper strips each tilted like a pasted clipping, a byline name tag, a warm punchy newsprint grade, a groovy bed. Built on the same engine as Editorial Collage. R1b port note: `music` is null here, not main's 'alif-match-c' - same reason as editorial-collage.json and alif.json (that id only exists in main's library/music/manifest.json, a Mixkit track this port deliberately does not bring over, BRANCH-AUDIT.md decision 4).",
   "extends": "editorial-collage",
   "cadence": {
     "every": 1.6,
@@ -45,10 +45,7 @@
     "vignette": 0.35,
     "grain": 0.08
   },
-  "music": {
-    "id": "alif-match-c",
-    "db": -13
-  },
+  "music": null,
   "zoom": {
     "origin": "50% 40%",
     "base": 1.1
