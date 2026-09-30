@@ -15,6 +15,7 @@
 //             accent hero word lands and a "not X" line gets a hand-drawn X
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import fs from "node:fs";
 
 // Transitions in/out: blur (0.2 s dissolve through blur), expand (rounded
 // panel grows from the centre), wipe (left to right), cut.
@@ -115,6 +116,8 @@ function transIn(ctx, sel, kind, t0) {
   if (kind === "blur") tl.push(`ft("${sel}", { autoAlpha: 0, filter: "blur(28px)", scale: 1.05 }, { autoAlpha: 1, filter: "blur(0px)", scale: 1, duration: 0.22, ease: "power2.out" }, ${t0});`);
   if (kind === "expand") tl.push(`ft("${sel}", { clipPath: "inset(40% 26% 40% 26% round 120px)" }, { clipPath: "inset(0% 0% 0% 0% round 0px)", duration: 0.42, ease: "expo.inOut" }, ${t0});`);
   if (kind === "wipe") tl.push(`ft("${sel}", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.3, ease: "power3.inOut" }, ${t0});`);
+  // slide: a sheet of paper slapped down from the right, a little rotated, settling flat (Broadsheet) (R1b port)
+  if (kind === "slide") tl.push(`ft("${sel}", { xPercent: 105, rotation: 5, transformOrigin: "100% 100%" }, { xPercent: 0, rotation: 0, duration: 0.26, ease: "power3.out" }, ${t0});`);
   if (kind === "glitch") {
     // six stepped frames of slice + RGB-ish shift, then clean: deterministic, no random
     const { r3 } = ctx;
@@ -134,6 +137,7 @@ function transOut(ctx, sel, kind, t1) {
   // in opens the right edge (revealing left to right); out keeps travelling the same way by closing
   // the left edge, so a wipe in/out pair reads as one gesture rather than a bounce.
   if (kind === "wipe") tl.push(`tl.to("${sel}", { clipPath: "inset(0% 0% 0% 100%)", duration: 0.25, ease: "power3.inOut" }, ${r3(t1 - 0.25)});`);
+  if (kind === "slide") tl.push(`tl.to("${sel}", { xPercent: -105, rotation: -4, transformOrigin: "0% 100%", duration: 0.2, ease: "power3.in" }, ${r3(t1 - 0.2)});`);  // R1b port
   if (kind === "glitch") {
     // the in-transition's stepped frames, reversed, then gone. Deterministic: no random.
     const steps = [[-6, "inset(62% 0% 4% 0%)", 180], [14, "inset(30% 0% 30% 0%)", 300],
@@ -175,13 +179,58 @@ const penTick = (ctx, at, style, why) => {
   ctx.addSfx(at, id, why, { db: snd.penDb ?? -4 });
 };
 
+// a paper page with an engraving -> a laid-out collage page (the director plans words + picture; this places them)
+// (R1b port)
+const BASE = { serif: 150, box: 140, dark: 160, caps: 64 }, LINE_H = { serif: 0.9, box: 1.25, dark: 1.2, caps: 1.2 };
+const pngSize = (file) => { const b = fs.readFileSync(file); return [b.readUInt32BE(16), b.readUInt32BE(20)]; };
+export function pageToCollage(b, ctx) {
+  const items = [];
+  let y = 300, n = 0;
+  const lines = b.lines || [];
+  const lead = lines[0]?.style === "marker" ? 1 : 0;
+  if (lead) { items.push({ type: "text", style: "marker", text: lines[0].text, x: 90, y: y - 40, size: 120, rotate: -4, at: lines[0].at }); y += 110; }
+  for (const l of lines.slice(lead).filter((l) => l.style !== "marker")) {
+    let st = l.style || "serif";
+    if (st === "serif" && n % 2 && l.text.length > 8) st = "caps";
+    const size = st === "caps" || l.text.length <= 10 ? BASE[st] : Math.round(BASE[st] * 10 / l.text.length * 1.2);
+    items.push({ type: "text", style: st, text: l.text, x: 80 + (n % 2) * 90, y, size, at: l.at });
+    y += Math.round(size * LINE_H[st] * (st === "caps" ? 1.25 : 1)) + 10; n++;
+  }
+  const marks = lines.slice(lead).filter((l) => l.style === "marker");
+  const bottom = marks.length ? 1400 : 1560;
+  const file = path.join(ctx.LIB, "engravings", "png", `${b.engraving}.png`);
+  const [iw, ih] = fs.existsSync(file) ? pngSize(file) : [1, 1];
+  const w = Math.round(Math.min(860, (bottom - (y + 10)) * iw / ih));
+  items.push({ type: "image", src: b.engraving, x: Math.round((1080 - w) / 2), y: y + 10, w, at: (lines[0]?.at ?? b.at) + 0.25 });
+  let my = bottom + 30;
+  for (const l of marks) { const size = l.text.length <= 12 ? 120 : 92; items.push({ type: "text", style: "marker", text: l.text, x: 120, y: my, size, rotate: -4, at: l.at }); my += size; }
+  const map = ctx.pageMap || {};
+  const H = { headline: 1.0, kicker: 1.5, deck: 1.05 };
+  for (const it of items) {
+    if (it.type !== "text" || !map[it.style]) continue;
+    it.style = map[it.style];
+    if (it.style === "headline") it.size = Math.min(150, Math.round(1380 / Math.max(6, it.text.length)));
+    if (it.style === "kicker") { it.size = 40; it.rotate = 0; }
+    if (it.style === "deck") it.size = Math.min(96, it.size ?? 96);
+  }
+  if (ctx.pageMap) {
+    // restack the text column with the new sizes, then the picture under it, like a newspaper column
+    let y = 250;
+    const texts = items.filter((it) => it.type === "text"), img = items.find((it) => it.type === "image");
+    for (const it of texts) { it.x = 80; it.y = y; y += Math.round((it.size ?? 90) * (H[it.style] ?? 1.1)) + 14; }
+    if (img) { const [iw, ih] = fs.existsSync(path.join(ctx.LIB, "engravings", "png", `${img.src}.png`)) ? pngSize(path.join(ctx.LIB, "engravings", "png", `${img.src}.png`)) : [1, 1]; img.y = y + 20; img.w = Math.round(Math.min(860, (1560 - img.y) * iw / ih)); img.x = Math.round((1080 - img.w) / 2); }
+  }
+  return { ...b, kind: "collage", paper: b.paper ?? ctx.pagePaper ?? "grid", screen: b.screen ?? ctx.pageScreen ?? false, items };
+}
+
 // scenes ---------------------------------------------------------------------
 export function buildScene(b, id, t0, t1, ctx) {
+  if (b.kind === "paper" && b.engraving) b = pageToCollage(b, ctx);  // R1b port
   const { tl, E, r3, esc, addSfx, brand, userAsset, words } = ctx;
   const sid = `${id}-sc`;
   let body = "";
   const bg = b.bg === "accent" ? `linear-gradient(135deg, ${brand.accentDark} 0%, ${brand.accent} 55%, ${brand.accentDark} 100%)` : (b.bg || "#fff");
-  const inKind = b.in ?? "blur", outKind = b.out ?? "blur";
+  const inKind = b.in ?? ctx.sceneIn ?? "blur", outKind = b.out ?? ctx.sceneOut ?? "blur";
   let customBg = null;
 
   if (b.kind === "card") {
@@ -469,6 +518,10 @@ export function buildScene(b, id, t0, t1, ctx) {
       box: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:${sz ?? 150}px;color:#fff;background:${brand.accent};padding:0 22px 12px;letter-spacing:-3px;line-height:1`,
       marker: (sz) => `font-family:'Caveat Brush',cursive;font-size:${sz ?? 130}px;color:#1e1e22;line-height:.8`,
       italic: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-style:italic;text-transform:uppercase;font-size:${sz ?? 210}px;color:#26302a;letter-spacing:-6px;line-height:.9`,
+      // Broadsheet (newsprint): a heavy display headline, a small kicker in the brand colour, an italic deck (R1b port)
+      headline: (sz) => `font-family:Gloock,Georgia,serif;text-transform:uppercase;font-size:${sz ?? 120}px;color:#15130f;letter-spacing:-0.02em;line-height:.92`,
+      kicker: (sz) => `font-family:Inter,system-ui,sans-serif;font-weight:800;text-transform:uppercase;font-size:${sz ?? 40}px;color:${brand.accent};letter-spacing:.14em;line-height:1`,
+      deck: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:${sz ?? 88}px;color:#2a2620;letter-spacing:-0.02em;line-height:.95`,
     };
     const items = (b.items || []).map((it, i) => {
       const iid = `${id}-c${i}`;
@@ -509,7 +562,12 @@ export function buildScene(b, id, t0, t1, ctx) {
       const layer = `z-index:${it.z ?? (it.type === "glasses" ? 5 : it.type === "image" ? 1 : 3)}`;
       return `<div id="${iid}" style="${pos};${layer}">${html}</div>`;
     }).join("");
-    const paperBg = paper === "grid"
+    const paperBg = paper === "newsprint"
+      // R1b port (Broadsheet)
+      ? `<div class="paper-bg" style="background-color:#ebe4d4;background-image:radial-gradient(rgba(30,25,15,.13) 1.1px, transparent 1.4px), linear-gradient(90deg, transparent 49.6%, rgba(40,30,20,.10) 50%, transparent 50.4%);background-size:9px 9px, 100% 100%;box-shadow:inset 0 0 160px rgba(90,70,40,.30)"></div>
+         <div style="position:absolute;left:60px;right:60px;top:170px;border-top:4px double rgba(20,18,14,.75)"></div>
+         <div style="position:absolute;left:60px;right:60px;bottom:170px;border-top:2px solid rgba(20,18,14,.55)"></div>`
+      : paper === "grid"
       ? `<div class="paper-bg" style="background-color:#ecebe4;background-image:linear-gradient(rgba(40,40,50,.28) 2px, transparent 2px), linear-gradient(90deg, rgba(40,40,50,.28) 2px, transparent 2px);background-size:96px 96px"></div>`
       : `<div class="paper-bg" style="background-color:#e9e6dc;background-image:none"></div>`;
     const screenFx = b.screen === false ? "" : `<div style="position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, rgba(255,0,0,.035) 0 1px, rgba(0,255,0,.035) 1px 2px, rgba(0,0,255,.035) 2px 3px);mix-blend-mode:multiply"></div>
@@ -634,6 +692,18 @@ export function buildMusic(m, ctx, execFileSync, path, fs) {
     fs.mkdirSync(path.join(proj, "assets", "music"), { recursive: true });
     fs.copyFileSync(path.join(LIB, "music", man[m.id].file), path.join(proj, "assets", "music", man[m.id].file));
     src = `assets/music/${man[m.id].file}`;
+  }
+  // the reveal: the bed plays muffled (low-pass, a touch quieter) through the hook, then opens to full on the turn
+  // ("but...", "here's exactly how"). Pre-rendered so any player hears it the same way.
+  // (R1b port)
+  if (m.revealAt > 0.5) {
+    const U = m.revealAt, R = m.revealRamp ?? 0.45, hz = m.revealHz ?? 650;
+    const out = path.join(proj, "assets", "music", "score.wav");
+    const f = `[0:a]atrim=start=${m.start ?? 0},asetpts=PTS-STARTPTS,asplit=2[d][w];` +
+      `[w]lowpass=f=${hz},lowpass=f=${hz},volume=1.6,volume='if(lt(t,${U}),1,if(lt(t,${U + R}),1-(t-${U})/${R},0))':eval=frame[wet];` +
+      `[d]volume='if(lt(t,${U}),0,if(lt(t,${U + R}),(t-${U})/${R},1))':eval=frame[dry];[wet][dry]amix=inputs=2:normalize=0,atrim=0:${TOTAL + 0.5}`;
+    const r = spawnSync("ffmpeg", ["-nostdin", "-v", "error", "-y", "-i", path.resolve(proj, src), "-filter_complex", f, "-ar", "44100", out], { encoding: "utf8" });
+    if (r.status === 0) { src = "assets/music/score.wav"; m = { ...m, start: 0 }; }
   }
   const err = spawnSync("ffmpeg", ["-hide_banner", "-nostats", "-i", path.resolve(proj, src), "-t", "60", "-af", "ebur128", "-f", "null", "-"], { encoding: "utf8" }).stderr;
   const I = parseFloat((err.match(/I:\s+(-?[\d.]+) LUFS/g) || ["I: -14"]).at(-1).split(/\s+/).at(-2));

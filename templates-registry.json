@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "broadsheet",
+      "name": "Broadsheet",
+      "tagline": "A talking head cut like a newspaper coming alive",
+      "status": "draft",
+      "style": "broadsheet",
+      "best_for": [
+        "founders",
+        "consultants",
+        "educators",
+        "anyone with a point to make fast"
+      ],
+      "needs": [
+        "one talking-head video",
+        "a brand kit"
+      ],
+      "does": [
+        "punch-ins every ~1.6 s across three framings",
+        "a newsprint page every 6-8 s (kicker, headline, deck, engraving)",
+        "pages slapped in and whipped out",
+        "clipping captions (white serif on tilted black paper strips)",
+        "byline name tag",
+        "number cards, logo tiles, object pop-ups, one type slam",
+        "intros and fillers cut",
+        "warm newsprint grade, groovy bed"
+      ],
+      "brand_kit_fields": [
+        "name",
+        "accent",
+        "accentDark (optional)",
+        "watermark",
+        "person.name",
+        "person.title",
+        "person.subtitle",
+        "music.db (optional)",
+        "flash (optional: derived from accent)"
+      ],
+      "note": "First attempt rejected by Ahmed (29 Sep): rebuild from his reference examples."
+    },
+    {
+      "id": "folio",
+      "name": "Folio",
+      "tagline": "Calm, premium talking head with editorial collage pages",
+      "status": "ready",
+      "style": "editorial-collage",
+      "best_for": [
+        "founders",
+        "consultants",
+        "experts",
+        "B2B thought leadership"
+      ],
+      "needs": [
+        "one talking-head video (9:16 or 16:9)",
+        "a brand kit"
+      ],
+      "does": [
+        "hook page at 2-4 s on the spoken words",
+        "collage pages with an engraving on every page",
+        "name tag from the first frame",
+        "number cards on enumerations",
+        "logo tiles when a tool is named",
+        "object pop-ups with a word label",
+        "one type slam",
+        "serif captions in a phrase-sized box",
+        "face-centred framing and colour matching",
+        "lo-fi bed with drops",
+        "paper, pen and zoom sound layer",
+        "opening burn in the brand colour"
+      ],
+      "brand_kit_fields": [
+        "name",
+        "accent",
+        "accentDark (optional)",
+        "watermark",
+        "person.name",
+        "person.title",
+        "person.subtitle",
+        "music.db (optional)",
+        "flash (optional: derived from accent)"
+      ]
+    },
+    {
+      "id": "the-closer",
+      "name": "The Closer",
+      "tagline": "Fast, bold box captions and constant punch-ins",
+      "status": "beta",
+      "style": "closer"
+    },
+    {
+      "id": "the-keynote",
+      "name": "The Keynote",
+      "tagline": "Script keywords, light leaks and a film look",
+      "status": "beta",
+      "style": "keynote"
+    },
+    {
+      "id": "the-monk",
+      "name": "The Monk",
+      "tagline": "One locked shot, quiet serif captions",
+      "status": "beta",
+      "style": "monk"
+    },
+    {
+      "id": "the-headline",
+      "name": "The Headline",
+      "tagline": "Condensed caps captions and B-roll on every named subject",
+      "status": "beta",
+      "style": "headline"
+    }
+  ],
+  "customer_templates": [
+    {
+      "id": "ak-consulting-content",
+      "name": "AK Consulting Content",
+      "extends": "editorial-collage",
+      "brand_kit": "ak-consulting",
+      "locked": "2026-09-29"
+    }
+  ]
+}
