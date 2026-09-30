@@ -10,7 +10,8 @@
   "captions": {
     "style": "box",
     "group": 3,
-    "y": 1150
+    "y": 1150,
+    "smartBreaks": true
   },
   "sfxProfile": "restrained",
   "music": null,

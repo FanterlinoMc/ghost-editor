@@ -12,7 +12,8 @@
     "group": 3,
     "y": 1120,
     "size": 64,
-    "maxHold": 1.8
+    "maxHold": 1.8,
+    "smartBreaks": true
   },
   "cadence": {
     "every": 3.0,

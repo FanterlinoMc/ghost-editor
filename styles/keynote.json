@@ -15,7 +15,8 @@
     "style": "editorial",
     "group": 3,
     "y": 960,
-    "keywordStyle": "serif"
+    "keywordStyle": "serif",
+    "smartBreaks": true
   },
   "cadence": {
     "every": 1.4,

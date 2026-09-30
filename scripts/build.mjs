@@ -605,6 +605,12 @@ if (cap.style === "serif") { cap.pop ??= false; cap.lowercase ??= true; }
 if (["box", "condensed"].includes(cap.style)) cap.upper ??= true;
 const caseOf = (word) => cap.upper ? word.toUpperCase() : cap.lowercase === true ? word.toLowerCase() : word;
 const WEAK_END = /^(a|an|the|to|of|and|or|but|in|on|at|for|with|my|your|his|her|their|our|is|are|was|he's|she's|it's|i'm|you're|we're|they're|i|you|he|she|we|they|gonna|wanna|have|has|had|be|so|if|that|this|just)$/i;
+// captions.smartBreaks is OPT-IN (decision 6): the three rules below (weak trailing word,
+// one-word orphans, minimum read time) run only when a style or reel asks for them with
+// `true`. Defaulting them on silently re-captioned every pre-existing style, which would
+// invalidate the measured caption rates in CATALOG.md that The Closer, The Monk and The
+// Headline were tuned against.
+const SMART = cap.smartBreaks === true;
 const groups = [];
 let cur = [];
 for (const w of words) {
@@ -612,7 +618,7 @@ for (const w of words) {
   cur.push(w);
   // don't strand a phrase on a weak word ("GONNA HAVE TO" / "OKAY OKAY HE'S"): allow one extra word
   const bare = w.word.replace(/[^a-z']/gi, "");
-  const weak = cap.smartBreaks !== false && (WEAK_END.test(bare) || /[a-z]'s$/i.test(bare)) && cur.length <= cap.group;
+  const weak = SMART && (WEAK_END.test(bare) || /[a-z]'s$/i.test(bare)) && cur.length <= cap.group;
   const size = cur.reduce((n, x) => n + x.word.trim().split(/\s+/).length, 0);
   if ((size >= cap.group && !weak) || size > cap.group + 1 || /[.?!,]$/.test(w.word)) { groups.push(cur); cur = []; }
 }
@@ -620,7 +626,7 @@ if (cur.length) groups.push(cur);
 // no one-word orphans ("it." / "okay," / "ChatGPT?"): fold into the phrase they belong to
 const wc = (g) => g.reduce((n, x) => n + x.word.trim().split(/\s+/).length, 0);
 for (let i = 0; i < groups.length; i++) {
-  if (cap.smartBreaks === false || wc(groups[i]) !== 1 || groups.length < 2) continue;
+  if (!SMART || wc(groups[i]) !== 1 || groups.length < 2) continue;
   const g = groups[i], prev = groups[i - 1], next = groups[i + 1];
   const joinsPrev = prev && !/[.?!]$/.test(prev.at(-1).word) && g[0].start - prev.at(-1).end < 0.6 && wc(prev) <= cap.group + 1;
   const joinsNext = next && !/[.?!]$/.test(g[0].word) && next[0].start - g[0].end < 0.6 && wc(next) <= cap.group;
@@ -631,7 +637,7 @@ for (let i = 0; i < groups.length; i++) {
 const MIN_READ = cap.minRead ?? 0.5;
 for (let i = 0; i < groups.length - 1; i++) {
   const g = groups[i], next = groups[i + 1];
-  if (cap.smartBreaks === false || next[0].start - g[0].start >= MIN_READ || /[.?!]$/.test(g.at(-1).word)) continue;
+  if (!SMART || next[0].start - g[0].start >= MIN_READ || /[.?!]$/.test(g.at(-1).word)) continue;
   if (wc(g) + wc(next) > cap.group + 4) continue;
   g.push(...next); groups.splice(i + 1, 1); i--;
 }
