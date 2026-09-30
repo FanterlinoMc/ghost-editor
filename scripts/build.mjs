@@ -600,6 +600,15 @@ if (cap.style === "clean" && !cap.highlight) cap.highlight = brand.accent;
 // box: the Closer (whole phrase on a solid accent box); condensed: the Headline (tall 1-2 word caps);
 // serif: the Monk (small lowercase serif, no motion)
 const CAP_SIZES = { pill: 66, box: cap.size ?? 60, condensed: cap.size ?? 104, serif: cap.size ?? 52, sessions: cap.size ?? 64 };
+// <wbr> between words is a break opportunity CSS needs only when `.cap-group .w` carries no
+// margin to wrap on. Every style but "sessions" (Alif) gives `.w` a non-zero margin (base
+// 0.2em, box 0.14em, serif 0.12em), which is itself a valid break point - <wbr> there is inert
+// markup. "sessions" zeroes the margin so its `box-decoration-break: clone` background can
+// look continuous, which removes that break point and strands long phrases. So this is
+// opt-in per style (mirrors decision 6's smartBreaks shape), keyed off which styles' `.w` has
+// a zero margin rather than a separate flag, since that margin is the actual reason a style
+// would need it.
+const ZERO_MARGIN_W = new Set(["sessions"]);
 if (cap.style === "sessions") { cap.pop ??= false; cap.reveal ??= "word"; }
 if (cap.style === "serif") { cap.pop ??= false; cap.lowercase ??= true; }
 if (["box", "condensed"].includes(cap.style)) cap.upper ??= true;
@@ -666,7 +675,7 @@ const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const capSize = CAP_SIZES[cap.style] ?? (cap.style === "clean" ? (cap.size ?? brand.capSize) : (cap.size ?? 56));
   const pl = placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
   const backed = pl.mode === "lower-face" && !["pill", "box", "sessions"].includes(cap.style);
-  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : ""}" style="top:${pl.y}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(caseOf(w.word))}</span>`).join("<wbr>")}</div>`;
+  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : ""}" style="top:${pl.y}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(caseOf(w.word))}</span>`).join(ZERO_MARGIN_W.has(cap.style) ? "<wbr>" : "")}</div>`;
 }).join("\n      ");
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
