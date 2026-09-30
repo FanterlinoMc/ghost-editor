@@ -41,12 +41,56 @@ const deepMerge = (a, b) => {
   return b;
 };
 const STYLE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "styles");
-let preset = {};
-if (rawSpec.style) {
-  const sp = path.join(STYLE_DIR, `${rawSpec.style}.json`);
-  if (!fs.existsSync(sp)) { console.error(`ERROR: unknown style '${rawSpec.style}'; have: ${fs.readdirSync(STYLE_DIR).map((f) => f.replace(".json", "")).join(", ")}`); process.exit(1); }
-  preset = JSON.parse(fs.readFileSync(sp, "utf8"));
-  delete preset._about;
+// a style can extend another ("extends": "editorial-collage"): the base loads first, the style overrides it
+// (R1b port: brand-kit layering, ported from main's engine/core/scripts/build.mjs)
+const loadStyle = (name, seen = []) => {
+  const sp = path.join(STYLE_DIR, `${name}.json`);
+  if (!fs.existsSync(sp)) { console.error(`ERROR: unknown style '${name}'; have: ${fs.readdirSync(STYLE_DIR).map((f) => f.replace(".json", "")).join(", ")}`); process.exit(1); }
+  if (seen.includes(name)) { console.error(`ERROR: style '${name}' extends itself`); process.exit(1); }
+  const own = JSON.parse(fs.readFileSync(sp, "utf8"));
+  delete own._about;
+  const base = own.extends ? loadStyle(own.extends, [...seen, name]) : {};
+  delete own.extends;
+  return deepMerge(base, own);
+};
+// a brand kit (brands/<id>.json) turns one customer's identity into template settings: colours, watermark, name tag,
+// and a flash/burn tint derived from the accent colour (so every brand gets its own burn, not ours)
+const hexToHsl = (hex) => {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  const h = d === 0 ? 0 : mx === r ? 60 * (((g - b) / d) % 6) : mx === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4);
+  return [(h + 360) % 360, s * 100, l * 100];
+};
+const hslToRgb = (h, s, l) => {
+  s /= 100; l /= 100;
+  const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n) => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))));
+  return `${f(0)},${f(8)},${f(4)}`;
+};
+const brandLayer = (id) => {
+  const bp = path.join(STYLE_DIR, "..", "brands", `${id}.json`);
+  if (!fs.existsSync(bp)) { console.error(`ERROR: unknown brand kit '${id}' (brands/)`); process.exit(1); }
+  const kit = JSON.parse(fs.readFileSync(bp, "utf8"));
+  const [h, s] = hexToHsl(kit.accent);
+  const layer = {
+    brand: { accent: kit.accent, accentDark: kit.accentDark ?? kit.accent },
+    openFlash: {
+      color: kit.flash?.color ?? [hslToRgb(h, Math.min(90, s + 20), 53), hslToRgb(h, 80, 75)],
+      textureFilter: kit.flash?.textureFilter ?? `hue-rotate(${Math.round((h - 25 + 360) % 360)}deg) saturate(1.6) brightness(.95)`,
+    },
+  };
+  if (kit.watermark) layer.watermark = { text: kit.watermark };
+  if (kit.person) layer.nametag = { name: kit.person.name, title: kit.person.title, subtitle: kit.person.subtitle, until: "hook" };
+  if (kit.music) layer.music = kit.music;
+  return layer;
+};
+let preset = rawSpec.style ? loadStyle(rawSpec.style) : {};
+const kitId = rawSpec.brandKit ?? preset.brandKit;
+if (kitId) {
+  const layer = brandLayer(kitId);
+  if (preset.openFlash === false) delete layer.openFlash;       // a template with no opening burn stays without one
+  preset = deepMerge(preset, layer);
 }
 const spec = deepMerge(preset, rawSpec);
 
@@ -346,11 +390,18 @@ const faceY = (() => {
   const ys = JSON.parse(fs.readFileSync(faceFile, "utf8")).samples.filter((x) => x[1] != null).map((x) => (x[1] + x[2]) / 2).sort((a, b) => a - b);
   return ys.length ? Math.round(ys[Math.floor(ys.length / 2)]) : 700;
 })();
-const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, words, proj, LIB, faceY, sound: spec.sound || {}, source: SRC, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
+const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, words, proj, LIB, faceY, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
 // a scene that hands over to an expand/wipe scene stays underneath until the
 // incoming panel has covered it
 const beatsList = spec.beats || [];
+// a template can carry the name tag: on screen from the first frame until the hook page cuts in (or 2.4 s)
+// (R1b port)
+if (spec.nametag && !beatsList.some((b) => b.type === "nametag")) {
+  const firstPage = beatsList.filter((b) => b.type === "scene").map((b) => b.at).sort((a, b) => a - b)[0];
+  const until = spec.nametag.until === "hook" && firstPage != null && firstPage < 4.5 ? firstPage - 0.05 : (spec.nametag.to ?? 2.4);
+  beatsList.unshift({ type: "nametag", name: spec.nametag.name, title: spec.nametag.title, subtitle: spec.nametag.subtitle, at: spec.nametag.at ?? 0.15, to: Math.max(1.2, until), sfx: false });
+}
 const HANDOVER = 0.45;
 for (const b of beatsList) {
   const id = `b${n++}`;
@@ -455,7 +506,40 @@ for (const b of beatsList) {
       beatSfx(b, t0, "pop", "emoji");
       break;
     }
+    case "slam": {
+      // Alif's type-only pattern break: the footage dims and blurs, one huge serif word (plus a small line) lands on it
+      // (R1b port)
+      const big = esc(String(b.text || "").toUpperCase());
+      const fit = Math.min(b.size ?? 300, Math.floor(1000 / Math.max(1, String(b.text || "").length * 0.47)));
+      inner = `<div id="${id}-in" class="ov" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">
+        <div id="${id}-dim" style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 55%, rgba(8,10,14,.45) 0%, rgba(8,10,14,.72) 100%);backdrop-filter:blur(6px)"></div>
+        ${b.pre ? `<div style="position:relative;font-family:'Instrument Serif',Georgia,serif;font-size:${Math.round(fit * 0.36)}px;color:#f4efe6;letter-spacing:-0.03em;margin-bottom:-${Math.round(fit * 0.08)}px;text-shadow:0 0 14px rgba(255,255,255,.35)">${esc(b.pre)}</div>` : ""}
+        <div id="${id}-big" style="position:relative;font-family:'Instrument Serif',Georgia,serif;font-size:${fit}px;line-height:.9;letter-spacing:-0.035em;color:#fff;text-shadow:0 0 22px rgba(255,255,255,.45), 0 0 2px #fff, 3px 0 0 rgba(230,40,60,.25), -3px 0 0 rgba(20,170,230,.25)">${big}</div>
+        ${b.post ? `<div style="position:relative;font-family:'Instrument Serif',Georgia,serif;font-size:${Math.round(fit * 0.36)}px;color:#f4efe6;letter-spacing:-0.03em;margin-top:${Math.round(fit * 0.02)}px;text-shadow:0 0 14px rgba(255,255,255,.35)">${esc(b.post)}</div>` : ""}</div>`;
+      tl.push(`ft("#${id}-dim", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.18, ease: "power1.out" }, ${t0});`);
+      tl.push(`ft("#${id}-big", { autoAlpha: 0, scale: 1.18, filter: "blur(14px)" }, { autoAlpha: 1, scale: 1, filter: "blur(0px)", duration: 0.28, ease: "power3.out" }, ${t0});`);
+      tl.push(`ft("#${id}-big", { scale: 1 }, { scale: 1.05, duration: ${r3(Math.max(0.3, t1 - t0 - 0.3))}, ease: "none" }, ${r3(t0 + 0.28)});`);
+      tl.push(`tl.to("#${id}-in", { autoAlpha: 0, duration: 0.18, ease: "power2.in" }, ${r3(t1 - 0.18)});`);
+      hiddenCaps.push([t0, t1]);
+      beatSfx(b, t0, "burn-whoosh-fast", "type slam", { db: 0 });
+      break;
+    }
     case "nametag": {
+      if (spec.nametagStyle === "byline") {
+        // Broadsheet: a newspaper byline. "BY NAME" in spaced caps, the outlet and beat in italic serif, a brand rule
+        // (R1b port)
+        const x = b.x ?? 70, y = b.y ?? 1330;
+        inner = `<div id="${id}-scrim" class="ov" style="position:absolute;left:0;right:0;top:${y - 120}px;height:520px;background:linear-gradient(180deg, rgba(10,8,6,0) 0%, rgba(10,8,6,.55) 45%, rgba(10,8,6,.55) 100%)"></div>
+        <div id="${id}-in" class="ov" style="left:${x}px;top:${y}px;position:absolute">
+          <div id="${id}-rule" style="width:480px;height:7px;background:${b.color ?? brand.accent};margin-bottom:14px;transform-origin:0 50%"></div>
+          <div style="font-family:Inter,system-ui,sans-serif;font-weight:800;font-size:50px;letter-spacing:.14em;color:#fff;text-transform:uppercase;text-shadow:0 2px 12px rgba(0,0,0,.55)">By ${esc(b.name || "")}</div>
+          <div style="font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:66px;letter-spacing:-0.02em;color:#fbf8f1;line-height:1.02;margin-top:6px;text-shadow:0 2px 14px rgba(0,0,0,.6)">${esc(b.title || "")}${b.subtitle ? `<br>${esc(b.subtitle)}` : ""}</div></div>`;
+        tl.push(`ft("#${id}-in", { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: 0.3, ease: "power3.out" }, ${t0});`);
+        tl.push(`ft("#${id}-scrim", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3 }, ${t0});`);
+        tl.push(`ft("#${id}-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power2.out" }, ${r3(t0 + 0.05)});`);
+        if (spec.sound?.nametag !== false) beatSfx(b, t0, "whoosh", "nametag (byline)", { db: -10 });
+        break;
+      }
       // Measured against Alif's tags at the same scale: an extra-bold grotesque name with the letters touching,
       // a condensed serif title (every line the same size, packed tight) in a snug box that sweeps in from the
       // left, and a thin hand-drawn hook from the end of the name down into the box.
@@ -601,6 +685,7 @@ if (cap.style === "clean" && !cap.highlight) cap.highlight = brand.accent;
 // serif: the Monk (small lowercase serif, no motion)
 const CAP_SIZES = { pill: 66, box: cap.size ?? 60, condensed: cap.size ?? 104, serif: cap.size ?? 52, sessions: cap.size ?? 64 };
 if (cap.style === "sessions") { cap.pop ??= false; cap.reveal ??= "word"; }
+if (cap.style === "clipping") { cap.pop ??= false; cap.reveal ??= "none"; }  // R1b port (Broadsheet)
 if (cap.style === "serif") { cap.pop ??= false; cap.lowercase ??= true; }
 if (["box", "condensed"].includes(cap.style)) cap.upper ??= true;
 const caseOf = (word) => cap.upper ? word.toUpperCase() : cap.lowercase === true ? word.toLowerCase() : word;
@@ -660,13 +745,15 @@ const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   g.forEach((w, wi) => {
     if (cap.pop !== false) tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: 1.08, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
     // reveal: word -> each word appears when it's spoken; the box is already sized for the whole phrase
+    if (cap.style === "clipping" && wi === 0) tl.push(`ft("#cg${gi}", { scale: 0.9 }, { scale: 1, duration: 0.12, ease: "back.out(2.5)" }, ${r3(s)});`);  // R1b port (Broadsheet)
     if (cap.reveal === "word" && wi > 0) tl.push(`ft("#cg${gi}w${wi}", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.05 }, ${r3(Math.max(s, w.start - 0.02))});`);
     if (cap.highlight) tl.push(`tl.set("#cg${gi}w${wi}", { color: "${cap.highlight}" }, ${r3(w.start)}); tl.set("#cg${gi}w${wi}", { color: "#fff" }, ${r3(Math.min(w.end + 0.02, e - 0.01))});`);
   });
   const capSize = CAP_SIZES[cap.style] ?? (cap.style === "clean" ? (cap.size ?? brand.capSize) : (cap.size ?? 56));
   const pl = placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
   const backed = pl.mode === "lower-face" && !["pill", "box", "sessions"].includes(cap.style);
-  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : ""}" style="top:${pl.y}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(caseOf(w.word))}</span>`).join("<wbr>")}</div>`;
+  const tilt = cap.tilt ? `;rotate:${gi % 2 ? -cap.tilt : cap.tilt * 0.7}deg` : "";  // R1b port (Broadsheet clippings)
+  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : ""}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(caseOf(w.word))}</span>`).join("<wbr>")}</div>`;
 }).join("\n      ");
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
@@ -680,10 +767,15 @@ const capCss = cap.style === "clean"
   .cap-group .w { margin: 0 0.14em; }`
   : cap.style === "condensed"
   ? `.cap-group { font-family: ${cap.font ?? "Oswald"}, sans-serif; font-size: ${CAP_SIZES.condensed}px; font-weight: 700; line-height: .95; letter-spacing: 1px; color: #fff; max-width: 920px; text-align: center; text-shadow: 0 6px 22px rgba(0,0,0,.6), 0 2px 4px rgba(0,0,0,.7); }`
+  : cap.style === "clipping"
+  ? `.cap-group { font-family: Gloock, Georgia, serif; font-size: ${cap.size ?? 58}px; line-height: 1.08; letter-spacing: -0.01em; color: #fbf8f1; background: #141210; padding: 6px 20px 12px; max-width: 900px; text-align: center; box-shadow: 0 10px 22px rgba(0,0,0,.35); }
+  .cap-group .w { margin: 0 0.12em; }`
   : cap.style === "sessions"
-  ? `.cap-group { font-family: "${cap.font ?? "Instrument Serif"}", Georgia, serif; font-size: ${CAP_SIZES.sessions}px; font-weight: 400; line-height: 1.12; letter-spacing: -0.045em; color: #f4f1ea; max-width: 860px; text-align: center; text-shadow: 0 0 14px rgba(255,255,255,.22); }
-  .cap-group .w { margin: 0; background: rgba(78,78,84,.6); padding: 2px 0.065em 8px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-  .cap-group .w:first-child { padding-left: 16px; } .cap-group .w:last-child { padding-right: 16px; }`
+  // R1b port: restyled to match editorial-collage's locked look (shares this style key with alif.json,
+  // which had no CATALOG.md-tracked caption rate and no fixture dependency - see R1b's report for the tradeoff)
+  ? `.cap-group { font-family: "${cap.font ?? "Instrument Serif"}", Georgia, serif; font-size: ${CAP_SIZES.sessions}px; font-weight: 400; line-height: 1.12; letter-spacing: -0.05em; color: #fff; max-width: 860px; text-align: center; -webkit-text-stroke: 0.2px #fff; text-shadow: 0 0 8px rgba(255,255,255,.4), 0 0 1px rgba(255,255,255,.85); }
+  .cap-group { background: rgba(98,98,104,.6); padding: 5px 14px 10px; border-radius: 1px; }
+  .cap-group .w { margin: 0 0.055em; }`
   : cap.style === "serif"
   ? `.cap-group { font-family: ${cap.font ?? "EB Garamond"}, Georgia, serif; font-size: ${CAP_SIZES.serif}px; font-weight: 500; line-height: 1.15; color: ${cap.color ?? "#E7C66B"}; max-width: 900px; text-align: center; text-shadow: 0 2px 12px rgba(0,0,0,.55); }
   .cap-group .w { margin: 0 0.12em; }`
@@ -849,6 +941,135 @@ if (spec.listMarks) {
   if (marks.length) console.log(`list marks: ${marks.map((m) => `${m.label} ${m.n} @${m.t}`).join(", ")}`);
 }
 
+// ---------- tool logos (spec.toolLogos) ----------
+// When a product is named ("ChatGPT", "Claude", "n8n"...), its logo lands as an app-icon tile (Alif: the ChatGPT
+// tile on the "AI hype cycle" page). Logos: Simple Icons (CC0 SVGs), drawn white on the brand colour.
+// (R1b port)
+const BRANDS = [
+  [/^(chatgpt|openai|gpt)$/, "openai", "#10A37F"], [/^claude(ai)?$/, "claude", "#D97757"], [/^n8n$/, "n8n", "#EA4B71"],
+  [/^deepseek$/, "deepseek", "#4D6BFE"], [/^gemini$/, "googlegemini", "#8E75B2"], [/^zapier$/, "zapier", "#FF4F00"],
+  [/^(notion)$/, "notion", "#111111"], [/^(hubspot)$/, "hubspot", "#FF7A59"], [/^(slack)$/, "slack", "#4A154B"],
+];
+if (spec.toolLogos) {
+  const T = spec.toolLogos === true ? {} : spec.toolLogos;
+  const size = T.size ?? 230, hold = T.hold ?? 1.5;
+  const scenes = beatsList.filter((b) => b.type === "scene").map((b) => [E(b.at), E(b.to)]);
+  const shown = [];
+  fs.mkdirSync(path.join(A, "logos"), { recursive: true });
+  words.forEach((w) => {
+    const key = w.word.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const brand2 = BRANDS.find(([re]) => re.test(key));
+    if (!brand2) return;
+    const [, slug, color] = brand2, t = r3(Math.max(0, w.start - 0.05));
+    if (shown.some((m) => m.slug === slug && t - m.t < 8)) return;       // named twice in a row: one tile
+    const svg = path.join(A, "logos", `${slug}.svg`);
+    if (!fs.existsSync(svg)) {
+      try { execFileSync("curl", ["-sfL", "-o", svg, `https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/${slug}.svg`]); }
+      catch { warn.push(`no logo for ${slug}`); return; }
+    }
+    const onPage = scenes.some(([a, b]) => t >= a - 0.1 && t <= b);
+    // slots: on a page, bottom-right (clear of the text column); over footage, upper right (clear of the face)
+    const busy = shown.filter((m) => m.onPage === onPage && t < m.t + hold + 0.3).length;
+    const x = (onPage ? (T.pageX ?? 780) : (T.x ?? 800)) - busy * (size + 30), y = onPage ? (T.pageY ?? 1360) : (T.y ?? 300);
+    const id = `logo${shown.length}`;
+    shown.push({ slug, t, onPage });
+    leakHtml += `<div id="${id}" class="clip" data-start="${t}" data-duration="${r3(hold + 0.3)}" data-track-index="14" style="position:absolute;left:${x}px;top:${y}px;width:${size}px;height:${size}px;z-index:10;pointer-events:none;border-radius:${Math.round(size * 0.23)}px;background:${color};box-shadow:0 18px 40px rgba(0,0,0,.28), inset 0 2px 0 rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center"><img src="assets/logos/${slug}.svg" style="width:58%;height:58%;filter:brightness(0) invert(1)"/></div>`;
+    tl.push(`ft("#${id}", { autoAlpha: 0, scale: 0.35, rotation: -10 }, { autoAlpha: 1, scale: 1, rotation: ${onPage ? -4 : 3}, duration: 0.28, ease: "back.out(2.2)" }, ${t});`);
+    tl.push(`tl.to("#${id}", { autoAlpha: 0, scale: 0.8, duration: 0.2, ease: "power2.in" }, ${r3(t + hold)});`);
+    addSfx(t, T.sfx ?? "pop-whoosh-light", `logo: ${slug}`, { db: T.db ?? 2 });
+  });
+  if (shown.length) console.log(`tool logos: ${shown.map((m) => `${m.slug}@${m.t}${m.onPage ? " (page)" : ""}`).join(", ")}`);
+}
+
+const OBJECT_SFX_BUILD = { calendar: ["pen-short", false], watch: ["tick-1", false], coins: ["kaching-1", true], mail: ["tech-notification-2", false],
+  team: ["pop-whoosh-light", false], chart: ["riser-1", false], handshake: ["whoosh-1", false], target: ["impact-2", false],
+  rocket: ["riser-1", false], trophy: ["ding-1", false], checklist: ["tick-1", false], phone: ["tech-notification-2", false],
+  laptop: ["click-1", false], lightbulb: ["ding-1", false], brain: ["ding-1", false], magnifier: ["whoosh-2", false], gears: ["click-1", false] };
+// ---------- object pop-ups (spec.objectPops) ----------
+// Between pages, when the speaker names something concrete ("day-to-day" -> calendar, "money" -> cash, "emails"
+// -> envelope), its engraving pops up beside them on a small paper card, with the object's own sound. Alif fills
+// the talking stretches between pages this way (calendar, clock, cash stickers).
+// (R1b port)
+const CONCEPTS = [
+  [/^(daytoday|daily|everyday|weekly|monthly|week|month|calendar|schedule|deadline|2026|2025)$/, "calendar"],
+  [/^(time|hours|hour|minutes|timeline|fast|faster|quickly)$/, "watch"],
+  [/^(money|revenue|cash|profit|dollars|income|cost|costs)$/, "coins"],
+  [/^(email|emails|inbox|outreach|messages|dms)$/, "mail"],
+  [/^(employees|employee|team|staff|people|hire|hiring)$/, "team"],
+  [/^(grow|growth|scale|scaling|results|increase)$/, "chart"],
+  [/^(clients|client|customers|customer|deal|deals|partner)$/, "handshake"],
+  [/^(goal|goals|target|targets)$/, "target"],
+  [/^(launch|launching|rocket)$/, "rocket"],
+  [/^(win|winning|best|success)$/, "trophy"],
+  [/^(tasks|task|todo|checklist|list)$/, "checklist"],
+  [/^(phone|calls|call)$/, "phone"],
+  [/^(computer|laptop|software|app|apps|website)$/, "laptop"],
+  [/^(idea|ideas|creative)$/, "lightbulb"],
+  [/^(think|thinking|mindset|knowledge|expertise)$/, "brain"],
+  [/^(audit|analyze|analyse|bottleneck|bottlenecks|problem|problems)$/, "magnifier"],
+  [/^(workflow|workflows|process|processes|systems|system|automation|automations|automate)$/, "gears"],
+];
+if (spec.objectPops) {
+  const P = spec.objectPops === true ? {} : spec.objectPops;
+  const hold = P.hold ?? 1.5, gap = P.gap ?? 4.5, w = P.w ?? 300;
+  const have = (k) => fs.existsSync(path.join(LIB, "engravings", "png", `${k}.png`));
+  // stay clear of pages, list marks, logos and the first/last beats
+  const busy = beatsList.filter((b) => b.type === "scene" || b.type === "nametag" || b.type === "slam").map((b) => [E(b.at) - 0.6, E(b.to) + 0.8]);
+  // number cards sit top-left and pop-ups top-right, so they can share the screen; logos share the pop-up slot
+  busy.push(...[...leakHtml.matchAll(/id="(logo\d+)" class="clip" data-start="([\d.]+)" data-duration="([\d.]+)"/g)].map((m) => [parseFloat(m[2]) - 0.6, parseFloat(m[2]) + parseFloat(m[3]) + 0.6]));
+  // never repeat a picture a page already showed
+  const used = new Set(beatsList.flatMap((b) => [b.engraving, ...(b.items || []).filter((it) => it.type === "image").map((it) => it.src)]).filter(Boolean));
+  let last = -Infinity, k = 0;
+  for (let i = 0; i < words.length; i++) {
+    const key = (words[i].word + (words[i + 1]?.word || "") + (words[i + 2]?.word || "")).toLowerCase().replace(/[^a-z0-9]/g, "");
+    // a phrase fix can merge several words into one token ("have an audit"): test each word inside it
+    const parts = words[i].word.toLowerCase().split(/\s+/).map((p) => p.replace(/[^a-z0-9]/g, ""));
+    const one = parts.find((p) => CONCEPTS.some(([re]) => re.test(p))) || parts[0];
+    const hit = CONCEPTS.find(([re]) => re.test(one) || re.test(key.slice(0, 10)));
+    if (!hit) continue;
+    const obj = hit[1], t = r3(Math.max(0, words[i].start - 0.05));
+    if (!have(obj) || used.has(obj) || t < 1.5 || t > SPEECH - 2 || t - last < gap) continue;
+    if (busy.some(([a, b]) => t + hold > a && t < b)) continue;
+    const id = `op${k++}`, rot = k % 2 ? 4 : -5;
+    // the label is what they said: "day-to-day", "time", "money" (a hyphenated phrase stays whole)
+    const label = (words[i].word.toLowerCase().split(/\s+/).find((p) => p.replace(/[^a-z0-9]/g, "") === one) || one).replace(/[^a-z0-9'-]/g, "");
+    const src = userAsset(path.join(LIB, "engravings", "png", `${obj}.png`));
+    leakHtml += `<div id="${id}" class="clip" data-start="${t}" data-duration="${r3(hold + 0.3)}" data-track-index="15" style="position:absolute;left:${P.x ?? 720}px;top:${P.y ?? 300}px;width:${w}px;z-index:9;pointer-events:none;transform:rotate(${rot}deg)">
+      <div style="background:#efece4;padding:${Math.round(w * 0.07)}px;border-radius:6px;box-shadow:0 16px 36px rgba(0,0,0,.32), 0 2px 0 rgba(255,255,255,.4) inset"><img src="${src}" style="display:block;width:100%"/></div>
+      <div id="${id}-lab" style="display:inline-block;position:relative;margin:-26px 0 0 ${Math.round(w * 0.12)}px;padding:2px 16px 8px 12px;background:${brand.accent};color:#f4efe6;font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:${P.labelSize ?? 58}px;letter-spacing:-0.04em;line-height:1;white-space:nowrap;transform:rotate(${-rot * 0.6}deg);box-shadow:0 10px 22px rgba(0,0,0,.25)">${esc(label)}</div></div>`;
+    tl.push(`ft("#${id}-lab", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.3, ease: "power2.out" }, ${r3(t + 0.18)});`);
+    tl.push(`ft("#${id}", { autoAlpha: 0, scale: 0.55, y: 30 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.3, ease: "back.out(1.8)" }, ${t});`);
+    tl.push(`tl.to("#${id}", { autoAlpha: 0, scale: 0.85, y: -10, duration: 0.22, ease: "power2.in" }, ${r3(t + hold)});`);
+    addSfx(t, "paper-quick", `pop-up in: ${obj}`, { db: -6 });
+    const [sfx, hero] = OBJECT_SFX_BUILD[obj] || [];
+    if (sfx) addSfx(t + 0.08, sfx, `pop-up: ${obj}`, { db: hero ? 8 : 0 });
+    used.add(obj); last = t; busy.push([t - 0.3, t + hold + 0.3]);
+  }
+  if (k) console.log(`object pop-ups: ${k}`);
+}
+
+// ---------- page sync check ----------
+// A page shows what the speaker is saying WHILE it is up. A line whose words were said before the page appeared
+// reads as lagging behind the voice (Ahmed caught "most CEOs / implement AI" landing after he'd said it).
+// (R1b port)
+{
+  const norm = (t) => t.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
+  const spoken = words.map((w) => ({ t: w.start, w: norm(w.word) })).flatMap((x) => x.w.map((w) => ({ t: x.t, w })));
+  for (const b of beatsList.filter((b) => b.type === "scene" && (b.lines || b.items))) {
+    const a = E(b.at), z = E(b.to);
+    const lines = (b.lines || (b.items || []).filter((it) => it.type === "text")).map((l) => l.text).filter(Boolean);
+    for (const text of lines) {
+      const first = norm(text).find((w) => w.length > 2);
+      if (!first) continue;
+      const hits = spoken.filter((s) => s.w === first || s.w.startsWith(first.slice(0, 5)));
+      if (!hits.length) continue;                                   // paraphrased: nothing to compare
+      if (!hits.some((h) => h.t >= a - 0.4 && h.t <= z + 0.3)) {
+        warn.push(`page @${b.at}: "${text}" was said at ${hits.map((h) => h.t.toFixed(1)).join("/")}s, not while the page is up (${a.toFixed(1)}-${z.toFixed(1)}s): it will lag the voice`);
+      }
+    }
+  }
+}
+
 // ---------- title banner (spec.banner) ----------
 // A headline that stays on screen for the whole reel (or from..to), top of the frame, inside the safe area.
 let titleHtml = "";
@@ -880,7 +1101,10 @@ if (spec.music) {
     const times = [];
     if (drops === "auto" || drops.auto) {
       const scenes = beatsList.filter((b) => b.type === "scene").map((b) => E(b.at));
-      if (scenes.length) times.push(scenes.at(-1));
+      // the payoff: set explicitly (the page that carries the core promise) or else the last page
+      // (R1b port)
+      if (spec.music.payoffAt != null) times.push(E(spec.music.payoffAt, "payoff"));
+      else if (scenes.length) times.push(scenes.at(-1));
       // the call to action: "comment ...", "follow ...", "subscribe", "link in bio", in the last quarter only
       const cta = words.find((w) => w.start > SPEECH * 0.75 && /^(comment|follow|subscribe|link)\b/i.test(w.word.trim().replace(/[^a-z ]/gi, "")));
       if (cta) times.push(r3(cta.start));
@@ -888,6 +1112,34 @@ if (spec.music) {
     for (const t of Array.isArray(drops) ? drops : (typeof drops === "object" && Array.isArray(drops.at) ? drops.at : [])) times.push(E(t, "music drop"));
     spec.music = { ...spec.music, dropTimes: [...new Set(times.map(r3))] };
     console.log(`music drops at ${spec.music.dropTimes.join(", ")}s`);
+  }
+  // the turn: where the hook ends and the promise begins ("but what it needs...", "here's exactly how",
+  // "I'm going to be showing you") -> the muffled bed opens here
+  // (R1b port)
+  if (spec.music.reveal) {
+    let at = typeof spec.music.reveal === "number" ? E(spec.music.reveal, "reveal") : null;
+    if (at == null) {
+      const bare = (w) => w.toLowerCase().replace(/[^a-z']/g, "");
+      for (let i = 0; i < words.length && at == null; i++) {
+        const w = words[i], b = bare(w.word), nx = bare(words[i + 1]?.word || "");
+        if (w.start < 2.2 || w.start > 9) continue;
+        const hit = b === "but" || b === "here's" || b === "heres" || (b === "showing" && bare(words[i - 1]?.word || "") === "be") ||
+          (b === "number" && nx === "one") || (b === "what" && nx === "you" && bare(words[i + 2]?.word || "") === "need");
+        if (!hit) continue;
+        let j = i;   // back up over the clause lead-in: "and I'm going to be | showing", "and | here's"
+        while (j > 0 && /^(and|so|i'm|im|going|to|be|today|now)$/.test(bare(words[j - 1].word)) && i - j < 5 && words[j].start - words[j - 1].end < 0.4) j--;
+        at = r3(Math.max(0, words[j].start - 0.04));
+      }
+    }
+    if (at != null) { spec.music = { ...spec.music, revealAt: at }; console.log(`music reveal (muffled -> open) at ${at}s`); }
+  }
+  // the payoff: a riser into the last page, the drop's silence, a soft hit as the page lands
+  // (R1b port)
+  const lastScene = spec.music.payoffAt != null ? E(spec.music.payoffAt, "payoff") : beatsList.filter((b) => b.type === "scene").map((b) => E(b.at)).sort((a, b) => a - b).at(-1);
+  if (lastScene && spec.music.payoff !== false && spec.music.drops) {
+    const len = spec.music.dropLen ?? 0.5;
+    addSfx(r3(lastScene - len - 1.25), spec.music.riserSfx ?? "riser-1", "riser into the payoff", { db: spec.music.riserDb ?? -2 });
+    addSfx(r3(lastScene), spec.music.hitSfx ?? "cinematic-cine-hit", "payoff hit", { db: spec.music.hitDb ?? -6 });
   }
   const m = buildMusic(spec.music, motionCtx, execFileSync, path, fs);
   musicHtml = m.html;
