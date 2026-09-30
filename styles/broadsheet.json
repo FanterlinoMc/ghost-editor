@@ -1,0 +1,66 @@
+{
+  "_about": "Broadsheet: a talking head cut like a newspaper coming alive. Fast punch-ins every ~1.6 s across three framings, a newsprint page every 6-8 s (heavy display headline, a brand-colour kicker, an italic deck, the engraving printed like a news photo) slapped in from the right and whipped out, captions as white serif on black paper strips each tilted like a pasted clipping, a byline name tag, a warm punchy newsprint grade, a groovy bed. Built on the same engine as Editorial Collage.",
+  "extends": "editorial-collage",
+  "cadence": {
+    "every": 1.6,
+    "minGap": 0.9,
+    "scales": [
+      1.0,
+      1.14,
+      1.26
+    ],
+    "emphasisScale": 1.3
+  },
+  "captions": {
+    "style": "clipping",
+    "size": 58,
+    "group": 3,
+    "tilt": 1.6,
+    "maxHold": 1.6,
+    "y": 1150
+  },
+  "pageMap": {
+    "serif": "deck",
+    "box": "headline",
+    "marker": "kicker",
+    "caps": "kicker"
+  },
+  "pagePaper": "newsprint",
+  "pageScreen": false,
+  "sceneIn": "slide",
+  "sceneOut": "slide",
+  "sceneFlash": {
+    "count": 0
+  },
+  "openFlash": false,
+  "leaks": false,
+  "nametagStyle": "byline",
+  "look": {
+    "grade": "sepia(.1) contrast(1.14) saturate(1.02) brightness(1.02)",
+    "tint": {
+      "color": "#8a6a3a",
+      "blend": "soft-light",
+      "opacity": 0.14
+    },
+    "vignette": 0.35,
+    "grain": 0.08
+  },
+  "music": {
+    "id": "alif-match-c",
+    "db": -13
+  },
+  "zoom": {
+    "origin": "50% 40%",
+    "base": 1.1
+  },
+  "director": {
+    "style": "Broadsheet: a fast, punchy newsroom energy. The speaker is cut often; newsprint pages break in often.",
+    "hook": "The FIRST page lands 1.5-3 s in on the hook's key phrase. Name tag (byline) from the first frame until that page.",
+    "pages": "One page every 6-8 s, 1.2-1.8 s each (short and frequent), never back to back. Each page: a kicker (2-3 words, the topic), ONE headline (the key phrase, 1-4 words), optionally an italic deck (the rest of the line), and one engraving that says what the idea IS.",
+    "page_lines": "Headline = the words being said as the page lands. Every line is spoken WHILE the page is up.",
+    "slam": "Once per video: a slam on the most charged word."
+  },
+  "sound": {
+    "zoom": false
+  }
+}

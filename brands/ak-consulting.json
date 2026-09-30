@@ -1,0 +1,22 @@
+{
+  "id": "ak-consulting",
+  "name": "AK Consulting",
+  "accent": "#12306B",
+  "accentDark": "#0B2150",
+  "watermark": "AK Consulting",
+  "person": {
+    "name": "Ahmed Karrar",
+    "title": "AK Consulting",
+    "subtitle": "AI Implementation for Businesses"
+  },
+  "music": {
+    "db": -13
+  },
+  "flash": {
+    "color": [
+      "38,92,235",
+      "130,180,255"
+    ],
+    "textureFilter": "hue-rotate(195deg) saturate(1.6) brightness(.95)"
+  }
+}

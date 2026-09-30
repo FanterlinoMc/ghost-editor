@@ -1,0 +1,135 @@
+{
+  "_about": "Editorial Collage: a calm, premium talking-head template. Collage pages (an engraving on every page, CRT screen look) land on the speaker's own words; hook page at 2-4 s; name tag from the first frame until the hook page; number cards, logo tiles, object pop-ups; one type slam per video; condensed serif captions in a phrase-sized box that fill in word by word; face-centred framing; rich grade; opening burn in the brand colour; a lo-fi bed with drops before the payoff and the call to action; a quiet paper/pen/zoom sound layer. Brand-neutral: colours, watermark and name tag come from the brand kit.",
+  "brand": {
+    "accent": "#1F2A44",
+    "accentDark": "#141C30",
+    "ink": "#111111",
+    "capSize": 60,
+    "font": "Inter"
+  },
+  "captions": {
+    "style": "sessions",
+    "group": 3,
+    "y": 1120,
+    "size": 70,
+    "maxHold": 1.8
+  },
+  "cadence": {
+    "every": 3.0,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.12
+    ],
+    "emphasisScale": 1.16
+  },
+  "packs": {
+    "editorsinventory": true
+  },
+  "leaks": {
+    "every": 12
+  },
+  "burns": {
+    "onScenes": true
+  },
+  "sfxProfile": "restrained",
+  "music": {
+    "id": "alif-match-a",
+    "db": -13,
+    "fadeIn": 0,
+    "fadeOut": 0,
+    "drops": "auto",
+    "dropLen": 0.5,
+    "reveal": false,
+    "revealHz": 650,
+    "payoff": false
+  },
+  "look": {
+    "grade": "saturate(1.1) contrast(1.08) brightness(1.02)",
+    "tint": {
+      "color": "#1f6c78",
+      "blend": "soft-light",
+      "opacity": 0.2
+    },
+    "vignette": 0.3,
+    "grain": 0.05
+  },
+  "director": {
+    "style": "A calm, premium founder interview. The speaker carries the reel; editorial PAGES (paper cut-aways) carry the ideas. Emphasis never comes from caption effects.",
+    "hook": "The FIRST page lands 2-4 s in, on the hook line's key phrase (e.g. 'implementing AI ... completely wrong', 'save you a lot of money'). It is a pattern break that holds the viewer. The name tag is on screen from the first frame until that first page cuts in ( name 0-2 s, first page at 2 s); never move the name tag later than the first 0.3 s.",
+    "pages": "About one page every 10-15 s, 1.6-3 s each, never two in a row without the speaker between them. Each page = 2-4 short lines in the speaker's own words + ONE engraving that says what the idea IS (money -> moneybag/coins, time -> watch/hourglass, systems/workflow -> gears, AI/tools -> robot, an idea -> lightbulb, thinking/expertise -> brain, finding problems -> magnifier, ask/point at people -> hand, strategy/plan -> chess, getting started -> ladder). A page with no picture is not allowed.",
+    "page_lines": "Line styles: 'serif' (plain lead-in words), 'box' (THE key phrase, brand box, exactly one per page), 'caps' (tiny condensed caps for a connector like 'of automations'), 'marker' (handwritten aside: a question the viewer asks, a contrast 'not another AI tool', or a verdict 'completely wrong'). Each line lands ON the spoken word (use its start time). A marker line spoken first opens the page at the top. Every line is words spoken WHILE the page is on screen; never put words on a page that were said before it appeared (it reads as lagging the voice).",
+    "cutaway_timing": "A page starts on the first stressed word of a new phrase, never mid-word, and ends on a phrase boundary.",
+    "automatic": "Do NOT plan these, the engine does them: numbered pop-ups on 'number one / secondly / step two', logo tiles when a tool is named, object pop-ups (an engraving card + the spoken word on a brand label) when a concrete thing is named between pages (day-to-day -> calendar, time -> watch, money -> coins, emails -> envelope, team -> people, growth -> chart) (ChatGPT, Claude, n8n, DeepSeek, Zapier...), punch-in cadence, captions, sound design (paper-in, pen ticks, object sounds, zoom swishes, burns + whooshes, lo-fi bed with drops before the last page and the call to action), colour matching, the opening flash.",
+    "nametag": "name + company in the box + a one-line 'what I do for you' (e.g. 'AI Implementation for Businesses').",
+    "icons": "none",
+    "limits": {
+      "keywords_per_min": 0,
+      "icons_per_min": 0,
+      "scenes_per_min": 5
+    },
+    "restraint": "Keep the speaker on screen most of the time. Quiet sound, few effects, each one meaning something.",
+    "virality": "From the outlier study (engine/templates/VIRALITY.md): the hook is the viewer's own question or a specific, named situation (tool, number, real client), said in the first 2 s and shown as on-screen text in frame 1; never an intro, never a platitude. Cut intros anywhere in the video ('I'm right here in...', 'today I'm going to show you...') when they delay the content. Keep 6+ picture changes in the first 10 s.",
+    "slam": "Once per video, on the most charged word (a verdict, a money/time word, a call to action like 'start building'): a 'slam' beat, 1.4-2 s, one huge word (text) with an optional small line above (pre) or below (post), landing on the word as it is spoken."
+  },
+  "outro": 0.15,
+  "openFlash": {
+    "dur": 0.4,
+    "db": 0,
+    "clip": "burn-04.mp4",
+    "media": 0.15,
+    "color": [
+      "38,92,235",
+      "130,180,255"
+    ],
+    "textureFilter": "hue-rotate(195deg) saturate(1.6) brightness(.95)"
+  },
+  "sound": {
+    "lines": false,
+    "nametag": false,
+    "objects": true,
+    "objectDb": 2,
+    "heroDb": 10,
+    "leaks": true,
+    "leakDb": 0,
+    "paperIn": true,
+    "paperDb": -2,
+    "pen": true,
+    "penDb": -4,
+    "zoom": true,
+    "zoomDb": -8
+  },
+  "sceneFlash": {
+    "kinds": [
+      "collage",
+      "paper"
+    ],
+    "which": "first",
+    "count": 1,
+    "dur": 0.35,
+    "db": 2,
+    "sfxIn": "burn-whoosh-fast",
+    "sfxOut": "burn-whoosh-tunnel"
+  },
+  "listMarks": {
+    "x": 70,
+    "y": 300,
+    "hold": 1.8
+  },
+  "toolLogos": {
+    "size": 230,
+    "hold": 1.5
+  },
+  "objectPops": {
+    "x": 650,
+    "y": 240,
+    "w": 380,
+    "hold": 1.5,
+    "gap": 4.5
+  },
+  "pageScreen": true,
+  "zoom": {
+    "origin": "50% 40%",
+    "base": 1.08
+  }
+}
