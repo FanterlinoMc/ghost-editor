@@ -1,0 +1,8 @@
+{
+  "_about": "The Headline (studied from business-news Shorts): 1-2 word tall condensed ALL CAPS captions, B-roll of whatever is named, punch-ins every ~1.4 s.",
+  "brand": { "accent": "#FFFFFF", "accentDark": "#DDDDDD", "ink": "#111111", "capSize": 104, "font": "Montserrat" },
+  "captions": { "style": "condensed", "group": 2, "y": 1180, "smartBreaks": true },
+  "sfxProfile": "standard",
+  "music": null,
+  "look": {}
+}

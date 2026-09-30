@@ -1,6 +1,6 @@
 ---
 name: ghost-editor
-description: AI video editor for talking-head reels. Turns a raw phone recording of someone talking to camera (retakes, pauses, false starts) into a finished vertical 1080x1920 reel for Instagram, TikTok or Shorts: best take of each sentence, pause trimming, word-timed captions that never cover the face and stay inside the platform safe area, motion scenes on the spoken word, sound effects and music mixed against the voice, in seven styles (clean, editorial, meme, cinematic, launch, kinetic, pop). It can also reverse-engineer a reference edit the user likes and apply that style to their recording. Use when the user hands over a talking-head video and says "edit this", "make a reel", "make it look like this video", "add captions/motion graphics/sound effects", "pick the best takes", "remove the pauses", or asks for a re-cut. Not for landscape screen recordings.
+description: AI video editor for talking-head reels. Turns a raw phone recording of someone talking to camera (retakes, pauses, false starts) into a finished vertical 1080x1920 reel for Instagram, TikTok or Shorts: best take of each sentence, pause trimming, word-timed captions that never cover the face and stay inside the platform safe area, motion scenes on the spoken word, sound effects and music mixed against the voice, in twelve styles (clean, editorial, meme, cinematic, launch, kinetic, pop, closer, headline, keynote, alif, monk). It can also reverse-engineer a reference edit the user likes and apply that style to their recording. Use when the user hands over a talking-head video and says "edit this", "make a reel", "make it look like this video", "add captions/motion graphics/sound effects", "pick the best takes", "remove the pauses", or asks for a re-cut. Not for landscape screen recordings.
 ---
 
 # ghost-editor
@@ -71,7 +71,7 @@ If the recording is already one good take, don't pick takes by hand:
 `python3 $S/scripts/autocut.py $P/assets/talk.mp4 --noise -30` prints `takes` with the pauses removed.
 
 ### 4. Pick a style, plan beats (`references/styles.md`, `references/reel-json.md`)
-Seven presets: `clean`, `editorial`, `meme`, `cinematic`, `launch`, `kinetic`, `pop`.
+Twelve presets: `clean`, `editorial`, `meme`, `cinematic`, `launch`, `kinetic`, `pop`, `closer`, `headline`, `keynote`, `alif`, `monk` (the last five ported from main's `engine/core`, BRANCH-AUDIT.md R1; see `references/styles.md`).
 Ask the user which one (show `examples/gallery/` or the showcase video) or pick by
 the speaker's energy. Start from `examples/gallery/<style>.reel.json`.
 To match a reference edit: `python3 $S/scripts/reference_study.py <their-edit.mp4> --out <dir> [--raw <raw>]`

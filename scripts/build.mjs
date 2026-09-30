@@ -221,13 +221,55 @@ const beatSfx = (b, t, def, why, opts) => {
 const zoom = spec.zoom || {};
 const tl = []; // GSAP lines
 const snaps = (zoom.snaps || []).map(([t, z]) => [E(t, "snap"), z]).sort((a, b) => a[0] - b[0]);
+// cadence: automatic punch-in rhythm (The Closer: the frame changes every 1-1.5 s).
+// Snaps land on a word start, at every jump cut between takes, and on emphasis words;
+// they alternate between the framings in `scales`. Every `sfxEvery`-th snap gets a sound.
+const cadence = spec.cadence;
+const cadenceSnaps = new Set();
+if (cadence) {
+  const every = cadence.every ?? 1.3, minGap = cadence.minGap ?? 0.6;
+  const scales = cadence.scales ?? [1, 1.12];
+  const emphasis = new Set([].concat(spec.captions?.highlight || []).filter((h) => typeof h === "string").map((h) => h.toLowerCase()));
+  const joins = takes.slice(1).map((k) => r3(k.start));
+  let last = -Infinity, n = 0;
+  const add = (t, why) => {
+    if (t - last < minGap || t >= SPEECH - 0.3) return;
+    if (snaps.some(([u]) => Math.abs(u - t) < minGap)) { last = t; return; }
+    const z = why === "emphasis" ? (cadence.emphasisScale ?? Math.max(...scales) + 0.06) : scales[n % scales.length];
+    snaps.push([r3(t), z]); cadenceSnaps.add(r3(t)); last = t; n++;
+  };
+  let joinIndex = 0;
+  for (const w of words) {
+    const t = r3(Math.max(0, w.start - 0.02));
+    const before = last;
+    while (joinIndex < joins.length && joins[joinIndex] <= w.start + 0.05) add(joins[joinIndex++], "jump cut");
+    if (last !== before) continue;
+    if (emphasis.has(core(w.word).toLowerCase()) || /!$/.test(w.word)) add(t, "emphasis");
+    else if (t - last >= every) add(t, "cadence");
+  }
+  snaps.sort((a, b) => a[0] - b[0]);
+  console.log(`cadence: ${cadenceSnaps.size} punch-ins added (~${(cadenceSnaps.size / Math.max(SPEECH, 1) * 60).toFixed(0)}/min)`);
+}
 tl.push(`tl.set("#snap", { scale: 1 }, 0);`);
+let cadenceIndex = 0;
 for (const [t, z] of snaps) {
   tl.push(`tl.set("#snap", { scale: ${z} }, ${t});`);
-  if (zoom.snapSfx || SFX_PROFILE === "rich") addSfx(t, !zoom.snapSfx || zoom.snapSfx === true ? "whoosh" : zoom.snapSfx, "snap", { db: -6, lead: 0.05 });
+  if (cadenceSnaps.has(t)) {
+    const every = cadence.sfxEvery ?? 4;
+    if (cadence.sfx && cadenceIndex % every === 0) addSfx(t, cadence.sfx, "cadence snap", { db: cadence.sfxDb ?? -6, lead: 0.04 });
+    cadenceIndex++;
+  } else if (zoom.snapSfx || SFX_PROFILE === "rich") addSfx(t, !zoom.snapSfx || zoom.snapSfx === true ? "whoosh" : zoom.snapSfx, "snap", { db: -6, lead: 0.05 });
 }
 let lastPushEnd = -1;
 const pushesEdit = [];
+// openPush: a slow push-in on the speaker over the opening seconds (the hook breathes in)
+if (spec.openPush && !(zoom.pushes || []).some((p) => E(p.at, "push") < (spec.openPush.dur ?? 2.5))) {
+  const d = spec.openPush.dur ?? 2.5;
+  tl.push(`ft("#push", { scale: 1 }, { scale: ${spec.openPush.z ?? 1.08}, duration: ${d}, ease: "sine.inOut" }, 0);`);
+  tl.push(`tl.to("#push", { scale: 1, duration: 0.01 }, ${r3(d + 0.05)});`);
+  pushesEdit.push({ a: 0, b: d, z: spec.openPush.z ?? 1.08, up: d, down: 0 });
+  lastPushEnd = d;
+}
 for (const p of zoom.pushes || []) {
   const a = E(p.at, "push"), up = p.up ?? 0.4, down = p.down ?? 0;
   const b = p.until === "end" ? TOTAL : E(p.until, "push until");
@@ -304,7 +346,7 @@ const faceY = (() => {
   const ys = JSON.parse(fs.readFileSync(faceFile, "utf8")).samples.filter((x) => x[1] != null).map((x) => (x[1] + x[2]) / 2).sort((a, b) => a - b);
   return ys.length ? Math.round(ys[Math.floor(ys.length / 2)]) : 700;
 })();
-const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, words, proj, LIB, faceY, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
+const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, words, proj, LIB, faceY, sound: spec.sound || {}, source: SRC, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
 // a scene that hands over to an expand/wipe scene stays underneath until the
 // incoming panel has covered it
@@ -316,7 +358,7 @@ for (const b of beatsList) {
   let t1 = b.to === undefined ? (b.type === "endcard" ? TOTAL : t0 + (b.type === "meme" ? 1.8 : 2.5)) : E(b.to, `${b.type} to`);
   if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(E(o.at) - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
   const dur = r3(t1 - t0);
-  const inSlot = ["emoji", "logo", "meme"].includes(b.type);
+  const inSlot = ["emoji", "logo", "meme", "icon"].includes(b.type);
   if (inSlot) {
     for (const [s, e] of slotUsed) if (t0 < e && t1 > s) warn.push(`reaction slot double-booked at ${b.at} (${b.type})`);
     slotUsed.push([t0, t1]);
@@ -338,8 +380,8 @@ for (const b of beatsList) {
     } else warn.push(`${b.type} at ${b.at}: no room beside the face for a card (close-up); make it a full-screen scene`);
   }
   let slotPos = null;
-  if (["emoji", "logo", "meme"].includes(b.type) && b.x === undefined && b.y === undefined && face) {
-    slotPos = placer.slot(t0, t1, b.type === "emoji" ? 360 : b.type === "logo" ? 280 : (b.w ?? 320), b.type === "emoji" ? 360 : 300);
+  if (["emoji", "logo", "meme", "icon"].includes(b.type) && b.x === undefined && b.y === undefined && face) {
+    slotPos = placer.slot(t0, t1, b.type === "emoji" ? 360 : b.type === "logo" || b.type === "icon" ? 280 : (b.w ?? 320), b.type === "emoji" ? 360 : 300);
     if (!slotPos) { warn.push(`${b.type} at ${b.at}: the face fills the frame, no room beside it: skipped`); continue; }
   }
   const box = (html, x = CARD.x, y = cy, w = CARD.w) => `<div id="${id}-in" class="ov card" style="left:${x}px;top:${y}px;width:${w}px">${html}</div>`;
@@ -411,6 +453,40 @@ for (const b of beatsList) {
       tl.push(enter(`#${id}-in`, t0));
       tl.push(`ft("#${id}-in", { rotation: -14 }, { rotation: 0, duration: 0.6, ease: "elastic.out(1.2,0.35)" }, ${t0});`);
       beatSfx(b, t0, "pop", "emoji");
+      break;
+    }
+    case "nametag": {
+      // Measured against Alif's tags at the same scale: an extra-bold grotesque name with the letters touching,
+      // a condensed serif title (every line the same size, packed tight) in a snug box that sweeps in from the
+      // left, and a thin hand-drawn hook from the end of the name down into the box.
+      const x = b.x ?? 64, y = b.y ?? 1310;
+      const nameSize = b.nameSize ?? 66, titleSize = b.titleSize ?? 72;
+      const nameW = (b.name || "").length * nameSize * 0.5;          // rough width of the tight bold name
+      const arrow = `<svg width="64" height="84" viewBox="0 0 64 84" fill="none" style="position:absolute;left:${Math.round(nameW - 8)}px;top:-18px;overflow:visible"><path d="M6 14 C 22 -2, 54 2, 52 30 C 51 46, 44 58, 36 70" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/><path d="M27 60 L35 72 L46 63" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      const lines = [b.title, b.subtitle].filter(Boolean).map((l) => `<div>${esc(l)}</div>`).join("");
+      inner = `<div id="${id}-in" class="ov" style="left:${x}px;top:${y}px;position:absolute">
+        <div style="position:relative;display:inline-block;font-family:'Inter',system-ui,sans-serif;font-size:${nameSize}px;font-weight:800;letter-spacing:-0.075em;line-height:1;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.45);white-space:nowrap">${esc(b.name || "")}${arrow}</div>
+        <div style="position:relative;isolation:isolate;display:inline-block;margin:2px 0 0 6px;padding:6px 26px 14px 10px;font-family:'Instrument Serif',Georgia,serif;font-size:${titleSize}px;letter-spacing:-0.06em;line-height:.88;color:#f4efe6;white-space:nowrap;transform:scaleX(.94);transform-origin:0 0"><span id="${id}-bg" style="position:absolute;inset:0;z-index:-1;background:${b.color ?? brand.accent};transform-origin:0 50%"></span>${lines}</div></div>`;
+      tl.push(`ft("#${id}-in", { autoAlpha: 0, x: -30 }, { autoAlpha: 1, x: 0, duration: 0.35, ease: "power3.out" }, ${t0});`);
+      // the box fills from the left once the words are up, like ink being laid down (Alif)
+      if (b.wipe !== false) tl.push(`ft("#${id}-bg", { scaleX: 0 }, { scaleX: 1, duration: ${b.wipeDur ?? 0.42}, ease: "power2.out" }, ${r3(t0 + 0.08)});`);
+      if (spec.sound?.nametag !== false) beatSfx(b, t0, "whoosh", "nametag", { db: -10 });
+      break;
+    }
+    case "icon": {
+      // a gold glass tile with a line icon (Lucide, ISC licence) for a named concept: "working towards" -> signpost
+      const svgPath = path.join(A, "icons", `lucide-${b.name}.svg`);
+      if (!fs.existsSync(svgPath)) {
+        try { execFileSync("curl", ["-sfL", "-o", svgPath, `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${b.name}.svg`]); }
+        catch { die(`no Lucide icon '${b.name}' (see https://lucide.dev/icons)`); }
+      }
+      const svg = fs.readFileSync(svgPath, "utf8").replace(/<!--[\s\S]*?-->/g, "").replace(/width="24"/, 'width="120"').replace(/height="24"/, 'height="120"')
+        .replace(/stroke="currentColor"/, `stroke="${b.ink ?? "#fff8e6"}"`).replace(/stroke-width="2"/, 'stroke-width="1.6"');
+      const x = b.x ?? (slotPos ? slotPos.x : SLOT.x), y = b.y ?? (slotPos ? slotPos.y : SLOT.y);
+      inner = `<div id="${id}-in" class="ov icon-tile" style="left:${x}px;top:${y}px">${svg}</div>`;
+      tl.push(enter(`#${id}-in`, t0));
+      tl.push(`tl.to("#${id}-in", { y: -12, duration: ${r3(Math.max(0.4, t1 - t0 - 0.3))}, ease: "sine.inOut" }, ${r3(t0 + 0.3)});`);
+      beatSfx(b, t0, "ding-1", "icon tile", { db: -6 });
       break;
     }
     case "logo": {
@@ -521,14 +597,59 @@ motionCtx.sidePad = placer.sidePad;
 // ---------- captions ----------
 const cap = { style: "house", group: 3, highlight: null, ...(spec.captions || {}) };
 if (cap.style === "clean" && !cap.highlight) cap.highlight = brand.accent;
+// box: the Closer (whole phrase on a solid accent box); condensed: the Headline (tall 1-2 word caps);
+// serif: the Monk (small lowercase serif, no motion)
+const CAP_SIZES = { pill: 66, box: cap.size ?? 60, condensed: cap.size ?? 104, serif: cap.size ?? 52, sessions: cap.size ?? 64 };
+// <wbr> between words is a break opportunity CSS needs only when `.cap-group .w` carries no
+// margin to wrap on. Every style but "sessions" (Alif) gives `.w` a non-zero margin (base
+// 0.2em, box 0.14em, serif 0.12em), which is itself a valid break point - <wbr> there is inert
+// markup. "sessions" zeroes the margin so its `box-decoration-break: clone` background can
+// look continuous, which removes that break point and strands long phrases. So this is
+// opt-in per style (mirrors decision 6's smartBreaks shape), keyed off which styles' `.w` has
+// a zero margin rather than a separate flag, since that margin is the actual reason a style
+// would need it.
+const ZERO_MARGIN_W = new Set(["sessions"]);
+if (cap.style === "sessions") { cap.pop ??= false; cap.reveal ??= "word"; }
+if (cap.style === "serif") { cap.pop ??= false; cap.lowercase ??= true; }
+if (["box", "condensed"].includes(cap.style)) cap.upper ??= true;
+const caseOf = (word) => cap.upper ? word.toUpperCase() : cap.lowercase === true ? word.toLowerCase() : word;
+const WEAK_END = /^(a|an|the|to|of|and|or|but|in|on|at|for|with|my|your|his|her|their|our|is|are|was|he's|she's|it's|i'm|you're|we're|they're|i|you|he|she|we|they|gonna|wanna|have|has|had|be|so|if|that|this|just)$/i;
+// captions.smartBreaks is OPT-IN (decision 6): the three rules below (weak trailing word,
+// one-word orphans, minimum read time) run only when a style or reel asks for them with
+// `true`. Defaulting them on silently re-captioned every pre-existing style, which would
+// invalidate the measured caption rates in CATALOG.md that The Closer, The Monk and The
+// Headline were tuned against.
+const SMART = cap.smartBreaks === true;
 const groups = [];
 let cur = [];
 for (const w of words) {
   if (cur.length && (w.start - cur.at(-1).end > 0.6)) { groups.push(cur); cur = []; }
   cur.push(w);
-  if (cur.length >= cap.group || /[.?!,]$/.test(w.word)) { groups.push(cur); cur = []; }
+  // don't strand a phrase on a weak word ("GONNA HAVE TO" / "OKAY OKAY HE'S"): allow one extra word
+  const bare = w.word.replace(/[^a-z']/gi, "");
+  const weak = SMART && (WEAK_END.test(bare) || /[a-z]'s$/i.test(bare)) && cur.length <= cap.group;
+  const size = cur.reduce((n, x) => n + x.word.trim().split(/\s+/).length, 0);
+  if ((size >= cap.group && !weak) || size > cap.group + 1 || /[.?!,]$/.test(w.word)) { groups.push(cur); cur = []; }
 }
 if (cur.length) groups.push(cur);
+// no one-word orphans ("it." / "okay," / "ChatGPT?"): fold into the phrase they belong to
+const wc = (g) => g.reduce((n, x) => n + x.word.trim().split(/\s+/).length, 0);
+for (let i = 0; i < groups.length; i++) {
+  if (!SMART || wc(groups[i]) !== 1 || groups.length < 2) continue;
+  const g = groups[i], prev = groups[i - 1], next = groups[i + 1];
+  const joinsPrev = prev && !/[.?!]$/.test(prev.at(-1).word) && g[0].start - prev.at(-1).end < 0.6 && wc(prev) <= cap.group + 1;
+  const joinsNext = next && !/[.?!]$/.test(g[0].word) && next[0].start - g[0].end < 0.6 && wc(next) <= cap.group;
+  if (joinsPrev) { prev.push(...g); groups.splice(i--, 1); }
+  else if (joinsNext) { next.unshift(...g); groups.splice(i--, 1); }
+}
+// fast talk: a phrase on screen for under ~0.5 s can't be read; give it the next phrase's words too
+const MIN_READ = cap.minRead ?? 0.5;
+for (let i = 0; i < groups.length - 1; i++) {
+  const g = groups[i], next = groups[i + 1];
+  if (!SMART || next[0].start - g[0].start >= MIN_READ || /[.?!]$/.test(g.at(-1).word)) continue;
+  if (wc(g) + wc(next) > cap.group + 4) continue;
+  g.push(...next); groups.splice(i + 1, 1); i--;
+}
 // captions.onlyInScenes: the recording already has burned-in captions, so ours
 // appear only over scenes that cover them (e.g. an image scene)
 const complement = (wins) => { const out = []; let c = 0; for (const [a, b] of [...wins].sort((x, y) => x[0] - y[0])) { if (a > c) out.push([c, a]); c = Math.max(c, b); } if (c < TOTAL) out.push([c, TOTAL + 1]); return out; };
@@ -538,22 +659,23 @@ if (cap.style !== "editorial" && cap.style !== "none") {
   const merged = [];
   for (const [a, b] of [...wins].sort((x, y) => x[0] - y[0])) { if (merged.length && a <= merged.at(-1)[1] + 0.05) merged.at(-1)[1] = Math.max(merged.at(-1)[1], b); else merged.push([a, b]); }
   tl.push(`tl.set("#caps", { autoAlpha: 1 }, 0);`);
-  for (const [a, b] of merged) { tl.push(`tl.to("#caps", { autoAlpha: 0, duration: 0.08 }, ${r3(a)});`); tl.push(`tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, ${r3(b - 0.05)});`); }
+  for (const [a, b] of merged) { tl.push(`tl.to("#caps", { autoAlpha: 0, duration: 0.06 }, ${r3(Math.max(0, a - 0.06))});`); tl.push(`tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, ${r3(b - 0.05)});`); }
 }
 const edit = cap.style === "editorial" ? buildEditorialCaptions(words, cap, motionCtx, cap.onlyInScenes ? complement(shownCaps) : hiddenCaps) : null;
 const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
   const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.05 : SPEECH;
-  const e = Math.min(g.at(-1).end + 0.3, nextS, SPEECH);
+  const e = Math.min(g.at(-1).end + 0.3, nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99));
   g.forEach((w, wi) => {
-    // The serif style is deliberately still: no per-word pop. "No effects, no stickers."
-    if (cap.style !== "serif") tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: 1.08, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
+    if (cap.pop !== false) tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: 1.08, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
+    // reveal: word -> each word appears when it's spoken; the box is already sized for the whole phrase
+    if (cap.reveal === "word" && wi > 0) tl.push(`ft("#cg${gi}w${wi}", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.05 }, ${r3(Math.max(s, w.start - 0.02))});`);
     if (cap.highlight) tl.push(`tl.set("#cg${gi}w${wi}", { color: "${cap.highlight}" }, ${r3(w.start)}); tl.set("#cg${gi}w${wi}", { color: "#fff" }, ${r3(Math.min(w.end + 0.02, e - 0.01))});`);
   });
-  const capSize = cap.style === "pill" ? 66 : cap.style === "clean" ? (cap.size ?? brand.capSize)
-    : cap.style === "serif" ? (cap.size ?? 46) : (cap.size ?? 56);
-  const pl = placer.place(s, e, capSize * (cap.style === "pill" ? 1.6 : 1.3));
-  return `<div id="cg${gi}" class="cap-group clip${pl.mode === "lower-face" && cap.style !== "pill" && cap.style !== "serif" ? " cap-backed" : ""}" style="top:${pl.y}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(w.word)}</span>`).join("")}</div>`;
+  const capSize = CAP_SIZES[cap.style] ?? (cap.style === "clean" ? (cap.size ?? brand.capSize) : (cap.size ?? 56));
+  const pl = placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
+  const backed = pl.mode === "lower-face" && !["pill", "box", "sessions"].includes(cap.style);
+  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : ""}" style="top:${pl.y}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(caseOf(w.word))}</span>`).join(ZERO_MARGIN_W.has(cap.style) ? "<wbr>" : "")}</div>`;
 }).join("\n      ");
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
@@ -562,22 +684,219 @@ const capCss = cap.style === "clean"
   ? `.cap-group { font-family: ${UI_FONT}, system-ui, sans-serif; font-size: ${cap.size ?? brand.capSize}px; font-weight: 800; color: #fff; letter-spacing: -1px; text-shadow: 0 4px 18px rgba(0,0,0,.55), 0 1px 3px rgba(0,0,0,.6); }`
   : cap.style === "pill"
   ? `.cap-group { font-family: ${UI_FONT}, system-ui, sans-serif; font-size: 66px; font-weight: 800; color: #fff; background: rgba(12,12,14,.88); border-radius: 22px; padding: 16px 32px; max-width: 900px; }`
+  : cap.style === "box"
+  ? `.cap-group { font-family: ${brand.font || "Montserrat"}, system-ui, sans-serif; font-size: ${CAP_SIZES.box}px; font-weight: 900; line-height: 1.08; color: ${cap.ink ?? brand.ink ?? "#111"}; background: ${cap.boxColor ?? brand.accent}; border-radius: 12px; padding: 10px 24px 14px; max-width: 860px; text-align: center; box-shadow: 0 10px 28px rgba(0,0,0,.28); }
+  .cap-group .w { margin: 0 0.14em; }`
+  : cap.style === "condensed"
+  ? `.cap-group { font-family: ${cap.font ?? "Oswald"}, sans-serif; font-size: ${CAP_SIZES.condensed}px; font-weight: 700; line-height: .95; letter-spacing: 1px; color: #fff; max-width: 920px; text-align: center; text-shadow: 0 6px 22px rgba(0,0,0,.6), 0 2px 4px rgba(0,0,0,.7); }`
+  : cap.style === "sessions"
+  ? `.cap-group { font-family: "${cap.font ?? "Instrument Serif"}", Georgia, serif; font-size: ${CAP_SIZES.sessions}px; font-weight: 400; line-height: 1.12; letter-spacing: -0.045em; color: #f4f1ea; max-width: 860px; text-align: center; text-shadow: 0 0 14px rgba(255,255,255,.22); }
+  .cap-group .w { margin: 0; background: rgba(78,78,84,.6); padding: 2px 0.065em 8px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .cap-group .w:first-child { padding-left: 16px; } .cap-group .w:last-child { padding-right: 16px; }`
   : cap.style === "serif"
-  // Quiet, essayistic captions: small lowercase serif in muted gold, no stroke, no box, no pop.
-  // The soft shadow is the only concession, and only so the text survives a light background.
-  ? `.cap-group { font-family: "Playfair Display", Georgia, serif; font-size: ${cap.size ?? 46}px; font-weight: 500;
-      color: ${cap.color ?? "#C8A96A"}; text-transform: lowercase; letter-spacing: 0.2px; max-width: 820px;
-      text-shadow: 0 2px 10px rgba(0,0,0,.45); }`
+  ? `.cap-group { font-family: ${cap.font ?? "EB Garamond"}, Georgia, serif; font-size: ${CAP_SIZES.serif}px; font-weight: 500; line-height: 1.15; color: ${cap.color ?? "#E7C66B"}; max-width: 900px; text-align: center; text-shadow: 0 2px 12px rgba(0,0,0,.55); }
+  .cap-group .w { margin: 0 0.12em; }`
   : `.cap-group { font-family: Arial, Helvetica, sans-serif; font-size: ${cap.size ?? 56}px; font-weight: 700; color: #fff; max-width: 900px;
       -webkit-text-stroke: 8px #000; paint-order: stroke fill; text-shadow: 0 4px 10px rgba(0,0,0,.35); }`;
 
+// ---------- asset packs (library/packs/<pack>/<kind>/*.mp4), gated by spec.packs ----------
+// A pack is used only when the style or reel turns it on (e.g. "packs": { "editorsinventory": true }) and its
+// row in engine/assets/LEDGER.md says it may ship. Clips are picked round-robin so repeats are spread out.
+// This fork does not yet have library/packs/ (out of scope for this port - a separate asset-restore task),
+// so packClip always returns null here and every caller below degrades to its asset-free fallback.
+const packRR = {};
+const packClip = (pack, kind) => {
+  if (!spec.packs?.[pack]) return null;
+  const dir = path.join(LIB, "packs", pack, kind);
+  if (!fs.existsSync(dir)) return null;
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith(".mp4")).sort();
+  if (!files.length) return null;
+  const key = `${pack}/${kind}`;
+  packRR[key] = ((packRR[key] ?? -1) + 1) % files.length;
+  const f = files[packRR[key]];
+  fs.mkdirSync(path.join(A, "pack"), { recursive: true });
+  const dst = path.join(A, "pack", `${pack}-${kind}-${f}`);
+  if (!fs.existsSync(dst)) fs.copyFileSync(path.join(dir, f), dst);
+  return `assets/pack/${pack}-${kind}-${f}`;
+};
+const packOf = spec.packs ? Object.keys(spec.packs).find((k) => spec.packs[k]) : null;
+const topOverlays = [];
+let packN = 0;
+const packOverlay = (src, t0, dur, { blend = "screen", z = 7, opacity = 1, media = 0, fadeIn = 0.15, fadeOut = 0.3, filter = "" } = {}) => {
+  const id = `pk${packN++}`;
+  topOverlays.push(`<video id="${id}" class="clip" src="${src}" data-start="${r3(Math.max(0, t0))}" data-duration="${r3(dur)}" data-media-start="${media}" data-track-index="${30 + (packN % 8)}" muted playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:${z};mix-blend-mode:${blend};opacity:0;pointer-events:none${filter ? `;filter:${filter}` : ""}"></video>`);
+  tl.push(`ft("#${id}", { opacity: 0 }, { opacity: ${opacity}, duration: ${fadeIn}, ease: "power1.in" }, ${r3(Math.max(0, t0))});`);
+  tl.push(`tl.to("#${id}", { opacity: 0, duration: ${fadeOut}, ease: "power1.out" }, ${r3(Math.max(0, t0) + dur - fadeOut)});`);
+};
+
+// ---------- watermark (spec.watermark = { text, opacity?, font? }) and colour tint (spec.look.tint) ----------
+let brandHtml = "";
+if (spec.watermark?.text) brandHtml += `<div style="position:absolute;top:${spec.watermark.y ?? 120}px;right:${spec.watermark.x ?? 60}px;z-index:9;font-family:'${spec.watermark.font ?? "Instrument Serif"}',Georgia,serif;font-size:${spec.watermark.size ?? 54}px;letter-spacing:-0.5px;color:#fff;opacity:${spec.watermark.opacity ?? 0.38};pointer-events:none">${esc(spec.watermark.text)}</div>`;
+if (spec.look?.tint) brandHtml += `<div style="position:absolute;inset:0;z-index:3;pointer-events:none;background:${spec.look.tint.color ?? "#1d6b75"};mix-blend-mode:${spec.look.tint.blend ?? "soft-light"};opacity:${spec.look.tint.opacity ?? 0.22}"></div>`;
+if (spec.look?.grade) tl.push(`tl.set("#base", { filter: "${spec.look.grade}" }, 0);`);
+
+// ---------- light leaks (spec.leaks = { every, color?, at? }) ----------
+// A warm burn-through flash that hides a cut between sections. Auto: on take joins, spaced by `every` seconds.
+let leakHtml = "";
+if (spec.leaks) {
+  const every = spec.leaks.every ?? 8, color = spec.leaks.color ?? "255,176,64";
+  const times = spec.leaks.at ? spec.leaks.at.map((t) => E(t, "leak")) : [];
+  if (!spec.leaks.at) {
+    let last = -Infinity;
+    for (const k of takes.slice(1)) if (k.start - last >= every && k.start > 2 && k.start < SPEECH - 2) { times.push(r3(k.start)); last = k.start; }
+  }
+  times.forEach((t, i) => {
+    const clip = packOf && packClip(packOf, "leaks");
+    // Alif: a flash is never silent; the whoosh rides it
+    if (spec.sound?.leaks) addSfx(t - 0.3, spec.sound.leakSfx ?? "whoosh-cine", "light leak", { db: spec.sound.leakDb ?? -12 });
+    if (clip) { packOverlay(clip, t - 0.35, 1.3, { blend: "screen", z: 7, opacity: 1, media: spec.leaks.media ?? 1.2, fadeIn: 0.25, fadeOut: 0.5, filter: spec.leaks.boost ?? "brightness(1.9) saturate(1.25)" }); return; }
+    leakHtml += `<div id="leak${i}" class="clip" data-start="${r3(Math.max(0, t - 0.25))}" data-duration="0.9" data-track-index="10" style="position:absolute;inset:0;z-index:7;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(ellipse 120% 90% at 30% 40%, rgba(${color},0.95) 0%, rgba(${color},0.55) 35%, rgba(255,90,20,0.18) 70%, rgba(0,0,0,0) 100%)"></div>`;
+    tl.push(`ft("#leak${i}", { opacity: 0 }, { opacity: 1, duration: 0.22, ease: "power2.in" }, ${r3(Math.max(0, t - 0.22))});`);
+    tl.push(`tl.to("#leak${i}", { opacity: 0, duration: 0.55, ease: "power2.out" }, ${r3(t + 0.05)});`);
+  });
+  if (times.length) console.log(`light leaks: ${times.length} at ${times.join(", ")}`);
+}
+
+// ---------- 8mm film gate over B-roll scenes (scene option gate: "8mm", or spec.scenes.<kind>.gate) ----------
+if (packOf) for (const b of beatsList) {
+  const sd = (spec.scenes || {})[b.kind] || {};
+  if (b.type !== "scene" || (b.gate ?? sd.gate) !== "8mm") continue;
+  const t0 = E(b.at), t1 = E(b.to);
+  const matte = packClip(packOf, "8mm-gate"), dust = packClip(packOf, "8mm-dust");
+  if (matte) packOverlay(matte, t0, t1 - t0, { blend: "multiply", z: 6, opacity: 1, fadeIn: 0.05, fadeOut: 0.1 });
+  if (dust) packOverlay(dust, t0, t1 - t0, { blend: "screen", z: 6, opacity: 0.7, fadeIn: 0.05, fadeOut: 0.1 });
+}
+
+// ---------- film burns (spec.burns = { at?, onScenes? }) ----------
+if (spec.burns && packOf) {
+  const times = (spec.burns.at || []).map((t) => E(t, "burn"));
+  if (spec.burns.onScenes) for (const b of beatsList) if (b.type === "scene" && ["image", "window", "tv"].includes(b.kind)) times.push(E(b.at));
+  for (const t of [...new Set(times.map(r3))].sort((a, b) => a - b)) {
+    const clip = packClip(packOf, "burns");
+    if (clip) packOverlay(clip, t - 0.2, 0.9, { blend: "screen", z: 9, opacity: 1, fadeIn: 0.08, fadeOut: 0.35 });
+  }
+}
+
+// ---------- opening flash (spec.openFlash = { at?, dur?, color?, clip?, sfx?, db? }) ----------
+// The hook: a split-second warm film burn that sweeps in from the left edge on the first frame (Alif reels),
+// with a soft film-flash sound under the voice. A glow, not a whiteout: the face stays readable.
+let flashN = 0;
+const brandFlash = (f, t, why, { side = "left" } = {}) => {
+  const dur = f.dur ?? 0.4, fid = `oflash${flashN++}`;
+  const [c1, c2] = f.color ?? ["255,92,40", "255,150,120"];
+  const x = side === "left" ? [4, 0, 90] : [96, 100, 270];
+  leakHtml += `<div id="${fid}" class="clip" data-start="${r3(t)}" data-duration="${r3(dur)}" data-track-index="11" style="position:absolute;inset:0;z-index:12;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(ellipse 70% 55% at ${x[0]}% 74%, rgba(${c1},1) 0%, rgba(${c1},.85) 40%, rgba(${c1},0) 100%), radial-gradient(ellipse 45% 70% at ${x[1]}% 30%, rgba(${c2},.85) 0%, rgba(${c2},0) 100%), linear-gradient(${x[2]}deg, rgba(${c1},.55) 0%, rgba(${c1},0) 45%)"></div>`;
+  const dir = side === "left" ? -1 : 1;
+  tl.push(`ft("#${fid}", { opacity: 0.6, xPercent: ${dir * 25} }, { opacity: 1, xPercent: 0, duration: ${r3(dur * 0.25)}, ease: "power2.out" }, ${r3(t)});`);
+  tl.push(`tl.to("#${fid}", { opacity: 0, xPercent: ${dir * 20}, duration: ${r3(dur * 0.55)}, ease: "power2.in" }, ${r3(t + dur * 0.4)});`);
+  addSfx(t, f.sfx ?? "cinematic-film-flash", why, { db: f.db ?? -8 });
+};
+// Alif: a burn carries the picture INTO a cutaway and back OUT to the speaker, and the whoosh rides it
+if (spec.sceneFlash && spec.openFlash) {
+  const sf = spec.sceneFlash, kinds = sf.kinds ?? ["collage", "paper"];
+  const scenes = beatsList.filter((b) => b.type === "scene" && kinds.includes(b.kind));
+  const chosen = sf.which === "all" ? scenes : sf.which === "last" ? scenes.slice(-1) : scenes.slice(0, sf.count ?? 1);
+  for (const b of chosen) {
+    brandFlash({ ...spec.openFlash, dur: sf.dur ?? 0.35, db: sf.db ?? -10, sfx: sf.sfxIn ?? spec.openFlash.sfx }, r3(Math.max(0, E(b.at) - 0.12)), "burn into cutaway");
+    if (sf.out !== false) brandFlash({ ...spec.openFlash, dur: sf.dur ?? 0.35, db: (sf.db ?? -10) - 3, sfx: sf.sfxOut ?? spec.openFlash.sfx }, r3(E(b.to) - 0.2), "burn out to speaker", { side: "right" });
+  }
+}
+if (spec.openFlash) {
+  const f = spec.openFlash, t = E(f.at ?? 0, "open flash"), dur = f.dur ?? 0.4;
+  const [c1, c2] = f.color ?? ["255,92,40", "255,150,120"];
+  leakHtml += `<div id="oflash" class="clip" data-start="${r3(t)}" data-duration="${r3(dur)}" data-track-index="11" style="position:absolute;inset:0;z-index:8;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(ellipse 70% 55% at 4% 74%, rgba(${c1},1) 0%, rgba(${c1},.85) 40%, rgba(${c1},0) 100%), radial-gradient(ellipse 45% 70% at 0% 30%, rgba(${c2},.85) 0%, rgba(${c2},0) 100%), linear-gradient(90deg, rgba(${c1},.55) 0%, rgba(${c1},0) 45%)"></div>`;
+  tl.push(`ft("#oflash", { opacity: 0.6, xPercent: -25 }, { opacity: 1, xPercent: 0, duration: ${r3(dur * 0.25)}, ease: "power2.out" }, ${r3(t)});`);
+  tl.push(`tl.to("#oflash", { opacity: 0, xPercent: -20, duration: ${r3(dur * 0.55)}, ease: "power2.in" }, ${r3(t + dur * 0.4)});`);
+  const pickBurn = (name) => {
+    const src = path.join(LIB, "packs", packOf, "burns", name);
+    if (!fs.existsSync(src)) die(`openFlash.clip '${name}' is not in packs/${packOf}/burns`);
+    fs.mkdirSync(path.join(A, "pack"), { recursive: true });
+    fs.copyFileSync(src, path.join(A, "pack", `${packOf}-burns-${name}`));
+    return `assets/pack/${packOf}-burns-${name}`;
+  };
+  const clip = f.clip !== false && packOf && spec.packs?.[packOf] && (f.clip ? pickBurn(f.clip) : packClip(packOf, "burns"));
+  if (clip) packOverlay(clip, t, dur, { blend: "screen", z: 8, opacity: f.texture ?? 0.8, media: f.media ?? 0.1, fadeIn: 0.05, fadeOut: dur * 0.5,
+    filter: f.textureFilter ?? "saturate(1.4) hue-rotate(-18deg) brightness(.9)" });
+  if (clip) topOverlays[topOverlays.length - 1] = topOverlays.at(-1).replace("pointer-events:none", "pointer-events:none;-webkit-mask-image:linear-gradient(90deg,#000 0%,#000 18%,transparent 55%);mask-image:linear-gradient(90deg,#000 0%,#000 18%,transparent 55%)");
+  addSfx(t, f.sfx ?? "cinematic-film-flash", "open flash", { db: f.db ?? -8 });
+  console.log(`open flash at ${t}s (${dur}s)`);
+}
+
+// ---------- list marks (spec.listMarks) ----------
+// When the speaker enumerates ("number one", "secondly", "step two"), a numbered card lands beside them: a small
+// handwritten label, a brand box that wipes in left -> right, a big serif numeral. Paper + pen sounds carry it.
+if (spec.listMarks) {
+  const L = spec.listMarks === true ? {} : spec.listMarks;
+  const NUM = { one: 1, first: 1, firstly: 1, two: 2, second: 2, secondly: 2, three: 3, third: 3, thirdly: 3, four: 4, fourth: 4, five: 5, fifth: 5, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5 };
+  const bare = (w) => w.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const marks = [];
+  for (let i = 0; i < words.length; i++) {
+    const a = bare(words[i].word), b = bare(words[i + 1]?.word || ""), prev = bare(words[i - 1]?.word || "");
+    let n = null, label = null;
+    if (/^(number|step|tip|rule)$/.test(a) && NUM[b]) { n = NUM[b]; label = a; }
+    else if (/^(firstly|secondly|thirdly|second|third)$/.test(a) && !/^(at|the|a|every|one)$/.test(prev) && /[,.]$/.test(words[i].word.trim())) { n = NUM[a]; label = "step"; }
+    else if (a === "first" && /[,]$/.test(words[i].word.trim()) && !/^(at|the|a)$/.test(prev)) { n = 1; label = "step"; }
+    if (!n) continue;
+    if (marks.some((m) => m.n === n)) continue;                      // a restated "number one" is not a new point
+    if (marks.length && label === "step") label = marks[0].label;    // "number one ... secondly" stays "number 02"
+    marks.push({ n, label, t: r3(Math.max(0, words[i].start - 0.05)) });
+  }
+  const scenes = beatsList.filter((b) => b.type === "scene").map((b) => [E(b.at), E(b.to)]);
+  marks.forEach((m, k) => {
+    if (scenes.some(([a, b]) => m.t >= a - 0.3 && m.t <= b)) return;  // a full-screen page is up: it already carries the point
+    const id = `lm${k}`, hold = L.hold ?? 1.8, x = L.x ?? 70, y = L.y ?? 300;
+    leakHtml += `<div id="${id}" class="clip" data-start="${m.t}" data-duration="${r3(hold + 0.35)}" data-track-index="13" style="position:absolute;left:${x}px;top:${y}px;z-index:9;pointer-events:none">
+      <div id="${id}-lab" style="font-family:'Caveat Brush',cursive;font-size:${L.labelSize ?? 70}px;color:#fff;line-height:.9;transform:rotate(-6deg);transform-origin:0 100%;margin:0 0 6px 8px;text-shadow:0 3px 12px rgba(0,0,0,.45)">${esc(m.label)}</div>
+      <div style="display:inline-block;position:relative;isolation:isolate;padding:0 26px 14px 20px;font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:${L.size ?? 190}px;letter-spacing:-6px;line-height:1;color:#fff"><span id="${id}-bg" style="position:absolute;inset:0;z-index:-1;background:${L.color ?? brand.accent};transform-origin:0 50%;box-shadow:0 14px 34px rgba(0,0,0,.28)"></span><span id="${id}-num" style="display:inline-block">${String(m.n).padStart(2, "0")}</span></div></div>`;
+    tl.push(`ft("#${id}-bg", { scaleX: 0 }, { scaleX: 1, duration: 0.32, ease: "power3.out" }, ${m.t});`);
+    tl.push(`ft("#${id}-num", { autoAlpha: 0, y: 26, rotation: -4 }, { autoAlpha: 1, y: 0, rotation: 0, duration: 0.3, ease: "back.out(2)" }, ${r3(m.t + 0.08)});`);
+    tl.push(`ft("#${id}-lab", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.32, ease: "none" }, ${r3(m.t + 0.14)});`);
+    tl.push(`tl.to("#${id}", { autoAlpha: 0, x: -40, duration: 0.25, ease: "power2.in" }, ${r3(m.t + hold)});`);
+    addSfx(m.t, "paper-quick", `list mark ${m.n}`, { db: spec.sound?.paperDb ?? -2 });
+    addSfx(m.t + 0.14, "pen-scribble", `list mark ${m.n} label`, { db: spec.sound?.penDb ?? -4 });
+  });
+  if (marks.length) console.log(`list marks: ${marks.map((m) => `${m.label} ${m.n} @${m.t}`).join(", ")}`);
+}
+
+// ---------- title banner (spec.banner) ----------
+// A headline that stays on screen for the whole reel (or from..to), top of the frame, inside the safe area.
+let titleHtml = "";
+if (spec.banner?.text) {
+  const from = spec.banner.from ?? 0, to = Math.min(spec.banner.to ?? TOTAL, TOTAL);
+  titleHtml = `<div id="title-banner" class="clip" data-start="${r3(from)}" data-duration="${r3(Math.max(0.1, to - from))}" data-track-index="9" style="position:absolute;left:60px;right:60px;top:${spec.banner.y ?? 250}px;text-align:center;z-index:9;font-family:${brand.font || "Montserrat"},system-ui,sans-serif;font-size:${spec.banner.size ?? 64}px;font-weight:900;line-height:1.05;color:#fff;-webkit-text-stroke:10px #000;paint-order:stroke fill;text-transform:uppercase">${esc(spec.banner.text)}</div>`;
+}
+
 // ---------- music bed ----------
 let musicHtml = "";
+// Alif: a punch-in is barely audible, a tiny air swish ~20 dB under the voice (not during full-screen scenes)
+if (spec.sound?.zoom && cadenceSnaps.size) {
+  const sceneWins = beatsList.filter((b) => b.type === "scene").map((b) => [E(b.at) - 0.1, E(b.to) + 0.1]);
+  let zn = 0;
+  for (const t of [...cadenceSnaps].sort((a, b) => a - b)) {
+    if (t < 0.6 || sceneWins.some(([a, b]) => t >= a && t <= b)) continue;   // the open flash owns the first beat
+    addSfx(t - 0.03, zn++ % 2 ? "zoom-sweep-short" : "zoom-sweep-small", "zoom swish", { db: spec.sound.zoomDb ?? -8 });
+  }
+}
+
 if (spec.music) {
   if (spec.music.id === "auto") {
     const man = JSON.parse(fs.readFileSync(path.join(LIB, "music", "manifest.json"), "utf8"));
     const pickId = Object.keys(man).find((k) => (man[k].styles || []).includes(spec.style)) || "deep-techno-ambience";
     spec.music = { ...spec.music, id: pickId };
+  }
+  const drops = spec.music.drops;
+  if (drops) {
+    const times = [];
+    if (drops === "auto" || drops.auto) {
+      const scenes = beatsList.filter((b) => b.type === "scene").map((b) => E(b.at));
+      if (scenes.length) times.push(scenes.at(-1));
+      // the call to action: "comment ...", "follow ...", "subscribe", "link in bio", in the last quarter only
+      const cta = words.find((w) => w.start > SPEECH * 0.75 && /^(comment|follow|subscribe|link)\b/i.test(w.word.trim().replace(/[^a-z ]/gi, "")));
+      if (cta) times.push(r3(cta.start));
+    }
+    for (const t of Array.isArray(drops) ? drops : (typeof drops === "object" && Array.isArray(drops.at) ? drops.at : [])) times.push(E(t, "music drop"));
+    spec.music = { ...spec.music, dropTimes: [...new Set(times.map(r3))] };
+    console.log(`music drops at ${spec.music.dropTimes.join(", ")}s`);
   }
   const m = buildMusic(spec.music, motionCtx, execFileSync, path, fs);
   musicHtml = m.html;
@@ -585,7 +904,7 @@ if (spec.music) {
 }
 
 // ---------- write ----------
-const FONT_NAMES = { "playfair-display": "Playfair Display", "jetbrains-mono": "JetBrains Mono", "geist-mono": "GeistMono" };
+const FONT_NAMES = { "instrument-serif": "Instrument Serif", "caveat-brush": "Caveat Brush", "yellowtail": "Yellowtail", "eb-garamond": "EB Garamond", "playfair-display": "Playfair Display", "jetbrains-mono": "JetBrains Mono", "geist-mono": "GeistMono" };
 const RANGES = { latin: "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD", cyrillic: "U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116" };
 const fontFaces = fs.readdirSync(path.join(A, "fonts")).filter((f) => /-(latin|cyrillic)(-italic)?\.woff2$/.test(f)).map((f) => {
   const m = /^(.*)-(latin|cyrillic)(-italic)?\.woff2$/.exec(f);
@@ -594,6 +913,7 @@ const fontFaces = fs.readdirSync(path.join(A, "fonts")).filter((f) => /-(latin|c
   return `@font-face { font-family: "${fam}"; src: url(assets/fonts/${f}) format("woff2"); font-weight: 100 900;${m[3] ? " font-style: italic;" : ""} unicode-range: ${RANGES[m[2]]}; }`;
 }).join("\n  ");
 const look = spec.look || {};
+if (look.exposure && look.exposure !== 1) tl.push(`tl.set("#pip", { filter: "brightness(${look.exposure}) contrast(${look.contrast ?? 1.04})" }, 0);`);
 const grainHtml = look.grain ? `<div id="grain" class="look-grain" style="opacity:${look.grain}"></div>` : "";
 const vignetteHtml = look.vignette ? `<div class="look-vignette" style="background:radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 45%, rgba(0,0,0,${look.vignette}) 100%)"></div>` : "";
 if (look.grain) for (let t = 0, k = 0; t < TOTAL; t += 1 / 12, k++) tl.push(`tl.set("#grain", { backgroundPosition: "${(k * 137) % 400}px ${(k * 251) % 400}px" }, ${r3(t)});`);
@@ -648,6 +968,10 @@ const html = `<!doctype html>
   .l-strike { position: absolute; left: -4px; right: -4px; top: 55%; height: 6px; background: #FF453A; transform-origin: 0 50%; display: block; }
   .stamp { position: absolute; right: 30px; top: 40%; border: 8px solid #FF453A; color: #FF453A; font-size: 78px; font-weight: 900; padding: 4px 26px; border-radius: 16px; text-transform: uppercase; background: rgba(0,0,0,.25); }
   .emoji { width: 400px; height: 400px; font-size: 320px; line-height: 400px; text-align: center; filter: drop-shadow(0 20px 30px rgba(0,0,0,.35)); }
+  .icon-tile { width: 220px; height: 220px; border-radius: 44px; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(145deg, rgba(255,214,120,.92) 0%, rgba(226,166,44,.88) 55%, rgba(170,112,20,.9) 100%);
+    border: 2px solid rgba(255,238,196,.75); box-shadow: 0 18px 50px rgba(0,0,0,.35), 0 0 60px rgba(242,193,78,.45), inset 0 2px 0 rgba(255,255,255,.55); }
+  .icon-tile svg { filter: drop-shadow(0 3px 6px rgba(120,70,0,.45)); }
   .logo { width: 280px; height: 280px; border-radius: 62px; display: flex; align-items: center; justify-content: center; box-shadow: 0 18px 50px rgba(0,0,0,.35); }
   .logo img { width: 60%; height: 60%; object-fit: contain; }
   .meme-img { background: #fff; padding: 8px; border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.4); }
@@ -689,6 +1013,10 @@ const html = `<!doctype html>
   <div id="caps">
       ${capHtml}
   </div>
+  ${titleHtml}
+  ${brandHtml}
+  ${leakHtml}
+  ${topOverlays.join("\n  ")}
   ${edit ? edit.html : ""}
   ${takeAudio}
   ${overlays.filter((o) => o.audio).map((o) => o.audio).join("\n  ")}

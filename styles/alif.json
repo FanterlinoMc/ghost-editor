@@ -1,0 +1,107 @@
+{
+  "_about": "Alif (studied from 6 reference reels, the 'Sessions' interview look): soft teal cinematic grade, condensed serif captions in a tight translucent box that fill in word by word (sentence case, punctuation kept), a faint serif watermark, name tag with the title in an accent box and a hand-drawn arrow, editorial grid-paper collage cutaways (serif + accent-box keyword + marker notes), light-leak flashes between cutaways and the speaker. Accent: dark professional blue (the reference uses dark red). R1 port note: `music` is null here, not main's 'alif-match-a' - that id only exists in main's library/music/manifest.json, a Mixkit track this port deliberately does not bring over (BRANCH-AUDIT.md decision 4). `openFlash.clip` ('burn-04.mp4', from library/packs/editorsinventory/) is dropped for the same reason - this fork has no library/packs/ yet (decision 4 / E1, separate task) and pickBurn() dies on a missing file; without `clip` it falls back to the asset-free CSS-gradient flash.",
+  "brand": {
+    "accent": "#12306B",
+    "accentDark": "#0B2150",
+    "ink": "#111111",
+    "capSize": 60,
+    "font": "Inter"
+  },
+  "captions": {
+    "style": "sessions",
+    "group": 3,
+    "y": 1120,
+    "size": 64,
+    "maxHold": 1.8,
+    "smartBreaks": true
+  },
+  "cadence": {
+    "every": 3.0,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.12
+    ],
+    "emphasisScale": 1.16
+  },
+  "packs": {
+    "editorsinventory": true
+  },
+  "leaks": {
+    "every": 12
+  },
+  "burns": {
+    "onScenes": true
+  },
+  "sfxProfile": "restrained",
+  "music": null,
+  "look": {
+    "grade": "saturate(0.9) contrast(0.95) brightness(1.03)",
+    "tint": {
+      "color": "#1f6c78",
+      "blend": "soft-light",
+      "opacity": 0.2
+    },
+    "vignette": 0.3,
+    "grain": 0.05
+  },
+  "director": {
+    "style": "Alif: calm, premium interview. Emphasis comes from editorial paper cutaways, not from caption effects.",
+    "keyword_treatments": {},
+    "scenes": {
+      "paper": "a grid-paper collage for the one key statement of each 15-20 s: 2-4 short lines; the key word in style 'box' (the accent box), one handwritten 'marker' note. 1.5-2.5 s. Lines are the speaker's own words.",
+      "window": "only for a concrete thing the speaker describes that the audience should see. 1.5-3 s."
+    },
+    "icons": "none",
+    "nametag": "a name tag in the first 3 s: name + title",
+    "limits": {
+      "keywords_per_min": 0,
+      "icons_per_min": 0,
+      "scenes_per_min": 3
+    },
+    "restraint": "Keep the speaker on screen most of the time. Never two cutaways back to back."
+  },
+  "outro": 1.0,
+  "openFlash": {
+    "dur": 0.4,
+    "db": 0,
+    "media": 0.15,
+    "color": [
+      "38,92,235",
+      "130,180,255"
+    ],
+    "textureFilter": "hue-rotate(195deg) saturate(1.6) brightness(.95)"
+  },
+  "sound": {
+    "lines": false,
+    "nametag": false,
+    "objects": true,
+    "objectDb": 2,
+    "heroDb": 10,
+    "leaks": true,
+    "leakDb": 0,
+    "paperIn": true,
+    "paperDb": -2,
+    "pen": true,
+    "penDb": -4,
+    "zoom": true,
+    "zoomDb": -8
+  },
+  "sceneFlash": {
+    "kinds": [
+      "collage",
+      "paper"
+    ],
+    "which": "first",
+    "count": 1,
+    "dur": 0.35,
+    "db": 2,
+    "sfxIn": "burn-whoosh-fast",
+    "sfxOut": "burn-whoosh-tunnel"
+  },
+  "listMarks": {
+    "x": 70,
+    "y": 300,
+    "hold": 1.8
+  }
+}

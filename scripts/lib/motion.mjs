@@ -14,6 +14,7 @@
 //   sentence  kinetic sentence: words ink in as they are spoken, then a big
 //             accent hero word lands and a "not X" line gets a hand-drawn X
 import { spawnSync } from "node:child_process";
+import path from "node:path";
 
 // Transitions in/out: blur (0.2 s dissolve through blur), expand (rounded
 // panel grows from the centre), wipe (left to right), cut.
@@ -39,6 +40,20 @@ export const MOTION_CSS = (brand) => `
   .fly-item .t { font-weight: 600; letter-spacing: -2px; line-height: .95; }
   .fly-item .u { font-weight: 400; letter-spacing: -1px; margin-top: 6px; }
   .img-fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform-origin: 50% 45%; }
+  /* paper / tv / window scenes (ported from main: The Keynote, Alif) */
+  .paper-bg { position: absolute; inset: 0; background-color: #eeede8; background-image: linear-gradient(rgba(60,60,70,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(60,60,70,.09) 1px, transparent 1px); background-size: 38px 38px; box-shadow: inset 0 0 220px rgba(80,70,50,.22); }
+  .win-frame { position: absolute; left: 70px; width: 940px; height: 860px; border-radius: 46px; overflow: hidden; box-shadow: 0 30px 90px rgba(0,0,0,.8); }
+  .tv-room { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 55% at 50% 42%, #3a2a1f 0%, #1c140f 55%, #0b0806 100%); }
+  .tv-side { position: absolute; width: 250px; height: 190px; border-radius: 26px; background: linear-gradient(160deg, #3b3632, #1d1a18); box-shadow: 0 20px 50px rgba(0,0,0,.6); filter: blur(3px); opacity: .7; }
+  .tv-side i { position: absolute; inset: 22px 60px 22px 22px; border-radius: 22px/16px; background: repeating-linear-gradient(0deg, rgba(255,255,255,.18) 0 2px, rgba(0,0,0,.25) 2px 4px), #8a9aa0; }
+  .tv-main { position: absolute; left: 40px; top: 360px; width: 1000px; height: 780px; border-radius: 60px; background: linear-gradient(165deg, #4a443e 0%, #2b2724 45%, #171513 100%); box-shadow: 0 60px 120px rgba(0,0,0,.75), inset 0 2px 0 rgba(255,255,255,.12); }
+  .tv-screen { position: absolute; left: 52px; top: 56px; width: 720px; height: 600px; border-radius: 70px/52px; overflow: hidden; background: #0c0f10; box-shadow: inset 0 0 60px rgba(0,0,0,.9), 0 0 0 10px #151311; }
+  .tv-screen img, .tv-screen video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(1.15) contrast(1.08); }
+  .tv-scan { position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 2px, rgba(0,0,0,0) 2px 4px), radial-gradient(ellipse at 50% 50%, rgba(0,0,0,0) 55%, rgba(0,0,0,.65) 100%); mix-blend-mode: multiply; }
+  .tv-glare { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(160deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,0) 35%); }
+  .tv-knobs { position: absolute; right: 52px; top: 90px; width: 130px; display: flex; flex-direction: column; align-items: center; gap: 38px; }
+  .tv-knobs b { width: 92px; height: 92px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #6d665f, #1f1c1a 70%); box-shadow: 0 8px 18px rgba(0,0,0,.6); }
+  .tv-knobs s { width: 100px; height: 130px; border-radius: 10px; background: repeating-linear-gradient(0deg, #1a1816 0 6px, #3a3531 6px 9px); }
   .sent-lines { position: absolute; left: 0; right: 0; top: 800px; text-align: center; }
   .sent-line { font-size: 64px; font-weight: 500; color: ${brand.ink}; letter-spacing: -1.5px; line-height: 1.08; white-space: nowrap; }
   .sent-line span { display: inline-block; margin: 0 0.12em; }
@@ -71,8 +86,11 @@ export const MOTION_CSS = (brand) => `
   .kin-text span { display: inline-block; margin: 0 0.14em; }
   .kin-text .em { color: ${brand.accent}; }
   .kin-text .it { font-style: italic; font-weight: 400; }
-  /* serif keyword captions (cinematic) */
-  .eser { display: inline-block; margin: 0 0.13em; font-family: "${brand.serif || "Georgia"}", Georgia, serif; font-style: italic; font-weight: 500; color: ${brand.accent}; text-shadow: 0 0 22px ${brand.accent}99, 0 2px 12px rgba(0,0,0,.4); letter-spacing: 0; }
+  /* per-word keyword treatments in editorial captions (captions.keywords, The Keynote) */
+  .eline:has(.ebold) { white-space: normal; max-width: 960px; margin: 0 auto; text-align: center; }
+  .ew.ebold { font-size: ${brand.boldScale ?? 1.9}em; font-weight: 900; line-height: .92; letter-spacing: -2px; color: ${brand.accent}; text-shadow: 0 6px 24px rgba(0,0,0,.45); }
+  .ew.ealarm { color: ${brand.alarm ?? "#E23B3B"}; font-weight: 800; text-shadow: 0 4px 18px rgba(0,0,0,.5); }
+  .ew.eser { display: inline-block; margin: 0 0.13em; font-family: "${brand.serif || "Georgia"}", Georgia, serif; font-style: italic; font-weight: 500; font-size: ${brand.serifScale ?? 1}em; line-height: .9; color: ${brand.accent}; text-shadow: 0 0 22px ${brand.accent}99, 0 2px 12px rgba(0,0,0,.4); letter-spacing: 0; }
   /* editorial captions */
   #ecaps { position: absolute; left: 0; right: 0; top: 0; height: 0; }
   .eblock { position: absolute; left: 130px; right: 130px; text-align: center; }
@@ -126,6 +144,36 @@ function transOut(ctx, sel, kind, t1) {
     tl.push(`tl.set("${sel}", { autoAlpha: 0, x: 0 }, ${r3(t1)});`);
   }
 }
+
+// object sounds (Alif rule: a sound says what the object IS; plain text lands silently) ----------
+// concept -> [sfx, hero]; hero sounds (money) sit near the voice, the rest ~10 dB under it
+export const OBJECT_SFX = {
+  moneybag: ["kaching-1", true], coins: ["kaching-1", true], money: ["kaching-1", true],
+  watch: ["tick-1", false], clock: ["tick-1", false], hourglass: ["tick-1", false],
+  lightbulb: ["ding-1", false], brain: ["ding-1", false],
+  gears: ["click-1", false], typewriter: ["typing-1", false], robot: ["tech-ui-confirm", false],
+  magnifier: ["whoosh-2", false], hand: ["whoosh-1", false], ladder: ["whoosh-3", false],
+  chess: ["impact-2", false], trophy: ["ding-1", false], rocket: ["riser-1", false],
+  chart: ["riser-1", false], check: ["tick-1", false], phone: ["tech-notification-2", false], mail: ["tech-notification-2", false],
+};
+const soundOf = (ctx) => ctx.sound || {};
+const objectSfx = (ctx, at, key, why) => {
+  const snd = soundOf(ctx);
+  if (snd.objects === false) return;
+  const concept = String(key).replace(/-\d+$/, "").replace(/^.*[\\/]/, "").replace(/\.png$/, "");
+  const [id, hero] = OBJECT_SFX[concept] || [null, false];
+  if (id) ctx.addSfx(at + (snd.objectLead ?? 0.04), id, `${why}: ${concept}`, { db: hero ? (snd.heroDb ?? -2) : (snd.objectDb ?? -8) });
+};
+const lineSfx = (ctx, at, id, why, opts) => { if (soundOf(ctx).lines !== false) ctx.addSfx(at, id, why, opts); };
+// Alif's paper-texture layer: quiet (~15-20 dB under the voice) and bright, so it reads over lo-fi music
+const PAPER_IN = ["paper-quick", "paper-page-turn", "paper-pages"];
+let paperN = 0, penN = 0;
+const penTick = (ctx, at, style, why) => {
+  const snd = soundOf(ctx);
+  if (!snd.pen) return;
+  const id = style === "marker" ? (penN++ % 2 ? "pen-scribble-2" : "pen-scribble") : (penN++ % 2 ? "pen-letters" : "pen-short");
+  ctx.addSfx(at, id, why, { db: snd.penDb ?? -4 });
+};
 
 // scenes ---------------------------------------------------------------------
 export function buildScene(b, id, t0, t1, ctx) {
@@ -206,10 +254,18 @@ export function buildScene(b, id, t0, t1, ctx) {
     for (const it of items.slice(1)) addSfx(it.at, "whoosh", "fly3d word", { db: -6 });
   }
 
-  else if (b.kind === "image") {
-    const src = userAsset(b.src);
+  else if (b.kind === "image" || b.kind === "window") {
+    // image: full-screen B-roll. window: the same inside a rounded vintage frame on black.
+    // src can be a still or a video clip; { self: <source seconds> } uses the speaker's own footage.
     const [z0, z1] = b.zoom ?? [1.0, 1.12];
-    body = `<img id="${id}-img" class="img-fill" src="${src}" style="${b.grade ? `filter:${b.grade};` : ""}" />`;
+    const grade = b.grade ?? (b.kind === "window" ? "sepia(.18) contrast(1.06) saturate(.9)" : "");
+    const media = b.self !== undefined ? ctx.source : userAsset(b.src);
+    const isVideo = b.self !== undefined || /\.(mp4|mov|webm)$/i.test(media);
+    const tag = isVideo
+      ? `<video id="${id}-img" class="img-fill" src="${media}" data-start="${t0}" data-duration="${r3(t1 - t0)}" data-media-start="${b.self ?? b.media ?? 0}" data-track-index="19" muted playsinline style="${grade ? `filter:${grade};` : ""}"></video>`
+      : `<img id="${id}-img" class="img-fill" src="${media}" style="${grade ? `filter:${grade};` : ""}" />`;
+    body = b.kind === "window" ? `<div class="win-frame" style="top:${b.y ?? 330}px">${tag}<div class="tv-scan" style="opacity:.35"></div></div>` : tag;
+    if (b.kind === "window") customBg = "#000";
     tl.push(`ft("#${id}-img", { scale: ${z0} }, { scale: ${z1}, duration: ${r3(t1 - t0)}, ease: "none" }, ${t0});`);
   }
 
@@ -348,9 +404,126 @@ export function buildScene(b, id, t0, t1, ctx) {
     customBg = kbg;
   }
 
+  else if (b.kind === "paper") {
+    // Editorial collage on grid paper: lines in serif, an accent box (italic serif, white) or marker handwriting.
+    // lines: [{ text, style: "serif"|"box"|"marker", at?, size?, rotate? }], optional arrow: true
+    const lines = (b.lines || []).map((ln, i) => {
+      // the first line is on the paper from the scene's first frame: never open on blank paper
+      const at = i === 0 ? t0 : (ln.at !== undefined ? Math.max(t0, E(ln.at, "paper line")) : r3(t0 + 0.15 + i * 0.35));
+      const sid2 = `${id}-p${i}`;
+      const size = ln.size ?? (ln.style === "box" ? 132 : ln.style === "marker" ? 96 : 118);
+      const css = ln.style === "box"
+        ? `display:inline-block;background:${brand.accent};color:#fff;font-family:'Instrument Serif',Georgia,serif;font-style:italic;padding:0 20px 10px;line-height:1`
+        : ln.style === "marker"
+        ? `color:#1e1e1e;font-family:'Caveat Brush',cursive;line-height:.9`
+        : `color:#1b1b1d;font-family:'Instrument Serif',Georgia,serif;letter-spacing:-2px;line-height:.92`;
+      tl.push(`ft("#${sid2}", { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.1, ease: "power2.out" }, ${r3(at - 0.03)});`);
+      if (ln.style !== "serif") lineSfx(ctx, at, ln.style === "marker" ? "pop" : "whoosh", "paper line", { db: -10 });
+      if (i > 0) penTick(ctx, at, ln.style, "pen tick (paper line)");
+      return `<div id="${sid2}" style="font-size:${size}px;${css};transform:rotate(${ln.rotate ?? (ln.style === "marker" ? -4 : 0)}deg);margin:${ln.style === "marker" ? "-10px 0 -6px 30px" : "0"}">${esc(ln.text)}</div>`;
+    }).join("");
+    body = `<div class="paper-bg"></div><div class="col" style="top:${b.y ?? 700}px;align-items:${b.align ?? "center"}">${lines}</div>`;
+    customBg = "#eeede8";
+  }
+
+  else if (b.kind === "tv") {
+    // A vintage CRT in a dark room; the screen flips through clips or stills (a montage for "distraction",
+    // "noise", "everyone else"). Items: { src } image or video, or { self: <source seconds> } for the
+    // speaker's own footage (rights-clean by default). Each item holds for dur (default: an even split).
+    const items = (b.items || []).length ? b.items : [{ self: 0 }];
+    const span = t1 - t0 - 0.1;
+    const each = Math.max(0.12, Math.min(0.8, span / items.length));
+    const screens = items.map((it, i) => {
+      const s0 = r3(t0 + 0.05 + i * each), d = r3(Math.min(it.dur ?? each, t1 - s0));
+      if (d <= 0) return "";
+      const style = `style="visibility:hidden"`;
+      tl.push(`tl.set("#${id}-tv${i}", { visibility: "visible" }, ${s0}); tl.set("#${id}-tv${i}", { visibility: "hidden" }, ${r3(s0 + d)});`);
+      if (i > 0) addSfx(s0, b.flipSfx ?? "tick-1", "tv channel flip", { db: -8 });
+      if (it.self !== undefined) return `<video id="${id}-tv${i}" src="${ctx.source}" data-start="${s0}" data-duration="${d}" data-media-start="${it.self}" data-track-index="${20 + (i % 6)}" muted playsinline ${style}></video>`;
+      const src = userAsset(it.src);
+      if (/\.(mp4|mov|webm)$/i.test(src)) return `<video id="${id}-tv${i}" src="${src}" data-start="${s0}" data-duration="${d}" data-media-start="${it.media ?? 0}" data-track-index="${20 + (i % 6)}" muted playsinline ${style}></video>`;
+      return `<img id="${id}-tv${i}" src="${src}" ${style} />`;
+    }).join("");
+    // a light flicker on the tube, stepped so any frame can be sought
+    for (let t = t0, k = 0; t < t1; t += 1 / 12, k++) tl.push(`tl.set("#${id}-scr", { opacity: ${(0.9 + ((k * 37) % 10) / 100).toFixed(2)} }, ${r3(t)});`);
+    body = `<div class="tv-room"></div>
+      <div class="tv-side" style="left:40px;top:250px"><i></i></div><div class="tv-side" style="right:30px;top:180px"><i></i></div>
+      <div class="tv-main" id="${id}-set"><div class="tv-screen" id="${id}-scr">${screens}<div class="tv-scan"></div><div class="tv-glare"></div></div>
+      <div class="tv-knobs"><b></b><b></b><s></s></div></div>`;
+    tl.push(`ft("#${id}-set", { scale: 0.94 }, { scale: 1.02, duration: ${r3(t1 - t0)}, ease: "none" }, ${t0});`);
+    customBg = "#0b0806";
+  }
+
+  else if (b.kind === "collage") {
+    // Vintage editorial collage (the "old school" look): public-domain engravings multiplied onto paper, mixed
+    // type (lowercase serif, tiny condensed caps, a dark box word, marker, huge italic caps), app-style stickers,
+    // all seen through a screen: RGB fringe, pixel mesh, a slight fisheye bulge.
+    // items: [{ type: "text"|"image"|"sticker"|"glasses", at?, x, y, ... }]  (x/y in px, top-left of the item)
+    const paper = b.paper ?? "grid";
+    const fringe = b.screen === false ? "" : "text-shadow:2.5px 0 0 rgba(230,40,60,.38),-2.5px 0 0 rgba(20,170,230,.38);";
+    const imgFringe = b.screen === false ? "" : "drop-shadow(2.5px 0 0 rgba(230,40,60,.35)) drop-shadow(-2.5px 0 0 rgba(20,170,230,.35))";
+    const TEXT = {
+      serif: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-size:${sz ?? 150}px;color:#1b1b1d;letter-spacing:-4px;line-height:.9`,
+      caps: (sz) => `font-family:Oswald,'Arial Narrow',sans-serif;font-weight:300;text-transform:uppercase;font-size:${sz ?? 64}px;color:#2a2a2c;letter-spacing:-1px;line-height:.9;transform:scaleY(1.25);transform-origin:0 0`,
+      dark: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-size:${sz ?? 170}px;color:#f1efe8;background:#1d1d22;padding:0 18px 12px;letter-spacing:-5px;line-height:1`,
+      box: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:${sz ?? 150}px;color:#fff;background:${brand.accent};padding:0 22px 12px;letter-spacing:-3px;line-height:1`,
+      marker: (sz) => `font-family:'Caveat Brush',cursive;font-size:${sz ?? 130}px;color:#1e1e22;line-height:.8`,
+      italic: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-style:italic;text-transform:uppercase;font-size:${sz ?? 210}px;color:#26302a;letter-spacing:-6px;line-height:.9`,
+    };
+    const items = (b.items || []).map((it, i) => {
+      const iid = `${id}-c${i}`;
+      // the first item is on the paper from the scene's first frame: never open on blank paper
+      const at = i === 0 ? t0 : it.at !== undefined ? Math.max(t0, E(it.at, "collage item")) : r3(t0 + 0.12 * i);
+      const pos = `position:absolute;left:${it.x ?? 120}px;top:${it.y ?? 600}px;transform:rotate(${it.rotate ?? 0}deg)`;
+      let html = "";
+      if (it.type === "image") {
+        const key = it.src || "";
+        const file = /[\/.]/.test(key) ? key : path.join(ctx.LIB, "engravings", "png", `${key}.png`);
+        html = `<img src="${userAsset(file)}" style="display:block;width:${it.w ?? 760}px;filter:contrast(1.15) ${imgFringe}" />`;
+        tl.push(`ft("#${iid}", { autoAlpha: 0, scale: 0.92 }, { autoAlpha: 1, scale: 1, duration: 0.18, ease: "back.out(2)" }, ${r3(at)});`);
+        if (soundOf(ctx).lines === false) objectSfx(ctx, at, it.src, "collage object");
+        else addSfx(at, "pop", "collage image", { db: -12 });
+      } else if (it.type === "glasses") {
+        // bold black frames dropped onto an engraving (a modern prop on a vintage cut-out)
+        const w = it.w ?? 640;
+        html = `<svg width="${w}" viewBox="0 0 640 200" style="display:block;filter:drop-shadow(0 8px 10px rgba(0,0,0,.35))"><g fill="none" stroke="#111" stroke-width="30" stroke-linejoin="round"><path d="M44 70 Q46 36 100 36 H236 Q284 36 282 80 Q278 150 236 168 Q200 180 120 176 Q62 172 52 128 Z"/><path d="M358 80 Q356 36 404 36 H540 Q594 36 596 70 L588 128 Q578 172 520 176 Q440 180 404 168 Q362 150 358 80 Z"/><path d="M284 72 Q320 52 356 72"/><path d="M40 62 L4 48 M600 62 L636 48"/></g></svg>`;
+        tl.push(`ft("#${iid}", { autoAlpha: 0, y: -160, rotation: -8 }, { autoAlpha: 1, y: 0, rotation: ${it.rotate ?? -4}, duration: 0.26, ease: "bounce.out" }, ${r3(at)});`);
+        lineSfx(ctx, at, "whoosh", "collage glasses", { db: -10 });
+      } else if (it.type === "sticker") {
+        // app-icon sticker: rounded square, white speech bubble, a number or a word inside
+        const sz = it.size ?? 420, col = it.color ?? "#5ccf5a";
+        html = `<div style="width:${sz}px;height:${sz}px;border-radius:${sz * 0.2}px;background:linear-gradient(180deg, ${col}, ${col}dd);box-shadow:0 18px 40px rgba(0,0,0,.25);position:relative">
+          <div style="position:absolute;left:12%;top:16%;width:76%;height:58%;background:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;font-weight:800;font-style:italic;font-size:${sz * 0.26}px;color:#111;letter-spacing:-4px">${esc(it.text ?? "")}</div>
+          <div style="position:absolute;left:24%;top:66%;width:0;height:0;border-left:${sz * 0.04}px solid transparent;border-right:${sz * 0.1}px solid transparent;border-top:${sz * 0.12}px solid #fff;transform:rotate(18deg)"></div></div>`;
+        tl.push(`ft("#${iid}", { autoAlpha: 0, scale: 0.4 }, { autoAlpha: 1, scale: 1, duration: 0.24, ease: "back.out(2.2)" }, ${r3(at)});`);
+        if (soundOf(ctx).lines === false) objectSfx(ctx, at, "phone", "collage sticker");
+        else addSfx(at, "pop", "collage sticker", { db: -8 });
+      } else {
+        const style = (TEXT[it.style ?? "serif"] || TEXT.serif)(it.size);
+        html = `<div style="${style};white-space:nowrap;${it.style === "dark" || it.style === "box" ? "" : fringe}">${esc(it.text ?? "")}</div>`;
+        tl.push(`ft("#${iid}", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.06 }, ${r3(at)});`);
+        if (it.style === "marker" || it.style === "dark" || it.style === "box") lineSfx(ctx, at, it.style === "marker" ? "pop" : "whoosh", "collage word", { db: -12 });
+        if (i > 0) penTick(ctx, at, it.style, "pen tick (collage word)");
+      }
+      // engravings are ink-only PNGs (alpha from darkness), so they layer like any sticker
+      const layer = `z-index:${it.z ?? (it.type === "glasses" ? 5 : it.type === "image" ? 1 : 3)}`;
+      return `<div id="${iid}" style="${pos};${layer}">${html}</div>`;
+    }).join("");
+    const paperBg = paper === "grid"
+      ? `<div class="paper-bg" style="background-color:#ecebe4;background-image:linear-gradient(rgba(40,40,50,.28) 2px, transparent 2px), linear-gradient(90deg, rgba(40,40,50,.28) 2px, transparent 2px);background-size:96px 96px"></div>`
+      : `<div class="paper-bg" style="background-color:#e9e6dc;background-image:none"></div>`;
+    const screenFx = b.screen === false ? "" : `<div style="position:absolute;inset:0;pointer-events:none;z-index:9;background:repeating-linear-gradient(0deg, rgba(0,0,0,.07) 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, rgba(255,0,0,.035) 0 1px, rgba(0,255,0,.035) 1px 2px, rgba(0,0,255,.035) 2px 3px);mix-blend-mode:multiply"></div>
+      <div style="position:absolute;inset:0;pointer-events:none;z-index:9;box-shadow:inset 0 0 180px rgba(40,30,20,.45)"></div>`;
+    body = `<div id="${id}-cw" style="position:absolute;inset:0;${b.screen === false ? "" : "filter:url(#phx-bulge) blur(0.5px)"}">${paperBg}${items}</div>${screenFx}
+      <svg width="0" height="0" style="position:absolute"><filter id="phx-bulge" x="0" y="0" width="100%" height="100%"><feImage href="${userAsset(path.join(ctx.LIB, "engravings", "bulge.png"))}" result="m" preserveAspectRatio="none" x="0" y="0" width="1080" height="1920"/><feDisplacementMap in="SourceGraphic" in2="m" scale="${b.bulge ?? 70}" xChannelSelector="R" yChannelSelector="G"/></filter></svg>`;
+    tl.push(`ft("#${id}-cw", { scale: 1 }, { scale: ${b.zoom ?? 1.06}, duration: ${r3(t1 - t0)}, ease: "none" }, ${t0});`);
+    customBg = "#e9e6dc";
+  }
+
   else throw new Error(`unknown scene kind '${b.kind}'`);
 
   transIn(ctx, `#${sid}`, inKind, t0);
+  if (soundOf(ctx).paperIn && (b.kind === "paper" || b.kind === "collage")) ctx.addSfx(Math.max(0, t0 - 0.06), PAPER_IN[paperN++ % PAPER_IN.length], "paper in (page arrives)", { db: soundOf(ctx).paperDb ?? -2 });
   if (inKind === "expand" || inKind === "wipe") addSfx(t0, "whoosh", `scene in (${inKind})`);
   transOut(ctx, `#${sid}`, outKind, t1);
   return `<div id="${sid}" class="scene" style="background:${customBg ?? bg};background-size:220% 220%">${body}</div>`;
@@ -389,7 +562,8 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
   const html = blocks.map((bl, bi) => {
     const s = bl[0].words[0].start - 0.05;
     const nextS = bi + 1 < blocks.length ? blocks[bi + 1][0].words[0].start - 0.05 : ctx.SPEECH;
-    const e = Math.min(bl.at(-1).words.at(-1).end + 0.5, nextS);
+    // maxHold: never keep a finished block up longer than this after its last word
+    const e = Math.min(bl.at(-1).words.at(-1).end + Math.min(0.5, cap.maxHold ?? 0.5), nextS, bl.at(-1).words.at(-1).end + (cap.maxHold ?? 99));
     const h = bl.reduce((n, ln) => n + (ln.tag ? brand.capSize * 1.35 : brand.capSize * 1.1), 0);
     const pl = ctx.placeCaption ? ctx.placeCaption(Math.max(0, s), e, h) : { y: cap.y ?? 1150, mode: "fixed" };
     const y = pl.y;
@@ -400,12 +574,32 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
         tl.push(`ft("#${lid}", { autoAlpha: 0, scale: 0.5, rotation: -16 }, { autoAlpha: 1, scale: 1, rotation: -6, duration: 0.3, ease: "back.out(1.7)" }, ${r3(t)});`);
         return `<span class="eline"><span id="${lid}" class="etag">${esc(ln.words.map((w) => w.word.replace(/[.,!?]$/, "")).join(" "))}</span></span>`;
       }
-      if (li > 0 && !bl[li - 1].tag && bl[li - 1].words) tl.push(`tl.to("#eb${bi}l${li - 1} .ew:not(.eser)", { fontWeight: 300, color: "rgba(255,255,255,0.86)", duration: 0.2, ease: "power2.out" }, ${r3(ln.words[0].start - 0.03)});`);
+      if (li > 0 && !bl[li - 1].tag && bl[li - 1].words) tl.push(`tl.to("#eb${bi}l${li - 1} .ew:not(.eser):not(.ebold):not(.ealarm)", { fontWeight: 300, color: "rgba(255,255,255,0.86)", duration: 0.2, ease: "power2.out" }, ${r3(ln.words[0].start - 0.03)});`);
       return `<span id="${lid}" class="eline">${ln.words.map((w, wi) => {
         const wid = `${lid}w${wi}`;
         tl.push(`ft("#${wid}", { autoAlpha: 0, y: 10, filter: "blur(10px)" }, { autoAlpha: 1, y: 0, filter: "blur(0px)", duration: 0.26, ease: "power3.out" }, ${r3(w.start - 0.03)});`);
         const txt = cap.upper ? w.word.toUpperCase() : cap.lowercase === false ? w.word : w.word.toLowerCase();
-        if (hl.has(norm(w.word)) && cap.keywordStyle === "serif") return `<span id="${wid}" class="ew eser">${esc(txt)}</span>`;
+        // per-word treatments (captions.keywords): script = gold handwritten, bold = huge accent sans,
+        // alarm = red while the frame drains to black and white
+        const kw = (cap.keywords || {})[norm(w.word)];
+        if (kw === "script" || (!kw && hl.has(norm(w.word)) && cap.keywordStyle === "serif")) {
+          // handwriting: the script word writes itself on, left to right
+          tl.push(`ft("#${wid}", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% -10% 0% 0%)", duration: ${r3(Math.max(0.35, Math.min(0.7, w.end - w.start + 0.2)))}, ease: "power1.inOut" }, ${r3(w.start - 0.02)});`);
+          if (cap.keywordSfx !== false && ctx.addSfx) ctx.addSfx(w.start, "whoosh", "keyword script", { db: -8 });
+          return `<span id="${wid}" class="ew eser">${esc(txt)}</span>`;
+        }
+        if (kw === "bold") {
+          tl.push(`ft("#${wid}", { scale: 0.6 }, { scale: 1, duration: 0.3, ease: "back.out(2)" }, ${r3(w.start - 0.02)});`);
+          if (cap.keywordSfx !== false && ctx.addSfx) ctx.addSfx(w.start, "impact", "keyword bold", { db: -6 });
+          return `<span id="${wid}" class="ew ebold">${esc(txt)}</span>`;
+        }
+        if (kw === "alarm") {
+          const hold = Math.max(0.9, (w.end - w.start) + 0.8);
+          tl.push(`tl.to("#base", { filter: "grayscale(1) contrast(1.1)", duration: 0.12, ease: "none" }, ${r3(w.start - 0.05)});`);
+          tl.push(`tl.to("#base", { filter: "grayscale(0) contrast(1)", duration: 0.25, ease: "power1.out" }, ${r3(w.start + hold)});`);
+          if (cap.keywordSfx !== false && ctx.addSfx) ctx.addSfx(w.start, "impact", "keyword alarm", { db: -4 });
+          return `<span id="${wid}" class="ew ealarm">${esc(txt)}</span>`;
+        }
         if (hl.has(norm(w.word))) {
           tl.push(`ft("#${wid}b", { scaleX: 0 }, { scaleX: 1, duration: 0.28, ease: "power3.out" }, ${r3(w.start)});`);
           return `<span class="ehl"><i id="${wid}b"></i><span id="${wid}" class="ew">${esc(txt)}</span></span>`;
@@ -446,6 +640,14 @@ export function buildMusic(m, ctx, execFileSync, path, fs) {
   const target = -16 + (m.db ?? -20);
   const vol = r3(Math.min(3.98, Math.pow(10, (target - I) / 20)));
   const fi = m.fadeIn ?? 0.6, fo = m.fadeOut ?? 1.2;
-  const lane = JSON.stringify({ version: 1, lanes: [{ target: "volume", points: [{ t: 0, v: 0 }, { t: fi, v: vol }, { t: r3(TOTAL - fo), v: vol }, { t: r3(TOTAL), v: 0 }] }] });
+  // drops: the beat stops for ~0.5 s right before a payoff line and comes back ON it (Alif: 1-2 per reel)
+  const pts = [{ t: 0, v: fi > 0.02 ? 0 : vol }, { t: Math.max(0.01, fi), v: vol }];
+  for (const d of [...(m.dropTimes || [])].sort((a, b) => a - b)) {
+    const len = m.dropLen ?? 0.5;
+    if (d - len < fi + 0.2 || d > TOTAL - fo - 0.1) continue;
+    pts.push({ t: r3(d - len - 0.03), v: vol }, { t: r3(d - len), v: 0 }, { t: r3(d - 0.02), v: 0 }, { t: r3(d), v: vol });
+  }
+  pts.push({ t: r3(TOTAL - Math.max(0.02, fo)), v: vol }, { t: r3(TOTAL), v: fo > 0.02 ? 0 : vol });
+  const lane = JSON.stringify({ version: 1, lanes: [{ target: "volume", points: pts }] });
   return { html: `<audio id="music-bed" src="${src}" data-start="0" data-duration="${TOTAL}" data-media-start="${m.start ?? 0}" data-track-index="20" data-automation='${lane}'></audio>`, vol, I };
 }

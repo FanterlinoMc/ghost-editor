@@ -1,0 +1,83 @@
+{
+  "_about": "The Keynote (studied from a cinematic speaker clip): two framings of a speaker alternating every ~1.4 s, lowercase captions that build line by line with the key phrase in a gold handwritten script with a glow, warm light-leak flashes between sections, soft cinematic music bed. Caption size and height measured by OCR on the reference: 3 words, lowercase, ~6% of frame height, centred at 50%.",
+  "brand": {
+    "accent": "#F2C14E",
+    "accentDark": "#D9A42B",
+    "ink": "#111111",
+    "capSize": 84,
+    "font": "Inter",
+    "serif": "Yellowtail",
+    "serifScale": 1.7,
+    "alarm": "#E23B3B",
+    "boldScale": 1.9
+  },
+  "captions": {
+    "style": "editorial",
+    "group": 3,
+    "y": 960,
+    "keywordStyle": "serif",
+    "smartBreaks": true
+  },
+  "cadence": {
+    "every": 1.4,
+    "minGap": 0.7,
+    "scales": [
+      1.0,
+      1.28
+    ],
+    "emphasisScale": 1.34,
+    "sfx": "whoosh",
+    "sfxEvery": 5,
+    "sfxDb": -8
+  },
+  "leaks": {
+    "every": 9
+  },
+  "sfxProfile": "restrained",
+  "music": {
+    "id": "silent-descent",
+    "db": -16
+  },
+  "look": {
+    "vignette": 0.35
+  },
+  "openPush": {
+    "z": 1.08,
+    "dur": 2.5
+  },
+  "scenes": {
+    "tv": {
+      "in": "glitch"
+    },
+    "window": {
+      "gate": "8mm"
+    }
+  },
+  "packs": {
+    "editorsinventory": true
+  },
+  "burns": {
+    "onScenes": true
+  },
+  "director": {
+    "style": "The Keynote: cinematic speaker edit. Part one (the problem) is designed and dramatic; part two (the answer) is calm.",
+    "keyword_treatments": {
+      "script": "gold handwritten script: aspiration, purpose, the future, faith, what the speaker is working towards",
+      "bold": "huge bold accent word: the single core idea or number of a sentence (e.g. a hundred, purpose, three months)",
+      "alarm": "red while the frame turns black and white: danger, loss, pain, what goes wrong (e.g. distracted, lose, punish)"
+    },
+    "icons": "a gold icon tile when the speaker names something concrete and visual (a calendar for a time frame, a signpost for direction, a trophy for winning). Use Lucide icon names (lucide.dev), e.g. calendar-days, signpost, trophy, target, dumbbell, alarm-clock, heart, brain.",
+    "scenes": {
+      "tv": "TV montage when the speaker describes noise, distraction, other people, the crowd, or what everyone else does. 1.5-3 s.",
+      "window": "framed vintage B-roll when the speaker describes doing something (writing, working, training, building). 1.5-3 s.",
+      "image": "full-screen B-roll for a vivid moment the speaker paints with words. 1.5-3 s."
+    },
+    "banner": "optional: a 3-6 word hook for the first ~3 s when the opening line is weak.",
+    "limits": {
+      "keywords_per_min": 6,
+      "icons_per_min": 2,
+      "scenes_per_min": 2
+    },
+    "restraint": "Never two treatments in the same sentence. Leave the calm second half mostly plain."
+  }
+}
