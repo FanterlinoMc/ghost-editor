@@ -1249,6 +1249,34 @@ let titleHtml = "";
 if (spec.banner?.text) {
   const from = spec.banner.from ?? 0, to = Math.min(spec.banner.to ?? TOTAL, TOTAL);
   titleHtml = `<div id="title-banner" class="clip" data-start="${r3(from)}" data-duration="${r3(Math.max(0.1, to - from))}" data-track-index="9" style="position:absolute;left:60px;right:60px;top:${spec.banner.y ?? 250}px;text-align:center;z-index:9;font-family:${brand.font || "Montserrat"},system-ui,sans-serif;font-size:${spec.banner.size ?? 64}px;font-weight:900;line-height:1.05;color:#fff;-webkit-text-stroke:10px #000;paint-order:stroke fill;text-transform:uppercase">${esc(spec.banner.text)}</div>`;
+
+  // A26: a full-frame scene draws its own heading in the same band as the banner, so the two
+  // collide - measured on a monologue reel where the banner sat across a paper page's serif line,
+  // both legible, neither readable. Neither layer is wrong on its own, which is why nothing caught
+  // it. The banner yields: it is the persistent furniture, the page is the moment.
+  //
+  // Scene beats are the full-frame carriers, the same set build.mjs already keeps the zoom swish
+  // out of (see the music-bed block below). Spans are merged first so two adjacent pages do not
+  // make the banner flash back on for a few frames between them, and clamped to the banner's own
+  // window so a scene before `from` or after `to` pushes no tween at all.
+  if (spec.banner.hideOnScenes !== false) {
+    const raw = beatsList.filter((b) => b.type === "scene" && typeof b.at === "number")
+      .map((b) => [E(b.at) - 0.12, E(b.to ?? b.at) + 0.12])
+      .filter(([a, z]) => z > from && a < to)
+      .map(([a, z]) => [Math.max(a, from), Math.min(z, to)])
+      .sort((x, y) => x[0] - y[0]);
+    const spans = [];
+    for (const [a, z] of raw) {
+      const last = spans[spans.length - 1];
+      if (last && a <= last[1] + 0.25) last[1] = Math.max(last[1], z);
+      else spans.push([a, z]);
+    }
+    for (const [a, z] of spans) {
+      tl.push(`tl.to("#title-banner", { autoAlpha: 0, duration: 0.16, ease: "power2.in" }, ${r3(a)});`);
+      if (z < to - 0.2) tl.push(`tl.to("#title-banner", { autoAlpha: 1, duration: 0.16, ease: "power2.out" }, ${r3(z)});`);
+    }
+    if (spans.length) console.log(`banner: hidden across ${spans.length} full-frame scene span(s)`);
+  }
 }
 
 // ---------- music bed ----------
