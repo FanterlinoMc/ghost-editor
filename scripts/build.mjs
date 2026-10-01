@@ -124,13 +124,20 @@ const SPEECH = acc / FPS;
 const OUTRO = spec.outro ?? 3;
 const TOTAL = +(SPEECH + OUTRO).toFixed(3);
 
+// takes in recording order, for the gap-snap below. Array order is PLAYBACK order and may differ.
+const bySource = [...takes].sort((x, y) => x.a - y.a);
 const E = (t, what = "") => {
   if (t === "end") return TOTAL;
   if (typeof t === "string" && t.startsWith("outro+")) return SPEECH + parseFloat(t.slice(6));
   for (const k of takes) if (t >= k.a - 1e-6 && t <= k.b + 1e-6) return +(k.start + (t - k.a)).toFixed(3);
   // whisper word times are loose around pauses: a time inside a short removed
-  // gap (< 1.2 s) snaps to the start of the next kept take
-  if (typeof t === "number") for (let i = 0; i + 1 < takes.length; i++) if (t > takes[i].b && t < takes[i + 1].a && takes[i + 1].a - takes[i].b < 1.2) return +takes[i + 1].start.toFixed(3);
+  // gap (< 1.2 s) snaps to the start of the next kept take.
+  // Walk takes in SOURCE order, not array order: a reordered edit (the hook moved to the front)
+  // leaves array-adjacent takes non-adjacent in the recording, and this test then compares a gap
+  // that does not exist. Measured: with takes [10.06-20.12, 0.4-4.88, 7.82-9.5, 20.24-22.36],
+  // E(9.8) threw "not inside any take" where source order resolved it to 6.133. Sorting a copy is
+  // a no-op when takes are already in source order, so plans that never reorder are untouched.
+  if (typeof t === "number") for (let i = 0; i + 1 < bySource.length; i++) if (t > bySource[i].b && t < bySource[i + 1].a && bySource[i + 1].a - bySource[i].b < 1.2) return +bySource[i + 1].start.toFixed(3);
   // "hold:<i>+s" = s seconds into the hold after take i
   if (typeof t === "string" && t.startsWith("hold:")) { const [i, off] = t.slice(5).split("+"); return +(takes[+i].holdStart + (parseFloat(off) || 0)).toFixed(3); }
   throw new Error(`E(${t})${what ? " for " + what : ""}: not inside any take`);
@@ -474,7 +481,12 @@ const beatsList = spec.beats || [];
 // a template can carry the name tag: on screen from the first frame until the hook page cuts in (or 2.4 s)
 // (R1b port)
 if (spec.nametag && !beatsList.some((b) => b.type === "nametag")) {
-  const firstPage = beatsList.filter((b) => b.type === "scene").map((b) => b.at).sort((a, b) => a - b)[0];
+  // first page as the VIEWER meets it, so pick by edit time - but keep its source `at`, because
+  // `until` below is a source time that gets mapped through E() with every other beat. When takes
+  // are in source order E() is monotonic, so this sorts identically to sorting by `at` and no
+  // existing plan changes; it only differs once a take has been moved.
+  const pagesByEdit = beatsList.filter((b) => b.type === "scene").sort((x, y) => E(x.at) - E(y.at));
+  const firstPage = pagesByEdit.length ? pagesByEdit[0].at : undefined;
   const until = spec.nametag.until === "hook" && firstPage != null && firstPage < 4.5 ? firstPage - 0.05 : (spec.nametag.to ?? 2.4);
   beatsList.unshift({ type: "nametag", name: spec.nametag.name, title: spec.nametag.title, subtitle: spec.nametag.subtitle, at: spec.nametag.at ?? 0.15, to: Math.max(1.2, until), sfx: false });
 }
