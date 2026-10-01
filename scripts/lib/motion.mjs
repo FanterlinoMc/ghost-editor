@@ -579,6 +579,245 @@ export function buildScene(b, id, t0, t1, ctx) {
     customBg = "#e9e6dc";
   }
 
+  // --- ported from origin/main (Ahmedmkarrar/phantasic) bd7ae09, 1 Oct: the five scene kinds the
+  // mono / pitch / monologue templates need. Additive by decision: our own `clip` kind above and
+  // every existing kind are untouched, and main's changes to caption construction, the nametag,
+  // `behind` and the page DOM were deliberately NOT taken - see PLAN-COMPARISON.md and decision 6.
+  else if (b.kind === "wordpage") {
+    // one spoken word at a time on a flat field: accent with white words, or paper with accent words.
+    // b.big: words drawn 1.5x (the payoff of the line); b.serif: words in the italic display serif
+    const onAccent = (b.bg ?? "accent") === "accent";
+    customBg = onAccent ? brand.accent : (b.paper ?? "#F3F3F3");
+    const spoken = words.filter((w) => w.start >= t0 - 0.05 && w.start < t1);
+    const serif = new Set((b.serif || []).map(norm)), big = new Set((b.big || []).map(norm));
+    body = spoken.map((w, i) => {
+      const s = r3(Math.max(t0, w.start - 0.03)), e = r3(i + 1 < spoken.length ? spoken[i + 1].start - 0.03 : t1);
+      const ser = serif.has(norm(w.word)), size = Math.round((b.size ?? 118) * (big.has(norm(w.word)) ? 1.5 : 1) * (ser ? 1.2 : 1));
+      tl.push(`ft("#${id}-w${i}", { autoAlpha: 0, filter: "blur(8px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: 0.1, ease: "power2.out" }, ${s});`);
+      if (i + 1 < spoken.length) tl.push(`tl.set("#${id}-w${i}", { autoAlpha: 0 }, ${e});`);
+      return `<div id="${id}-w${i}" class="wp-word${ser ? " ser" : ""}" style="font-size:${size}px;color:${onAccent ? "#fff" : brand.accent}">${esc(w.word.replace(/,$/, ""))}</div>`;
+    }).join("");
+  }
+
+  else if (b.kind === "highlight") {
+    // white page: plain lines in the accent colour ink in word by word as spoken; the box line grows its
+    // accent box one word at a time under white type ("comes down" / [to 3 things])
+    customBg = b.paper ?? "#F3F3F3";
+    const spoken = words.filter((w) => w.start >= t0 - 0.05 && w.start < t1);
+    let si = 0;
+    const lines = (b.lines || []).map((l, li) => {
+      const la = E(l.at, "highlight line");
+      const ws = l.text.split(/\s+/).map((w, wi) => {
+        let at = null;
+        for (let k = si; k < spoken.length; k++) if (norm(spoken[k].word) === norm(w)) { at = spoken[k].start; si = k + 1; break; }
+        at = r3(Math.max(t0, (at ?? la + wi * 0.14) - 0.02));
+        const wid = `${id}-h${li}-${wi}`;
+        if (l.box) tl.push(`ft("#${wid}", { autoAlpha: 1, clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.14, ease: "power2.out" }, ${at});`);
+        else tl.push(`ft("#${wid}", { autoAlpha: 0, filter: "blur(6px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: 0.1, ease: "power2.out" }, ${at});`);
+        if (l.box && wi === 0) addSfx(at, "click-1", "highlight box", { db: -6 });
+        return `<span id="${wid}" class="${l.box ? "hl-boxw" : "hl-w"}"${l.box ? ` style="background:${brand.accent}"` : ` style="color:${brand.accent}"`}>${esc(w)}</span>`;
+      }).join("");
+      return `<div class="hl-line" style="font-size:${l.size ?? b.size ?? 104}px">${ws}</div>`;
+    }).join("");
+    body = `<div class="hl-col" style="top:${b.y ?? 800}px">${lines}</div>`;
+  }
+
+  else if (b.kind === "cardpage") {
+    // white page, one small framed picture in the middle that swaps (stop-motion) on b.items[].at, and the
+    // spoken words one at a time in the accent colour under it
+    customBg = b.paper ?? "#F3F3F3";
+    const items = (b.items || []).map((it, i) => ({ ...it, i, t: r3(Math.max(t0, E(it.at, "cardpage item"))) }));
+    const w = b.w ?? 380;
+    const cards = items.map((it, i) => {
+      const end = i + 1 < items.length ? items[i + 1].t : t1;
+      if (i > 0) tl.push(`tl.set("#${id}-c${i}", { autoAlpha: 0 }, 0);`);
+      tl.push(`tl.set("#${id}-c${i}", { autoAlpha: 1 }, ${it.t});`);
+      tl.push(`ft("#${id}-c${i}", { xPercent: -50, yPercent: -50, scale: ${i ? 1.06 : 0.8}, rotation: ${i % 2 ? 2 : -2} }, { xPercent: -50, yPercent: -50, scale: 1, rotation: 0, duration: 0.16, ease: "power3.out" }, ${it.t});`);
+      if (i + 1 < items.length) tl.push(`tl.set("#${id}-c${i}", { autoAlpha: 0 }, ${end});`);
+      addSfx(it.t, "click-1", "card swap", { db: -8 });
+      // a tool logo (Simple Icons slug) sits on a white tile; a painting fills its frame
+      if (it.logo) return `<div id="${id}-c${i}" class="cp-card cp-logo" style="width:${w}px;height:${w}px"><img src="${ctx.icon(it.logo)}" /></div>`;
+      return `<img id="${id}-c${i}" class="cp-card" src="${ctx.artAsset(it.art)}" style="width:${w}px" />`;
+    }).join("");
+    const spoken = words.filter((w) => w.start >= t0 - 0.05 && w.start < t1);
+    const labs = spoken.map((wd, i) => {
+      const s0 = r3(Math.max(t0, wd.start - 0.03)), e0 = r3(i + 1 < spoken.length ? spoken[i + 1].start - 0.03 : t1);
+      tl.push(`ft("#${id}-l${i}", { autoAlpha: 0, filter: "blur(6px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: 0.08, ease: "power2.out" }, ${s0});`);
+      if (i + 1 < spoken.length) tl.push(`tl.set("#${id}-l${i}", { autoAlpha: 0 }, ${e0});`);
+      return `<div id="${id}-l${i}" class="cp-lab" style="color:${brand.accent};font-size:${b.labelSize ?? 86}px">${esc(wd.word.replace(/,$/, ""))}</div>`;
+    }).join("");
+    body = `<div class="cp-stage" style="top:${b.y ?? 560}px;height:${Math.round(w * 1.3)}px">${cards}</div><div class="cp-labs" style="top:${(b.y ?? 560) + Math.round(w * 1.3) + 40}px">${labs}</div>`;
+  }
+
+  else if (b.kind === "concept") {
+    // a key word on a white-to-grey card, its typeface cycling every ~0.22 s, over engravings that swap on the beat
+    customBg = b.bg ?? "linear-gradient(180deg, #ffffff 0%, #f1f1f1 45%, #bdbdbd 100%)";
+    const fonts = b.fonts ?? [["Instrument Serif", "normal", 400], ["Yellowtail", "normal", 400], ["JetBrains Mono", "normal", 500], ["Inter", "normal", 800], ["EB Garamond", "italic", 500], ["Gloock", "normal", 400]];
+    const step = b.step ?? 0.22, n = Math.max(1, Math.floor((t1 - t0) / step));
+    const word = b.word ?? "";
+    const faces = Array.from({ length: n }, (_, k) => {
+      const [fam, st, wt] = fonts[k % fonts.length], at = r3(t0 + k * step);
+      if (k > 0) tl.push(`tl.set("#${id}-f${k}", { autoAlpha: 0 }, 0);`);
+      tl.push(`tl.set("#${id}-f${k}", { autoAlpha: 1 }, ${at});`);
+      if (k + 1 < n) tl.push(`tl.set("#${id}-f${k}", { autoAlpha: 0 }, ${r3(at + step)});`);
+      return `<div id="${id}-f${k}" class="cc-word" style="font-family:'${fam}',serif;font-style:${st};font-weight:${wt};font-size:${b.size ?? 120}px">${esc(word)}</div>`;
+    }).join("");
+    const imgs = (b.engravings || []).map((eng, i, arr) => {
+      const src = path.join(ctx.LIB, "engravings", "png", `${eng}.png`);
+      const dst = path.join(ctx.proj, "assets", `${eng}.png`);
+      if (fs.existsSync(src) && !fs.existsSync(dst)) fs.copyFileSync(src, dst);
+      const at = r3(t0 + i * ((t1 - t0) / arr.length));
+      if (i > 0) tl.push(`tl.set("#${id}-e${i}", { autoAlpha: 0 }, 0);`);
+      tl.push(`tl.set("#${id}-e${i}", { autoAlpha: 1 }, ${at});`);
+      tl.push(`ft("#${id}-e${i}", { scale: 1.06 }, { scale: 1, duration: 0.2, ease: "power2.out" }, ${at});`);
+      if (i + 1 < arr.length) tl.push(`tl.set("#${id}-e${i}", { autoAlpha: 0 }, ${r3(t0 + (i + 1) * ((t1 - t0) / arr.length))});`);
+      return `<img id="${id}-e${i}" class="cc-img" src="assets/${eng}.png" />`;
+    }).join("");
+    body = `<div class="cc-words">${faces}</div><div class="cc-imgs">${imgs}</div>`;
+  }
+
+  else if (b.kind === "stack") {
+    // Mono: a three-tier statement. A small lead line types on word by word, the KEY word lands huge out of a
+    // ghosted blur, a small italic tail lands under it. Ground: accent, paper, the speaker's grayscale footage
+    // (transparent page), the footage in a rounded card, or the footage in a phone with a reels UI. Icons
+    // (engraving or brand logo) pop above the key; flips swap accent <-> paper on the beat.
+    const ground = b.bg ?? "accent", bgIsPhone = ground === "phone";
+    const spoken = words.filter((w) => w.start >= t0 - 0.05 && w.start < t1);
+    let si = 0;
+    const timeOf = (text, fallback) => {
+      // the start of the spoken word matching the first token of text, searched forward from the last match
+      const first = norm(String(text).split(/\s+/)[0] || "");
+      for (let k = si; k < spoken.length; k++) if (norm(spoken[k].word) === first) { si = k + 1; return spoken[k].start; }
+      return fallback;
+    };
+    const wordsIn = (text, cls, ink, fallbackAt) => String(text || "").split(/\s+/).filter(Boolean).map((w, i) => {
+      const at = r3(Math.max(t0, (timeOf(w, null) ?? fallbackAt + i * 0.12) - 0.03));
+      const wid = `${id}-${cls}${i}-${Math.round(at * 1000)}`;
+      // words join the line as spoken (display none -> inline) so a line grows from its centre
+      tl.push(`tl.set("#${wid}", { display: "inline-block" }, ${at});`);
+      tl.push(`ft("#${wid}", { autoAlpha: 0, filter: "blur(6px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: 0.12, ease: "power2.out" }, ${at});`);
+      return `<span id="${wid}" class="mn-w">${esc(w)}</span>`;
+    }).join("");
+    // lines: the stack grows top-down as it is spoken. role s = small regular, k = HUGE key, t = small italic tail.
+    // (lead/key/tail is the short form: one of each.)
+    const lines = b.lines ?? [b.lead && { text: b.lead, role: "s" }, { text: b.key, role: "k", say: b.keySay, size: b.keySize, color: b.keyColor, ring: b.ring, enter: b.enter }, b.tail && { text: b.tail, role: "t" }].filter(Boolean);
+    let firstKeyAt = null;
+    const lineHtml = lines.map((l, li) => {
+      if (l.role !== "k") {
+        const fb = li === 0 ? t0 : (firstKeyAt ?? t0) + 0.3;
+        const cls = l.role === "t" ? "mn-tail" : l.role === "m" ? "mn-mid" : "mn-lead";
+        return `<div class="${cls}"${l.size ? ` style="font-size:${l.size}px"` : ""}>${wordsIn(l.text, `l${li}-`, null, fb)}</div>`;
+      }
+      // a key line: a pale ghost on its first word, solid as it finishes (reference: 'wanna be', 'idea')
+      const sayWords = String(l.say ?? l.text).split(/\s+/).filter(Boolean);
+      const startSi = si;
+      const s0 = timeOf(sayWords[0], null);
+      let last = s0;
+      for (const w of sayWords.slice(1)) last = timeOf(w, last) ?? last;
+      if (s0 == null) si = startSi;
+      const ka = r3(Math.max(t0, l.at != null ? E(l.at, "stack key") : (s0 ?? t0 + 0.05) - 0.04));
+      const solid = r3(Math.min(ka + 0.5, Math.max(ka + 0.16, (last ?? ka) - 0.02)));
+      firstKeyAt ??= ka;
+      const size = l.size ?? Math.min(b.keyMax ?? 240, Math.round(1640 / Math.max(4, String(l.text).length)));
+      const kid = `${id}-k${li}`;
+      let label = esc(l.text);
+      if (l.enter === "letters") {
+        // hook: the key builds letter by letter, each one rising out of a blur
+        const chars = [...String(l.text)];
+        label = chars.map((c, ci) => `<span id="${kid}c${ci}" class="mn-letter">${c === " " ? "&nbsp;" : esc(c)}</span>`).join("");
+        const step = Math.min(0.045, Math.max(0.02, (solid - ka + 0.12) / Math.max(1, chars.length)));
+        tl.push(`tl.set("#${kid}", { autoAlpha: 1 }, ${ka});`);
+        chars.forEach((_, ci) => tl.push(`ft("#${kid}c${ci}", { autoAlpha: 0, y: 90, rotation: ${ci % 2 ? 8 : -8}, filter: "blur(10px)" }, { autoAlpha: 1, y: 0, rotation: 0, filter: "blur(0px)", duration: 0.22, ease: "back.out(2)" }, ${r3(ka + ci * step)});`));
+      } else if (l.enter === "rise") {
+        tl.push(`ft("#${kid}", { autoAlpha: 0, y: 140, scaleY: 1.5, filter: "blur(16px)" }, { autoAlpha: 0.5, y: 40, scaleY: 1.2, filter: "blur(10px)", duration: ${r3(Math.max(0.08, solid - ka))}, ease: "power1.out" }, ${ka});`);
+        tl.push(`tl.to("#${kid}", { autoAlpha: 1, y: 0, scaleY: 1, filter: "blur(0px)", duration: 0.14, ease: "power3.out" }, ${solid});`);
+      } else if (l.enter !== "letters") {
+        tl.push(`ft("#${kid}", { autoAlpha: 0, scale: 1.06, filter: "blur(10px)" }, { autoAlpha: 0.32, scale: 1.02, filter: "blur(2px)", duration: 0.08, ease: "none" }, ${ka});`);
+        tl.push(`tl.to("#${kid}", { autoAlpha: 1, scale: 1, filter: "blur(0px)", duration: 0.14, ease: "power3.out" }, ${solid});`);
+      }
+      addSfx(solid, b.sfx ?? "click-1", "stack key", { db: -10 });
+      let ring = "";
+      if (l.ring) {
+        ring = `<svg class="mn-ring" viewBox="0 0 100 40" preserveAspectRatio="none"><ellipse id="${kid}r" cx="50" cy="20" rx="48" ry="17" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/></svg>`;
+        tl.push(`ft("#${kid}r", { attr: { "stroke-dashoffset": 1 } }, { attr: { "stroke-dashoffset": 0 }, duration: 0.4, ease: "power2.inOut" }, ${r3(solid + 0.05)});`);
+      }
+      let pulse = "";
+      if (l.pulse) {
+        // a ring bursts out from behind the key as it lands
+        pulse = `<i id="${kid}p" class="mn-pulse"></i>`;
+        tl.push(`tl.set("#${kid}p", { autoAlpha: 0.7, scale: 0.4 }, ${solid}); tl.to("#${kid}p", { autoAlpha: 0, scale: 2.4, duration: 0.5, ease: "power2.out" }, ${solid});`);
+        tl.push(`tl.to("#${kid}", { keyframes: [{ scale: 1.18, duration: 0.06 }, { scale: 1, duration: 0.22, ease: "back.out(3)" }] }, ${solid});`);
+      }
+      return `<div id="${kid}" class="mn-key" style="font-size:${size}px${l.color ? `;color:${l.color}` : ""}">${pulse}${ring}${label}</div>`;
+    });
+    const keyAt = firstKeyAt ?? t0;
+    const firstK = lines.findIndex((l) => l.role === "k");
+    const lead = lineHtml.slice(0, Math.max(0, firstK)).join("");
+    const rest = lineHtml.slice(Math.max(0, firstK)).join("");
+
+    let iconHtml = "";
+    if (b.icon || b.logo) {
+      const ia = r3(Math.max(t0, b.iconAt != null ? E(b.iconAt, "stack icon") : keyAt + 0.08));
+      const size = b.iconSize ?? (b.logo ? 150 : bgIsPhone ? 150 : 230);
+      if (b.logo) {
+        const fill = b.logoFill ?? "#fff";
+        iconHtml = `<div id="${id}-ic" class="mn-ic" style="width:${size}px;height:${size}px;background:${fill};-webkit-mask:url(${ctx.icon(b.logo)}) center/contain no-repeat;mask:url(${ctx.icon(b.logo)}) center/contain no-repeat"></div>`;
+      } else {
+        const src = ctx.userAsset(path.join(ctx.LIB, "engravings", "png", `${b.icon}.png`));
+        iconHtml = `<div id="${id}-ic" class="mn-ic mn-eng" style="width:${size}px;height:${size}px;-webkit-mask:url(${src}) center/contain no-repeat;mask:url(${src}) center/contain no-repeat"></div>`;
+      }
+      tl.push(`ft("#${id}-icw", { autoAlpha: 0, scale: 0.4, y: 30 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.26, ease: "back.out(2.4)" }, ${ia});`);
+      addSfx(ia, "pop-whoosh-light", "stack icon", { db: -4 });
+      iconHtml = `<div id="${id}-icw">${bgIsPhone ? `<div class="mn-tile">${iconHtml}</div>` : iconHtml}</div>`;
+    }
+    // the block's height, so tall stacks centre on pages and stay inside the safe area on footage
+    const est = lines.reduce((h, l) => h + (l.role === "k" ? (l.size ?? Math.min(b.keyMax ?? 240, Math.round(1640 / Math.max(4, String(l.text).length)))) * 0.92
+      : l.role === "m" ? (brand.midSize ?? 96) * 1.04 : l.role === "t" ? (brand.tailSize ?? 46) * 1.4 : (l.size ?? brand.leadSize ?? 56) * 1.08), 0) + (iconHtml ? 240 : 0);
+    const column = (top) => `<div class="mn-col" style="top:${top}px">${iconHtml}${lead}${rest}</div>`;
+    const selfAt = b.self ?? b.at;
+    const film = (cls) => `<video class="${cls}" src="${ctx.source}" data-start="${t0}" data-duration="${r3(t1 - t0)}" data-media-start="${selfAt}" data-track-index="19" muted playsinline></video>`;
+    if (ground === "footage") {
+      body = column(b.y ?? Math.round(Math.max(760, Math.min(1080, 1460 - est))));
+      if (b.punch) {
+        // hook: the camera punches in on the key, then drifts (a full-bleed copy of the footage, matched to #base)
+        const base = ctx.zoomBase ?? 1;
+        body = `<div id="${id}-fw" class="mn-full" style="position:absolute;inset:0">${film("mn-film")}</div>` + body;
+        tl.push(`tl.set("#${id}-fw", { scale: ${base} }, ${t0});`);
+        tl.push(`tl.to("#${id}-fw", { scale: ${r3(base * (b.punch === true ? 1.22 : b.punch))}, rotation: ${b.tilt ?? 0}, duration: 0.14, ease: "power3.out" }, ${keyAt});`);
+        tl.push(`tl.to("#${id}-fw", { scale: ${r3(base * (b.punch === true ? 1.28 : b.punch + 0.06))}, duration: ${r3(Math.max(0.2, t1 - keyAt - 0.14))}, ease: "none" }, ${r3(keyAt + 0.14)});`);
+      }
+      customBg = "transparent";
+    } else if (ground === "card") {
+      // a tall stack shrinks the card so the last line still ends inside the safe area (~1500)
+      const cardH = Math.round(Math.max(560, Math.min(900, 1500 - est - 280)));
+      body = `<div id="${id}-card" class="mn-card" style="height:${cardH}px">${film("mn-film")}</div>${column(b.y ?? 330 + cardH - 60)}`;
+      tl.push(`ft("#${id}-card", { scale: 0.9, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 0.24, ease: "expo.out" }, ${t0});`);
+      customBg = brand.accent;
+    } else if (ground === "phone") {
+      const ui = `<div class="mn-ui"><i class="mn-top">‹<b>Reels</b>◎</i><i class="mn-rail">♡<br>◯<br>➤<br>⋯</i><i class="mn-user"><s></s>${esc(b.handle ?? "yourname")} · Follow</i><i class="mn-nav">⌂ ⌕ ⊕ ▷ ◯</i></div>`;
+      body = `${lead ? `<div class="mn-col" style="top:${b.leadY ?? 230}px">${lead}</div>` : ""}<div id="${id}-ph" class="mn-phone">${film("mn-film")}${ui}${iconHtml ? `<div class="mn-phic">${iconHtml}</div>` : ""}</div><div class="mn-col" style="top:${b.y ?? 1480}px">${rest}</div>`;
+      tl.push(`ft("#${id}-ph", { y: 120, autoAlpha: 0, scale: 0.92 }, { y: 0, autoAlpha: 1, scale: 1, duration: 0.32, ease: "expo.out" }, ${t0});`);
+      tl.push(`tl.to("#${id}-ph", { scale: 1.04, duration: ${r3(Math.max(0.2, t1 - t0 - 0.32))}, ease: "none" }, ${r3(t0 + 0.32)});`);
+      customBg = brand.accent;
+    } else {
+      body = column(b.y ?? Math.round(Math.max(260, 900 - est / 2)));
+      customBg = ground === "paper" ? (brand.paper ?? "#FEFEFE") : brand.accent;
+    }
+    if (b.push) tl.push(`ft("#${id}-ink", { scale: 1.25, filter: "blur(8px)" }, { scale: 1, filter: "blur(0px)", duration: 0.3, ease: "expo.out" }, ${t0});`);
+    const inkOf = (g) => (g === "paper" ? brand.accent : "#fff");
+    body = `<div id="${id}-ink" class="mn-ink mn-on-${ground}" style="--ink:${inkOf(ground)}">${body}</div>`;
+    // flips: the page swaps accent <-> paper (and the ink swaps with it) on a beat, a hard cut like the reference
+    if (ground === "accent" || ground === "paper") {
+      let g = ground;
+      for (const f of b.flips || []) {
+        const ft0 = r3(Math.max(t0, E(f, "stack flip")));
+        g = g === "paper" ? "accent" : "paper";
+        tl.push(`tl.set("#${sid}", { backgroundColor: "${g === "paper" ? (brand.paper ?? "#FEFEFE") : brand.accent}" }, ${ft0});`);
+        tl.push(`tl.set("#${id}-ink", { "--ink": "${inkOf(g)}" }, ${ft0});`);
+      }
+    }
+  }
+
   else throw new Error(`unknown scene kind '${b.kind}'`);
 
   transIn(ctx, `#${sid}`, inKind, t0);
@@ -593,6 +832,83 @@ export function buildScene(b, id, t0, t1, ctx) {
 // word being spoken resolves out of blur in bold white; when the next line
 // starts, the previous one relaxes to a light weight. Tag phrases become a
 // tilted accent pill on their own line; highlight words get an accent box wipe.
+
+// --- ported from origin/main bd7ae09, 1 Oct (pitch 5's pop cards) ---
+// Literal pictures of tech/business ideas, drawn in HTML (no assets): the director picks one when a word means a
+// concrete thing in THIS video's context ("tokens" in an AI video = text split into model tokens, not coins).
+// Each returns { html, w, h } and pushes its own animation, starting at t0. Numbers are never invented: a card
+// only shows counts it computes itself (e.g. its own token chips) or values the plan passes in.
+const UI_COLORS = ["#c9d7ff", "#ffd9b8", "#c6f0d4", "#f6c8e6", "#fff0a8", "#d6ccff"];
+export function uiCard(ui, id, t0, t1, ctx) {
+  const { tl, r3, esc, brand } = ctx;
+  const A = brand.accent;
+  const card = (inner, w, h, pad = 34) => `<div class="ui-card" style="width:${w}px;min-height:${h}px;padding:${pad}px">${inner}</div>`;
+  if (ui.type === "tokens") {
+    // a sentence breaks into model tokens (words, sub-word pieces, punctuation), chips pop in, the count ticks up
+    const text = ui.text || "How many tokens does this prompt use?";
+    // like a real BPE tokenizer: common words stay whole, long words split into a stem + a suffix piece,
+    // clitics ('s, 're) and punctuation are their own tokens
+    const toks = (text.match(/[A-Za-z]+|'[a-z]+|\d+|[^\sA-Za-z\d']/g) || []).flatMap((t) => {
+      if (!/^[A-Za-z]{8,}$/.test(t)) return [t];
+      const m = /(ization|ation|tion|ing|ize|ise|ment|ness|able|ally|ed|er|ly|s)$/i.exec(t);
+      const cut = m && t.length - m[0].length >= 4 ? t.length - m[0].length : t.length - 3;
+      return [t.slice(0, cut), t.slice(cut)];
+    });
+    const chips = toks.map((t, i) => `<span id="${id}-t${i}" class="ui-tok" style="background:${UI_COLORS[i % UI_COLORS.length]}">${esc(t)}</span>`).join("");
+    const step = Math.min(0.06, Math.max(0.025, (t1 - t0 - 0.5) / toks.length));
+    tl.push(`ft("#${id}-t", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.1 }, ${r3(t0 + 0.1)});`);
+    toks.forEach((t, i) => tl.push(`ft("#${id}-t${i}", { autoAlpha: 0, scale: 0.6, y: 10 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.16, ease: "back.out(2.5)" }, ${r3(t0 + 0.12 + i * step)});`));
+    tl.push(`(() => { const o = { v: 0 }, el = document.getElementById("${id}-n"); tl.to(o, { v: ${toks.length}, duration: ${r3(toks.length * step)}, ease: "none", onUpdate: () => { el.textContent = Math.round(o.v) + " tokens"; } }, ${r3(t0 + 0.12)}); })();`);
+    return { html: card(`<div class="ui-kicker" style="color:${A}">${esc(ui.title ?? "Tokenizer")}</div><div class="ui-toks">${chips}</div><div id="${id}-t" class="ui-count"><span id="${id}-n">0 tokens</span></div>`, 640, 300) };
+  }
+  if (ui.type === "calendar") {
+    // a month grid; checks land on the repeating days one after another (how often a task happens)
+    const days = ui.days ?? [1, 3, 5];   // Mon, Wed, Fri
+    const cells = [];
+    let k = 0;
+    for (let wk = 0; wk < 4; wk++) for (let d = 0; d < 7; d++) {
+      const on = days.includes(d);
+      cells.push(`<div class="ui-day${on ? " on" : ""}">${on ? `<i id="${id}-c${k}" style="background:${A}">✓</i>` : ""}</div>`);
+      if (on) { tl.push(`ft("#${id}-c${k}", { autoAlpha: 0, scale: 0.3 }, { autoAlpha: 1, scale: 1, duration: 0.14, ease: "back.out(3)" }, ${r3(t0 + 0.15 + k * 0.05)});`); k++; }
+    }
+    const head = ["M", "T", "W", "T", "F", "S", "S"].map((d) => `<div class="ui-dh">${d}</div>`).join("");
+    return { html: card(`<div class="ui-kicker" style="color:${A}">${esc(ui.title ?? "Every week")}</div><div class="ui-cal">${head}${cells.join("")}</div>`, 560, 420) };
+  }
+  if (ui.type === "stopwatch") {
+    // a stopwatch ring sweeps once: the time one run of a task costs
+    const C = 2 * Math.PI * 120;
+    tl.push(`ft("#${id}-arc", { strokeDashoffset: ${C} }, { strokeDashoffset: 0, duration: ${r3(Math.max(0.5, t1 - t0 - 0.25))}, ease: "none" }, ${r3(t0 + 0.1)});`);
+    tl.push(`ft("#${id}-hand", { rotation: 0, svgOrigin: "150 165" }, { rotation: 360, svgOrigin: "150 165", duration: ${r3(Math.max(0.5, t1 - t0 - 0.25))}, ease: "none" }, ${r3(t0 + 0.1)});`);
+    return { html: card(`<div class="ui-kicker" style="color:${A}">${esc(ui.title ?? "Time per run")}</div><svg viewBox="0 0 300 310" width="300" height="310"><rect x="135" y="8" width="30" height="22" rx="6" fill="#222"/><circle cx="150" cy="165" r="120" fill="#f4f5f8" stroke="#e1e3ea" stroke-width="16"/><circle id="${id}-arc" cx="150" cy="165" r="120" fill="none" stroke="${A}" stroke-width="16" stroke-linecap="round" stroke-dasharray="${C.toFixed(1)}" transform="rotate(-90 150 165)"/><line id="${id}-hand" x1="150" y1="165" x2="150" y2="70" stroke="#111" stroke-width="7" stroke-linecap="round"/><circle cx="150" cy="165" r="10" fill="#111"/></svg>`, 420, 420) };
+  }
+  if (ui.type === "bars") {
+    // before/after bars, the after bar grows past the before bar (relative, no numbers unless the plan gives them)
+    const [l0, l1] = ui.labels ?? ["Before", "After"];
+    tl.push(`ft("#${id}-b0", { scaleY: 0 }, { scaleY: 1, duration: 0.3, ease: "power3.out" }, ${r3(t0 + 0.12)});`);
+    tl.push(`ft("#${id}-b1", { scaleY: 0 }, { scaleY: 1, duration: 0.45, ease: "power3.out" }, ${r3(t0 + 0.32)});`);
+    return { html: card(`<div class="ui-kicker" style="color:${A}">${esc(ui.title ?? "Improvement")}</div><div class="ui-bars"><div class="ui-bar-col"><div id="${id}-b0" class="ui-bar" style="height:${ui.before ?? 110}px;background:#c9ccd6"></div><div class="ui-bl">${esc(l0)}</div></div><div class="ui-bar-col"><div id="${id}-b1" class="ui-bar" style="height:${ui.after ?? 250}px;background:${A}"></div><div class="ui-bl">${esc(l1)}</div></div></div>`, 520, 420) };
+  }
+  if (ui.type === "loop") {
+    // two arrows chasing each other round a circle: something that repeats every single time
+    tl.push(`ft("#${id}-rot", { rotation: 0, svgOrigin: "130 130" }, { rotation: 360, svgOrigin: "130 130", duration: ${r3(Math.max(0.6, t1 - t0))}, ease: "power1.inOut" }, ${r3(t0)});`);
+    const arc = (r) => `<path d="M130 ${130 - r} A ${r} ${r} 0 0 1 ${130 + r} 130" fill="none" stroke="${A}" stroke-width="18" stroke-linecap="round"/><path d="M${130 + r - 16} 112 L${130 + r} 138 L${130 + r + 18} 112" fill="${A}"/>`;
+    return { html: card(`<div class="ui-kicker" style="color:${A}">${esc(ui.title ?? "Every time")}</div><svg viewBox="0 0 260 260" width="260" height="260"><g id="${id}-rot">${arc(90)}<g transform="rotate(180 130 130)">${arc(90)}</g></g></svg>`, 400, 380) };
+  }
+  if (ui.type === "target") {
+    // crosshair rings lock onto the centre: focus
+    tl.push(`ft("#${id}-ring", { scale: 1.8, autoAlpha: 0, svgOrigin: "130 130" }, { scale: 1, autoAlpha: 1, svgOrigin: "130 130", duration: 0.35, ease: "expo.out" }, ${r3(t0 + 0.08)});`);
+    tl.push(`ft("#${id}-dot", { scale: 0, svgOrigin: "130 130" }, { scale: 1, svgOrigin: "130 130", duration: 0.2, ease: "back.out(3)" }, ${r3(t0 + 0.38)});`);
+    return { html: card(`<div class="ui-kicker" style="color:${A}">${esc(ui.title ?? "Focus")}</div><svg viewBox="0 0 260 260" width="260" height="260"><g id="${id}-ring" fill="none" stroke="#111" stroke-width="6"><circle cx="130" cy="130" r="100"/><circle cx="130" cy="130" r="60" stroke="${A}"/><line x1="130" y1="10" x2="130" y2="60"/><line x1="130" y1="200" x2="130" y2="250"/><line x1="10" y1="130" x2="60" y2="130"/><line x1="200" y1="130" x2="250" y2="130"/></g><circle id="${id}-dot" cx="130" cy="130" r="16" fill="${A}"/></svg>`, 400, 380) };
+  }
+  throw new Error(`unknown ui card '${ui.type}' (tokens, calendar, stopwatch, bars, loop, target)`);
+}
+
+// editorial captions ------------------------------------------------------------
+// Lines of <= group words (or up to punctuation); a block holds two lines. The
+// word being spoken resolves out of blur in bold white; when the next line
+// starts, the previous one relaxes to a light weight. Tag phrases become a
+// tilted accent pill on their own line; highlight words get an accent box wipe.
+
 export function buildEditorialCaptions(words, cap, ctx, hidden) {
   const { tl, r3, esc, brand, rtl } = ctx;
   const tags = (cap.tags || []).map((p) => p.split(/\s+/).map(norm));

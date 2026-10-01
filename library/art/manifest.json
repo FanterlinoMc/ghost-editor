@@ -1,0 +1,1031 @@
+{
+ "time-1": {
+  "concept": "time",
+  "query": "clock",
+  "objectID": 437265,
+  "title": "Maria Luisa of Parma (1751\u20131819), Later Queen of Spain",
+  "artist": "Laurent P\u00e9cheux",
+  "date": "1765",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437265",
+  "skip": true
+ },
+ "time-2": {
+  "concept": "time",
+  "query": "clock",
+  "objectID": 436301,
+  "title": "The Parable of the Mote and the Beam",
+  "artist": "Domenico Fetti",
+  "date": "ca. 1619",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436301",
+  "skip": true
+ },
+ "time-3": {
+  "concept": "time",
+  "query": "clock",
+  "objectID": 73134,
+  "title": "Books and Scholars' Possessions",
+  "artist": "Unidentified artist",
+  "date": "early 20th century",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/73134",
+  "skip": true
+ },
+ "time-4": {
+  "concept": "time",
+  "query": "clock",
+  "objectID": 438126,
+  "title": "The Garter",
+  "artist": "Jean Fran\u00e7ois de Troy",
+  "date": "1724",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/438126",
+  "skip": true
+ },
+ "money-1": {
+  "concept": "money",
+  "query": "money changer",
+  "objectID": 436722,
+  "title": "Man Weighing Gold",
+  "artist": "Adriaen Isenbrant",
+  "date": "ca. 1515\u201320",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436722",
+  "concepts": [
+   "money",
+   "cost",
+   "gold"
+  ]
+ },
+ "money-2": {
+  "concept": "money",
+  "query": "money changer",
+  "objectID": 436643,
+  "title": "The Calling of Saint Matthew",
+  "artist": "Jan Sanders van Hemessen",
+  "date": "early 17th century",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436643",
+  "skip": true
+ },
+ "money-3": {
+  "concept": "money",
+  "query": "money changer",
+  "objectID": 436572,
+  "title": "Christ Healing the Blind",
+  "artist": "El Greco (Domenikos Theotokopoulos)",
+  "date": "ca. 1570",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436572",
+  "skip": true
+ },
+ "money-4": {
+  "concept": "money",
+  "query": "money changer",
+  "objectID": 437056,
+  "title": "Tommaso di Folco Portinari (1428\u20131501); Maria Portinari (Maria Maddalena Baroncelli, born 1456)",
+  "artist": "Hans Memling",
+  "date": "ca. 1470",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437056",
+  "skip": true
+ },
+ "growth-1": {
+  "concept": "growth",
+  "query": "harvest",
+  "objectID": 53456,
+  "title": "Orchid Pavilion Gathering; Autumn Harvest Festival",
+  "artist": "Ike no Taiga",
+  "date": "ca. 1763",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/53456",
+  "skip": true
+ },
+ "growth-2": {
+  "concept": "growth",
+  "query": "harvest",
+  "objectID": 435809,
+  "title": "The Harvesters",
+  "artist": "Pieter Bruegel the Elder",
+  "date": "1565",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/435809",
+  "concepts": [
+   "growth",
+   "results",
+   "harvest"
+  ]
+ },
+ "growth-3": {
+  "concept": "growth",
+  "query": "harvest",
+  "objectID": 459108,
+  "title": "The Harvest, Pontoise (La R\u00e9colte, Pontoise)",
+  "artist": "Camille Pissarro",
+  "date": "1881",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/459108",
+  "concepts": [
+   "growth",
+   "work"
+  ]
+ },
+ "growth-4": {
+  "concept": "growth",
+  "query": "harvest",
+  "objectID": 436329,
+  "title": "Gathering Olives at Tivoli",
+  "artist": "Fran\u00e7ois-Louis Fran\u00e7ais",
+  "date": "1868",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436329",
+  "skip": true
+ },
+ "work-1": {
+  "concept": "work",
+  "query": "scholar",
+  "objectID": 459088,
+  "title": "Saint Jerome as Scholar",
+  "artist": "El Greco (Domenikos Theotokopoulos)",
+  "date": "ca. 1610",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/459088",
+  "concepts": [
+   "work",
+   "study",
+   "learning"
+  ]
+ },
+ "work-2": {
+  "concept": "work",
+  "query": "scholar",
+  "objectID": 39916,
+  "title": "Frontispiece and Colophons to the Album \"Five Old Men of Suiyang\"",
+  "artist": "Various Scholars",
+  "date": "",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/39916",
+  "skip": true
+ },
+ "work-3": {
+  "concept": "work",
+  "query": "scholar",
+  "objectID": 40086,
+  "title": "Scholar viewing a waterfall",
+  "artist": "Ma Yuan",
+  "date": "early 13th century",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/40086",
+  "skip": true
+ },
+ "work-4": {
+  "concept": "work",
+  "query": "scholar",
+  "objectID": 436986,
+  "title": "Portrait of a Woman",
+  "artist": "Quinten Massys",
+  "date": "ca. 1520",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436986",
+  "skip": true
+ },
+ "thinking-1": {
+  "concept": "thinking",
+  "query": "philosopher",
+  "objectID": 437283,
+  "title": "A Hunting Scene",
+  "artist": "Piero di Cosimo (Piero di Lorenzo di Piero d'Antonio)",
+  "date": "ca. 1494\u20131500",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437283",
+  "skip": true
+ },
+ "thinking-2": {
+  "concept": "thinking",
+  "query": "philosopher",
+  "objectID": 51527,
+  "title": "Gathering of Philosophers",
+  "artist": "Unidentified artist",
+  "date": "",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/51527",
+  "skip": true
+ },
+ "thinking-3": {
+  "concept": "thinking",
+  "query": "philosopher",
+  "objectID": 437508,
+  "title": "Self-Portrait",
+  "artist": "Salvator Rosa",
+  "date": "ca. 1647",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437508",
+  "skip": true
+ },
+ "thinking-4": {
+  "concept": "thinking",
+  "query": "philosopher",
+  "objectID": 437394,
+  "title": "Aristotle with a Bust of Homer",
+  "artist": "Rembrandt (Rembrandt van Rijn)",
+  "date": "1653",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437394",
+  "concepts": [
+   "thinking",
+   "wisdom",
+   "expert"
+  ]
+ },
+ "team-1": {
+  "concept": "portrait",
+  "query": "group portrait",
+  "objectID": 436532,
+  "title": "Self-Portrait with a Straw Hat (obverse: The Potato Peeler)",
+  "artist": "Vincent van Gogh",
+  "date": "1887",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436532",
+  "concepts": [
+   "portrait",
+   "creator",
+   "artist"
+  ]
+ },
+ "team-2": {
+  "concept": "team",
+  "query": "group portrait",
+  "objectID": 436896,
+  "title": "Portrait of a Woman with a Man at a Casement",
+  "artist": "Fra Filippo Lippi",
+  "date": "ca. 1440",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436896",
+  "skip": true
+ },
+ "team-3": {
+  "concept": "team",
+  "query": "group portrait",
+  "objectID": 435896,
+  "title": "Portrait of a Carthusian",
+  "artist": "Petrus Christus",
+  "date": "1446",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/435896",
+  "skip": true
+ },
+ "team-4": {
+  "concept": "team",
+  "query": "group portrait",
+  "objectID": 435944,
+  "title": "Portrait of a Man with Gloves",
+  "artist": "Corneille de Lyon",
+  "date": "ca. 1535",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/435944",
+  "skip": true
+ },
+ "target-1": {
+  "concept": "target",
+  "query": "archery",
+  "objectID": 916567,
+  "title": "Archery Contest at Renge\u014d\u2019in (Sanj\u016bsangend\u014d)",
+  "artist": "Hara Zaimei",
+  "date": "first half 19th century",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/916567",
+  "skip": true
+ },
+ "target-2": {
+  "concept": "target",
+  "query": "archery",
+  "objectID": 75000,
+  "title": "The Courtesan Kosa with the King's Charioteer: Folio from a Kalpasutra Manuscript",
+  "artist": "",
+  "date": "15th century",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/75000",
+  "skip": true
+ },
+ "target-3": {
+  "concept": "target",
+  "query": "archery",
+  "objectID": 36048,
+  "title": "Spring Festival on the River",
+  "artist": "Unidentified artist",
+  "date": "18th century?",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/36048",
+  "skip": true
+ },
+ "target-4": {
+  "concept": "target",
+  "query": "archery",
+  "objectID": 437030,
+  "title": "Young Man Holding a Book",
+  "artist": "Master of the View of Saint Gudula",
+  "date": "ca. 1480",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437030",
+  "skip": true
+ },
+ "speed-1": {
+  "concept": "speed",
+  "query": "horse race",
+  "objectID": 670917,
+  "title": "Horse Race at Kamo",
+  "artist": "Sumiyoshi Hiromori",
+  "date": "18th century",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/670917",
+  "skip": true
+ },
+ "speed-2": {
+  "concept": "speed",
+  "query": "horse race",
+  "objectID": 435702,
+  "title": "The Horse Fair",
+  "artist": "Rosa Bonheur",
+  "date": "1852\u201355",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/435702",
+  "concepts": [
+   "speed",
+   "power",
+   "momentum"
+  ]
+ },
+ "speed-3": {
+  "concept": "speed",
+  "query": "horse race",
+  "objectID": 829391,
+  "title": "Horse Race at the Kamo Shrine",
+  "artist": "Unidentified",
+  "date": "ca. 1600",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/829391",
+  "skip": true
+ },
+ "speed-4": {
+  "concept": "speed",
+  "query": "horse race",
+  "objectID": 44889,
+  "title": "\"Imperial Visit to the Great Horse Race at the Kaya-no-in Mansion\"  from the Tale of Flowering Fortunes",
+  "artist": "",
+  "date": "13th\u201314th century",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/44889",
+  "skip": true
+ },
+ "build-1": {
+  "concept": "build",
+  "query": "construction",
+  "objectID": 436455,
+  "title": "Evening: Landscape with an Aqueduct",
+  "artist": "Th\u00e9odore G\u00e9ricault",
+  "date": "1818",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436455",
+  "concepts": [
+   "build",
+   "infrastructure",
+   "system"
+  ]
+ },
+ "build-2": {
+  "concept": "build",
+  "query": "construction",
+  "objectID": 435673,
+  "title": "The Outer Harbor of Brest",
+  "artist": "Henri Joseph van Blarenberghe",
+  "date": "1773",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/435673",
+  "skip": true
+ },
+ "build-3": {
+  "concept": "build",
+  "query": "construction",
+  "objectID": 435739,
+  "title": "The Toilette of Venus",
+  "artist": "Fran\u00e7ois Boucher",
+  "date": "1751",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/435739",
+  "skip": true
+ },
+ "build-4": {
+  "concept": "build",
+  "query": "construction",
+  "objectID": 436283,
+  "title": "Virgin and Child in a Niche",
+  "artist": "Jan van Eyck",
+  "date": "ca. 1440\u201350",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436283",
+  "skip": true
+ },
+ "numbers-1": {
+  "concept": "expert",
+  "query": "geographer",
+  "objectID": 437530,
+  "title": "Portrait of a Man, Possibly an Architect or Geographer",
+  "artist": "Peter Paul Rubens",
+  "date": "1597",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437530",
+  "concepts": [
+   "expert",
+   "architect",
+   "planning"
+  ]
+ },
+ "numbers-2": {
+  "concept": "numbers",
+  "query": "geographer",
+  "objectID": 441353,
+  "title": "Three Figures in an Interior (Un Envoi de Serbie)",
+  "artist": "Benjamin-Constant (Jean-Joseph-Benjamin Constant)",
+  "date": "1876",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/441353",
+  "skip": true
+ },
+ "numbers-3": {
+  "concept": "numbers",
+  "query": "geographer",
+  "objectID": 438624,
+  "title": "Lake Fucino and the Abruzzi Mountains",
+  "artist": "Joseph Bidauld",
+  "date": "ca. 1789",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/438624",
+  "skip": true
+ },
+ "numbers-4": {
+  "concept": "numbers",
+  "query": "geographer",
+  "objectID": 436472,
+  "title": "Portrait of a Man in Profile",
+  "artist": "Italian Painter",
+  "date": "",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436472",
+  "skip": true
+ },
+ "message-1": {
+  "concept": "message",
+  "query": "letter",
+  "objectID": 435976,
+  "title": "The Letter",
+  "artist": "Camille Corot",
+  "date": "ca. 1865",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/435976",
+  "concepts": [
+   "message",
+   "email",
+   "reading"
+  ]
+ },
+ "message-2": {
+  "concept": "message",
+  "query": "letter",
+  "objectID": 436322,
+  "title": "The Love Letter",
+  "artist": "Jean Honor\u00e9 Fragonard",
+  "date": "early 1770s",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436322",
+  "concepts": [
+   "message",
+   "email",
+   "love"
+  ]
+ },
+ "message-3": {
+  "concept": "message",
+  "query": "letter",
+  "objectID": 436904,
+  "title": "The Letter",
+  "artist": "Pietro Longhi (Pietro Falca)",
+  "date": "1746",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436904",
+  "skip": true
+ },
+ "message-4": {
+  "concept": "message",
+  "query": "letter",
+  "objectID": 436964,
+  "title": "Young Lady in 1866",
+  "artist": "Edouard Manet",
+  "date": "1866",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436964",
+  "skip": true
+ },
+ "success-1": {
+  "concept": "win",
+  "query": "triumph",
+  "objectID": 437788,
+  "title": "The Triumph of Marius",
+  "artist": "Giovanni Battista Tiepolo",
+  "date": "1729",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437788",
+  "concepts": [
+   "win",
+   "victory"
+  ]
+ },
+ "success-2": {
+  "concept": "success",
+  "query": "triumph",
+  "objectID": 437534,
+  "title": "The Triumph of Henry IV",
+  "artist": "Peter Paul Rubens",
+  "date": "ca. 1630",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437534",
+  "skip": true
+ },
+ "success-3": {
+  "concept": "success",
+  "query": "triumph",
+  "objectID": 436516,
+  "title": "The Triumph of Fame; (reverse) Impresa of the Medici Family and Arms of the Medici and Tornabuoni Families",
+  "artist": "Giovanni di ser Giovanni Guidi (called Scheggia)",
+  "date": "ca. 1449",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436516",
+  "skip": true
+ },
+ "success-4": {
+  "concept": "success",
+  "query": "triumph",
+  "objectID": 437885,
+  "title": "The Triumph of Aemilius Paulus",
+  "artist": "Carle (Antoine Charles Horace) Vernet",
+  "date": "1789",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437885",
+  "skip": true
+ },
+ "taste-1": {
+  "concept": "taste",
+  "query": "still life flowers",
+  "objectID": 436293,
+  "title": "Still Life with Flowers and Fruit",
+  "artist": "Henri Fantin-Latour",
+  "date": "1866",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436293"
+ },
+ "taste-2": {
+  "concept": "taste",
+  "query": "still life flowers",
+  "objectID": 441104,
+  "title": "Still Life with Flowers and Prickly Pears",
+  "artist": "Auguste Renoir",
+  "date": "ca. 1885",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/441104"
+ },
+ "taste-3": {
+  "concept": "taste",
+  "query": "still life flowers",
+  "objectID": 435882,
+  "title": "Still Life with Apples and a Pot of Primroses",
+  "artist": "Paul C\u00e9zanne",
+  "date": "ca. 1890",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/435882"
+ },
+ "taste-4": {
+  "concept": "taste",
+  "query": "still life flowers",
+  "objectID": 437999,
+  "title": "Still Life with Teapot and Fruit",
+  "artist": "Paul Gauguin",
+  "date": "1896",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437999"
+ },
+ "portrait-1": {
+  "concept": "portrait",
+  "query": "portrait of a woman",
+  "objectID": 437390,
+  "title": "Portrait of a Woman",
+  "artist": "Rembrandt (Rembrandt van Rijn)",
+  "date": "1633",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437390"
+ },
+ "portrait-2": {
+  "concept": "portrait",
+  "query": "portrait of a woman",
+  "objectID": 436295,
+  "title": "Portrait of a Woman",
+  "artist": "Henri Fantin-Latour",
+  "date": "1885",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436295"
+ },
+ "portrait-3": {
+  "concept": "portrait",
+  "query": "portrait of a woman",
+  "objectID": 459071,
+  "title": "Portrait of a Woman",
+  "artist": "Netherlandish or French",
+  "date": "ca. 1470\u201380",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/459071"
+ },
+ "portrait-4": {
+  "concept": "portrait",
+  "query": "portrait of a woman",
+  "objectID": 643540,
+  "title": "Portrait of a Woman",
+  "artist": "Giovanni Battista Gaulli (Il Baciccio)",
+  "date": "ca. 1670s",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/643540"
+ },
+ "city-1": {
+  "concept": "city",
+  "query": "city view",
+  "objectID": 436575,
+  "title": "View of Toledo",
+  "artist": "El Greco (Domenikos Theotokopoulos)",
+  "date": "ca. 1599\u20131600",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436575",
+  "concepts": [
+   "city",
+   "storm"
+  ]
+ },
+ "city-2": {
+  "concept": "city",
+  "query": "city view",
+  "objectID": 437682,
+  "title": "View of Marly-le-Roi from Coeur-Volant",
+  "artist": "Alfred Sisley",
+  "date": "1876",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437682"
+ },
+ "city-3": {
+  "concept": "city",
+  "query": "city view",
+  "objectID": 438634,
+  "title": "View of Beirut",
+  "artist": "Jules Coignet",
+  "date": "1844",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/438634",
+  "skip": true
+ },
+ "city-4": {
+  "concept": "city",
+  "query": "city view",
+  "objectID": 438644,
+  "title": "View on the Quirinal Hill, Rome",
+  "artist": "Simon Denis",
+  "date": "1800",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/438644",
+  "skip": true
+ },
+ "calm-1": {
+  "concept": "calm",
+  "query": "seascape",
+  "objectID": 51659,
+  "title": "Seascape",
+  "artist": "Unidentified artist",
+  "date": "",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/51659",
+  "skip": true
+ },
+ "calm-2": {
+  "concept": "risk",
+  "query": "seascape",
+  "objectID": 437854,
+  "title": "Whalers",
+  "artist": "Joseph Mallord William Turner",
+  "date": "ca. 1845",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/437854",
+  "concepts": [
+   "risk",
+   "storm"
+  ]
+ },
+ "calm-3": {
+  "concept": "calm",
+  "query": "seascape",
+  "objectID": 438950,
+  "title": "A Storm off the Normandy Coast",
+  "artist": "Eug\u00e8ne Isabey",
+  "date": "probably 1850s",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/438950",
+  "skip": true
+ },
+ "calm-4": {
+  "concept": "calm",
+  "query": "seascape",
+  "objectID": 436005,
+  "title": "The Calm Sea",
+  "artist": "Gustave Courbet",
+  "date": "1869",
+  "license": "CC0 (The Met Open Access)",
+  "source": "https://www.metmuseum.org/art/collection/search/436005",
+  "concepts": [
+   "calm",
+   "clarity"
+  ]
+ },
+ "mona-lisa": {
+  "concept": "taste",
+  "concepts": [
+   "taste",
+   "portrait",
+   "art",
+   "classic"
+  ],
+  "title": "Mona Lisa",
+  "artist": "Leonardo",
+  "wikidata": "Q12418",
+  "file": "Mona Lisa, by Leonardo da Vinci, from C2RMF retouched.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Mona%20Lisa%2C%20by%20Leonardo%20da%20Vinci%2C%20from%20C2RMF%20retouched.jpg",
+  "famous": true
+ },
+ "sunflowers": {
+  "concept": "taste",
+  "concepts": [
+   "taste",
+   "art",
+   "creativity"
+  ],
+  "title": "Sunflowers",
+  "artist": "Gogh",
+  "wikidata": "Q157541",
+  "file": "Vincent Willem van Gogh 128.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Vincent%20Willem%20van%20Gogh%20128.jpg",
+  "famous": true
+ },
+ "creation-of-adam": {
+  "concept": "idea",
+  "concepts": [
+   "idea",
+   "creativity",
+   "connection",
+   "ai"
+  ],
+  "title": "The Creation of Adam",
+  "artist": "Michelangelo",
+  "wikidata": "Q500242",
+  "file": "The Creation of Adam perspective fix.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:The%20Creation%20of%20Adam%20perspective%20fix.jpg",
+  "famous": true
+ },
+ "starry-night": {
+  "concept": "vision",
+  "concepts": [
+   "vision",
+   "dream",
+   "night"
+  ],
+  "title": "The Starry Night",
+  "artist": "Gogh",
+  "wikidata": "Q45585",
+  "file": "Van Gogh - Starry Night - Google Art Project.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Van%20Gogh%20-%20Starry%20Night%20-%20Google%20Art%20Project.jpg",
+  "famous": true
+ },
+ "great-wave": {
+  "concept": "pressure",
+  "concepts": [
+   "pressure",
+   "wave",
+   "risk",
+   "scale"
+  ],
+  "title": "The Great Wave off Kanagawa",
+  "artist": "Hokusai",
+  "wikidata": "Q252485",
+  "file": "Katsushika Hokusai - The Great Wave off the Coast of Kanagawa LCCN2008660568.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Katsushika%20Hokusai%20-%20The%20Great%20Wave%20off%20the%20Coast%20of%20Kanagawa%20LCCN2008660568.jpg",
+  "famous": true
+ },
+ "night-watch": {
+  "concept": "team",
+  "concepts": [
+   "team",
+   "company",
+   "people"
+  ],
+  "title": "The Night Watch",
+  "artist": "Rembrandt",
+  "wikidata": "Q219831",
+  "file": "La ronda de noche, por Rembrandt van Rijn.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:La%20ronda%20de%20noche%2C%20por%20Rembrandt%20van%20Rijn.jpg",
+  "famous": true
+ },
+ "school-of-athens": {
+  "concept": "learning",
+  "concepts": [
+   "learning",
+   "knowledge",
+   "mentor",
+   "community"
+  ],
+  "title": "The School of Athens",
+  "artist": "Raphael",
+  "wikidata": "Q186953",
+  "file": "\"The School of Athens\" by Raffaello Sanzio da Urbino.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:%22The%20School%20of%20Athens%22%20by%20Raffaello%20Sanzio%20da%20Urbino.jpg",
+  "famous": true
+ },
+ "wanderer": {
+  "concept": "vision",
+  "concepts": [
+   "vision",
+   "strategy",
+   "goal",
+   "leader"
+  ],
+  "title": "Wanderer above the Sea of Fog",
+  "artist": "Friedrich",
+  "wikidata": "Q311243",
+  "file": "Friedrich, Caspar David - Wanderer \u00fcber dem Nebelmeer.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Friedrich%2C%20Caspar%20David%20-%20Wanderer%20%C3%BCber%20dem%20Nebelmeer.jpg",
+  "famous": true
+ },
+ "the-scream": {
+  "concept": "stress",
+  "concepts": [
+   "stress",
+   "problem",
+   "pain",
+   "overwhelm"
+  ],
+  "title": "The Scream",
+  "artist": "Munch",
+  "wikidata": "Q18891156",
+  "file": "The Scream.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:The%20Scream.jpg",
+  "famous": true
+ },
+ "astronomer": {
+  "concept": "data",
+  "concepts": [
+   "data",
+   "numbers",
+   "analysis",
+   "research"
+  ],
+  "title": "The Astronomer",
+  "artist": "Vermeer",
+  "wikidata": "Q544315",
+  "file": "Johannes Vermeer - The Astronomer - 1668.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Johannes%20Vermeer%20-%20The%20Astronomer%20-%201668.jpg",
+  "famous": true
+ },
+ "gleaners": {
+  "concept": "work",
+  "concepts": [
+   "work",
+   "manual",
+   "repetitive",
+   "labour"
+  ],
+  "title": "The Gleaners",
+  "artist": "Millet",
+  "wikidata": "Q1368055",
+  "file": "Jean-Fran\u00e7ois Millet - Des glaneuses.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Jean-Fran%C3%A7ois%20Millet%20-%20Des%20glaneuses.jpg",
+  "famous": true
+ },
+ "stone-breakers": {
+  "concept": "work",
+  "concepts": [
+   "work",
+   "grind",
+   "manual",
+   "hard"
+  ],
+  "title": "The Stone Breakers",
+  "artist": "Courbet",
+  "wikidata": "Q2914912",
+  "file": "Gustave Courbet 018.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Gustave%20Courbet%20018.jpg",
+  "famous": true
+ },
+ "harvesters": {
+  "concept": "growth",
+  "concepts": [
+   "growth",
+   "results",
+   "harvest"
+  ],
+  "title": "The Harvesters",
+  "artist": "Bruegel",
+  "wikidata": "Q776175",
+  "file": "Pieter Bruegel the Elder- The Harvesters - Google Art Project.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Pieter%20Bruegel%20the%20Elder-%20The%20Harvesters%20-%20Google%20Art%20Project.jpg",
+  "famous": true
+ },
+ "liberty": {
+  "concept": "win",
+  "concepts": [
+   "win",
+   "leadership",
+   "victory"
+  ],
+  "title": "Liberty Leading the People",
+  "artist": "Delacroix",
+  "wikidata": "Q29530",
+  "file": "La Libert\u00e9 guidant le peuple - Eug\u00e8ne Delacroix - Mus\u00e9e du Louvre Peintures RF 129 - apr\u00e8s restauration 2024.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:La%20Libert%C3%A9%20guidant%20le%20peuple%20-%20Eug%C3%A8ne%20Delacroix%20-%20Mus%C3%A9e%20du%20Louvre%20Peintures%20RF%20129%20-%20apr%C3%A8s%20restauration%202024.jpg",
+  "famous": true
+ },
+ "raft-medusa": {
+  "concept": "crisis",
+  "concepts": [
+   "crisis",
+   "failure",
+   "survival"
+  ],
+  "title": "The Raft of the Medusa",
+  "artist": "G\u00e9ricault",
+  "wikidata": "Q212616",
+  "file": "JEAN LOUIS TH\u00c9ODORE G\u00c9RICAULT - La Balsa de la Medusa (Museo del Louvre, 1818-19).jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:JEAN%20LOUIS%20TH%C3%89ODORE%20G%C3%89RICAULT%20-%20La%20Balsa%20de%20la%20Medusa%20%28Museo%20del%20Louvre%2C%201818-19%29.jpg",
+  "famous": true
+ },
+ "vanitas": {
+  "concept": "time",
+  "concepts": [
+   "time",
+   "deadline",
+   "mortality"
+  ],
+  "title": "Vanitas Still Life",
+  "artist": "Claesz",
+  "wikidata": "Q17276208",
+  "file": "Pieter Claesz - Vanitas Still Life - 943 - Mauritshuis.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Pieter%20Claesz%20-%20Vanitas%20Still%20Life%20-%20943%20-%20Mauritshuis.jpg",
+  "famous": true
+ },
+ "persistence-clock": {
+  "concept": "business",
+  "concepts": [
+   "business",
+   "deal",
+   "partners"
+  ],
+  "title": "The Ambassadors",
+  "artist": "Holbein",
+  "wikidata": "Q1212937",
+  "file": "Hans Holbein the Younger - The Ambassadors - Google Art Project.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Hans%20Holbein%20the%20Younger%20-%20The%20Ambassadors%20-%20Google%20Art%20Project.jpg",
+  "famous": true
+ },
+ "birth-of-venus": {
+  "concept": "launch",
+  "concepts": [
+   "launch",
+   "new",
+   "beauty"
+  ],
+  "title": "The Birth of Venus",
+  "artist": "Botticelli",
+  "wikidata": "Q151047",
+  "file": "Sandro Botticelli - La nascita di Venere - Google Art Project - edited.jpg",
+  "license": "public domain (Public domain)",
+  "source": "https://commons.wikimedia.org/wiki/File:Sandro%20Botticelli%20-%20La%20nascita%20di%20Venere%20-%20Google%20Art%20Project%20-%20edited.jpg",
+  "famous": true
+ }
+}

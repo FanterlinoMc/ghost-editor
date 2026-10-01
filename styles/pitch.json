@@ -1,0 +1,113 @@
+{
+  "_about": "Pitch (working name; studied from 'Phantasic AI training video #1', see reels/study/t01/STUDY.md): a fast/slow talking-head pitch. One word at a time in two sizes (small calm words at chest height, big energy words; italic display serif for the dream-outcome words), electric-blue word pages and white highlight pages in bursts, a typed hook title box, #1 #2 #3 bubbles above the head, a faint serif word behind the head, black-and-white mood sentences. Hard cuts, no paper, no burns.",
+  "brand": {
+    "accent": "#1F35F0",
+    "accentDark": "#1426C4",
+    "ink": "#111111",
+    "capSize": 60,
+    "font": "Inter"
+  },
+  "captions": {
+    "style": "duo",
+    "calmSize": 46,
+    "energySize": 116,
+    "hold": 0.6,
+    "y": 1120,
+    "energyPunch": {
+      "scale": 1.2,
+      "blur": 12
+    },
+    "fixedY": 1180,
+    "energyY": 1120
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.1
+    ],
+    "emphasisScale": 1.14
+  },
+  "scenes": {
+    "default_in": "cut"
+  },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "listMarks": {
+    "style": "bubbles",
+    "size": 124,
+    "gap": 156,
+    "y": 250,
+    "hold": 2.4
+  },
+  "toolLogos": {
+    "size": 230,
+    "hold": 1.5
+  },
+  "sfxProfile": "restrained",
+  "sound": {
+    "lines": false,
+    "nametag": false,
+    "objects": false,
+    "paperIn": false,
+    "pen": false,
+    "zoom": false,
+    "zoomDb": -10,
+    "popDb": -6,
+    "complete": true
+  },
+  "music": {
+    "id": "alif-match-a",
+    "db": -16,
+    "fadeIn": 0,
+    "fadeOut": 0,
+    "drops": "auto",
+    "dropLen": 0.5,
+    "reveal": false,
+    "payoff": false
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.32) brightness(1.02)",
+    "tint": {
+      "color": "#1d5f63",
+      "blend": "soft-light",
+      "opacity": 0.05
+    },
+    "vignette": 0.24,
+    "grain": 0.04,
+    "cleanScenes": true,
+    "refocus": {
+      "blur": 20,
+      "dur": 0.4
+    }
+  },
+  "zoom": {
+    "origin": "50% 40%",
+    "base": 1.06
+  },
+  "outro": 0.15,
+  "director": {
+    "style": "A fast/slow pitch. Long calm stretches carried by small one-word captions, broken by BURSTS of 4-6 visuals in 3-4 s at the hook, at each list point and at the payoff.",
+    "captions": "captions.energy = [[from, to]] source-second spans drawn big: the hook question, the promise, each list point's opener, the payoff. Everything else stays calm and small. captions.serif = the 2-4 dream-outcome words (e.g. 'elite', 'expected improvement'); they switch to the italic serif.",
+    "pages": "wordpage (accent field, one word at a time) for a short punchy sentence (4-8 words); highlight (white, a plain line + a box line that grows word by word) for the line that frames the list ('comes down / [to 3 things]'). 1.5-3 s each, on the spoken words.",
+    "titlebox": "One per video, 0.2-0.4 s in: the topic in 2-5 words, typed in the accent box, held through the hook (to ~4-5 s).",
+    "behind": "At most one: a faint serif word or number behind the head during the hook (font: serif), needs matte: true.",
+    "mood": "Black and white for one pain/stakes sentence. At most one.",
+    "automatic": "Bubbles on 'number one/two/three', logo tiles, punch-ins, music, sounds.",
+    "popcard": "Pop cards: a famous public-domain painting (library/art, by concept) flips in over the speaker with the spoken word as its label, the camera defocusing behind it. Every 4-6 s in calm stretches, 1-1.6 s each, on a concrete noun or idea word.",
+    "cardpage": "Card page: white page, a small painting swapping every 0.3-0.5 s, the spoken words under it. Once or twice per video, in a burst.",
+    "context": "BEFORE choosing any picture, read the WHOLE transcript and write build/context.json: {topic, audience, domain, promise, glossary: {term: meaning IN THIS VIDEO}, entities: [tools, people, brands], tone}. Every visual is chosen from the glossary meaning, never the dictionary word: in an AI video 'tokens' = text split into model tokens (cost), 'agent' = software, 'model' = an LLM, 'training' = model training, 'frequency' = how often a task repeats.",
+    "visual_ladder": "Pick the FIRST rung that fits the meaning: (1) a UI card that shows the literal thing (popcard ui: tokens | calendar | stopwatch | bars | loop | target); (2) the named tool's logo; (3) a real screenshot of the product/site; (4) a painting (library/art) ONLY for an emotion, a metaphor or a human situation (stress, vision, the grind, a team, a win). Never a painting for a literal tech or business term. If nothing fits, show nothing: a wrong picture is worse than none."
+  },
+  "popcard": {
+    "w": 620,
+    "h": 560,
+    "y": 300
+  },
+  "master": {
+    "lufs": -14,
+    "ratio": 2,
+    "threshold": -20
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "_about": "Mono (working name; studied from 'Phantasic AI training #3', see engine/templates/mono.md): every phrase is a statement page. Footage in its original colour (Ahmed, 30 Sep: not grey; the reference was grayscale, set brand.film + look.grade to get that back), a deep accent (forest green by default) and white pages that flip on the beat, a three-tier type stack (small lead / HUGE heavy key / small italic tail), engraving icons and brand logos above the key, the speaker in a rounded card or a phone with a reels UI. No running captions: the pages ARE the captions.",
+  "brand": {
+    "accent": "#104333",
+    "accentDark": "#0B3126",
+    "paper": "#FEFEFE",
+    "ink": "#111111",
+    "capSize": 56,
+    "font": "Inter",
+    "leadSize": 56,
+    "tailSize": 46,
+    "footKey": "#ffffff"
+  },
+  "captions": { "style": "none" },
+  "cadence": { "every": 99, "minGap": 99, "scales": [1.0], "emphasisScale": 1.0 },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "sfxProfile": "restrained",
+  "sound": { "lines": false, "nametag": false, "objects": false, "paperIn": false, "pen": false, "zoom": false, "complete": true },
+  "music": { "id": "alif-match-a", "db": -12, "fadeIn": 0, "fadeOut": 0, "drops": false, "reveal": false, "payoff": false },
+  "look": {
+    "grade": "none",
+    "vignette": 0,
+    "grain": 0
+  },
+  "zoom": { "origin": "50% 38%", "base": 1.12 },
+  "outro": 0.15,
+  "director": {
+    "style": "A statement edit. The whole video is a chain of stack pages, one per phrase (0.7-2 s), cut hard into each other. About 40% of the time the ground is the speaker's own grayscale footage (bg footage), the rest is accent/paper pages, a footage card (bg card) or a phone (bg phone).",
+    "stack": "{type:scene, kind:stack, at, to, bg: accent|paper|footage|card|phone, lead: the small words spoken before the key, key: ONE word (or two short) spoken as the punch, drawn huge, keySay: the spoken form if key is censored or re-cased, tail: the small italic words spoken right after, icon: engraving name (brain, coins, gears, team, rocket, chart, target...), logo: simple-icons slug when a platform/product is NAMED (youtube, instagram), logoFill: its brand colour, flips: [source seconds] where an accent/paper page inverts (1-2 per page, on lead and on key)}. Every word on a page must be spoken while it is up.",
+    "rhythm": "Never two of the same ground in a row. Pattern from the reference: footage -> page(flips, icon) -> card -> footage -> phone -> page(flips) -> footage(icon) -> page(flips, icon) -> footage -> phone(logos).",
+    "automatic": "Grayscale grade, sounds on keys and icons, quiet bed."
+  }
+}

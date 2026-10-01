@@ -1,0 +1,32 @@
+{
+  "_about": "Monologue (working name; studied from the '$80 edit' in a $5-vs-$80 comparison, see reels/study/t02/STUDY.md): a cinematic quote edit. Word-cluster captions (small lead-in, one huge hero word, small tail; serif and handwriting accents; diagonal staircases), meaning cutaways from free public-domain photos (Wikimedia Commons / Openverse, chosen from the video's context), a concept card with cycling typefaces over swapping engravings, light-leak flashes and glitch cuts, two framings from one shot, warm rich grade, an emotional piano bed mixed loud with a whoosh on every hero word, -14 LUFS master.",
+  "brand": { "accent": "#E8A23A", "accentDark": "#B5741E", "ink": "#111111", "capSize": 60, "font": "Inter" },
+  "captions": { "style": "cluster", "smallSize": 44, "heroSize": 168, "stairSize": 72, "x": 150, "fixedY": 1150, "hold": 0.45, "maxWords": 6, "heroSfx": "whoosh" },
+  "cadence": { "every": 2.2, "minGap": 1.2, "scales": [1.0, 1.22], "emphasisScale": 1.22 },
+  "scenes": { "default_in": "cut" },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "packs": { "editorsinventory": true },
+  "sfxProfile": "restrained",
+  "sound": { "lines": false, "nametag": false, "objects": false, "paperIn": false, "pen": false, "zoom": false, "complete": true, "heroDb": -10 },
+  "music": { "id": "silent-descent", "db": -9, "fadeIn": 0, "fadeOut": 0.4, "drops": false, "reveal": false, "payoff": false },
+  "look": {
+    "grade": "contrast(1.14) saturate(1.28) brightness(1.0) sepia(0.06)",
+    "tint": { "color": "#7a4a1f", "blend": "soft-light", "opacity": 0.12 },
+    "vignette": 0.34,
+    "grain": 0.05,
+    "refocus": { "blur": 12, "dur": 0.3 },
+    "cleanScenes": true
+  },
+  "zoom": { "origin": "50% 40%", "base": 1.06 },
+  "master": { "lufs": -14, "ratio": 2, "threshold": -20 },
+  "outro": 0.15,
+  "director": {
+    "style": "A cinematic quote edit: the speaker carries it, cutaways are METAPHORS for the line (never literal stock of the word), typography is the hero.",
+    "context": "Read the whole transcript first and write build/context.json (topic, audience, glossary of what terms mean in THIS video). Cutaway searches come from the meaning: 'clarity problem' -> fog; 'a lot of CEOs and companies' -> a night skyline; 'AI is here' -> dawn.",
+    "captions": "captions.heroes: one hero per phrase (the word that carries the line). captions.serif: 1-3 heroes drawn in the serif. captions.script: 1-2 small words written in handwriting. captions.stairs: [[from,to]] for one short line (3-5 words) set as a diagonal staircase.",
+    "cutaways": "3-4 image scenes per 15 s (scene kind image, src assets/stock/<pick>.jpg from stock_fetch.py, public domain / CC0 only), 0.8-1.8 s, captions: true so the cluster sits on the picture. One concept card (kind concept: word + 3-4 engravings) on the first key noun.",
+    "transitions": "One leak beat (0.35-0.45 s) into a return to the speaker; one image enters with in: glitch.",
+    "limits": { "scenes_per_min": 18 }
+  }
+}

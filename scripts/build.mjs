@@ -23,7 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic } from "./lib/motion.mjs";
+import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard } from "./lib/motion.mjs";
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -219,6 +219,16 @@ const memeLib = (id) => {
   const mp = path.join(dir, "meta.json");
   if (!fs.existsSync(mp)) die(`meme '${id}' not in library (library/memes/${id}/meta.json); add it with meme_add.py or run meme_find.py`);
   return { dir, meta: JSON.parse(fs.readFileSync(mp, "utf8")) };
+};
+// a public-domain painting from library/art (art_fetch.py fills it; the files are gitignored)
+// ported from origin/main bd7ae09
+const artAsset = (key) => {
+  const src = path.join(LIB, "art", `${key}.jpg`);
+  if (!fs.existsSync(src)) die(`art '${key}' not in library/art (see library/art/manifest.json)`);
+  fs.mkdirSync(path.join(A, "art"), { recursive: true });
+  const dst = path.join(A, "art", `${key}.jpg`);
+  if (!fs.existsSync(dst)) fs.copyFileSync(src, dst);
+  return `assets/art/${key}.jpg`;
 };
 const icon = (slug) => {
   // simple-icons (CC0), fetched at build time, never at render time
@@ -473,10 +483,11 @@ const faceY = (() => {
   const ys = JSON.parse(fs.readFileSync(faceFile, "utf8")).samples.filter((x) => x[1] != null).map((x) => (x[1] + x[2]) / 2).sort((a, b) => a - b);
   return ys.length ? Math.round(ys[Math.floor(ys.length / 2)]) : 700;
 })();
-const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, words, proj, LIB, faceY, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
+const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
 // a scene that hands over to an expand/wipe scene stays underneath until the
 // incoming panel has covered it
+const deferredLeaks = [];   // leak beats need the pack helpers, which are defined after the beat loop (ported from main bd7ae09)
 const beatsList = spec.beats || [];
 // a template can carry the name tag: on screen from the first frame until the hook page cuts in (or 2.4 s)
 // (R1b port)
@@ -728,6 +739,61 @@ for (const b of beatsList) {
       if (b.captions !== true) hiddenCaps.push([t0, t1]); else shownCaps.push([t0, t1]);
       break;
     }
+    // --- ported from origin/main (Ahmedmkarrar/phantasic) bd7ae09, 1 Oct: the beat types the
+    // mono / pitch / monologue templates need. Additive by decision - no existing case changed.
+    case "titlebox": {
+      // the hook title types on letter by letter in an accent box that slides in tilted from the top left
+      // and settles centred near the top; the box grows with the letters
+      const chars = [...b.text];
+      const step = Math.min(0.045, (b.typeFor ?? 0.8) / chars.length);
+      inner = `<div id="${id}-in" class="ov tbox" style="top:${b.y ?? 250}px"><div class="tbox-in" style="background:${b.color ?? brand.accent};font-size:${b.size ?? 66}px">${chars.map((c, k) => `<span id="${id}-c${k}" style="display:none">${c === " " ? "&nbsp;" : esc(c)}</span>`).join("")}</div></div>`;
+      chars.forEach((c, k) => tl.push(`tl.set("#${id}-c${k}", { display: "inline" }, ${r3(t0 + (k ? k * step : -0.02))});`));
+      tl.push(`ft("#${id}-in", { xPercent: -50, x: -240, y: -30, rotation: -7, scale: 0.88, autoAlpha: 0 }, { xPercent: -50, x: 0, y: 0, rotation: 0, scale: 1, autoAlpha: 1, duration: 1.0, ease: "power3.out" }, ${t0});`);
+      beatSfx(b, t0, "typing-1", "title type-on", { db: -8 });
+      break;
+    }
+    case "popcard": {
+      // a framed picture flips in over the speaker with the spoken word on an accent label; the camera behind
+      // softly defocuses and dims so the card is the one sharp thing in frame
+      const img = b.ui ? null : b.art ? artAsset(b.art) : userAsset(b.src);
+      const w = b.w ?? spec.popcard?.w ?? 620, h = b.h ?? spec.popcard?.h ?? 560, y = b.y ?? spec.popcard?.y ?? 300;
+      const face = b.ui ? uiCard(b.ui, `${id}u`, t0, t1, motionCtx).html : `<img id="${id}-img" class="popcard-img" src="${img}" style="max-width:${w}px;max-height:${h}px" />`;
+      inner = `<div id="${id}-in" class="ov popcard" style="top:${y}px">${face}${b.label ? `<div id="${id}-lab" class="popcard-lab" style="background:${brand.accent};font-size:${b.labelSize ?? 64}px">${esc(b.label)}</div>` : ""}</div>`;
+      tl.push(`ft("#${id}-in", { xPercent: -50, autoAlpha: 0, rotationY: ${b.tilt ?? 70}, rotationX: -12, scale: 0.72, filter: "blur(14px)" }, { xPercent: -50, autoAlpha: 1, rotationY: 0, rotationX: 0, scale: 1, filter: "blur(0px)", duration: 0.45, ease: "expo.out" }, ${t0});`);
+      tl.push(`tl.to("#${id}-in", { y: -14, duration: ${r3(Math.max(0.3, t1 - t0 - 0.3))}, ease: "sine.inOut" }, ${r3(t0 + 0.3)});`);
+      if (b.label) tl.push(`ft("#${id}-lab", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.24, ease: "power3.out" }, ${r3(t0 + 0.18)});`);
+      if (b.defocus !== false) {
+        tl.push(`tl.to("#fx", { filter: "blur(${b.blur ?? 9}px) brightness(0.72)", duration: 0.25, ease: "power2.out" }, ${t0});`);
+        tl.push(`tl.to("#fx", { filter: "blur(0px) brightness(1)", duration: 0.26, ease: "power2.out" }, ${r3(t1 - 0.3)});`);
+      }
+      hiddenCaps.push([t0, t1]);
+      beatSfx(b, t0, "pop-whoosh-light", "pop card", { db: -4 });
+      break;
+    }
+    case "leak": {
+      // a warm light-leak flash (a real burn/leak clip, screen-blended) with a bloom on the camera: the "$80" transition
+      deferredLeaks.push({ b, t0, t1 });
+      tl.push(`tl.to("#fx", { filter: "blur(0px) brightness(${b.bloom ?? 1.5})", duration: 0.1, ease: "power2.out" }, ${t0});`);
+      tl.push(`tl.to("#fx", { filter: "blur(0px) brightness(1)", duration: 0.25, ease: "power2.in" }, ${r3(Math.max(t0 + 0.12, t1 - 0.25))});`);
+      beatSfx(b, t0, "whoosh", "light leak", { db: -6 });
+      break;
+    }
+    case "mood": {
+      // a whole sentence drops to black and white (hard cut in and out, like a grade change between shots)
+      const g = spec.look?.grade ?? "";
+      tl.push(`tl.set("#base", { filter: "${g} grayscale(1) contrast(1.12)".trim() }, ${t0});`);
+      tl.push(`tl.set("#base", { filter: "${g || "none"}" }, ${r3(t1)});`);
+      break;
+    }
+    case "scene": {
+      const sd = spec.scenes || {};
+      const bb = { ...(sd[b.kind] || {}), ...b };
+      if (b.in === undefined && sd.default_in) bb.in = sd.default_in;
+      inner = buildScene(bb, id, t0, t1, motionCtx);
+      if (b.captions !== true) hiddenCaps.push([t0, t1]); else shownCaps.push([t0, t1]);
+      break;
+    }
+
     default:
       die(`unknown beat type '${b.type}'`);
   }
@@ -899,6 +965,13 @@ const packOverlay = (src, t0, dur, { blend = "screen", z = 7, opacity = 1, media
   tl.push(`ft("#${id}", { opacity: 0 }, { opacity: ${opacity}, duration: ${fadeIn}, ease: "power1.in" }, ${r3(Math.max(0, t0))});`);
   tl.push(`tl.to("#${id}", { opacity: 0, duration: ${fadeOut}, ease: "power1.out" }, ${r3(Math.max(0, t0) + dur - fadeOut)});`);
 };
+
+// a `leak` beat, resolved here because packClip/packOverlay are defined above (ported from main bd7ae09)
+for (const { b, t0, t1 } of deferredLeaks) {
+  const clip = packClip(packOf, b.kind ?? "leaks") || packClip(packOf, "burns");
+  if (clip) packOverlay(clip, t0, Math.max(0.3, t1 - t0), { blend: "screen", z: 7, opacity: b.opacity ?? 1, media: b.media ?? 0.2, fadeIn: 0.06, fadeOut: 0.2 });
+  else warn.push(`leak at ${b.at}: no leak/burn clip (turn a pack on in the style's "packs")`);
+}
 
 // ---------- watermark (spec.watermark = { text, opacity?, font? }) and colour tint (spec.look.tint) ----------
 let brandHtml = "";
