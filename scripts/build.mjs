@@ -347,6 +347,31 @@ const takeHtml = takes.map((k, i) => {
   }
   return h;
 }).join("");
+// take-join transitions (I-17): a join can now blur or whip between the two recordings instead
+// of a hard cut. No SFX here, by design: expand/wipe's whoosh (motion.mjs transIn) ties a
+// transition to the SFX library, which ships 0 files while E1 is open (the A10 defect class) -
+// blur and whip are built fresh here, video-to-video on the same layer, not a lift of
+// motion.mjs's transIn/transOut (those dissolve a full-screen scene OVER the speaker plate).
+const JOIN_TRANSITIONS = new Set(["blur", "whip"]);
+if (takes[0]?.transition) warn.push(`take 0: 'transition' is ignored (no earlier take to join from)`);
+for (let i = 1; i < takes.length; i++) {
+  const kind = takes[i].transition;
+  if (!kind) continue;
+  if (!JOIN_TRANSITIONS.has(kind)) die(`take ${i}: unknown transition '${kind}'; have: ${[...JOIN_TRANSITIONS].join(", ")}`);
+  if (takes[i - 1].holdFrames) die(`take ${i}: transition '${kind}' follows a hold on take ${i - 1} (a frozen still, nothing to dissolve from)`);
+  const T = r3(takes[i].start);
+  const outSel = `#take-${i - 1}`, inSel = `#take-${i}`;
+  const outDur = Math.min(kind === "whip" ? 0.12 : 0.18, takes[i - 1].dur / 2);
+  const inDur = Math.min(kind === "whip" ? 0.16 : 0.22, takes[i].dur / 2);
+  if (Math.min(takes[i - 1].dur, takes[i].dur) < 0.3) warn.push(`take ${i}: '${kind}' transition on a take under 0.3s may clip`);
+  if (kind === "blur") {
+    tl.push(`tl.to("${outSel}", { autoAlpha: 0, filter: "blur(28px)", duration: ${outDur}, ease: "power2.in" }, ${r3(T - outDur)});`);
+    tl.push(`ft("${inSel}", { autoAlpha: 0, filter: "blur(28px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: ${inDur}, ease: "power2.out" }, ${T});`);
+  } else if (kind === "whip") {
+    tl.push(`tl.to("${outSel}", { autoAlpha: 0, xPercent: -8, filter: "blur(40px)", duration: ${outDur}, ease: "power1.in" }, ${r3(T - outDur)});`);
+    tl.push(`ft("${inSel}", { autoAlpha: 0, xPercent: 8, filter: "blur(40px)" }, { autoAlpha: 1, xPercent: 0, filter: "blur(0px)", duration: ${inDur}, ease: "power1.out" }, ${T});`);
+  }
+}
 const takeAudio = takes.map((k, i) => `
   <audio id="take-${i}-audio" src="${SRC}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="${10 + (i % 2)}" data-automation='${fadeLane(k.dur)}'></audio>`).join("");
 let matteHtml = "";
@@ -1312,7 +1337,10 @@ fs.writeFileSync(path.join(proj, "build", "caption_layout.json"), JSON.stringify
 // through the takes. Ground truth must come from here, never from the input spec.
 fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
   total: TOTAL, speech: SPEECH, fps: FPS,
-  takes: takes.map((t) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames })),
+  // I-17: a take's `transition` names the look its join FROM the previous take carries (blur or
+  // whip) instead of a hard cut; omitted entirely when unset, so a reel with no take transitions
+  // still writes byte-identical edit_truth.json to before this field existed.
+  takes: takes.map((t) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(t.transition ? { transition: t.transition } : {}) })),
   snaps: snaps.map(([t, z]) => ({ t: r3(t), scale: z })),
   pushes: pushesEdit.map((p) => ({ start: r3(p.a), end: r3(p.b), z: p.z, up: p.up, down: p.down })),
   // `to` matters as much as `at`: a scene animates in at `at` and out near `to`, so both are

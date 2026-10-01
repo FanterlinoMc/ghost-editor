@@ -15,8 +15,11 @@ hold after take 1. Any on-screen text with Cyrillic switches the card font from 
   "outro": 3,                           // seconds of frozen last frame under the end card
   "takes": [                            // edit order; a = first word - 0.10..0.15, b = last word + 0.20..0.30
     { "a": 6.58, "b": 10.40, "note": "hook, 2nd take" },
-    { "a": 10.76, "b": 14.42, "hold": 0.8 }   // hold: frozen last frame, no voice, AFTER the take: air for a meme on a
-  ],                                          // tightly cut recording. Address it as "hold:<take index>+<seconds>"
+    { "a": 10.76, "b": 14.42, "hold": 0.8 },  // hold: frozen last frame, no voice, AFTER the take: air for a meme on a
+    { "a": 15.0, "b": 18.6, "transition": "blur" }  // tightly cut recording. Address it as "hold:<take index>+<seconds>"
+  ],                                          // transition (I-17): the join FROM the previous take blurs or whips instead
+                                               // of a hard cut. "blur" | "whip"; omit for a cut (default). No SFX - never
+                                               // on a take right after a `hold` (nothing to dissolve from; build.mjs dies).
   "zoom": {
     "origin": "50% 29%",                // the face; move it if the face sits elsewhere
     "snaps": [[10.76, 1.1], [16.30, 1.0]],   // instant reframes: every cut + most sentence starts, 1.0/1.1, 1.12 on a punchline
@@ -122,6 +125,15 @@ Top-level fields:
 
 - **Transitions:** `in` is `blur` (default), `expand`, `wipe`, `glitch`, `slide` or `cut`. A style can set `scenes.default_in`, or set `sceneIn`/`sceneOut` at the top level to change the style-wide default without touching every beat (R1b). `out` takes the same set. Each out mirrors its in and runs slightly faster, and `wipe` out closes the left edge so a wipe in/out pair travels one way rather than bouncing back. `slide` (Broadsheet, R1b): a sheet of paper slapped down from the right, a little rotated, settling flat; its out keeps travelling the same way, off to the left. **Out transitions add no sound** - the whoosh on expand and wipe is played once, on the way in. A scene that ends where an expand or wipe scene starts stays underneath for 0.45 s.
 - **Sound:** default sounds are listed per kind below; expand and wipe also get a whoosh.
+
+`takes[i].transition` (I-17) is a **different** transition from the one above: it is the join FROM
+the previous take, video-to-video, not a scene coming over the speaker plate. `"blur"` (0.18s
+dissolve-through-blur out, 0.22s in) or `"whip"` (a fast blurred pan: out slides left, in slides
+in from the right, 0.12/0.16s) replace that one hard cut; omit for the default cut. Both are
+SFX-free by construction - unlike the scene `expand`/`wipe` above, nothing here plays a sound, so
+a take join never depends on `library/sfx/` having a file behind the id. `takes[0].transition` is
+ignored (no earlier take to join from) and a transition right after a `hold` dies at build
+(nothing to dissolve from - resolve the hold first, or drop the transition).
 
 | kind | fields | what it looks like |
 |---|---|---|
