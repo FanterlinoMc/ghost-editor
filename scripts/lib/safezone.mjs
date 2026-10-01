@@ -16,16 +16,50 @@
 // Platform UI chrome at 1080x1920 (px covered by the app): measured guides for
 // Reels / TikTok / Shorts. `right` is the action-button column (like, comment,
 // share), which only matters for the lower half.
+//
+// I-19 adds 4:5, 1:1 and 16:9. Those three are not full-screen swipe players --
+// there's no stories-style nav chrome baked into the frame -- so `platform`
+// (which vertical app's bar to dodge) has no meaning for them; `feed` and
+// `widescreen` below are the guide sets a caller should pass instead. The
+// numbers are small edge margins, not app-UI cutouts, because there genuinely
+// is no app UI drawn over these frames the way there is over a Reel.
 export const PLATFORMS = {
   instagram: { top: 220, bottom: 420, right: 130, name: "Instagram Reels" },
   tiktok: { top: 160, bottom: 480, right: 150, name: "TikTok" },
   shorts: { top: 140, bottom: 380, right: 140, name: "YouTube Shorts" },
   all: { top: 220, bottom: 480, right: 150, name: "Reels + TikTok + Shorts" },
+  // 4:5 (1080x1350) and 1:1 (1080x1080): IG/FB feed posts. No action-button
+  // column (right: 0) -- that's drawn beside the post, not over it.
+  feed: { top: 48, bottom: 48, right: 0, name: "Feed post (4:5 / 1:1)" },
+  // 16:9 (1920x1080): YouTube/X landscape player. Controls + progress bar
+  // sit at the very bottom; nothing meaningful at the top.
+  widescreen: { top: 36, bottom: 96, right: 0, name: "Widescreen (16:9)" },
+};
+
+// Canonical W x H per format (I-19). scripts/prep.sh has to duplicate these by
+// hand -- it's bash, this is Node, and shelling out to node from prep.sh just
+// to read a constant is the exact kind of cross-runtime fragility prep.sh has
+// already been burned by once (see its python3-JSON comment). Keep the two in
+// sync by hand; this is the source of truth build.mjs should read from rather
+// than hold its own copy of these four numbers.
+export const FORMATS = {
+  "9:16": { W: 1080, H: 1920 },
+  "4:5": { W: 1080, H: 1350 },
+  "1:1": { W: 1080, H: 1080 },
+  "16:9": { W: 1920, H: 1080 },
 };
 
 export function makePlacer({ face, takes, zoom, TOTAL, platform = "instagram", ideal = 1180, gap = 36, H = 1920, W = 1080 }) {
   const P = PLATFORMS[platform] || PLATFORMS.instagram;
   const safeTop = P.top, safeBottom = H - P.bottom;
+  // Every guide pair above was measured against *some* canvas height. A
+  // caller pairing the wrong platform key with the wrong H (e.g.
+  // "instagram"'s 1920-tall guides against a 1:1 render) gets a cramped but
+  // still-placeable window today (none of this file's own 24
+  // format x platform combinations trip it), not a silently "fixed" one --
+  // loud here, not patched, so a real misconfiguration surfaces instead of
+  // shipping a caption placement nobody asked for.
+  if (safeBottom - safeTop < H * 0.3) console.warn(`safezone: "${P.name}" guides leave only ${safeBottom - safeTop}px of a ${H}px-tall frame safe - check platform/H pairing`);
   const [ox, oy] = (zoom.origin || "50% 29%").split(/\s+/).map((v, i) => (parseFloat(v) / 100) * (i ? H : W));
   const base = zoom.base ?? 1;
   // camera scale at edit time t: base x current snap x push envelope
