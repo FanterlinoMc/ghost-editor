@@ -24,7 +24,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic } from "./lib/motion.mjs";
-import { makePlacer, PLATFORMS } from "./lib/safezone.mjs";
+import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = path.join(SKILL, "library");
@@ -97,9 +97,16 @@ const spec = deepMerge(preset, rawSpec);
 const FPS = spec.fps ?? 30;
 // brand kit: one accent (60/30/10), ink for text on light scenes, caption size
 const brand = { accent: "#D13F34", accentDark: "#B93026", ink: "#262626", capSize: 58, font: null, ...(spec.brand || {}) };
-const W = 1080, H = 1920;
 const warn = [];
 const die = (m) => { console.error("ERROR: " + m); process.exit(1); };
+// I-19: output format. Canonical WxH comes from safezone.mjs's FORMATS map (one
+// source of truth prep.sh and build.mjs both read, rather than build.mjs holding
+// its own second copy of these four numbers). Unknown spec.format dies loudly
+// instead of silently falling back - a typo'd format and a missing one should
+// not look the same.
+const FORMAT = spec.format ?? "9:16";
+if (!FORMATS[FORMAT]) die(`unknown spec.format '${FORMAT}'; have: ${Object.keys(FORMATS).join(", ")}`);
+const { W, H } = FORMATS[FORMAT];
 
 // ---------- takes and time mapping ----------
 const takes = spec.takes.map((t, i) => {
@@ -187,7 +194,17 @@ const rtl = /[֐-ࣿיִ-﷿ﹰ-﻿]/.test(JSON.stringify(spec.beats || []) + wor
 // ---------- assets ----------
 const A = path.join(proj, "assets");
 for (const d of ["sfx", "memes", "icons", "fonts"]) fs.mkdirSync(path.join(A, d), { recursive: true });
-for (const f of fs.readdirSync(path.join(SKILL, "templates", "fonts"))) fs.copyFileSync(path.join(SKILL, "templates", "fonts", f), path.join(A, "fonts", f));
+// A16: assets/fonts must mirror templates/fonts exactly, or a project built before a
+// font rename keeps the old file around under its old name and the fontFaces loop
+// below (which just reads whatever is in assets/fonts) emits a @font-face for a
+// phantom family forever - the exact bug 49ba994 fixed, resurrected from stale
+// copies. assets/fonts has no other writer than this loop, so delete-then-copy is
+// safe: anything here that isn't in templates/fonts right now is a leftover from an
+// older build, never something a project added itself.
+const templateFonts = fs.readdirSync(path.join(SKILL, "templates", "fonts"));
+const wantedFonts = new Set(templateFonts);
+for (const f of fs.readdirSync(path.join(A, "fonts"))) if (!wantedFonts.has(f)) fs.unlinkSync(path.join(A, "fonts", f));
+for (const f of templateFonts) fs.copyFileSync(path.join(SKILL, "templates", "fonts", f), path.join(A, "fonts", f));
 
 const sfxManifest = JSON.parse(fs.readFileSync(path.join(LIB, "sfx", "manifest.json"), "utf8"));
 const memeLib = (id) => {
@@ -405,11 +422,28 @@ const outroHtml = OUTRO > 0 ? `
       <img id="outro-still" class="fill" src="assets/outro.jpg" data-start="${r3(SPEECH)}" data-duration="${r3(OUTRO)}" data-track-index="0" />` : "";
 
 // ---------- caption placement: face-aware, inside the platform's safe area ----------
-const platform = spec.platform || "instagram";
+// I-19: 4:5/1:1/16:9 have no stories-style swipe chrome, so "instagram" is the
+// wrong default guide set for them - default on format, still overridable by
+// an explicit spec.platform. (Verified: 1:1 with "instagram" dead-centres a
+// 440px safe window in a 1080-tall frame - the safezone.mjs console.warn does
+// not catch that, since 440 > its 324px threshold - so this default is what
+// actually prevents it, not the warning.)
+const platform = spec.platform || (FORMAT === "16:9" ? "widescreen" : FORMAT === "9:16" ? "instagram" : "feed");
 const facePath = path.join(proj, spec.face || "build/face.json");
 const face = fs.existsSync(facePath) ? JSON.parse(fs.readFileSync(facePath, "utf8")) : null;
 if (!face) warn.push(`no ${path.relative(proj, facePath)}: captions sit at a fixed height and may cover the face; run scripts/face_track.py first`);
-const placer = makePlacer({ face, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL, platform, ideal: spec.captions?.y ?? 1180 });
+// A face.json is pixel coordinates in whatever W/H face_track.py measured. If that
+// doesn't match this build's canvas (project built in one format, face.json tracked
+// against another), every caption placement is silently wrong - same failure class
+// as a stale format assumption, just one level up, so this dies loudly rather than
+// placing captions against the wrong pixel space. Older face.json files predating
+// this field have no w/h to check, so they fall back to a warning, not a die.
+if (face && face.w != null && face.h != null) {
+  if (face.w !== W || face.h !== H) die(`${path.relative(proj, facePath)} is ${face.w}x${face.h} but this build is ${W}x${H} (spec.format '${FORMAT}') - re-run face_track.py against the matching source`);
+} else if (face) {
+  warn.push(`${path.relative(proj, facePath)} has no w/h; cannot verify it matches this build's ${W}x${H} canvas - re-run face_track.py to add it`);
+}
+const placer = makePlacer({ face, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W });
 
 // ---------- overlays ----------
 const CARD = { x: 60, y: spec.layout?.cardY ?? 990, w: 870 };
@@ -1237,7 +1271,7 @@ const html = `<!doctype html>
   #root { position: relative; width: ${W}px; height: ${H}px; overflow: hidden; background: #000; font-family: ${UI_FONT}, system-ui, sans-serif; }
   #base, #snap, #push { position: absolute; inset: 0; transform-origin: ${zoom.origin || "50% 29%"}; }
   #base { transform: scale(${zoom.base ?? 1});${look.grade ? ` filter: ${look.grade};` : ""} }
-  #pip { position: absolute; inset: 0; z-index: 1; transform-origin: 540px ${faceY}px; }
+  #pip { position: absolute; inset: 0; z-index: 1; transform-origin: ${W / 2}px ${faceY}px; }
   .behind { position: absolute; inset: 0; pointer-events: none; }
   .behind-in { position: absolute; left: -40px; right: -40px; text-align: center; font-weight: 900; line-height: .86; letter-spacing: -6px; text-transform: uppercase; white-space: nowrap; font-family: ${brand.displayFont ? `"${brand.displayFont}", ` : ""}${UI_FONT}, sans-serif; }
   .matte { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
