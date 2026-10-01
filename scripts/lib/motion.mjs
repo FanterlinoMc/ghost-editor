@@ -91,7 +91,7 @@ export const MOTION_CSS = (brand, rtl) => `
   .eline:has(.ebold) { white-space: normal; max-width: 960px; margin: 0 auto; text-align: center; }
   .ew.ebold { font-size: ${brand.boldScale ?? 1.9}em; font-weight: 900; line-height: .92; letter-spacing: -2px; color: ${brand.accent}; text-shadow: 0 6px 24px rgba(0,0,0,.45); }
   .ew.ealarm { color: ${brand.alarm ?? "#E23B3B"}; font-weight: 800; text-shadow: 0 4px 18px rgba(0,0,0,.5); }
-  .ew.eser { display: inline-block; margin: 0 0.13em; font-family: "${brand.serif || "Georgia"}", "Noto Sans Arabic", Georgia, serif; font-style: italic; font-weight: 500; font-size: ${brand.serifScale ?? 1}em; line-height: .9; color: ${brand.accent}; text-shadow: 0 0 22px ${brand.accent}99, 0 2px 12px rgba(0,0,0,.4); letter-spacing: 0; }
+  .ew.eser { display: inline-block; margin: 0 0.13em; font-family: "${brand.serif || "Georgia"}", "EB Garamond", "Noto Sans Arabic", Georgia, serif; font-style: italic; font-weight: 500; font-size: ${brand.serifScale ?? 1}em; line-height: .9; color: ${brand.accent}; text-shadow: 0 0 22px ${brand.accent}99, 0 2px 12px rgba(0,0,0,.4); letter-spacing: 0; }
   /* editorial captions */
   #ecaps { position: absolute; left: 0; right: 0; top: 0; height: 0; }
   .eblock { position: absolute; left: 130px; right: 130px; text-align: center; }
