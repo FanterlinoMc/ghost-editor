@@ -55,6 +55,28 @@ LOGOS = {"youtube": ("youtube", "#FF0000"), "instagram": ("instagram", "#E4405F"
 ROTATION = ["footage", "accent", "card", "footage", "phone", "paper", "footage", "accent"]
 HOOK = 3.5            # seconds of opening burst: short pages, letter-built keys, punch-ins, pulses, flips on every word
 HOOK_ROTATION = ["footage", "accent", "paper", "footage", "card", "accent"]
+
+
+def mono_cfg(proj, spec: dict) -> dict:
+    """The mono knobs, from the style card with the reel's own `mono` block layered over it.
+
+    These were module constants until 2 Oct. The cap in particular was invisible and surprising:
+    letter-built keys, pulses and flips only ever applied to the first HOOK seconds, so a reel
+    looked energetic for 3.5 s and plain for the rest, with no way for a style to say otherwise.
+    `burst: "all"` makes that reach the whole reel - measured on one 21 s reel as 17 built keys
+    instead of 4.
+    """
+    cfg = {"hook": HOOK, "hookRotation": list(HOOK_ROTATION), "burst": "hook"}
+    name = spec.get("style")
+    if name:
+        card = Path(__file__).resolve().parent.parent / "styles" / f"{name}.json"
+        if card.is_file():
+            try:
+                cfg.update(json.loads(card.read_text(encoding="utf-8")).get("mono") or {})
+            except (ValueError, OSError):
+                pass    # a broken style card is build.mjs's error to report, not the planner's
+    cfg.update(spec.get("mono") or {})
+    return cfg
 FIX = {"ai": "AI", "i": "I", "i'm": "I'm", "ceo": "CEO", "chatgpt": "ChatGPT", "youtube": "YouTube", "tiktok": "TikTok",
        "linkedin": "LinkedIn", "instagram": "Instagram"}
 
@@ -213,7 +235,8 @@ def plan(proj):
     spec = json.loads((proj / "reel.json").read_text())
     ws, takes = load_words(proj, spec)
     ps = phrases(ws)
-    hook_end = (ws[0]["start"] if ws else 0) + HOOK
+    cfg = mono_cfg(proj, spec)
+    hook_end = (ws[0]["start"] if ws else 0) + float(cfg["hook"])
     ps = hook_split(ps, hook_end)
     ps = merge_slivers(ps)
     beats, prev, ri, hi = [], None, 0, 0
@@ -224,9 +247,9 @@ def plan(proj):
         if logo:
             ground = "phone"
         elif hook:
-            ground = HOOK_ROTATION[hi % len(HOOK_ROTATION)]; hi += 1
+            ground = cfg["hookRotation"][hi % len(cfg["hookRotation"])]; hi += 1
             if ground == prev:
-                ground = HOOK_ROTATION[hi % len(HOOK_ROTATION)]; hi += 1
+                ground = cfg["hookRotation"][hi % len(cfg["hookRotation"])]; hi += 1
         else:
             ground = ROTATION[ri % len(ROTATION)]; ri += 1
             if ground == prev:
@@ -260,7 +283,7 @@ def plan(proj):
             [l for l in ls if l["role"] == "k"][-1]["ring"] = True
         if ground in ("card", "phone"):
             b["handle"] = spec.get("handle", "yourname")
-        if hook:
+        if hook or cfg.get("burst") == "all":
             kl = [l for l in ls if l["role"] == "k"]
             for j, l in enumerate(kl):
                 l["enter"] = "letters" if (n + j) % 2 == 0 else l.get("enter", "ghost")

@@ -286,13 +286,25 @@ const sfxEvents = []; // {t, id, role, vol, src, why}
 // clicks, impacts); rich adds a whoosh to every snap. Standard = everything.
 const SFX_PROFILE = spec.sfxProfile || "standard";
 const RESTRAINED_DROP = /type tick|fly3d word|chip|list line|card pill|badge in|push-in|device line|ui line|kinetic keyword|emoji|logo/;
+// A missing sound effect WARNS and is skipped; it does not kill the build.
+//
+// Two things forced this. First, library/sfx/ ships manifests and no audio at all, so until the
+// licensed pack is restored every reel that wants a sound dies - and the engine has ~40 raw
+// addSfx() call sites, most of them inside scene builders where no per-beat `sfx: false` can
+// reach. Working around that per reel meant deleting the beats and icons that wanted sound.
+// Second, a sound effect is decorative: losing a whoosh should cost you a whoosh, not a render.
+// Music keeps its named, fatal error (A10) because a missing music bed IS structural.
+// Every miss is collected and reported once at the end rather than per occurrence.
+const missingSfx = new Map();
 const addSfx = (t, id, why, { db = 0, lead = 0 } = {}) => {
   if (!id || id === "none") return;
   if (SFX_PROFILE === "restrained" && RESTRAINED_DROP.test(why)) return;
   const real = pick(id);
   const m = sfxManifest[real];
-  if (!m) die(`sfx '${real}' not in library/sfx/manifest.json (${why})`);
-  fs.copyFileSync(path.join(LIB, "sfx", m.file), path.join(A, "sfx", m.file));
+  if (!m) { missingSfx.set(real, (missingSfx.get(real) ?? 0) + 1); return; }
+  const srcFile = path.join(LIB, "sfx", m.file);
+  if (!fs.existsSync(srcFile)) { missingSfx.set(`${real} (${m.file})`, (missingSfx.get(`${real} (${m.file})`) ?? 0) + 1); return; }
+  fs.copyFileSync(srcFile, path.join(A, "sfx", m.file));
   sfxEvents.push({ t: r3(Math.max(0, t - lead)), id: real, role: m.role, vol: volFor(m.role, db), dur: m.duration, src: `assets/sfx/${m.file}`, why });
 };
 const beatSfx = (b, t, def, why, opts) => {
@@ -1495,6 +1507,12 @@ const byRole = {};
 for (const e of sfxEvents) byRole[e.role] = (byRole[e.role] || 0) + 1;
 console.log(`voice p95 peak ${voiceP95.toFixed(1)} dBFS; sfx role levels vs voice ${JSON.stringify(ROLE_DB)}`);
 console.log(`sfx: ${sfxEvents.length} hits ${JSON.stringify(byRole)}, ${perMin(sfxEvents).toFixed(1)}/min`);
+if (missingSfx.size) {
+  const total = [...missingSfx.values()].reduce((a, b) => a + b, 0);
+  warn.push(`${total} sound(s) skipped, ${missingSfx.size} id(s) unavailable: `
+    + [...missingSfx.entries()].map(([k, n]) => `${k} x${n}`).join(", ")
+    + ` - restore library/sfx (see engine/assets/LEDGER.md) to hear them`);
+}
 for (const e of sfxEvents) console.log(`  ${e.t.toFixed(2).padStart(6)}s  ${e.id.padEnd(22)} ${e.role.padEnd(6)} vol ${e.vol}  (${e.why})`);
 if (warn.length) console.log("\nWARNINGS:\n  " + [...new Set(warn)].join("\n  "));
 console.log(`\n-> ${path.join(proj, "index.html")}`);
