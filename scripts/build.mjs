@@ -352,18 +352,25 @@ const takeHtml = takes.map((k, i) => {
 // transition to the SFX library, which ships 0 files while E1 is open (the A10 defect class) -
 // blur and whip are built fresh here, video-to-video on the same layer, not a lift of
 // motion.mjs's transIn/transOut (those dissolve a full-screen scene OVER the speaker plate).
+// Validated once into takeJoins, then applied to #take- below and to #matte- (when spec.matte)
+// further down, so the cut-out layer whips/blurs in step with the plate instead of hard-cutting
+// underneath an animated join.
 const JOIN_TRANSITIONS = new Set(["blur", "whip"]);
 if (takes[0]?.transition) warn.push(`take 0: 'transition' is ignored (no earlier take to join from)`);
+const takeJoins = [];
 for (let i = 1; i < takes.length; i++) {
   const kind = takes[i].transition;
   if (!kind) continue;
   if (!JOIN_TRANSITIONS.has(kind)) die(`take ${i}: unknown transition '${kind}'; have: ${[...JOIN_TRANSITIONS].join(", ")}`);
   if (takes[i - 1].holdFrames) die(`take ${i}: transition '${kind}' follows a hold on take ${i - 1} (a frozen still, nothing to dissolve from)`);
-  const T = r3(takes[i].start);
-  const outSel = `#take-${i - 1}`, inSel = `#take-${i}`;
-  const outDur = Math.min(kind === "whip" ? 0.12 : 0.18, takes[i - 1].dur / 2);
-  const inDur = Math.min(kind === "whip" ? 0.16 : 0.22, takes[i].dur / 2);
   if (Math.min(takes[i - 1].dur, takes[i].dur) < 0.3) warn.push(`take ${i}: '${kind}' transition on a take under 0.3s may clip`);
+  takeJoins.push({
+    i, kind, T: r3(takes[i].start),
+    outDur: Math.min(kind === "whip" ? 0.12 : 0.18, takes[i - 1].dur / 2),
+    inDur: Math.min(kind === "whip" ? 0.16 : 0.22, takes[i].dur / 2),
+  });
+}
+const pushJoinTransition = (outSel, inSel, kind, T, outDur, inDur) => {
   if (kind === "blur") {
     tl.push(`tl.to("${outSel}", { autoAlpha: 0, filter: "blur(28px)", duration: ${outDur}, ease: "power2.in" }, ${r3(T - outDur)});`);
     tl.push(`ft("${inSel}", { autoAlpha: 0, filter: "blur(28px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: ${inDur}, ease: "power2.out" }, ${T});`);
@@ -371,7 +378,8 @@ for (let i = 1; i < takes.length; i++) {
     tl.push(`tl.to("${outSel}", { autoAlpha: 0, xPercent: -8, filter: "blur(40px)", duration: ${outDur}, ease: "power1.in" }, ${r3(T - outDur)});`);
     tl.push(`ft("${inSel}", { autoAlpha: 0, xPercent: 8, filter: "blur(40px)" }, { autoAlpha: 1, xPercent: 0, filter: "blur(0px)", duration: ${inDur}, ease: "power1.out" }, ${T});`);
   }
-}
+};
+for (const { i, kind, T, outDur, inDur } of takeJoins) pushJoinTransition(`#take-${i - 1}`, `#take-${i}`, kind, T, outDur, inDur);
 const takeAudio = takes.map((k, i) => `
   <audio id="take-${i}-audio" src="${SRC}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="${10 + (i % 2)}" data-automation='${fadeLane(k.dur)}'></audio>`).join("");
 let matteHtml = "";
@@ -386,6 +394,9 @@ if (spec.matte) {
   }
   matteHtml = takes.map((k, i) => `
       <video id="matte-${i}" class="matte" src="assets/talk-matte.webm" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="2" muted playsinline></video>`).join("");
+  // the cut-out layer mirrors the plate's join transition so a `behind` beat never shows the
+  // matte hard-cutting on top of a plate that is whipping or blurring underneath it.
+  for (const { i, kind, T, outDur, inDur } of takeJoins) pushJoinTransition(`#matte-${i - 1}`, `#matte-${i}`, kind, T, outDur, inDur);
 }
 // the outro is a real still of the last frame, frozen under the end card
 const last = takes.at(-1);
