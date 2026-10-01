@@ -14,9 +14,6 @@
     "y": 1180
   },
   "sfxProfile": "standard",
-  "music": {
-    "id": "auto",
-    "db": -20
-  },
+  "music": null,
   "look": {}
 }

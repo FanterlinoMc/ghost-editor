@@ -23,10 +23,7 @@
     }
   },
   "sfxProfile": "restrained",
-  "music": {
-    "id": "auto",
-    "db": -19
-  },
+  "music": null,
   "look": {
     "grade": "contrast(1.06) saturate(0.82) brightness(0.97)",
     "grain": 0.07,

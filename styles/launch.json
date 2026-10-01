@@ -17,10 +17,7 @@
     "default_in": "glitch"
   },
   "sfxProfile": "standard",
-  "music": {
-    "id": "auto",
-    "db": -20
-  },
+  "music": null,
   "look": {
     "vignette": 0.2
   }

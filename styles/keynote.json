@@ -34,10 +34,7 @@
     "every": 9
   },
   "sfxProfile": "restrained",
-  "music": {
-    "id": "silent-descent",
-    "db": -16
-  },
+  "music": null,
   "look": {
     "vignette": 0.35
   },

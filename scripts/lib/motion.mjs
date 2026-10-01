@@ -693,8 +693,13 @@ export function buildMusic(m, ctx, execFileSync, path, fs) {
   if (m.id) {
     const man = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     if (!man[m.id]) throw new Error(`music '${m.id}' not in library/music/manifest.json`);
+    const musicSrc = path.join(LIB, "music", man[m.id].file);
+    // manifest entries can outlive the audio: library/music/ ships no files at all today (the
+    // Mixkit catalogue is kept for its licence record, not for playback - BRANCH-AUDIT decision
+    // 4). Fail with the id and the missing path instead of a raw copyFileSync ENOENT.
+    if (!fs.existsSync(musicSrc)) throw new Error(`music '${m.id}' is in library/music/manifest.json but library/music/${man[m.id].file} is not on disk; set "music": null (or supply "src" to your own track) instead of an id with no shipped file`);
     fs.mkdirSync(path.join(proj, "assets", "music"), { recursive: true });
-    fs.copyFileSync(path.join(LIB, "music", man[m.id].file), path.join(proj, "assets", "music", man[m.id].file));
+    fs.copyFileSync(musicSrc, path.join(proj, "assets", "music", man[m.id].file));
     src = `assets/music/${man[m.id].file}`;
   }
   // the reveal: the bed plays muffled (low-pass, a touch quieter) through the hook, then opens to full on the turn
