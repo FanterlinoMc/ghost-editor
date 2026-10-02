@@ -461,18 +461,56 @@ const platform = spec.platform || (FORMAT === "16:9" ? "widescreen" : FORMAT ===
 const facePath = path.join(proj, spec.face || "build/face.json");
 const face = fs.existsSync(facePath) ? JSON.parse(fs.readFileSync(facePath, "utf8")) : null;
 if (!face) warn.push(`no ${path.relative(proj, facePath)}: captions sit at a fixed height and may cover the face; run scripts/face_track.py first`);
-// A face.json is pixel coordinates in whatever W/H face_track.py measured. If that
-// doesn't match this build's canvas (project built in one format, face.json tracked
-// against another), every caption placement is silently wrong - same failure class
-// as a stale format assumption, just one level up, so this dies loudly rather than
-// placing captions against the wrong pixel space. Older face.json files predating
-// this field have no w/h to check, so they fall back to a warning, not a die.
+// A face.json is pixel coordinates in whatever W/H face_track.py measured - in practice
+// always the untouched 9:16 canvas (SKILL.md step 2b always runs face_track.py against
+// prep.sh's default assets/talk.mp4 output, before any other format gets prepped).
+//
+// A15/I-19: prep.sh derives one build/crop-<fmtdash>.json sidecar per format from THAT
+// SAME face.json (its "Crop plan for build.mjs / safezone.mjs" comment: canvasCoord =
+// rawCoord * scale + offset). So a 9:16-tracked face.json against a 4:5/1:1/16:9 build of
+// the SAME source is legitimate - the sidecar is exactly the evidence that prep.sh ran
+// for THIS format against THIS project's own face.json - and only the sidecar's numbers
+// get trusted to remap captions onto this build's canvas; the direct W/H match keeps its
+// old identity-transform path untouched below.
+//
+// This does not prove the footage itself matches (no content hash ties face.json to the
+// source video, and nothing here or before this change ever checked that): a fabricated
+// face.json at exactly 1080x1920 next to a genuine sidecar for this project would still
+// pass. It is not weaker than the check it replaces - that one only ever verified
+// dimensions too - but it is worth saying plainly rather than implying more than it
+// proves. A duration cross-check (face.json's last sample time vs this build's source
+// duration) was considered and rejected: measured against all seven A1 fixtures, they
+// share one canned 18s face.json across sources of 14/16/18/20s by design, so a duration
+// mismatch is the normal case there, not a signal of wrong footage.
+//
+// A genuine mismatch - wrong dimensions AND no matching sidecar, or a sidecar whose own
+// declared W/H disagrees with this build's - still dies loudly, same as before: placing
+// captions against the wrong pixel space is exactly what this check exists to prevent.
+// Older face.json files predating the w/h field have no w/h to check at all, and still
+// just warn, as before.
+let cropScale = 1, cropOffsetX = 0, cropOffsetY = 0;
 if (face && face.w != null && face.h != null) {
-  if (face.w !== W || face.h !== H) die(`${path.relative(proj, facePath)} is ${face.w}x${face.h} but this build is ${W}x${H} (spec.format '${FORMAT}') - re-run face_track.py against the matching source`);
+  if (face.w !== W || face.h !== H) {
+    const fmtdash = FORMAT.replace(":", "x");
+    const cropPath = path.join(proj, "build", `crop-${fmtdash}.json`);
+    const crop = fs.existsSync(cropPath) ? JSON.parse(fs.readFileSync(cropPath, "utf8")) : null;
+    // Trust the sidecar's own declared format/W/H (stale-able: a re-prep at different source
+    // dims leaves an old one sitting there) AND require its three numbers to actually be
+    // numbers - a malformed awk printf in prep.sh would otherwise hand NaN/undefined straight
+    // to makePlacer and faceY below, which would silently poison every coordinate rather than
+    // dying loudly the way a bad sidecar should.
+    const cropNumeric = crop && [crop.scale, crop.offsetX, crop.offsetY].every(Number.isFinite) && crop.scale > 0;
+    if (crop && crop.format === FORMAT && crop.W === W && crop.H === H && cropNumeric) {
+      ({ scale: cropScale, offsetX: cropOffsetX, offsetY: cropOffsetY } = crop);
+      console.log(`crop: ${path.relative(proj, facePath)} is ${face.w}x${face.h}; remapping onto this ${W}x${H} (${FORMAT}) build via ${path.relative(proj, cropPath)} (mode=${crop.mode}, scale=${cropScale}, offset=${cropOffsetX},${cropOffsetY})`);
+    } else {
+      die(`${path.relative(proj, facePath)} is ${face.w}x${face.h} but this build is ${W}x${H} (spec.format '${FORMAT}') and no matching ${path.relative(proj, cropPath)} sidecar was found - run prep.sh against this source for '${FORMAT}' (it writes that sidecar from this same face.json), or re-run face_track.py against the matching source`);
+    }
+  }
 } else if (face) {
   warn.push(`${path.relative(proj, facePath)} has no w/h; cannot verify it matches this build's ${W}x${H} canvas - re-run face_track.py to add it`);
 }
-const placer = makePlacer({ face, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W });
+const placer = makePlacer({ face, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W, cropScale, cropOffsetX, cropOffsetY });
 
 // ---------- overlays ----------
 const CARD = { x: 60, y: spec.layout?.cardY ?? 990, w: 870 };
@@ -493,7 +531,15 @@ const faceFile = path.join(proj, spec.face || "build/face.json");
 const faceY = (() => {
   if (!fs.existsSync(faceFile)) return 700;
   const ys = JSON.parse(fs.readFileSync(faceFile, "utf8")).samples.filter((x) => x[1] != null).map((x) => (x[1] + x[2]) / 2).sort((a, b) => a - b);
-  return ys.length ? Math.round(ys[Math.floor(ys.length / 2)]) : 700;
+  if (!ys.length) return 700;
+  // Same raw-face.json-pixel -> this-canvas remap as makePlacer's cropScale/cropOffsetY above
+  // (A15/I-19): faceY ends up as a CSS pixel position on THIS build's canvas (#pip's
+  // transform-origin below, and fly3d's fy in motion.mjs), so it needs the same crop sidecar
+  // applied as the caption placer, not the raw 9:16-space value. cropScale is always > 0, so
+  // the transform is monotonic and applying it to the median (rather than to every sample
+  // before taking the median) gives the same answer. Identity (cropScale=1, cropOffsetY=0) for
+  // every 9:16 build, so this is a no-op there.
+  return Math.round(ys[Math.floor(ys.length / 2)] * cropScale + cropOffsetY);
 })();
 const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
