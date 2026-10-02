@@ -4,7 +4,7 @@
 # regardless of which output format is chosen, so a later join (I-16) is never
 # audible.
 #
-#   prep.sh <recording> <project-dir> [9:16|4:5|1:1|16:9]   (default 9:16)
+#   prep.sh <recording> <project-dir> [9:16|4:5|1:1|16:9] [source-index]   (default 9:16, no index)
 #
 #   9:16 -> 1080x1920 (Reels/TikTok/Shorts)  -> assets/talk.mp4
 #   4:5  -> 1080x1350 (IG/FB feed)           -> assets/talk-4x5.mp4
@@ -15,6 +15,27 @@
 # project/reel.json that already points there is untouched; a non-default
 # format gets its own suffixed file so one project can hold more than one
 # format's source side by side (I-19: "one plan renders in all four").
+#
+# I-16 (multi-source, engine/MULTIANGLE.md gap 3): a 4th argument, a small
+# integer, is the source index -- run prep.sh once per distinct recording
+# that will appear in the same reel, passing 0, 1, 2, ... so each lands at
+# its own name instead of overwriting the last one:
+#
+#   prep.sh a.mp4 proj 9:16 0   -> assets/talk-0.mp4, build/crop-0-9x16.json
+#   prep.sh b.mp4 proj 9:16 1   -> assets/talk-1.mp4, build/crop-1-9x16.json
+#   prep.sh b.mp4 proj 4:5  1   -> assets/talk-1-4x5.mp4, build/crop-1-4x5.json
+#
+# Omitting the index is still the single-source path and is byte-identical to
+# before (same names, same filters, same loudnorm target) -- an index is
+# purely additive. Every invocation, indexed or not, measures and targets the
+# SAME -16 LUFS / 30 fps / yuv420p regardless of what the source itself
+# measured at, which is what makes two sources join without an audible
+# loudness jump (see the "what still jumps" note near the bottom of this
+# file for what that target does NOT cover). face_track.py and transcribe.py
+# take an explicit --out, so they need no changes to run per source -- just
+# point --out at build/face-<i>.json / build/words-<i>.whisper.json; see
+# transcribe.py --merge for turning N of those into one list the planner
+# can read.
 #
 # Normalizing the voice here, before any SFX is mixed, is what keeps the SFX
 # levels in build.mjs meaningful: the kit's role levels assume a -16 LUFS
@@ -27,8 +48,8 @@
 # python3 note below for why a cross-runtime call here is exactly the kind of
 # fragility this script has already paid for once).
 set -euo pipefail
-[ "$#" -ge 2 ] && [ "$#" -le 3 ] || { echo "usage: prep.sh <recording> <project-dir> [9:16|4:5|1:1|16:9]" >&2; exit 2; }
-src="$1"; proj="$2"; fmt="${3:-9:16}"
+[ "$#" -ge 2 ] && [ "$#" -le 4 ] || { echo "usage: prep.sh <recording> <project-dir> [9:16|4:5|1:1|16:9] [source-index]" >&2; exit 2; }
+src="$1"; proj="$2"; fmt="${3:-9:16}"; idx="${4:-}"
 case "$fmt" in
   9:16) tw=1080; th=1920 ;;
   4:5)  tw=1080; th=1350 ;;
@@ -36,9 +57,19 @@ case "$fmt" in
   16:9) tw=1920; th=1080 ;;
   *) echo "unknown format '$fmt' (want 9:16, 4:5, 1:1 or 16:9)" >&2; exit 2 ;;
 esac
+if [ -n "$idx" ]; then
+  case "$idx" in
+    ''|*[!0-9]*) echo "source-index must be a non-negative integer, got '$idx'" >&2; exit 2 ;;
+  esac
+fi
 fmtdash=$(printf '%s' "$fmt" | tr ':' 'x')
-if [ "$fmt" = "9:16" ]; then out="$proj/assets/talk.mp4"
-else out="$proj/assets/talk-$fmtdash.mp4"; fi
+# No index: unchanged single-source names (talk.mp4 / talk-<fmt>.mp4). An index inserts
+# "-<idx>" right after "talk", before any format suffix, matching face-<idx>.json /
+# words-<idx>.whisper.json below -- one source id, consistently spelled across every file
+# ingest produces for it.
+if [ -n "$idx" ]; then base="talk-$idx"; else base="talk"; fi
+if [ "$fmt" = "9:16" ]; then out="$proj/assets/$base.mp4"
+else out="$proj/assets/$base-$fmtdash.mp4"; fi
 mkdir -p "$proj/assets" "$proj/build"
 
 # tr -d '\r': ffprobe writes CRLF on Windows. This no longer feeds a branch that picks the crop
@@ -89,7 +120,11 @@ sh=$(awk -v h="$h" -v s="$scale" 'BEGIN{printf "%d", h*s+0.5}')
 xoff=$(awk -v sw="$sw" -v tw="$tw" 'BEGIN{v=(sw-tw)/2; if(v<0)v=0; printf "%d", v}')
 yoff=$(awk -v sh="$sh" -v th="$th" 'BEGIN{v=(sh-th)/2; if(v<0)v=0; printf "%d", v}')  # centred default
 mode="centre"
-facejson="$proj/build/face.json"
+# I-16: a source index looks for ITS OWN face track (face_track.py run against this same
+# source's talk-<idx>.mp4), never the single-source build/face.json -- using another
+# source's face positions to pick this one's crop offset would be worse than the plain
+# centred fallback.
+if [ -n "$idx" ]; then facejson="$proj/build/face-$idx.json"; else facejson="$proj/build/face.json"; fi
 if [ -s "$facejson" ] && [ "$sh" -gt "$th" ]; then
   FH=$(sed -nE 's/.*"h":[[:space:]]*([0-9]+).*/\1/p' "$facejson" | head -1)
   tops=$(tr -d ' ' < "$facejson" | sed 's/\[/\n[/g' | sed -nE 's/^\[[0-9.]+,([0-9]+),.*/\1/p')
@@ -143,7 +178,7 @@ fi
 # face.json's original-frame pixel coordinates map onto THIS format's canvas as
 # canvasCoord = rawCoord * scale + offset, for both axes alike, in crop mode (offset <= 0, a
 # cropped-away margin) and pad mode (offset >= 0, a letterboxed-in margin) both.
-cropfile="$proj/build/crop-$fmtdash.json"
+if [ -n "$idx" ]; then cropfile="$proj/build/crop-$idx-$fmtdash.json"; else cropfile="$proj/build/crop-$fmtdash.json"; fi
 printf '{"format":"%s","W":%s,"H":%s,"mode":"%s","scale":%s,"offsetX":%s,"offsetY":%s}\n' \
   "$fmt" "$tw" "$th" "$mode" "$planScale" "$planOffX" "$planOffY" > "$cropfile"
 echo "-> $cropfile (mode=$mode, for safezone.mjs's cropScale/cropOffsetX/cropOffsetY)"
