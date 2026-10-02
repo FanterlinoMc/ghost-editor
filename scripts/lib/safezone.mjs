@@ -49,7 +49,15 @@ export const FORMATS = {
   "16:9": { W: 1920, H: 1080 },
 };
 
-export function makePlacer({ face, takes, zoom, TOTAL, platform = "instagram", ideal = 1180, gap = 36, H = 1920, W = 1080 }) {
+export function makePlacer({ face, takes, zoom, TOTAL, platform = "instagram", ideal = 1180, gap = 36, H = 1920, W = 1080, cropScale = 1, cropOffsetX = 0, cropOffsetY = 0 }) {
+  // A15 / I-19: face.json's samples are always in the pixel space of the untouched (9:16)
+  // frame that face_track.py actually ran on -- prep.sh's 4:5/1:1/16:9 crops don't re-run face
+  // tracking, they just crop (and sometimes pad) that same frame differently per format. Map a
+  // raw face.json coordinate into THIS format's canvas with canvasCoord = raw * cropScale +
+  // cropOffset, matching exactly what prep.sh's scripts/prep.sh writes per format to
+  // <project>/build/crop-<fmt>.json (offset <= 0 for a cropped-away margin, >= 0 for a
+  // letterboxed-in one). Defaults are the identity transform, so every existing 9:16 caller
+  // (which has no crop plan to read) is unaffected.
   const P = PLATFORMS[platform] || PLATFORMS.instagram;
   const safeTop = P.top, safeBottom = H - P.bottom;
   // Every guide pair above was measured against *some* canvas height. A
@@ -98,8 +106,11 @@ export function makePlacer({ face, takes, zoom, TOTAL, platform = "instagram", i
     const f = faceAt(toOrig(t));
     if (!f) return null;
     const s = camScale(t);
-    const Y = (y) => oy + s * (y - oy);
-    const X = (x) => ox + s * (x - ox);
+    // crop/pad mapping first (raw face.json pixel -> this format's canvas), then the existing
+    // camera zoom transform around (ox, oy) on top, exactly as before when cropScale is 1 and
+    // both offsets are 0.
+    const Y = (y) => oy + s * (y * cropScale + cropOffsetY - oy);
+    const X = (x) => ox + s * (x * cropScale + cropOffsetX - ox);
     return { top: Y(f[1]), bottom: Y(f[2]), left: X(f[3]), right: X(f[4]), eyes: Y(f[5] ?? f[1]), mouth: Y(f[6] ?? f[2]) };
   };
   const span = (t0, t1) => {
