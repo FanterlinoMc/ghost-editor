@@ -2,6 +2,11 @@
 """Track the speaker's face so captions never cover it.
 
     face_track.py <project>/assets/talk.mp4 --out <project>/build/face.json [--fps 5]
+    # I-16 / MULTIANGLE Gap 3 - one face track per RECORDING, for the same reason: coordinates are
+    # in the pixel space of the file this ran on, so a second camera needs its own.
+    #   source 1:  face_track.py <project>/assets/talk-1.mp4 --out <project>/build/face-1.json
+    # prep.sh already reads build/face-<N>.json when prepping source N (A15's crop offset).
+    # build.mjs consuming a face track per source is MULTIANGLE Gap 6, still open.
 
 Runs OpenCV's YuNet detector (library/models/face_detection_yunet_2023mar.onnx,
 fetched on first use, MIT licence) on a downscaled copy at --fps and writes,

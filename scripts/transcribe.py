@@ -3,6 +3,10 @@
 and print the segment table: the take map you choose takes from.
 
     transcribe.py <project>/assets/talk.mp4 --out <project>/build/words.whisper.json \
+    # I-16 / MULTIANGLE Gap 3 - one transcript per RECORDING. No flag is needed: --out already
+    # names the file, and build.mjs derives the same paths from take.src (lib/sources.mjs), so the
+    # convention is all that has to be followed. Source 0 keeps the unsuffixed name.
+    #   source 1:  transcribe.py <project>/assets/talk-1.mp4 --out <project>/build/words-1.whisper.json
         [--model turbo] [--lang en] [--raw existing.json] \
         [--min-confidence 0.72] [--flags-out <project>/build/words.flags.json]
 

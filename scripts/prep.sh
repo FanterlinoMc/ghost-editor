@@ -27,8 +27,9 @@
 # python3 note below for why a cross-runtime call here is exactly the kind of
 # fragility this script has already paid for once).
 set -euo pipefail
-[ "$#" -ge 2 ] && [ "$#" -le 3 ] || { echo "usage: prep.sh <recording> <project-dir> [9:16|4:5|1:1|16:9]" >&2; exit 2; }
-src="$1"; proj="$2"; fmt="${3:-9:16}"
+[ "$#" -ge 2 ] && [ "$#" -le 4 ] || { echo "usage: prep.sh <recording> <project-dir> [9:16|4:5|1:1|16:9] [source-index]" >&2; exit 2; }
+src="$1"; proj="$2"; fmt="${3:-9:16}"; idx="${4:-0}"
+case "$idx" in ''|*[!0-9]*) echo "source index must be a non-negative integer, got '$idx'" >&2; exit 2 ;; esac
 case "$fmt" in
   9:16) tw=1080; th=1920 ;;
   4:5)  tw=1080; th=1350 ;;
@@ -37,8 +38,22 @@ case "$fmt" in
   *) echo "unknown format '$fmt' (want 9:16, 4:5, 1:1 or 16:9)" >&2; exit 2 ;;
 esac
 fmtdash=$(printf '%s' "$fmt" | tr ':' 'x')
-if [ "$fmt" = "9:16" ]; then out="$proj/assets/talk.mp4"
-else out="$proj/assets/talk-$fmtdash.mp4"; fi
+# I-16 / MULTIANGLE Gap 3 (ingest half): a project can hold several RECORDINGS, not just several
+# formats of one. Source 0 keeps every name it already has - exactly as the 9:16 default keeps
+# writing assets/talk.mp4 - so no existing project or reel.json moves. Source N gets "-N", and it
+# goes BEFORE the format token so build.mjs can strip the format and read the index back
+# (scripts/lib/sources.mjs, which is the consumer of this naming and has the tests for it):
+#
+#   idx 0, 9:16 -> assets/talk.mp4          idx 1, 9:16 -> assets/talk-1.mp4
+#   idx 0, 16:9 -> assets/talk-16x9.mp4     idx 1, 16:9 -> assets/talk-1-16x9.mp4
+#
+# Each run normalises its own source to -16 LUFS independently, which is what makes a join between
+# two recordings inaudible - the requirement Gap 3 states and the reason this is one script run
+# per source rather than a batch mode with shared gain.
+sfx=""
+[ "$idx" -ne 0 ] && sfx="-$idx"
+if [ "$fmt" = "9:16" ]; then out="$proj/assets/talk$sfx.mp4"
+else out="$proj/assets/talk$sfx-$fmtdash.mp4"; fi
 mkdir -p "$proj/assets" "$proj/build"
 
 # tr -d '\r': ffprobe writes CRLF on Windows. This no longer feeds a branch that picks the crop
@@ -89,7 +104,10 @@ sh=$(awk -v h="$h" -v s="$scale" 'BEGIN{printf "%d", h*s+0.5}')
 xoff=$(awk -v sw="$sw" -v tw="$tw" 'BEGIN{v=(sw-tw)/2; if(v<0)v=0; printf "%d", v}')
 yoff=$(awk -v sh="$sh" -v th="$th" 'BEGIN{v=(sh-th)/2; if(v<0)v=0; printf "%d", v}')  # centred default
 mode="centre"
-facejson="$proj/build/face.json"
+# This source's OWN face track, never another recording's: face coordinates are in the pixel
+# space of the file face_track.py ran on, so consulting face.json while prepping source 1 would
+# offset the crop by a face that is not in this footage.
+facejson="$proj/build/face$sfx.json"
 if [ -s "$facejson" ] && [ "$sh" -gt "$th" ]; then
   FH=$(sed -nE 's/.*"h":[[:space:]]*([0-9]+).*/\1/p' "$facejson" | head -1)
   tops=$(tr -d ' ' < "$facejson" | sed 's/\[/\n[/g' | sed -nE 's/^\[[0-9.]+,([0-9]+),.*/\1/p')
@@ -153,7 +171,10 @@ fi
 # and every mapped coordinate is wrong by the 9:16 scale factor, with nothing to notice it. With
 # these two fields build.mjs can refuse the plan instead of placing captions against the wrong
 # pixel space - the same failure class its own face.w/h canvas check already guards.
-cropfile="$proj/build/crop-$fmtdash.json"
+# Per source as well as per format: the sidecar carries srcW/srcH from THIS recording, and two
+# cameras of different dimensions need different plans. build.mjs reading the right one per source
+# is MULTIANGLE Gap 6.
+cropfile="$proj/build/crop$sfx-$fmtdash.json"
 printf '{"format":"%s","W":%s,"H":%s,"srcW":%s,"srcH":%s,"mode":"%s","scale":%s,"offsetX":%s,"offsetY":%s}\n' \
   "$fmt" "$tw" "$th" "$w" "$h" "$mode" "$planScale" "$planOffX" "$planOffY" > "$cropfile"
 echo "-> $cropfile (mode=$mode, for safezone.mjs's cropScale/cropOffsetX/cropOffsetY)"
