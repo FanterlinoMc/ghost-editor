@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard } from "./lib/motion.mjs";
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { wordOwners } from "./lib/words.mjs";
+import { wordsPathFor } from "./lib/sources.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = path.join(SKILL, "library");
@@ -185,8 +186,22 @@ const r3 = (x) => Math.round(x * 1000) / 1000;
 // ---------- words -> edit-time captions ----------
 const core = (w) => w.replace(/[.,!?;:]+$/, "");
 const punct = (w) => w.slice(core(w).length);
-const whisper = JSON.parse(fs.readFileSync(path.resolve(proj, spec.words), "utf8"));
-const allWords = whisper.segments.flatMap((s) => (s.words || []).map((w) => ({ word: w.word.trim(), start: w.start, end: w.end })));
+// MULTIANGLE Gap 3 (consumption half): a transcript PER source. `spec.words` still names the
+// primary source's, so single-source reel.json files are untouched; every other source's path is
+// derived by convention from its own `src` (lib/sources.mjs) rather than through a new schema
+// field, so the planner needs to learn nothing. A source whose transcript has not been produced
+// yet warns and contributes no captions - the honest degradation A30 established.
+const PRIMARY_SRC = spec.source ?? SOURCES[0];
+const loadWords = (rel) => {
+  const abs = path.resolve(proj, rel);
+  if (!fs.existsSync(abs)) return null;
+  return JSON.parse(fs.readFileSync(abs, "utf8")).segments
+    .flatMap((s) => (s.words || []).map((w) => ({ word: w.word.trim(), start: w.start, end: w.end })));
+};
+// Still required, and still named by spec.words - a missing primary transcript is a build failure,
+// not a reel with no captions.
+const allWords = loadWords(spec.words);
+if (!allWords) die(`words file not found: ${spec.words} (run transcribe.py first)`);
 const fixes = Object.entries(spec.captions?.fixes || {});
 const words = [];
 console.log("\n edit-start   orig a  ->  orig b   dur   text");
@@ -215,14 +230,34 @@ console.log("\n edit-start   orig a  ->  orig b   dur   text");
 // text covers only the ingest half - see ISSUES A30.
 // The rule itself lives in lib/words.mjs so it can be asserted without a build - see
 // lib/words.test.mjs, which carries the multi-source regression case.
-const WORDS_SRC = spec.source ?? SOURCES[0];
-const owner = wordOwners(allWords, takes, WORDS_SRC);
-if (SOURCES.length > 1) {
-  const foreign = takes.filter((k) => k.src !== WORDS_SRC).length;
-  warn.push(`${foreign} take(s) come from a source other than ${WORDS_SRC}, which is the only recording ${spec.words} transcribes - those takes carry no captions until MULTIANGLE Gap 3 gives each source its own transcript`);
+//
+// Ownership is resolved once per source, against that source's own transcript, and the results
+// collected per take. A take belongs to exactly one source, so its words all come from one list
+// and stay in that list's order - no cross-source interleaving to re-sort.
+const wordsByTake = takes.map(() => []);
+for (const s of SOURCES) {
+  const rel = s === PRIMARY_SRC ? spec.words : wordsPathFor(s);
+  // Two sources must never resolve to the SAME transcript - that is A30 wearing a convention.
+  // A source not named per lib/sources.mjs (`assets/talk-1.mp4`) derives index 0 and therefore the
+  // PRIMARY path, which would hand one recording's words to another recording's takes. Caught by
+  // the 2-source repro the moment this was wired up: `assets/b.mp4` has no `-N`, so it resolved to
+  // `build/words.whisper.json` and stole source 0's captions all over again. Refuse instead.
+  if (s !== PRIMARY_SRC && rel === (spec.words ?? wordsPathFor(PRIMARY_SRC))) {
+    const n = takes.filter((k) => k.src === s).length;
+    warn.push(`source ${s} is not named for the per-source convention (expected assets/talk-<N>.mp4), so no transcript of its own can be located - its ${n} take(s) carry no captions. Renaming it is MULTIANGLE Gap 3's ingest half.`);
+    continue;
+  }
+  const list = s === PRIMARY_SRC ? allWords : loadWords(rel);
+  if (!list) {
+    const n = takes.filter((k) => k.src === s).length;
+    warn.push(`source ${s} has no transcript at ${rel} - its ${n} take(s) carry no captions (MULTIANGLE Gap 3: run transcribe.py per source)`);
+    continue;
+  }
+  const own = wordOwners(list, takes, s);
+  list.forEach((w, wi) => { if (own[wi] >= 0) wordsByTake[own[wi]].push(w); });
 }
 for (const [ti, k] of takes.entries()) {
-  const ws = allWords.filter((w, wi) => owner[wi] === ti);
+  const ws = wordsByTake[ti];
   if (!ws.length) { warn.push(`take ${k.a}-${k.b} owns no words (a breath or a tail); fine for autocut takes`); continue; }
   ws.forEach((w, i) => {
     let text = w.word;
@@ -323,6 +358,12 @@ const voiceP95 = (() => {
   const raw = execFileSync("ffmpeg", ["-v", "error", "-i", path.resolve(proj, spec.source), "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "-"], { maxBuffer: 1 << 30 });
   const x = new Float32Array(raw.buffer, raw.byteOffset, Math.floor(raw.length / 4));
   const win = 800, pk = [];
+  // allWords is the PRIMARY source's transcript, matched against every take. That is deliberate
+  // and self-consistent: the audio decoded above is spec.source's too, so words and samples come
+  // from the same recording. On a multi-source reel this measures the voice level of source 0 and
+  // uses it as the reference for the whole mix - a level approximation, not a wrong render. Making
+  // it per-source needs prep.sh to guarantee identical loudness across sources, which is Gap 3's
+  // ingest half (-16 LUFS each); until then one reference is the honest choice.
   for (const k of takes) for (const w of allWords) {
     if (w.start < k.a || w.end > k.b) continue;
     for (let i = Math.floor(w.start * 16000); i + win <= w.end * 16000; i += win) {
