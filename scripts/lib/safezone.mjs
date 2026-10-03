@@ -49,7 +49,7 @@ export const FORMATS = {
   "16:9": { W: 1920, H: 1080 },
 };
 
-export function makePlacer({ face, takes, zoom, TOTAL, platform = "instagram", ideal = 1180, gap = 36, H = 1920, W = 1080, cropScale = 1, cropOffsetX = 0, cropOffsetY = 0 }) {
+export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = "instagram", ideal = 1180, gap = 36, H = 1920, W = 1080, cropScale = 1, cropOffsetX = 0, cropOffsetY = 0 }) {
   // A15 / I-19: face.json's samples are always in the pixel space of the untouched (9:16)
   // frame that face_track.py actually ran on -- prep.sh's 4:5/1:1/16:9 crops don't re-run face
   // tracking, they just crop (and sometimes pad) that same frame differently per format. Map a
@@ -85,16 +85,31 @@ export function makePlacer({ face, takes, zoom, TOTAL, platform = "instagram", i
     }
     return base * s * p;
   };
-  const toOrig = (t) => {
-    for (const k of takes) if (t >= k.start && t < k.start + k.dur) return k.a + (t - k.start);
-    for (const k of takes) if (t >= k.holdStart && t < k.holdStart + k.holdFrames / 30) return k.b;
-    return takes.at(-1).b;
+  // MULTIANGLE Gap 6: which take owns this edit moment, and therefore WHICH RECORDING. Was
+  // `toOrig()` returning only the mapped time; the take was already in hand and thrown away, and
+  // with it the only way to know whose face is on screen. Branch order is unchanged - the main
+  // span of every take is tried before any hold span, which is not the same as checking both per
+  // take - so single-source mapping is identical.
+  const locate = (t) => {
+    for (const k of takes) if (t >= k.start && t < k.start + k.dur) return { k, orig: k.a + (t - k.start) };
+    for (const k of takes) if (t >= k.holdStart && t < k.holdStart + k.holdFrames / 30) return { k, orig: k.b };
+    const last = takes.at(-1);
+    return { k: last, orig: last.b };
   };
-  const samples = face ? face.samples : [];
-  const faceAt = (orig) => {
+  const toOrig = (t) => locate(t).orig;
+  // A face track per source. `faces` is keyed by `take.src`; `face` remains the single-source
+  // input and the fallback for any source without its own track, so a reel that passes only
+  // `face` behaves exactly as before. Samples are in the pixel space of the file face_track.py
+  // ran on, so using one recording's track for another's takes places captions against a face
+  // that is not in that footage - the B3-class defect this placer exists to prevent.
+  const samplesFor = (src) => {
+    const own = faces && src != null ? faces[src] : null;
+    return (own && own.samples) || (face ? face.samples : []);
+  };
+  const faceAt = (orig, src) => {
     // nearest sample, holding the last known face across short misses
     let best = null, bd = 1e9;
-    for (const s of samples) {
+    for (const s of samplesFor(src)) {
       if (s[1] == null) continue;
       const d = Math.abs(s[0] - orig);
       if (d < bd) { bd = d; best = s; }
@@ -103,7 +118,8 @@ export function makePlacer({ face, takes, zoom, TOTAL, platform = "instagram", i
     return bd < 1.5 ? best : null;
   };
   const screenFace = (t) => {
-    const f = faceAt(toOrig(t));
+    const { k, orig } = locate(t);
+    const f = faceAt(orig, k.src);
     if (!f) return null;
     const s = camScale(t);
     // crop/pad mapping first (raw face.json pixel -> this format's canvas), then the existing

@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard } from "./lib/motion.mjs";
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { wordOwners } from "./lib/words.mjs";
-import { wordsPathFor } from "./lib/sources.mjs";
+import { wordsPathFor, facePathFor } from "./lib/sources.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = path.join(SKILL, "library");
@@ -587,6 +587,18 @@ const outroHtml = OUTRO > 0 ? `
 const platform = spec.platform || (FORMAT === "16:9" ? "widescreen" : FORMAT === "9:16" ? "instagram" : "feed");
 const facePath = path.join(proj, spec.face || "build/face.json");
 const face = fs.existsSync(facePath) ? JSON.parse(fs.readFileSync(facePath, "utf8")) : null;
+// MULTIANGLE Gap 6: a face track per source, same convention as the transcripts - `spec.face`
+// names the primary source's, every other is derived from its own `src`. A source with no track
+// of its own falls back to the primary's inside makePlacer, which is wrong but is what happened
+// before this existed; the warning says so rather than letting it pass silently.
+const faces = {};
+for (const sname of SOURCES) {
+  const rel = sname === PRIMARY_SRC ? (spec.face || "build/face.json") : facePathFor(sname);
+  const abs = path.resolve(proj, rel);
+  if (fs.existsSync(abs)) faces[sname] = JSON.parse(fs.readFileSync(abs, "utf8"));
+  else if (SOURCES.length > 1)
+    warn.push(`source ${sname} has no face track at ${rel} - its captions are placed against ${PRIMARY_SRC}'s face, which is not the face on screen (MULTIANGLE Gap 3: run face_track.py per source)`);
+}
 if (!face) warn.push(`no ${path.relative(proj, facePath)}: captions sit at a fixed height and may cover the face; run scripts/face_track.py first`);
 // A face.json is pixel coordinates in whatever W/H face_track.py measured. If that
 // doesn't match this build's canvas (project built in one format, face.json tracked
@@ -633,7 +645,7 @@ if (face && face.w != null && face.h != null) {
 if (cropScale !== 1 || cropOffsetX !== 0 || cropOffsetY !== 0) {
   console.log(`face.json ${face.w}x${face.h} -> ${W}x${H} via ${path.relative(proj, cropPath)} (mode=${cropPlan.mode}, scale ${cropScale}, offset ${cropOffsetX},${cropOffsetY})`);
 }
-const placer = makePlacer({ face, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W, cropScale, cropOffsetX, cropOffsetY });
+const placer = makePlacer({ face, faces, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W, cropScale, cropOffsetX, cropOffsetY });
 
 // ---------- overlays ----------
 const CARD = { x: 60, y: spec.layout?.cardY ?? 990, w: 870 };

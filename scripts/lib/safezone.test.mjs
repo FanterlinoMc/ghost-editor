@@ -99,5 +99,45 @@ function spanFor({ W, H, platform, cropScale = 1, cropOffsetX = 0, cropOffsetY =
         `aware top ${aware.top} / bottom ${aware.bottom} vs centred top ${centred.top}`);
 }
 
-console.log("\n" + (failures ? `${failures} check(s) failed` : "crop mapping holds"));
+
+// ---- MULTIANGLE Gap 6: the placer consults the face of the source actually on screen ----------
+//
+// Two takes from two recordings, with deliberately different face geometry: source A's face is
+// high and small, source B's is low and large. If the placer used one track for both - which is
+// what it did before Gap 6 - the reported face for take 1 would be source A's, and the caption
+// would be placed to dodge a face that is not in that footage (a B3-class defect).
+{
+  const takes = [
+    { start: 0, dur: 2, holdStart: 0, holdFrames: 0, a: 0, b: 2, src: "assets/talk.mp4" },
+    { start: 2, dur: 2, holdStart: 0, holdFrames: 0, a: 0, b: 2, src: "assets/talk-1.mp4" },
+  ];
+  // [t, top, bottom, left, right, eyes_y, mouth_y]
+  const faceA = { w: 1080, h: 1920, samples: [[0, 200, 400, 440, 640, 260, 350], [2, 200, 400, 440, 640, 260, 350]] };
+  const faceB = { w: 1080, h: 1920, samples: [[0, 900, 1500, 300, 780, 1050, 1350], [2, 900, 1500, 300, 780, 1050, 1350]] };
+  const p = makePlacer({
+    face: faceA,
+    faces: { "assets/talk.mp4": faceA, "assets/talk-1.mp4": faceB },
+    takes, zoom: {}, TOTAL: 4, H: 1920, W: 1080,
+  });
+  p.place(0.5, 1.5, 120);   // inside take 0 -> source A
+  p.place(2.5, 3.5, 120);   // inside take 1 -> source B
+  const [a, b] = p.log;
+  check("Gap 6: a take from source A is placed against source A's face",
+        a.face && near(a.face.top, 200, 2), `got ${JSON.stringify(a.face)}`);
+  check("Gap 6: a take from source B is placed against source B's OWN face, not A's",
+        b.face && near(b.face.top, 900, 2), `got ${JSON.stringify(b.face)}`);
+  check("Gap 6: the two takes therefore get different caption rows",
+        a.y !== b.y, `both at y=${a.y}`);
+
+  // Without `faces`, every take falls back to the single track - the pre-Gap-6 behaviour, kept
+  // asserted so the cases above cannot pass for an unrelated reason.
+  const q = makePlacer({ face: faceA, takes, zoom: {}, TOTAL: 4, H: 1920, W: 1080 });
+  q.place(0.5, 1.5, 120);
+  q.place(2.5, 3.5, 120);
+  check("Gap 6: with no per-source tracks, both takes still use the one face (old behaviour)",
+        near(q.log[0].face.top, 200, 2) && near(q.log[1].face.top, 200, 2),
+        `got ${JSON.stringify(q.log.map((l) => l.face && l.face.top))}`);
+}
+
+console.log(failures ? `\n${failures} failure(s)` : "\ncrop mapping and per-source faces hold");
 process.exit(failures ? 1 : 0);
