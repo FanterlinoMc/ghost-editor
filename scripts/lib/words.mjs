@@ -24,13 +24,18 @@ export const overlap = (w, k) => Math.min(w.end, k.b) - Math.max(w.start, k.a);
  * second recording, which may have no transcript at all, is handed whichever words happen to share
  * its numbers and renders them over its own footage. See ISSUES A30.
  *
- * Pass `wordsSrc` as null to opt out of the filter (single-source callers that never set take.src).
+ * `wordsSrc` is required and there is deliberately NO opt-out. An earlier draft let callers pass
+ * null to skip the filter, which would have re-enabled A30 silently from any new call site - the
+ * "some take(s) come from another source" warning lives in build.mjs, not here, so this function
+ * cannot shout on its own. A nullish `wordsSrc` therefore matches no take and every take ends up
+ * owning no words, which build.mjs already warns about once per take: loud and wrong beats quiet
+ * and wrong.
  */
 export function wordOwners(words, takes, wordsSrc) {
   return words.map((w) => {
     let best = -1, bo = 0;
     takes.forEach((k, i) => {
-      if (wordsSrc != null && k.src !== wordsSrc) return;
+      if (k.src !== wordsSrc) return;
       const o = overlap(w, k);
       if (o > bo) { bo = o; best = i; }
     });

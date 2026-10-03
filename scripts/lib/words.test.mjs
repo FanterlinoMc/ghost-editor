@@ -66,11 +66,17 @@ const w = (start, end, word = "x") => ({ start, end, word });
         owners[0] === 0 && !owners.includes(1), `owners=${owners}`);
 }
 {
-  // Opting out of the filter reproduces the OLD behaviour, so the test states what was wrong
-  // rather than only what is right.
-  const takes = [{ a: 0, b: 4, src: A }, { a: 6, b: 10, src: B }];
-  const owners = wordOwners([w(6.5, 7.0, "Second")], takes, null);
-  check("A30: with the filter off, the foreign take DOES steal the word (the old bug)",
+  // State what was WRONG, not only what is right - otherwise the cases above would still pass if
+  // the overlap arithmetic silently stopped selecting take 1 for some unrelated reason, and they
+  // would be proving nothing. Same geometry as the A30 case, but both takes relabelled to the
+  // SAME source: the filter no longer excludes anything, and take 1 wins on overlap. That is
+  // exactly the selection the old code made across a source boundary.
+  //
+  // Done by relabelling rather than by an opt-out parameter on purpose: `wordsSrc` has no null
+  // escape, precisely so no caller can re-enable A30 (see words.mjs).
+  const takes = [{ a: 0, b: 4, src: A }, { a: 6, b: 10, src: A }];
+  const owners = wordOwners([w(6.5, 7.0, "Second")], takes, A);
+  check("A30: the overlap rule does pick take 1 for that word - the filter is what excludes it",
         owners[0] === 1, `got ${owners[0]}`);
 }
 
