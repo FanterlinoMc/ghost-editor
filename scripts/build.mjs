@@ -27,6 +27,7 @@ import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard } fr
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { wordOwners } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
+import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = path.join(SKILL, "library");
@@ -718,11 +719,18 @@ if (spec.nametag && !beatsList.some((b) => b.type === "nametag")) {
   beatsList.unshift({ type: "nametag", name: spec.nametag.name, title: spec.nametag.title, subtitle: spec.nametag.subtitle, at: spec.nametag.at ?? 0.15, to: Math.max(1.2, until), sfx: false });
 }
 const HANDOVER = 0.45;
+// I-25: the resolved [t0, t1] every beat actually occupies on the output timeline, captured as a
+// side effect of this loop (same pattern as sfxEvents/slotUsed below) rather than re-derived later
+// - the HANDOVER extension a few lines down is exactly the kind of resolution a second
+// implementation could silently drift from. lib/sections.mjs uses this to decide which take joins
+// a beat spans, so it never becomes a section boundary.
+const beatSpans = [];
 for (const b of beatsList) {
   const id = `b${n++}`;
   const t0 = E(b.at, `${b.type} at`);
   let t1 = b.to === undefined ? (b.type === "endcard" ? TOTAL : t0 + (b.type === "meme" ? 1.8 : 2.5)) : E(b.to, `${b.type} to`);
   if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(E(o.at) - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
+  beatSpans.push({ t0, t1 });
   const dur = r3(t1 - t0);
   const inSlot = ["emoji", "logo", "meme", "icon"].includes(b.type);
   if (inSlot) {
@@ -1709,6 +1717,16 @@ fs.writeFileSync(path.join(proj, "build", "caption_layout.json"), JSON.stringify
 // Resolved edit-time motion events, for the style-study accuracy harness (A1). Beat times in
 // reel.json are SOURCE seconds; these are what the render actually contains, after E() maps them
 // through the takes. Ground truth must come from here, never from the input spec.
+// Pulled into named variables (I-25) so lib/sections.mjs's manifest can share them verbatim rather
+// than re-deriving the same shape a second time - the expressions themselves are unchanged, so
+// edit_truth.json's own output is unchanged.
+const editTruthTakes = takes.map((t) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(SOURCES.length > 1 ? { src: t.src, srcIndex: srcIndex.get(t.src) } : {}), ...(t.transition ? { transition: t.transition } : {}) }));
+const editTruthBeats = (spec.beats || []).map((b) => ({
+  type: b.type, kind: b.kind ?? null,
+  at: r3(E(b.at, `${b.type} at`)),
+  to: b.to === undefined ? null : r3(E(b.to, `${b.type} to`)),
+  in: b.in ?? null, out: b.out ?? null,
+}));
 fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
   total: TOTAL, speech: SPEECH, fps: FPS,
   // I-17: a take's `transition` names the look its join FROM the previous take carries (blur or
@@ -1721,18 +1739,40 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
   // B" while the oracle does not record which camera a take came from. Scoring an angle change
   // still needs A2/A5 to work (NEXT.md item 6); this just stops the oracle being the blocker.
   ...(SOURCES.length > 1 ? { sources: SOURCES } : {}),
-  takes: takes.map((t) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(SOURCES.length > 1 ? { src: t.src, srcIndex: srcIndex.get(t.src) } : {}), ...(t.transition ? { transition: t.transition } : {}) })),
+  takes: editTruthTakes,
   snaps: snaps.map(([t, z]) => ({ t: r3(t), scale: z })),
   pushes: pushesEdit.map((p) => ({ start: r3(p.a), end: r3(p.b), z: p.z, up: p.up, down: p.down })),
   // `to` matters as much as `at`: a scene animates in at `at` and out near `to`, so both are
   // events a frame-level analyzer should see.
-  beats: (spec.beats || []).map((b) => ({
-    type: b.type, kind: b.kind ?? null,
-    at: r3(E(b.at, `${b.type} at`)),
-    to: b.to === undefined ? null : r3(E(b.to, `${b.type} to`)),
-    in: b.in ?? null, out: b.out ?? null,
-  })),
+  beats: editTruthBeats,
 }, null, 2));
+// I-25: section boundaries and per-section invalidation hashes (ISSUES D3). Additive and written
+// AFTER edit_truth.json, from the same already-resolved arrays that file dumps (editTruthTakes,
+// editTruthBeats, words) rather than a second pass over spec - so this can never disagree with
+// edit_truth.json about where a take or beat actually landed. index.html is untouched by this
+// block: a single-source build's index.html/edit_truth.json/caption_layout.json stay
+// byte-identical to before this existed (nothing above this line changed).
+//
+// NOT done, and said plainly rather than implied: this writes the MANIFEST a per-section render
+// would consume - it does not itself split index.html into per-section composition files, invoke
+// `hyperframes render -c <section>.html` per section, render the once-only audio composition, or
+// mux/concat the results. See the I-25 commit message and ENGINE.md for what that remaining work
+// is and why it did not fit this change (every beat builder in this file and in lib/motion.mjs
+// bakes an ABSOLUTE edit-time into its GSAP calls; a section-relative composition needs each of
+// them to accept a time origin, which is the real remaining surface, not a detail).
+{
+  const sections = computeSections(TOTAL, takes, { beatSpans, pushes: pushesEdit, joins: takeJoins });
+  const manifest = buildSectionManifest(sections, { takes: editTruthTakes, beats: editTruthBeats, words });
+  fs.writeFileSync(path.join(proj, "build", "sections.json"), JSON.stringify({
+    total: TOTAL, fps: FPS,
+    // Settings that invalidate every section at once, kept separate from each section's own hash
+    // so a manifest diff can tell "one caption changed" apart from "the whole reel's look
+    // changed" - see lib/sections.mjs's invalidation note.
+    globalHash: globalHash({ style: rawSpec.style ?? null, format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE }),
+    sections: manifest,
+  }, null, 2));
+  console.log(`sections: ${sections.length} (${sections.map((s) => `${s.start}-${s.end}`).join(", ")})`);
+}
 {
   const modes = {};
   for (const b of placer.log) modes[b.mode] = (modes[b.mode] || 0) + 1;
