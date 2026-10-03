@@ -25,6 +25,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard } from "./lib/motion.mjs";
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
+import { wordOwners } from "./lib/words.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = path.join(SKILL, "library");
@@ -191,12 +192,35 @@ const words = [];
 console.log("\n edit-start   orig a  ->  orig b   dur   text");
 // each word belongs to ONE take: the one it overlaps most (whisper stretches
 // words over pauses, so a boundary word can touch two neighbouring takes)
-const ov = (w, k) => Math.min(w.end, k.b) - Math.max(w.start, k.a);
-const owner = allWords.map((w) => {
-  let best = -1, bo = 0;
-  takes.forEach((k, i) => { const o = ov(w, k); if (o > bo) { bo = o; best = i; } });
-  return bo >= Math.min(0.1, 0.5 * (w.end - w.start)) ? best : -1;
-});
+// I-16: `spec.words` is ONE transcript, and it describes ONE recording - spec.source, the file
+// prep.sh and transcribe.py were pointed at. Word times in it are therefore times in THAT
+// recording, so only takes cut from it can own a word.
+//
+// Without this filter the candidate set was every take regardless of src, and a word was handed to
+// whichever take overlapped it most in bare numbers. On a multi-source reel that silently steals
+// captions across a file boundary: measured on a 2-source build where take 1 (6.0-10.0 of a
+// second recording with NO transcript at all) was given "Second take starts here after a gap",
+// words spoken in the FIRST recording, and rendered them over the second recording's footage.
+// Nothing warned. It reached index.html, and `caption_layout.json` - the A1 gate's caption oracle
+// - is written from this same ownership, so the oracle inherited the error and the gate scored the
+// stolen captions as correct. An earlier 2-source build looked clean only because its take landed
+// in a dead zone where the transcript happened to have no words (4.0-6.0).
+//
+// Single-source is unaffected by construction: every take's src defaults to spec.source, so the
+// candidate set is unchanged (verified by hashing f01-f06's index.html, edit_truth.json and
+// caption_layout.json before and after - all identical).
+//
+// Scope: this makes a foreign-source take own NO words, which is correct today because no second
+// transcript exists. Giving each source its own transcript is MULTIANGLE Gap 3, and that gap's
+// text covers only the ingest half - see ISSUES A30.
+// The rule itself lives in lib/words.mjs so it can be asserted without a build - see
+// lib/words.test.mjs, which carries the multi-source regression case.
+const WORDS_SRC = spec.source ?? SOURCES[0];
+const owner = wordOwners(allWords, takes, WORDS_SRC);
+if (SOURCES.length > 1) {
+  const foreign = takes.filter((k) => k.src !== WORDS_SRC).length;
+  warn.push(`${foreign} take(s) come from a source other than ${WORDS_SRC}, which is the only recording ${spec.words} transcribes - those takes carry no captions until MULTIANGLE Gap 3 gives each source its own transcript`);
+}
 for (const [ti, k] of takes.entries()) {
   const ws = allWords.filter((w, wi) => owner[wi] === ti);
   if (!ws.length) { warn.push(`take ${k.a}-${k.b} owns no words (a breath or a tail); fine for autocut takes`); continue; }
