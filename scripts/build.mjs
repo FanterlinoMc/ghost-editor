@@ -663,6 +663,15 @@ const hiddenCaps = [];
 const behindHtml = [];
 const shownCaps = []; // scenes that keep captions (captions.onlyInScenes shows ONLY these)
 const faceFile = path.join(proj, spec.face || "build/face.json");
+// MULTIANGLE Gap 6, still open and more tractable than it looks. This median comes from the
+// PRIMARY source's track and is used in two places with different constraints:
+//   - `#pip`'s CSS transform-origin (:1560) - one value baked into the stylesheet, so per-source
+//     would mean animating the origin, not just choosing a track.
+//   - `motionCtx.faceY`, whose only consumer is motion.mjs:508's pip clip-path centre - and that
+//     is inside a BEAT, which has a time. So t0 -> the take that owns it -> its src -> that
+//     source's median is all available, and a per-source value there needs no animation at all.
+// So on a multi-source reel a kinetic pip beat currently centres its circle on source 0's face
+// wherever it lands. Not fixed here, but it is the smaller half of what is left of Gap 6.
 const faceY = (() => {
   if (!fs.existsSync(faceFile)) return 700;
   const ys = JSON.parse(fs.readFileSync(faceFile, "utf8")).samples.filter((x) => x[1] != null).map((x) => (x[1] + x[2]) / 2).sort((a, b) => a - b);
