@@ -109,10 +109,25 @@ if (!FORMATS[FORMAT]) die(`unknown spec.format '${FORMAT}'; have: ${Object.keys(
 const { W, H } = FORMATS[FORMAT];
 
 // ---------- takes and time mapping ----------
+// I-16 / MULTIANGLE Gap 1: a take names the recording it comes from. `take.src` is OPTIONAL and
+// defaults to spec.source, so every reel.json written before this - and every fixture - means
+// exactly what it meant before, and a single-source build is byte-identical (verified against
+// f01-f06's index.html and edit_truth.json hashes, both before and after this change). Only a reel
+// that actually sets take.src on some take becomes multi-source.
+//
+// Scope, deliberately: this is Gaps 1 and 2 (schema + renderer). Gap 3 - prep.sh / transcribe.py /
+// face_track.py writing per-source outputs - is NOT in this change; a multi-source project today
+// needs its assets/*.mp4 placed by hand. Recorded in NEXT.md so it does not expand silently.
 const takes = spec.takes.map((t, i) => {
   if (!(t.b > t.a)) die(`take ${i} has b <= a`);
-  return { ...t, frames: Math.round((t.b - t.a) * FPS) };
+  if (t.src != null && typeof t.src !== "string") die(`take ${i}: src must be a string path, got ${typeof t.src}`);
+  return { ...t, src: t.src ?? spec.source, frames: Math.round((t.b - t.a) * FPS) };
 });
+// Distinct sources in first-use order. SOURCES[0] stays spec.source for any reel that does not use
+// take.src, which is what keeps the single-source render path unchanged.
+const SOURCES = [...new Set(takes.map((t) => t.src))];
+if (SOURCES.some((s) => s == null)) die("a take has no src and spec.source is unset");
+const srcIndex = new Map(SOURCES.map((s, i) => [s, i]));
 // hold: seconds of frozen last frame AFTER a take (no voice). It makes air
 // for a meme on a tightly cut recording; the meme's `at` is the take's b.
 let acc = 0;
@@ -125,10 +140,32 @@ const OUTRO = spec.outro ?? 3;
 const TOTAL = +(SPEECH + OUTRO).toFixed(3);
 
 // takes in recording order, for the gap-snap below. Array order is PLAYBACK order and may differ.
-const bySource = [...takes].sort((x, y) => x.a - y.a);
+// I-16: partitioned PER SOURCE. A single global sort would interleave times from different
+// recordings, and the "< 1.2 s removed gap" test below would then compare two takes that are
+// adjacent in the merged ordering but come from different files - a gap that does not exist in
+// either recording. That returns a plausible wrong edit time rather than throwing, which is the
+// worse failure, so the partition is load-bearing and not a tidy-up. With one source this is the
+// same single sorted array as before.
+const bySourceOf = new Map(SOURCES.map((s) => [s, takes.filter((t) => t.src === s).sort((x, y) => x.a - y.a)]));
 const E = (t, what = "") => {
   if (t === "end") return TOTAL;
   if (typeof t === "string" && t.startsWith("outro+")) return SPEECH + parseFloat(t.slice(6));
+  // I-16: with more than one source a bare number is "t seconds into WHICH file?". Resolve it only
+  // when exactly one source can claim it; if two different recordings both contain that time, the
+  // reel has to say which, because guessing is how an edit silently cuts to the wrong camera.
+  // `{src, t}` is the explicit form. Single-source reels never reach the ambiguity branch.
+  if (typeof t === "object" && t !== null && t.src != null && typeof t.t === "number") {
+    const k = takes.find((q) => q.src === t.src && t.t >= q.a - 1e-6 && t.t <= q.b + 1e-6);
+    if (!k) throw new Error(`E({src:${t.src}, t:${t.t}})${what ? " for " + what : ""}: not inside any take of that source`);
+    return +(k.start + (t.t - k.a)).toFixed(3);
+  }
+  if (typeof t === "number" && SOURCES.length > 1) {
+    const hits = takes.filter((k) => t >= k.a - 1e-6 && t <= k.b + 1e-6);
+    const srcs = [...new Set(hits.map((k) => k.src))];
+    if (srcs.length > 1) {
+      throw new Error(`E(${t})${what ? " for " + what : ""}: ambiguous across ${srcs.length} sources (${srcs.join(", ")}) - this reel is multi-source, so write {"src": "<file>", "t": ${t}} instead of a bare time`);
+    }
+  }
   for (const k of takes) if (t >= k.a - 1e-6 && t <= k.b + 1e-6) return +(k.start + (t - k.a)).toFixed(3);
   // whisper word times are loose around pauses: a time inside a short removed
   // gap (< 1.2 s) snaps to the start of the next kept take.
@@ -137,7 +174,7 @@ const E = (t, what = "") => {
   // that does not exist. Measured: with takes [10.06-20.12, 0.4-4.88, 7.82-9.5, 20.24-22.36],
   // E(9.8) threw "not inside any take" where source order resolved it to 6.133. Sorting a copy is
   // a no-op when takes are already in source order, so plans that never reorder are untouched.
-  if (typeof t === "number") for (let i = 0; i + 1 < bySource.length; i++) if (t > bySource[i].b && t < bySource[i + 1].a && bySource[i + 1].a - bySource[i].b < 1.2) return +bySource[i + 1].start.toFixed(3);
+  if (typeof t === "number") for (const bySource of bySourceOf.values()) for (let i = 0; i + 1 < bySource.length; i++) if (t > bySource[i].b && t < bySource[i + 1].a && bySource[i + 1].a - bySource[i].b < 1.2) return +bySource[i + 1].start.toFixed(3);
   // "hold:<i>+s" = s seconds into the hold after take i
   if (typeof t === "string" && t.startsWith("hold:")) { const [i, off] = t.slice(5).split("+"); return +(takes[+i].holdStart + (parseFloat(off) || 0)).toFixed(3); }
   throw new Error(`E(${t})${what ? " for " + what : ""}: not inside any take`);
@@ -378,16 +415,33 @@ for (const p of zoom.pushes || []) {
 }
 
 // ---------- the speaker ----------
-const SRC = spec.source;
-if (!fs.existsSync(path.resolve(proj, SRC))) die(`source ${SRC} missing; run prep.sh first`);
-const srcDur = parseFloat(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path.resolve(proj, SRC)]).toString());
+// I-16 / Gap 2: SRC was one file wired through here nine times. It is now the FIRST source, kept
+// under the old name for the single-source paths that are genuinely about "the recording" as a
+// whole (the matte, motionCtx), while anything per-take reads k.src instead.
+const SRC = SOURCES[0];
+for (const s of SOURCES) {
+  if (!fs.existsSync(path.resolve(proj, s))) {
+    die(SOURCES.length > 1
+      ? `source ${s} missing (take.src names it; ${SOURCES.length} sources in this reel) - Gap 3 is not built, so per-source files are placed by hand for now`
+      : `source ${s} missing; run prep.sh first`);
+  }
+}
+const srcDurOf = new Map(SOURCES.map((s) => [s, parseFloat(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path.resolve(proj, s)]).toString())]));
+const srcDur = srcDurOf.get(SRC);
+// Every take must fit inside its OWN recording. With one source this is the check that already
+// existed implicitly via srcDur; with several it is the only thing standing between a typo in
+// take.src and a take that silently plays black.
+for (const [i, k] of takes.entries()) {
+  const d = srcDurOf.get(k.src);
+  if (k.b > d + 0.05) die(`take ${i} ends at ${k.b}s but ${k.src} is only ${d.toFixed(2)}s long`);
+}
 const stillAt = (t) => String(Math.max(0, Math.min(t, srcDur - 0.12)));
 const fadeLane = (d) => JSON.stringify({ version: 1, lanes: [{ target: "volume", points: [{ t: 0, v: 0 }, { t: r3(2 / FPS), v: 1 }, { t: r3(d - 3 / FPS), v: 1 }, { t: r3(d), v: 0 }] }] });
 const takeHtml = takes.map((k, i) => {
   let h = `
-      <video id="take-${i}" src="${SRC}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="0" muted playsinline></video>`;
+      <video id="take-${i}" src="${k.src}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="0" muted playsinline></video>`;
   if (k.holdFrames) {
-    execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(k.a + k.dur - 1 / FPS), "-i", path.resolve(proj, SRC), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, `hold-${i}.jpg`)]);
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(k.a + k.dur - 1 / FPS), "-i", path.resolve(proj, k.src), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, `hold-${i}.jpg`)]);
     h += `
       <img id="hold-${i}" class="fill" src="assets/hold-${i}.jpg" data-start="${r3(k.holdStart)}" data-duration="${r3(k.holdFrames / FPS)}" data-track-index="0" />`;
   }
@@ -427,8 +481,16 @@ const pushJoinTransition = (outSel, inSel, kind, T, outDur, inDur) => {
 };
 for (const { i, kind, T, outDur, inDur } of takeJoins) pushJoinTransition(`#take-${i - 1}`, `#take-${i}`, kind, T, outDur, inDur);
 const takeAudio = takes.map((k, i) => `
-  <audio id="take-${i}-audio" src="${SRC}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="${10 + (i % 2)}" data-automation='${fadeLane(k.dur)}'></audio>`).join("");
+  <audio id="take-${i}-audio" src="${k.src}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="${10 + (i % 2)}" data-automation='${fadeLane(k.dur)}'></audio>`).join("");
 let matteHtml = "";
+// I-16: the matte is deliberately NOT per-source yet. One talk-matte.webm is cut from SRC and then
+// every take indexes into it by its own k.a - so a take from a second recording would read the
+// FIRST recording's cut-out at that timestamp and show the wrong person, silently. Refusing is the
+// only honest option until there is a matte per source, which is MULTIANGLE Gap 6's territory
+// (per-source framing) and not in this change.
+if (spec.matte && SOURCES.length > 1) {
+  die(`spec.matte with ${SOURCES.length} sources is not supported: one matte is cut from ${SRC}, and every take indexes it by its own source time, so takes from the other recording(s) would show the wrong cut-out - drop spec.matte, or keep this reel single-source (MULTIANGLE Gap 6)`);
+}
 if (spec.matte) {
   const mp = path.join(A, "talk-matte.webm");
   if (!fs.existsSync(mp)) {
@@ -446,7 +508,7 @@ if (spec.matte) {
 }
 // the outro is a real still of the last frame, frozen under the end card
 const last = takes.at(-1);
-if (OUTRO > 0) execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(last.a + last.dur - 1 / FPS), "-i", path.resolve(proj, SRC), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, "outro.jpg")]);
+if (OUTRO > 0) execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(last.a + last.dur - 1 / FPS), "-i", path.resolve(proj, last.src), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, "outro.jpg")]);
 const outroHtml = OUTRO > 0 ? `
       <img id="outro-still" class="fill" src="assets/outro.jpg" data-start="${r3(SPEECH)}" data-duration="${r3(OUTRO)}" data-track-index="0" />` : "";
 
@@ -1544,7 +1606,14 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
   // I-17: a take's `transition` names the look its join FROM the previous take carries (blur or
   // whip) instead of a hard cut; omitted entirely when unset, so a reel with no take transitions
   // still writes byte-identical edit_truth.json to before this field existed.
-  takes: takes.map((t) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(t.transition ? { transition: t.transition } : {}) })),
+  // I-16: `src` is emitted only on a genuinely multi-source reel, the same way `transition` is -
+  // so a single-source dump stays byte-identical to before this change, which is what keeps the A1
+  // baseline valid (verified by hashing f01-f06's edit_truth.json either side). It is the first
+  // half of MULTIANGLE Gap 9: expected.py cannot say "at edit 6.2 s we should be looking at camera
+  // B" while the oracle does not record which camera a take came from. Scoring an angle change
+  // still needs A2/A5 to work (NEXT.md item 6); this just stops the oracle being the blocker.
+  ...(SOURCES.length > 1 ? { sources: SOURCES } : {}),
+  takes: takes.map((t) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(SOURCES.length > 1 ? { src: t.src, srcIndex: srcIndex.get(t.src) } : {}), ...(t.transition ? { transition: t.transition } : {}) })),
   snaps: snaps.map(([t, z]) => ({ t: r3(t), scale: z })),
   pushes: pushesEdit.map((p) => ({ start: r3(p.a), end: r3(p.b), z: p.z, up: p.up, down: p.down })),
   // `to` matters as much as `at`: a scene animates in at `at` and out near `to`, so both are
