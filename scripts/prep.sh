@@ -139,13 +139,23 @@ else
   planOffY=$(awk -v y="$yoff" 'BEGIN{printf "%d", -y}')
 fi
 
-# Crop plan for build.mjs / safezone.mjs (I-19's build.mjs half, not wired up on the ingest side):
-# face.json's original-frame pixel coordinates map onto THIS format's canvas as
-# canvasCoord = rawCoord * scale + offset, for both axes alike, in crop mode (offset <= 0, a
-# cropped-away margin) and pad mode (offset >= 0, a letterboxed-in margin) both.
+# Crop plan for build.mjs / safezone.mjs (I-19; build.mjs consumes this as of the commit that
+# added srcW/srcH below). face.json's original-frame pixel coordinates map onto THIS format's
+# canvas as canvasCoord = rawCoord * scale + offset, for both axes alike, in crop mode
+# (offset <= 0, a cropped-away margin) and pad mode (offset >= 0, a letterboxed-in margin) both.
+#
+# srcW/srcH are the dimensions the scale and offsets were computed FROM ($w/$h above, after the
+# rotation swap) - the pixel space a coordinate must already be in for this plan to map it
+# correctly. They are recorded because the consumer cannot otherwise tell whether it is applying
+# the plan to the right space: face.json holds whatever face_track.py measured, and that is the
+# same space as this plan's input only when prep.sh was fed the same file face_track.py ran on.
+# Prep the 1:1 from an original 4K recording while face.json was tracked on the 1080x1920 output,
+# and every mapped coordinate is wrong by the 9:16 scale factor, with nothing to notice it. With
+# these two fields build.mjs can refuse the plan instead of placing captions against the wrong
+# pixel space - the same failure class its own face.w/h canvas check already guards.
 cropfile="$proj/build/crop-$fmtdash.json"
-printf '{"format":"%s","W":%s,"H":%s,"mode":"%s","scale":%s,"offsetX":%s,"offsetY":%s}\n' \
-  "$fmt" "$tw" "$th" "$mode" "$planScale" "$planOffX" "$planOffY" > "$cropfile"
+printf '{"format":"%s","W":%s,"H":%s,"srcW":%s,"srcH":%s,"mode":"%s","scale":%s,"offsetX":%s,"offsetY":%s}\n' \
+  "$fmt" "$tw" "$th" "$w" "$h" "$mode" "$planScale" "$planOffX" "$planOffY" > "$cropfile"
 echo "-> $cropfile (mode=$mode, for safezone.mjs's cropScale/cropOffsetX/cropOffsetY)"
 
 echo "== measuring voice loudness"

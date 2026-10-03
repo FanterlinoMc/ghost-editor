@@ -467,12 +467,46 @@ if (!face) warn.push(`no ${path.relative(proj, facePath)}: captions sit at a fix
 // as a stale format assumption, just one level up, so this dies loudly rather than
 // placing captions against the wrong pixel space. Older face.json files predating
 // this field have no w/h to check, so they fall back to a warning, not a die.
+// I-19, the engine half: a mismatch is no longer automatically fatal. prep.sh's non-9:16 formats
+// do not re-run face tracking - they crop (or letterbox) the very frame face_track.py already
+// measured - and they write build/crop-<fmt>.json describing exactly that transform. When such a
+// plan is present and provably describes THIS build, the mismatch is expected and the plan is the
+// answer to it: every face coordinate maps as coord * scale + offset, which is what safezone.mjs's
+// makePlacer cropScale/cropOffsetX/cropOffsetY do (A15 added them for this).
+//
+// "Provably describes this build" is two separate equalities, and both matter:
+//   - plan.W/H === this canvas    - the plan is for the format we are building, not another one;
+//   - plan.srcW/srcH === face.w/h - the plan's INPUT space is the space face.json is already in.
+// The second is the one that would otherwise rot silently: prep.sh computes scale/offsets from
+// whatever file it was handed, so a 1:1 prepped from an original 4K recording carries a plan whose
+// numbers are right for 4K coordinates and wrong for the 1080x1920 ones face.json holds. Without
+// the check, captions would be placed against the wrong pixel space - the precise thing the die()
+// here exists to prevent - while looking perfectly fine in the logs.
+const cropPath = path.join(proj, "build", `crop-${FORMAT.replace(":", "x")}.json`);
+const cropPlan = fs.existsSync(cropPath) ? JSON.parse(fs.readFileSync(cropPath, "utf8")) : null;
+let cropScale = 1, cropOffsetX = 0, cropOffsetY = 0;
 if (face && face.w != null && face.h != null) {
-  if (face.w !== W || face.h !== H) die(`${path.relative(proj, facePath)} is ${face.w}x${face.h} but this build is ${W}x${H} (spec.format '${FORMAT}') - re-run face_track.py against the matching source`);
+  if (face.w !== W || face.h !== H) {
+    const why = !cropPlan ? `no ${path.relative(proj, cropPath)} to map it through (run scripts/prep.sh for this format, which writes one)`
+      : cropPlan.W !== W || cropPlan.H !== H ? `${path.relative(proj, cropPath)} is a plan for ${cropPlan.W}x${cropPlan.H}, not this build's ${W}x${H}`
+      : cropPlan.srcW == null || cropPlan.srcH == null ? `${path.relative(proj, cropPath)} predates srcW/srcH, so the space it maps FROM cannot be verified - re-run scripts/prep.sh for this format`
+      : cropPlan.srcW !== face.w || cropPlan.srcH !== face.h ? `${path.relative(proj, cropPath)} maps from ${cropPlan.srcW}x${cropPlan.srcH} but ${path.relative(proj, facePath)} is ${face.w}x${face.h} - the plan was computed from a different source than the face was tracked on`
+      : null;
+    if (why) die(`${path.relative(proj, facePath)} is ${face.w}x${face.h} but this build is ${W}x${H} (spec.format '${FORMAT}'): ${why}`);
+    ({ scale: cropScale, offsetX: cropOffsetX, offsetY: cropOffsetY } = cropPlan);
+    if (!(cropScale > 0)) die(`${path.relative(proj, cropPath)} has a non-positive scale ${cropScale}`);
+  }
+  // face.w/h === W/H is the 9:16 case: face_track.py ran on this very canvas, so face.json is
+  // ALREADY in canvas space. prep.sh writes crop-9x16.json too, mapping the original recording
+  // onto that canvas - applying it here would re-transform coordinates that are already correct.
+  // Hence the crop plan is consulted only inside the mismatch branch above, never as a default.
 } else if (face) {
   warn.push(`${path.relative(proj, facePath)} has no w/h; cannot verify it matches this build's ${W}x${H} canvas - re-run face_track.py to add it`);
 }
-const placer = makePlacer({ face, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W });
+if (cropScale !== 1 || cropOffsetX !== 0 || cropOffsetY !== 0) {
+  console.log(`face.json ${face.w}x${face.h} -> ${W}x${H} via ${path.relative(proj, cropPath)} (mode=${cropPlan.mode}, scale ${cropScale}, offset ${cropOffsetX},${cropOffsetY})`);
+}
+const placer = makePlacer({ face, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W, cropScale, cropOffsetX, cropOffsetY });
 
 // ---------- overlays ----------
 const CARD = { x: 60, y: spec.layout?.cardY ?? 990, w: 870 };
