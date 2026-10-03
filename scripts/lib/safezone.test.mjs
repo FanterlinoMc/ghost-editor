@@ -139,5 +139,49 @@ function spanFor({ W, H, platform, cropScale = 1, cropOffsetX = 0, cropOffsetY =
         `got ${JSON.stringify(q.log.map((l) => l.face && l.face.top))}`);
 }
 
+// ---- MULTIANGLE Gap 6, the crop half: each source maps through its OWN crop plan -----------------
+//
+// Before this, build.mjs read ONE crop-<fmt>.json (the primary source's) and handed its
+// scale/offsets to makePlacer as a single global cropScale/cropOffsetX/cropOffsetY, applied to
+// every take regardless of source. Invisible on every fixture and every reel to date because 9:16
+// is the identity transform. Two sources of DIFFERENT native dimensions genuinely need different
+// plans - this pins that each take's crop now comes from `crops[take.src]`, not from source 0's.
+{
+  const takes = [
+    { start: 0, dur: 2, holdStart: 2, holdFrames: 0, a: 0, b: 2, src: "assets/talk.mp4" },
+    { start: 2, dur: 2, holdStart: 4, holdFrames: 0, a: 0, b: 2, src: "assets/talk-1.mp4" },
+  ];
+  // same face geometry on both sources, so any DIFFERENCE in reported screen position can only
+  // come from the crop plan, not from the face track itself.
+  const face = { w: 1080, h: 1920, samples: [[0, RAW.top, RAW.bottom, RAW.left, RAW.right, RAW.eyes, RAW.mouth], [2, RAW.top, RAW.bottom, RAW.left, RAW.right, RAW.eyes, RAW.mouth]] };
+  const faces = { "assets/talk.mp4": face, "assets/talk-1.mp4": face };
+  // source 0's plan: pure vertical shift (the real 1:1 plan from test 2 above).
+  // source 1's plan: a DIFFERENT shift - a second camera's own native dimensions would plausibly
+  // need a different offset, which is the whole point of this being per-source.
+  const crops = {
+    "assets/talk.mp4": { scale: 1, offsetX: 0, offsetY: -187 },
+    "assets/talk-1.mp4": { scale: 1, offsetX: 0, offsetY: -420 },
+  };
+  const p = makePlacer({ face, faces, takes, zoom: {}, TOTAL: 4, H: 1080, W: 1080, crops });
+  const a = p.span(0.4, 0.6);   // take 0 -> source 0's plan
+  const b = p.span(2.4, 2.6);   // take 1 -> source 1's plan
+  check("Gap 6 crop: source 0's take maps through source 0's OWN plan",
+        near(a.top, RAW.top - 187), `top ${a.top}, want ${RAW.top - 187}`);
+  check("Gap 6 crop: source 1's take maps through source 1's OWN plan, not source 0's",
+        near(b.top, RAW.top - 420), `top ${b.top}, want ${RAW.top - 420}`);
+  check("Gap 6 crop: the two sources therefore land at different screen heights",
+        !near(a.top, b.top, 1), `both landed at ~${a.top}`);
+
+  // Pin the OLD behaviour: with no `crops` map, every source falls back to the single
+  // cropScale/cropOffsetX/cropOffsetY - so a second source gets mapped through the FIRST source's
+  // plan, which is the bug this half of Gap 6 fixes. Asserted so the cases above cannot pass for
+  // an unrelated reason (e.g. `crops` being silently ignored in both directions).
+  const q = makePlacer({ face, faces, takes, zoom: {}, TOTAL: 4, H: 1080, W: 1080, cropScale: 1, cropOffsetX: 0, cropOffsetY: -187 });
+  const aOld = q.span(0.4, 0.6), bOld = q.span(2.4, 2.6);
+  check("Gap 6 crop, old behaviour: with no per-source plans, BOTH sources use the one global plan",
+        near(aOld.top, RAW.top - 187) && near(bOld.top, RAW.top - 187),
+        `got ${aOld.top} and ${bOld.top}, both should be ${RAW.top - 187}`);
+}
+
 console.log(failures ? `\n${failures} failure(s)` : "\ncrop mapping and per-source faces hold");
 process.exit(failures ? 1 : 0);

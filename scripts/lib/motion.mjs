@@ -504,8 +504,13 @@ export function buildScene(b, id, t0, t1, ctx) {
     tl.fromTo(P, { u: 0 }, { u: 1, duration: ${r3(t1 - t0)}, ease: "none", onUpdate: paint, immediateRender: false }, ${t0}); })();`);
     for (const k of toks.slice(1)) if (k.em) addSfx(k.at, "whoosh", "kinetic keyword", { db: -6 });
     if (b.pip) {
-      // the speaker plate shrinks into a round window, above the type
-      const fx = 540, fy = ctx.faceY ?? 700, R = 560, sc = 0.34, tx = b.pipX ?? 820, ty = b.pipY ?? 1330;
+      // the speaker plate shrinks into a round window, above the type. MULTIANGLE Gap 6: this
+      // beat has a time (t0), so the take that owns it (and therefore its source) is knowable -
+      // `faceYAt(t0)` centres the circle on THAT source's own face median, falling back to the
+      // primary's (`ctx.faceY`) for a single-source reel or a source with no track of its own.
+      // Unlike `#pip`'s baked CSS transform-origin, this value is read fresh per beat, so it needs
+      // no animation to vary by source.
+      const fx = 540, fy = ctx.faceYAt ? ctx.faceYAt(t0) : (ctx.faceY ?? 700), R = 560, sc = 0.34, tx = b.pipX ?? 820, ty = b.pipY ?? 1330;
       tl.push(`tl.set("#pip", { zIndex: 7 }, ${t0});`);
       tl.push(`ft("#pip", { x: 0, y: 0, scale: 1, clipPath: "circle(2400px at ${fx}px ${fy}px)" }, { x: ${tx - fx}, y: ${ty - fy}, scale: ${sc}, clipPath: "circle(${R}px at ${fx}px ${fy}px)", duration: 0.5, ease: "power3.inOut" }, ${t0});`);
       tl.push(`tl.to("#pip", { x: 0, y: 0, scale: 1, clipPath: "circle(2400px at ${fx}px ${fy}px)", duration: 0.45, ease: "power3.inOut" }, ${r3(t1 - 0.45)});`);

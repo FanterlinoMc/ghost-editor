@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard } from "./lib/motion.mjs";
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { wordOwners } from "./lib/words.mjs";
-import { wordsPathFor, facePathFor } from "./lib/sources.mjs";
+import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = path.join(SKILL, "library");
@@ -621,31 +621,53 @@ if (!face) warn.push(`no ${path.relative(proj, facePath)}: captions sit at a fix
 // numbers are right for 4K coordinates and wrong for the 1080x1920 ones face.json holds. Without
 // the check, captions would be placed against the wrong pixel space - the precise thing the die()
 // here exists to prevent - while looking perfectly fine in the logs.
-const cropPath = path.join(proj, "build", `crop-${FORMAT.replace(":", "x")}.json`);
-const cropPlan = fs.existsSync(cropPath) ? JSON.parse(fs.readFileSync(cropPath, "utf8")) : null;
-let cropScale = 1, cropOffsetX = 0, cropOffsetY = 0;
-if (face && face.w != null && face.h != null) {
-  if (face.w !== W || face.h !== H) {
-    const why = !cropPlan ? `no ${path.relative(proj, cropPath)} to map it through (run scripts/prep.sh for this format, which writes one)`
-      : cropPlan.W !== W || cropPlan.H !== H ? `${path.relative(proj, cropPath)} is a plan for ${cropPlan.W}x${cropPlan.H}, not this build's ${W}x${H}`
-      : cropPlan.srcW == null || cropPlan.srcH == null ? `${path.relative(proj, cropPath)} predates srcW/srcH, so the space it maps FROM cannot be verified - re-run scripts/prep.sh for this format`
-      : cropPlan.srcW !== face.w || cropPlan.srcH !== face.h ? `${path.relative(proj, cropPath)} maps from ${cropPlan.srcW}x${cropPlan.srcH} but ${path.relative(proj, facePath)} is ${face.w}x${face.h} - the plan was computed from a different source than the face was tracked on`
-      : null;
-    if (why) die(`${path.relative(proj, facePath)} is ${face.w}x${face.h} but this build is ${W}x${H} (spec.format '${FORMAT}'): ${why}`);
-    ({ scale: cropScale, offsetX: cropOffsetX, offsetY: cropOffsetY } = cropPlan);
-    if (!(cropScale > 0)) die(`${path.relative(proj, cropPath)} has a non-positive scale ${cropScale}`);
+//
+// MULTIANGLE Gap 6, the crop half: this used to run ONCE, for the primary source only, and the
+// resulting single (cropScale, cropOffsetX, cropOffsetY) was handed to makePlacer for every
+// source. prep.sh now writes a crop plan per (source, format) pair (I-16 Gap 3 ingest half,
+// `980682c`) - each sidecar carries its own `srcW`/`srcH` because two cameras genuinely have
+// different native dimensions - so this runs per source and builds a `crops` map keyed by
+// `take.src`, which makePlacer consults per take. 9:16 stays the identity transform either way
+// (face.w/h === W/H short-circuits below), which is why this was invisible on every fixture and
+// every reel built so far.
+const crops = {};
+for (const sname of SOURCES) {
+  const f = faces[sname];
+  if (!f) continue; // no track at all for this source; already warned above
+  if (f.w == null || f.h == null) {
+    if (sname === PRIMARY_SRC) warn.push(`${path.relative(proj, facePath)} has no w/h; cannot verify it matches this build's ${W}x${H} canvas - re-run face_track.py to add it`);
+    continue;
   }
-  // face.w/h === W/H is the 9:16 case: face_track.py ran on this very canvas, so face.json is
-  // ALREADY in canvas space. prep.sh writes crop-9x16.json too, mapping the original recording
-  // onto that canvas - applying it here would re-transform coordinates that are already correct.
-  // Hence the crop plan is consulted only inside the mismatch branch above, never as a default.
-} else if (face) {
-  warn.push(`${path.relative(proj, facePath)} has no w/h; cannot verify it matches this build's ${W}x${H} canvas - re-run face_track.py to add it`);
+  if (f.w === W && f.h === H) continue; // already in canvas space (the 9:16 case) - no plan needed
+  // The primary source's path is NOT `cropPathFor(sname, FORMAT)` even when that would compute the
+  // same string - it is pinned to the unsuffixed name regardless of how spec.source happens to be
+  // spelled, mirroring the exact special case the face/words loops above already use
+  // (`sname === PRIMARY_SRC ? spec.face : facePathFor(sname)`, `... ? spec.words : wordsPathFor(s)`).
+  // All three exist for the same reason: the primary recording is "index 0" by ROLE (it is the one
+  // prep.sh is run on without an index argument), not by whatever string spec.source contains, and
+  // a reel.json that happens to name its only/primary source "talk-1.mp4" must still find the files
+  // prep.sh actually wrote for an unindexed run. There is no `spec.crop` field to make this
+  // explicit the way spec.face/spec.words do, so the pin here is unconditional rather than a
+  // fallback - unlike face/words, nothing else could ever override a primary source's crop path.
+  const relCrop = sname === PRIMARY_SRC ? `build/crop-${FORMAT.replace(":", "x")}.json` : cropPathFor(sname, FORMAT);
+  const cropPathN = path.join(proj, relCrop);
+  const cropPlanN = fs.existsSync(cropPathN) ? JSON.parse(fs.readFileSync(cropPathN, "utf8")) : null;
+  const subject = sname === PRIMARY_SRC ? path.relative(proj, facePath) : `source ${sname}'s face track`;
+  const why = !cropPlanN ? `no ${relCrop} to map it through (run scripts/prep.sh for this format and source, which writes one)`
+    : cropPlanN.W !== W || cropPlanN.H !== H ? `${relCrop} is a plan for ${cropPlanN.W}x${cropPlanN.H}, not this build's ${W}x${H}`
+    : cropPlanN.srcW == null || cropPlanN.srcH == null ? `${relCrop} predates srcW/srcH, so the space it maps FROM cannot be verified - re-run scripts/prep.sh for this format`
+    : cropPlanN.srcW !== f.w || cropPlanN.srcH !== f.h ? `${relCrop} maps from ${cropPlanN.srcW}x${cropPlanN.srcH} but ${subject} is ${f.w}x${f.h} - the plan was computed from a different recording than the face was tracked on`
+    : null;
+  if (why) die(`${subject} is ${f.w}x${f.h} but this build is ${W}x${H} (spec.format '${FORMAT}'): ${why}`);
+  if (!(cropPlanN.scale > 0)) die(`${relCrop} has a non-positive scale ${cropPlanN.scale}`);
+  crops[sname] = { scale: cropPlanN.scale, offsetX: cropPlanN.offsetX, offsetY: cropPlanN.offsetY };
+  console.log(`${subject} ${f.w}x${f.h} -> ${W}x${H} via ${relCrop} (mode=${cropPlanN.mode}, scale ${cropPlanN.scale}, offset ${cropPlanN.offsetX},${cropPlanN.offsetY})`);
 }
-if (cropScale !== 1 || cropOffsetX !== 0 || cropOffsetY !== 0) {
-  console.log(`face.json ${face.w}x${face.h} -> ${W}x${H} via ${path.relative(proj, cropPath)} (mode=${cropPlan.mode}, scale ${cropScale}, offset ${cropOffsetX},${cropOffsetY})`);
-}
-const placer = makePlacer({ face, faces, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W, cropScale, cropOffsetX, cropOffsetY });
+// Backward-compat scalar: the primary source's own plan, or identity - exactly what the single
+// global value was before this loop existed. makePlacer still takes these as its no-`crops`
+// default, and a single-source build never has more than this one entry anyway.
+const { scale: cropScale = 1, offsetX: cropOffsetX = 0, offsetY: cropOffsetY = 0 } = crops[PRIMARY_SRC] || {};
+const placer = makePlacer({ face, faces, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W, cropScale, cropOffsetX, cropOffsetY, crops, fps: FPS });
 
 // ---------- overlays ----------
 const CARD = { x: 60, y: spec.layout?.cardY ?? 990, w: 870 };
@@ -663,21 +685,21 @@ const hiddenCaps = [];
 const behindHtml = [];
 const shownCaps = []; // scenes that keep captions (captions.onlyInScenes shows ONLY these)
 const faceFile = path.join(proj, spec.face || "build/face.json");
-// MULTIANGLE Gap 6, still open and more tractable than it looks. This median comes from the
-// PRIMARY source's track and is used in two places with different constraints:
+// MULTIANGLE Gap 6. This median comes from the PRIMARY source's track and has two consumers with
+// different constraints:
 //   - `#pip`'s CSS transform-origin (:1560) - one value baked into the stylesheet, so per-source
-//     would mean animating the origin, not just choosing a track.
+//     would mean animating the origin, not just choosing a track. LEFT global; noted, not fixed.
 //   - `motionCtx.faceY`, whose only consumer is motion.mjs:508's pip clip-path centre - and that
 //     is inside a BEAT, which has a time. So t0 -> the take that owns it -> its src -> that
-//     source's median is all available, and a per-source value there needs no animation at all.
-// So on a multi-source reel a kinetic pip beat currently centres its circle on source 0's face
-// wherever it lands. Not fixed here, but it is the smaller half of what is left of Gap 6.
-const faceY = (() => {
-  if (!fs.existsSync(faceFile)) return 700;
-  const ys = JSON.parse(fs.readFileSync(faceFile, "utf8")).samples.filter((x) => x[1] != null).map((x) => (x[1] + x[2]) / 2).sort((a, b) => a - b);
-  return ys.length ? Math.round(ys[Math.floor(ys.length / 2)]) : 700;
-})();
-const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
+//     source's median is all available, and needs no animation at all. FIXED below: `faceYAt(t)`
+//     resolves the take owning edit-time `t` (`locateTake`, the same ownership logic `locate()` in
+//     safezone.mjs and the take/hold loop above both already use) and returns THAT source's own
+//     median, falling back to the primary's (i.e. this `faceY`) for a source with no track of its
+//     own. `#pip`'s baked origin still uses `faceY` directly, unchanged.
+const faceY = medianFaceY(fs.existsSync(faceFile) ? JSON.parse(fs.readFileSync(faceFile, "utf8")) : null, 700);
+const faceYBySrc = new Map(SOURCES.map((s) => [s, medianFaceY(faces[s], faceY)]));
+const faceYAt = (t) => faceYBySrc.get(locateTake(takes, t, FPS)?.src) ?? faceY;
+const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
 // a scene that hands over to an expand/wipe scene stays underneath until the
 // incoming panel has covered it

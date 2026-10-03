@@ -49,7 +49,21 @@ export const FORMATS = {
   "16:9": { W: 1920, H: 1080 },
 };
 
-export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = "instagram", ideal = 1180, gap = 36, H = 1920, W = 1080, cropScale = 1, cropOffsetX = 0, cropOffsetY = 0 }) {
+/**
+ * Which take owns an EDIT-timeline moment `t` - the main span first, then the hold (frozen last
+ * frame), then falling back to the last take. The ownership rule `build.mjs`'s own take/hold loop
+ * and this file's placer both need, so it lives here (the leaf module with no imports of its own)
+ * and `sources.mjs` re-exports it rather than holding a second copy - this file cannot import FROM
+ * sources.mjs without a cycle, since sources.mjs already imports FORMATS from here. `fps` defaults
+ * to 30 to match this function's own prior hardcoded value; pass the real one when it might differ.
+ */
+export function locateTake(takes, t, fps = 30) {
+  for (const k of takes) if (t >= k.start && t < k.start + k.dur) return k;
+  for (const k of takes) if (t >= k.holdStart && t < k.holdStart + k.holdFrames / fps) return k;
+  return takes.at(-1);
+}
+
+export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = "instagram", ideal = 1180, gap = 36, H = 1920, W = 1080, cropScale = 1, cropOffsetX = 0, cropOffsetY = 0, crops = null, fps = 30 }) {
   // A15 / I-19: face.json's samples are always in the pixel space of the untouched (9:16)
   // frame that face_track.py actually ran on -- prep.sh's 4:5/1:1/16:9 crops don't re-run face
   // tracking, they just crop (and sometimes pad) that same frame differently per format. Map a
@@ -87,14 +101,17 @@ export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = 
   };
   // MULTIANGLE Gap 6: which take owns this edit moment, and therefore WHICH RECORDING. Was
   // `toOrig()` returning only the mapped time; the take was already in hand and thrown away, and
-  // with it the only way to know whose face is on screen. Branch order is unchanged - the main
-  // span of every take is tried before any hold span, which is not the same as checking both per
-  // take - so single-source mapping is identical.
+  // with it the only way to know whose face is on screen. Ownership itself is `locateTake` (above
+  // in this file) rather than a second copy of the same three branches - `orig` just needs one
+  // more fact locateTake doesn't return: whether `t` landed in the take's MAIN span (map through
+  // `a`/`start`) or its hold / the fallback-to-last-take case (hold on `b`). Re-checking that one
+  // condition on the take locateTake already found reproduces the original three-branch result
+  // exactly: a main-span hit recomputes the same way; a hold hit or the fallback both want `k.b`,
+  // which is what the condition's false branch gives either way.
   const locate = (t) => {
-    for (const k of takes) if (t >= k.start && t < k.start + k.dur) return { k, orig: k.a + (t - k.start) };
-    for (const k of takes) if (t >= k.holdStart && t < k.holdStart + k.holdFrames / 30) return { k, orig: k.b };
-    const last = takes.at(-1);
-    return { k: last, orig: last.b };
+    const k = locateTake(takes, t, fps);
+    const orig = (t >= k.start && t < k.start + k.dur) ? k.a + (t - k.start) : k.b;
+    return { k, orig };
   };
   const toOrig = (t) => locate(t).orig;
   // A face track per source. `faces` is keyed by `take.src`; `face` remains the single-source
@@ -117,16 +134,24 @@ export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = 
     }
     return bd < 1.5 ? best : null;
   };
+  // MULTIANGLE Gap 6: a crop/pad plan per source, same fallback shape as `faces`/`face` above.
+  // `crops` is keyed by `take.src`; the single `cropScale`/`cropOffsetX`/`cropOffsetY` remain the
+  // default for a source with no plan of its own, which is also what every existing caller (none
+  // of which passes `crops`) gets - so a single-source or 9:16 build is unaffected. Before this,
+  // ALL sources were mapped through whichever plan `cropScale` etc. held, i.e. the first source's
+  // - invisible on 9:16 (identity) and on every fixture, which is exactly why it needed care.
+  const cropFor = (src) => (crops && src != null && crops[src]) || { scale: cropScale, offsetX: cropOffsetX, offsetY: cropOffsetY };
   const screenFace = (t) => {
     const { k, orig } = locate(t);
     const f = faceAt(orig, k.src);
     if (!f) return null;
     const s = camScale(t);
+    const { scale: cs, offsetX: cox, offsetY: coy } = cropFor(k.src);
     // crop/pad mapping first (raw face.json pixel -> this format's canvas), then the existing
     // camera zoom transform around (ox, oy) on top, exactly as before when cropScale is 1 and
     // both offsets are 0.
-    const Y = (y) => oy + s * (y * cropScale + cropOffsetY - oy);
-    const X = (x) => ox + s * (x * cropScale + cropOffsetX - ox);
+    const Y = (y) => oy + s * (y * cs + coy - oy);
+    const X = (x) => ox + s * (x * cs + cox - ox);
     return { top: Y(f[1]), bottom: Y(f[2]), left: X(f[3]), right: X(f[4]), eyes: Y(f[5] ?? f[1]), mouth: Y(f[6] ?? f[2]) };
   };
   const span = (t0, t1) => {

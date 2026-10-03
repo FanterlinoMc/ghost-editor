@@ -16,7 +16,14 @@
 // Words and face take a SOURCE index only, never a format token: word times and face coordinates
 // are in source space, and I-19 already maps one `face.json` through `crop-<fmt>.json` rather than
 // re-tracking per format. Only `assets/talk*` carries both dimensions.
-import { FORMATS } from "./safezone.mjs";
+import { FORMATS, locateTake } from "./safezone.mjs";
+// Re-exported, not reimplemented: `locateTake` has to live in safezone.mjs (this module already
+// imports FORMATS from there, and safezone.mjs's own placer needs take ownership too - importing
+// it the other way round would be a cycle evaluated before either module finishes initialising,
+// the exact "Cannot access 'faces' before initialization" class of failure the Gap 6 face-half
+// repin already hit once). Every caller - build.mjs, safezone.mjs's placer, and this module's own
+// re-export - therefore shares the one implementation.
+export { locateTake };
 
 // prep.sh spells the format with a dash, not a colon ("16:9" -> "16x9"), and derives it from this
 // same map - so the two stay in step rather than holding separate copies of the four tokens.
@@ -49,4 +56,29 @@ export function wordsPathFor(src) {
 export function facePathFor(src) {
   const i = sourceIndex(src);
   return i === 0 ? "build/face.json" : `build/face-${i}.json`;
+}
+
+/**
+ * Conventional crop-plan path for a source AND an output format (MULTIANGLE Gap 6). Unlike words
+ * and face, which are source-space and format-independent, the crop plan maps one source's face
+ * geometry into one format's canvas - prep.sh writes a `build/crop-<fmt>.json` per (source, format)
+ * pair, mirroring the same before-the-format-token index convention: `crop-16x9.json` for source 0,
+ * `crop-1-16x9.json` for source 1.
+ */
+export function cropPathFor(src, fmt) {
+  const i = sourceIndex(src);
+  const fmtTok = fmt.replace(":", "x");
+  return i === 0 ? `build/crop-${fmtTok}.json` : `build/crop-${i}-${fmtTok}.json`;
+}
+
+/**
+ * The median vertical centre of a face track's samples - the statistic `build.mjs` uses for both
+ * `faceY` consumers (the baked `#pip` CSS origin, and, before Gap 6, the one value every source
+ * shared for the kinetic-pip clip-path centre). `fallback` is returned for a missing or empty
+ * track, matching `build.mjs`'s own `700` default.
+ */
+export function medianFaceY(face, fallback = 700) {
+  if (!face || !face.samples) return fallback;
+  const ys = face.samples.filter((x) => x[1] != null).map((x) => (x[1] + x[2]) / 2).sort((a, b) => a - b);
+  return ys.length ? Math.round(ys[Math.floor(ys.length / 2)]) : fallback;
 }
