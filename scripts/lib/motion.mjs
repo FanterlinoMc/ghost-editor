@@ -232,8 +232,11 @@ const objectSfx = (ctx, at, key, why) => {
 const lineSfx = (ctx, at, id, why, opts) => { if (soundOf(ctx).lines !== false) ctx.addSfx(at, id, why, opts); };
 // A21: mirrors build.mjs's beatSfx() opt-out (a beat's own `sfx: false`/`"none"` silences its sound
 // but keeps the visual) for the handful of addSfx() calls in this file that call it with a hardcoded
-// id and no gate at all - so a per-beat sfx:false could not reach them.
-const beatSfxOn = (b) => !(b.sfx === false || b.sfx === "none");
+// id and no gate at all - so a per-beat sfx:false could not reach them. `null` is included too: in
+// beatSfx() it isn't caught by its own `s === false || s === "none"` check, but it falls through to
+// addSfx(t, null, ...), whose `!id` guard drops it the same as false - so beatSfx's NET effect
+// already silences null, and this should match that net effect, not just its first check.
+const beatSfxOn = (b) => !(b.sfx === false || b.sfx === "none" || b.sfx === null);
 // Alif's paper-texture layer: quiet (~15-20 dB under the voice) and bright, so it reads over lo-fi music
 const PAPER_IN = ["paper-quick", "paper-page-turn", "paper-pages"];
 let paperN = 0, penN = 0;
