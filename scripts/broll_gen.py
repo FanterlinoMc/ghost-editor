@@ -6,6 +6,16 @@
 Needs GEMINI_API_KEY in the environment (or in <skill>/.env, gitignored);
 the key is never printed. Needs google-genai (pip install google-genai).
 Look at the image before using it: AI images get hands, text and logos wrong.
+
+A23/A24: --model already governs the real call here (no hardcoded preflight
+like reference_study.py had), and the default is left as-is on purpose.
+Measured 2026-10-04 on a fresh key: the default resolves to the preview
+alias models/gemini-2.5-flash-preview-image, which is NOT retired (no 404)
+- it fails with 429 RESOURCE_EXHAUSTED, limit: 0 (A24, zero free-tier quota
+for image models, billing problem). A 3.x image model (gemini-3.1-flash-
+image) was probed too and hits the identical limit: 0 wall, so there is no
+model choice here that gets further than A24 does; changing the default
+would not fix anything measurable today.
 """
 import argparse
 import os

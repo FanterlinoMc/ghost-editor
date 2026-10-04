@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Reverse-engineer a reference edit you want to match.
 
-    reference_study.py <edited.mp4> --out <dir> [--model gemini-2.5-pro] [--raw raw.mp4]
+    reference_study.py <edited.mp4> --out <dir> [--model gemini-3.5-flash] [--raw raw.mp4]
 
 Writes into <dir>:
   sheet.jpg          1 frame per second, timestamped (look at it first)
@@ -13,9 +13,21 @@ Gemini gets styles wrong (it called light lowercase captions "ExtraBold"),
 so the edit log is a draft: verify type, sizes and framing against frames/
 before building. Then map every scene to a word time of the raw transcript.
 
-Needs GEMINI_API_KEY (env or <skill>/.env) and google-genai. The key is
-validated with one cheap call first; transient errors retry twice; an error
-is never written as if it were analysis.
+Needs GEMINI_API_KEY (env or <skill>/.env) and google-genai. The key AND the
+chosen --model are validated with one call first (same model as the real
+analysis, not a hardcoded one, so a retired/misspelled --model is caught
+here instead of after the ffmpeg frame extraction); transient errors retry
+twice; an error is never written as if it were analysis.
+
+Default is gemini-3.5-flash: measured working on a fresh key (2026-10-04).
+gemini-2.5-pro and gemini-2.5-flash are retired for new keys (404 NOT_FOUND,
+"no longer available to new users"). Google's own error recommends
+gemini-3.8-flash but it 503'd (overloaded) on the same day, so it is not
+baked in here - pass --model gemini-3.8-flash yourself once you've confirmed
+it's reliably reachable. Note pro-tier models (gemini-3.1-pro-preview
+included) currently return 429 RESOURCE_EXHAUSTED with limit: 0 on the free
+tier regardless of retirement status - that's a billing/quota problem, not
+something a model choice here can route around.
 """
 import argparse
 import datetime
@@ -38,7 +50,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("video")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--model", default="gemini-2.5-pro")
+    ap.add_argument("--model", default="gemini-3.5-flash")
     ap.add_argument("--raw")
     a = ap.parse_args()
     os.makedirs(os.path.join(a.out, "frames"), exist_ok=True)
@@ -59,7 +71,12 @@ def main():
 
     from google import genai
     client = genai.Client(api_key=key())
-    ping = client.models.generate_content(model="gemini-2.5-flash", contents="Reply with the single word: ok")
+    # A23: this used to hardcode "gemini-2.5-flash" here, so the preflight
+    # check ran (and could 404 on a retired model) before --model's choice
+    # was ever consulted - --model could not work around a dead default
+    # because this ping died first, on a different model, every time. Using
+    # a.model makes this a real preflight for the model actually in use.
+    ping = client.models.generate_content(model=a.model, contents="Reply with the single word: ok")
     if not (ping.text or "").strip():
         sys.exit("Gemini key check failed (empty reply); not running the analysis")
     prompt = open(os.path.join(SKILL, "references", "reference-study-prompt.md")).read()
