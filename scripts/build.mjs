@@ -1425,9 +1425,14 @@ if (spec.objectPops) {
     tl.push(`ft("#${id}-lab", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.3, ease: "power2.out" }, ${r3(t + 0.18)});`);
     tl.push(`ft("#${id}", { autoAlpha: 0, scale: 0.55, y: 30 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.3, ease: "back.out(1.8)" }, ${t});`);
     tl.push(`tl.to("#${id}", { autoAlpha: 0, scale: 0.85, y: -10, duration: 0.22, ease: "power2.in" }, ${r3(t + hold)});`);
-    addSfx(t, "paper-quick", `pop-up in: ${obj}`, { db: -6 });
-    const [sfx, hero] = OBJECT_SFX_BUILD[obj] || [];
-    if (sfx) addSfx(t + 0.08, sfx, `pop-up: ${obj}`, { db: hero ? 8 : 0 });
+    // A21: route through the same `spec.sound.<feature> !== false` opt-out `nametag` etc. use (:863,
+    // :880) - this pop-up used to be unconditional, so the only way to silence it was spec.objectPops:
+    // false, which also removes the visual.
+    if (spec.sound?.objects !== false) {
+      addSfx(t, "paper-quick", `pop-up in: ${obj}`, { db: -6 });
+      const [sfx, hero] = OBJECT_SFX_BUILD[obj] || [];
+      if (sfx) addSfx(t + 0.08, sfx, `pop-up: ${obj}`, { db: hero ? 8 : 0 });
+    }
     used.add(obj); last = t; busy.push([t - 0.3, t + hold + 0.3]);
   }
   if (k) console.log(`object pop-ups: ${k}`);
@@ -1720,7 +1725,12 @@ fs.writeFileSync(path.join(proj, "build", "caption_layout.json"), JSON.stringify
 // Pulled into named variables (I-25) so lib/sections.mjs's manifest can share them verbatim rather
 // than re-deriving the same shape a second time - the expressions themselves are unchanged, so
 // edit_truth.json's own output is unchanged.
-const editTruthTakes = takes.map((t) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(SOURCES.length > 1 ? { src: t.src, srcIndex: srcIndex.get(t.src) } : {}), ...(t.transition ? { transition: t.transition } : {}) }));
+// A17: take 0's `transition` is never validated (the join loop above starts at i=1 and only warns
+// that take 0's is ignored), so it can carry the planner's raw {kind, why} object or any garbage
+// string and still reach the oracle. Take 0 never joins from an earlier take, so it never gets a
+// transition in the render - only takes 1.. do, once JOIN_TRANSITIONS has checked them. Dropped by
+// index here rather than by truthiness, so a genuine take-1+ transition is untouched.
+const editTruthTakes = takes.map((t, i) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(SOURCES.length > 1 ? { src: t.src, srcIndex: srcIndex.get(t.src) } : {}), ...(i > 0 && t.transition ? { transition: t.transition } : {}) }));
 const editTruthBeats = (spec.beats || []).map((b) => ({
   type: b.type, kind: b.kind ?? null,
   at: r3(E(b.at, `${b.type} at`)),

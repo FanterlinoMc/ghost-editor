@@ -230,6 +230,10 @@ const objectSfx = (ctx, at, key, why) => {
   if (id) ctx.addSfx(at + (snd.objectLead ?? 0.04), id, `${why}: ${concept}`, { db: hero ? (snd.heroDb ?? -2) : (snd.objectDb ?? -8) });
 };
 const lineSfx = (ctx, at, id, why, opts) => { if (soundOf(ctx).lines !== false) ctx.addSfx(at, id, why, opts); };
+// A21: mirrors build.mjs's beatSfx() opt-out (a beat's own `sfx: false`/`"none"` silences its sound
+// but keeps the visual) for the handful of addSfx() calls in this file that call it with a hardcoded
+// id and no gate at all - so a per-beat sfx:false could not reach them.
+const beatSfxOn = (b) => !(b.sfx === false || b.sfx === "none");
 // Alif's paper-texture layer: quiet (~15-20 dB under the voice) and bright, so it reads over lo-fi music
 const PAPER_IN = ["paper-quick", "paper-page-turn", "paper-pages"];
 let paperN = 0, penN = 0;
@@ -443,14 +447,14 @@ export function buildScene(b, id, t0, t1, ctx) {
     const lines = (b.lines || []).map((l, i) => {
       const at = E(l.at, "ui line");
       tl.push(`ft("#${id}-u${i}", { autoAlpha: 0, x: -30 }, { autoAlpha: 1, x: 0, duration: 0.3, ease: "power3.out" }, ${at});`);
-      addSfx(at, "ding-1", "ui line", { db: -8 });
+      if (beatSfxOn(b)) addSfx(at, "ding-1", "ui line", { db: -8 }); // A21
       return `<div id="${id}-u${i}" class="ui-line"><span class="ck">✓</span><span>${esc(l.text)}</span></div>`;
     }).join("");
     // typed characters: one set per char at its time; caret blinks in steps
     [...text].forEach((_, i) => tl.push(`tl.set("#${id}-c${i}", { opacity: 1 }, ${r3(ta + i / cps)});`));
     const blinkEnd = t1;
     for (let t = ta, k = 0; t < blinkEnd; t += 0.45, k++) tl.push(`tl.set("#${id}-caret", { opacity: ${k % 2 ? 0 : 1} }, ${r3(t)});`);
-    if (text) addSfx(ta, "typing-1", "ui typing", { db: -6 });
+    if (text && beatSfxOn(b)) addSfx(ta, "typing-1", "ui typing", { db: -6 }); // A21
     const y = b.y ?? 620;
     body = `${b.label ? `<div class="ui-label" style="top:${y - 90}px">${esc(b.label)}</div>` : ""}<div id="${id}-win" class="ui-win" style="top:${y}px"><div class="ui-bar"><i></i><i></i><i></i><b>${esc(b.title || "")}</b></div><div class="ui-body"><div class="ui-prompt"><span class="pr">›</span>${chars}<span id="${id}-caret" class="ui-caret"></span></div>${lines}</div></div>`;
     tl.push(`ft("#${id}-win", { autoAlpha: 0, y: 60, scale: 0.94 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.45, ease: "expo.out" }, ${t0});`);
@@ -832,7 +836,7 @@ export function buildScene(b, id, t0, t1, ctx) {
         iconHtml = `<div id="${id}-ic" class="mn-ic mn-eng" style="width:${size}px;height:${size}px;-webkit-mask:url(${src}) center/contain no-repeat;mask:url(${src}) center/contain no-repeat"></div>`;
       }
       tl.push(`ft("#${id}-icw", { autoAlpha: 0, scale: 0.4, y: 30 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.26, ease: "back.out(2.4)" }, ${ia});`);
-      addSfx(ia, "pop-whoosh-light", "stack icon", { db: -4 });
+      if (beatSfxOn(b)) addSfx(ia, "pop-whoosh-light", "stack icon", { db: -4 }); // A21: was unconditional; b.sfx:false now silences it like it does "stack key" (:807)
       iconHtml = `<div id="${id}-icw">${bgIsPhone ? `<div class="mn-tile">${iconHtml}</div>` : iconHtml}</div>`;
     }
     // the block's height, so tall stacks centre on pages and stay inside the safe area on footage
