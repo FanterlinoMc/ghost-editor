@@ -16,6 +16,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
+import { gapMs } from "./words.mjs";
 
 // Transitions in/out: blur (0.2 s dissolve through blur), expand (rounded
 // panel grows from the centre), wipe (left to right), cut.
@@ -992,7 +993,9 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
     const tag = tags.find((tw) => tw.every((x, k) => words[i + k] && norm(words[i + k].word) === x));
     if (tag) { push(cur); cur = null; lines.push({ tag: true, words: words.slice(i, i + tag.length) }); i += tag.length - 1; continue; }
     const w = words[i];
-    if (!cur || cur.words.length >= (cap.group ?? 3) || (w.start - cur.words.at(-1).end > 0.6)) { push(cur); cur = { words: [] }; }
+    // A35 (ISSUES.md): same group-break shape as build.mjs's `clean`-style grouping - gapMs() instead
+    // of raw `b - a > 0.6`, for the reasons documented on gapMs() in lib/words.mjs.
+    if (!cur || cur.words.length >= (cap.group ?? 3) || gapMs(cur.words.at(-1).end, w.start) > 600) { push(cur); cur = { words: [] }; }
     cur.words.push(w);
     if (/[.?!,]$/.test(w.word)) { push(cur); cur = null; }
   }
@@ -1062,6 +1065,8 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
   // hide the captions under full-screen scenes that don't want them
   tl.push(`tl.set("#ecaps", { autoAlpha: 1 }, 0);`);
   // merge overlapping windows first, or one window's "show" fires inside the next
+  // A35 sweep (b): same construct and same "left as-is" reasoning as build.mjs's hiddenCaps/shownCaps
+  // window merge - see the comment there.
   const merged = [];
   for (const [a, b] of [...hidden].sort((x, y) => x[0] - y[0])) {
     if (merged.length && a <= merged.at(-1)[1] + 0.05) merged.at(-1)[1] = Math.max(merged.at(-1)[1], b);
@@ -1111,6 +1116,10 @@ export function buildMusic(m, ctx, execFileSync, path, fs) {
   const pts = [{ t: 0, v: fi > 0.02 ? 0 : vol }, { t: Math.max(0.01, fi), v: vol }];
   for (const d of [...(m.dropTimes || [])].sort((a, b) => a - b)) {
     const len = m.dropLen ?? 0.5;
+    // A35 sweep (b): same float-difference-vs-literal shape, gating whether a drop point is emitted
+    // into the music automation lane at all. Left unhardened: `dropTimes` is reel-authored and not
+    // used by any shipped style or fixture today, and a tie needs four independent values (d, len,
+    // fi/fo) to land exactly together, not two - meaningfully less likely than A35's word-gap case.
     if (d - len < fi + 0.2 || d > TOTAL - fo - 0.1) continue;
     pts.push({ t: r3(d - len - 0.03), v: vol }, { t: r3(d - len), v: 0 }, { t: r3(d - 0.02), v: 0 }, { t: r3(d), v: vol });
   }

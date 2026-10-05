@@ -10,7 +10,7 @@
 // expected values too and scores as correct. Oracle and renderer share the code.
 //
 // Pure in-memory fixtures: no file is read or written, no ffmpeg, no render.
-import { wordOwners, overlap } from "./words.mjs";
+import { wordOwners, overlap, gapMs } from "./words.mjs";
 
 let failures = 0;
 function check(label, cond, detail = "") {
@@ -83,6 +83,27 @@ const w = (start, end, word = "x") => ({ start, end, word });
 // ---- overlap() itself --------------------------------------------------------------------------
 check("overlap is positive when a word sits inside a take", overlap(w(1, 2), { a: 0, b: 4 }) === 1);
 check("overlap is negative when a word is outside a take", overlap(w(5, 6), { a: 0, b: 4 }) < 0);
+
+// ---- A35: gapMs() is offset-invariant at an exact-decimal boundary -----------------------------
+// Verified arithmetic from ISSUES.md A35, reproduced directly: the same real 0.6s gap, computed
+// un-rebased (8.2 - 7.6) and after subtracting a 4.0s section offset from both ends (4.2 - 3.6),
+// land on opposite sides of a raw `b - a > 0.6` test even though they are the same logical gap.
+{
+  const unrebased = 8.2 - 7.6, rebased = 4.2 - 3.6;
+  check("the raw float subtraction really does disagree with itself (the bug A35 reports)",
+        !(unrebased > 0.6) && (rebased > 0.6), `unrebased=${unrebased} rebased=${rebased}`);
+}
+check("gapMs: un-rebased 8.2/7.6 does not exceed a 600ms threshold",
+      !(gapMs(7.6, 8.2) > 600), `gapMs=${gapMs(7.6, 8.2)}`);
+check("gapMs: rebased 3.6/4.2 (same real gap, offset by -4.0) ALSO does not exceed 600ms",
+      !(gapMs(3.6, 4.2) > 600), `gapMs=${gapMs(3.6, 4.2)}`);
+check("gapMs: the exact-0.6s gap grouping decision is identical at offset 0 and offset -4.0 - the actual invariance proof",
+      (gapMs(7.6, 8.2) > 600) === (gapMs(3.6, 4.2) > 600));
+// A gap that is genuinely over the threshold must still break, at any offset - the fix must not
+// swallow real differences, only the float noise at an exact tie.
+check("gapMs: a real 0.9s gap still exceeds 600ms, offset 0", gapMs(7.6, 8.5) > 600);
+check("gapMs: a real 0.9s gap still exceeds 600ms, offset -4.0", gapMs(3.6, 4.5) > 600);
+check("gapMs: a real 0.3s gap still does not exceed 600ms, offset 0", !(gapMs(7.6, 7.9) > 600));
 
 console.log(failures ? `\n${failures} failure(s)` : "\nword ownership holds");
 process.exit(failures ? 1 : 0);

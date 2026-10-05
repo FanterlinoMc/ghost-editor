@@ -11,6 +11,28 @@
 export const overlap = (w, k) => Math.min(w.end, k.b) - Math.max(w.start, k.a);
 
 /**
+ * Gap between two timeline floats, in whole milliseconds, computed by rounding
+ * each endpoint before subtracting rather than subtracting raw floats (A35,
+ * ISSUES.md).
+ *
+ * IEEE-754 doubles don't represent most decimal literals exactly, so a
+ * comparison like `b - a > 0.6` is not reliably offset-invariant: the same
+ * real 0.6s gap can come out as `8.2 - 7.6 = 0.5999999999999996` (not > 0.6)
+ * or, after subtracting a 4.0s section offset from both ends first, as
+ * `4.2 - 3.6 = 0.6000000000000001` (> 0.6) - opposite grouping decisions for
+ * the same logical gap, depending only on what arithmetic produced the two
+ * numbers. Rounding `a` and `b` to the nearest millisecond first, then
+ * subtracting as integers, removes that noise: integer subtraction is exact,
+ * and a fixed real-world gap rounds to the same millisecond count no matter
+ * which offset (if any) was applied upstream.
+ *
+ * Callers compare the result to a millisecond integer (`gapMs(a, b) > 600`,
+ * not `b - a > 0.6`), so the threshold itself is never re-exposed to float
+ * subtraction either.
+ */
+export const gapMs = (a, b) => Math.round(b * 1000) - Math.round(a * 1000);
+
+/**
  * Index of the take that owns each word, or -1 for none.
  *
  * Each word belongs to ONE take: the one it overlaps most. Whisper stretches words over pauses, so

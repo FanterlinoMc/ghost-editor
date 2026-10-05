@@ -25,7 +25,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard } from "./lib/motion.mjs";
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
-import { wordOwners } from "./lib/words.mjs";
+import { wordOwners, gapMs } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 
@@ -786,6 +786,12 @@ for (const b of beatsList) {
   const id = `b${n++}`;
   const t0 = E(b.at, `${b.type} at`);
   let t1 = b.to === undefined ? (b.type === "endcard" ? TOTAL : t0 + (b.type === "meme" ? 1.8 : 2.5)) : E(b.to, `${b.type} to`);
+  // A35 sweep (b): Math.abs(E(o.at) - t1) is a difference of floats against an exact 0.06 literal,
+  // same shape as A35. Left unhardened - E(o.at) and t1 are independent beat times authored a scene
+  // apart, and landing exactly 60ms apart by coincidence is far less likely than the half-second-ish
+  // speech-pause gaps that make 0.6 a realistic caption boundary. Worst case on a tie is a missed
+  // HANDOVER extension (a few extra frames of overlap at a scene cut), not a structural content
+  // difference, so this wasn't worth the same fix without a reachable case to prove it against.
   if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(E(o.at) - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
   beatSpans.push({ t0, t1 });
   const dur = r3(t1 - t0);
@@ -1096,6 +1102,11 @@ for (const e of memeHits) {
   if (seenMeme.has(e.id)) warn.push(`meme sound '${e.id}' used twice; never repeat a meme sound in one reel`);
   seenMeme.add(e.id);
 }
+// A35 sweep (b): the two gap checks below (memeHits spacing vs 8, the accent dedupe vs 0.2) are the
+// same float-difference-vs-literal shape as A35, but both only ever feed `warn[]`, which is console
+// output - it is not part of index.html/edit_truth.json/caption_layout.json, the three artifacts A35
+// cares about staying deterministic. A tie-breaking flip here changes a lint message, not the render,
+// so it was left unhardened rather than hardened on spec with no reachable case to prove against.
 for (let i = 1; i < memeHits.length; i++) if (memeHits[i].t - memeHits[i - 1].t < 8) warn.push(`meme sounds ${memeHits[i - 1].id} and ${memeHits[i].id} only ${(memeHits[i].t - memeHits[i - 1].t).toFixed(1)}s apart (want >= 8 s)`);
 const perMin = (xs) => (xs.length / Math.max(TOTAL, 1)) * 60;
 // a layered hit (whoosh + impact on one frame) is one event to the ear
@@ -1133,8 +1144,13 @@ const WEAK_END = /^(a|an|the|to|of|and|or|but|in|on|at|for|with|my|your|his|her|
 const SMART = cap.smartBreaks === true;
 const groups = [];
 let cur = [];
+// A35 (ISSUES.md): group-break and the three SMART merge rules below all compare a *gap* between
+// two word-timing floats to an exact-decimal threshold. Raw float subtraction is not reliably
+// offset-invariant at that boundary - see gapMs()'s doc in lib/words.mjs for why `b - a > 0.6` can
+// flip sides depending only on what arithmetic produced `a` and `b` - so every one of them goes
+// through gapMs() (round-then-subtract-as-integers) instead of `b - a OP literal`.
 for (const w of words) {
-  if (cur.length && (w.start - cur.at(-1).end > 0.6)) { groups.push(cur); cur = []; }
+  if (cur.length && gapMs(cur.at(-1).end, w.start) > 600) { groups.push(cur); cur = []; }
   cur.push(w);
   // don't strand a phrase on a weak word ("GONNA HAVE TO" / "OKAY OKAY HE'S"): allow one extra word
   const bare = w.word.replace(/[^a-z']/gi, "");
@@ -1148,16 +1164,17 @@ const wc = (g) => g.reduce((n, x) => n + x.word.trim().split(/\s+/).length, 0);
 for (let i = 0; i < groups.length; i++) {
   if (!SMART || wc(groups[i]) !== 1 || groups.length < 2) continue;
   const g = groups[i], prev = groups[i - 1], next = groups[i + 1];
-  const joinsPrev = prev && !/[.?!]$/.test(prev.at(-1).word) && g[0].start - prev.at(-1).end < 0.6 && wc(prev) <= cap.group + 1;
-  const joinsNext = next && !/[.?!]$/.test(g[0].word) && next[0].start - g[0].end < 0.6 && wc(next) <= cap.group;
+  const joinsPrev = prev && !/[.?!]$/.test(prev.at(-1).word) && gapMs(prev.at(-1).end, g[0].start) < 600 && wc(prev) <= cap.group + 1;
+  const joinsNext = next && !/[.?!]$/.test(g[0].word) && gapMs(g[0].end, next[0].start) < 600 && wc(next) <= cap.group;
   if (joinsPrev) { prev.push(...g); groups.splice(i--, 1); }
   else if (joinsNext) { next.unshift(...g); groups.splice(i--, 1); }
 }
 // fast talk: a phrase on screen for under ~0.5 s can't be read; give it the next phrase's words too
 const MIN_READ = cap.minRead ?? 0.5;
+const MIN_READ_MS = Math.round(MIN_READ * 1000);
 for (let i = 0; i < groups.length - 1; i++) {
   const g = groups[i], next = groups[i + 1];
-  if (!SMART || next[0].start - g[0].start >= MIN_READ || /[.?!]$/.test(g.at(-1).word)) continue;
+  if (!SMART || gapMs(g[0].start, next[0].start) >= MIN_READ_MS || /[.?!]$/.test(g.at(-1).word)) continue;
   if (wc(g) + wc(next) > cap.group + 4) continue;
   g.push(...next); groups.splice(i + 1, 1); i--;
 }
@@ -1168,6 +1185,15 @@ const complement = (wins) => { const out = []; let c = 0; for (const [a, b] of [
 if (cap.style !== "editorial" && cap.style !== "none") {
   const wins = cap.onlyInScenes ? complement(shownCaps) : hiddenCaps;
   const merged = [];
+  // A35 sweep (b): `a <= merged.at(-1)[1] + 0.05` is a difference of two independently-authored
+  // scene times against an exact 0.05 literal, same shape as A35, and NOT obviously unreachable (a
+  // 0.05s handover buffer between scenes is a plausible thing to author on purpose). Left as-is for
+  // now: it's `<=`, so a tie already merges, which is the safer side for this specific check (two
+  // caption-hide windows that are meant to touch stay one continuous hide instead of flickering caps
+  // on for one frame); a float-noise flip only matters in the rarer direction (computed gap comes out
+  // a hair over 0.05 when it should tie), and no fixture or shipped style was found exercising it.
+  // Same construct exists in lib/motion.mjs's buildEditorialCaptions (window merge) - not hardened
+  // there either, for the same reason.
   for (const [a, b] of [...wins].sort((x, y) => x[0] - y[0])) { if (merged.length && a <= merged.at(-1)[1] + 0.05) merged.at(-1)[1] = Math.max(merged.at(-1)[1], b); else merged.push([a, b]); }
   tl.push(`tl.set("#caps", { autoAlpha: 1 }, 0);`);
   for (const [a, b] of merged) { tl.push(`tl.to("#caps", { autoAlpha: 0, duration: 0.08 }, ${r3(a)});`); tl.push(`tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, ${r3(b - 0.05)});`); }
@@ -1602,7 +1628,8 @@ if (spec.music) {
           (b === "number" && nx === "one") || (b === "what" && nx === "you" && bare(words[i + 2]?.word || "") === "need");
         if (!hit) continue;
         let j = i;   // back up over the clause lead-in: "and I'm going to be | showing", "and | here's"
-        while (j > 0 && /^(and|so|i'm|im|going|to|be|today|now)$/.test(bare(words[j - 1].word)) && i - j < 5 && words[j].start - words[j - 1].end < 0.4) j--;
+        // A35 sweep: same word-gap-vs-decimal shape as the caption grouping above, so gapMs() here too.
+        while (j > 0 && /^(and|so|i'm|im|going|to|be|today|now)$/.test(bare(words[j - 1].word)) && i - j < 5 && gapMs(words[j - 1].end, words[j].start) < 400) j--;
         at = r3(Math.max(0, words[j].start - 0.04));
       }
     }
