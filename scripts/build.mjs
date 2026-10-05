@@ -111,6 +111,23 @@ const FORMAT = spec.format ?? "9:16";
 if (!FORMATS[FORMAT]) die(`unknown spec.format '${FORMAT}'; have: ${Object.keys(FORMATS).join(", ")}`);
 const { W, H } = FORMATS[FORMAT];
 
+// I-25 second half, PROTOTYPE: render-per-section. Opt-in via three env vars, all unset by
+// default - every existing caller (every fixture, every `node build.mjs <dir>` invocation in
+// SKILL.md/doctor.sh/the A1 harness) leaves SECTION_MODE false and this file's behaviour is
+// completely unchanged below this line. See the report accompanying this change for exactly
+// what IS and is NOT exercised by this prototype (beats/scenes, multi-source, take-join
+// transitions, opening effects and the endcard are NOT covered - only takes, snaps, pushes and
+// word-timed captions are, which is what f01-cuts-pushes (the fixture this was proved against)
+// contains). This writes ONE section's composition to GE_SECTION_OUT; it does not orchestrate
+// the render or the final concat/mux - that is done by the calling script, same division as
+// `hyperframes render` itself not knowing about sections.
+const SECTION_START = process.env.GE_SECTION_START !== undefined ? parseFloat(process.env.GE_SECTION_START) : null;
+const SECTION_END = process.env.GE_SECTION_END !== undefined ? parseFloat(process.env.GE_SECTION_END) : null;
+const SECTION_OUT = process.env.GE_SECTION_OUT || null;
+const SECTION_MODE = SECTION_START !== null && SECTION_END !== null;
+if (SECTION_MODE && !SECTION_OUT) die("GE_SECTION_START/GE_SECTION_END set without GE_SECTION_OUT");
+if (SECTION_MODE && !(SECTION_END > SECTION_START)) die(`GE_SECTION_END (${SECTION_END}) must be > GE_SECTION_START (${SECTION_START})`);
+
 // ---------- takes and time mapping ----------
 // I-16 / MULTIANGLE Gap 1: a take names the recording it comes from. `take.src` is OPTIONAL and
 // defaults to spec.source, so every reel.json written before this - and every fixture - means
@@ -140,6 +157,27 @@ for (const t of takes) {
 }
 const SPEECH = acc / FPS;
 const OUTRO = spec.outro ?? 3;
+// I-25 prototype: every take's edit-time position shifts by -SECTION_START, UNCHANGED array,
+// UNCHANGED indices - take-join-transition adjacency (takes[i-1]/takes[i], below) and E()'s own
+// take lookup (which reads t.start) both still work exactly as in the full build, just in a
+// time-origin that starts at this section instead of at the reel. `t.inSection` is decided on
+// the PRE-rebase (i.e. real, whole-reel) start/end, before it moves: a take wholly outside
+// [SECTION_START, SECTION_END) is kept in the array (so adjacency math stays intact) but never
+// emitted (see takeHtml/takeAudio/the words-ownership loop below). E() itself needs no change -
+// every snap, push and beat `at`/`to` in the system already resolves through `k.start` (this
+// same rebased value), so rebasing takes here rebases everything downstream of E() for free.
+if (SECTION_MODE) {
+  for (const t of takes) {
+    const tEnd = t.start + t.dur + t.holdFrames / FPS;
+    t.inSection = t.start < SECTION_END - 1e-6 && tEnd > SECTION_START + 1e-6;
+    // not run through r3() here - t.start/t.holdStart were never rounded at this point either
+    // (see the unrounded `acc / FPS` assignment just above); rounding is applied, as before,
+    // wherever these values are interpolated into output strings (r3(k.start) etc. below).
+    t.start = t.start - SECTION_START;
+    t.holdStart = t.holdStart - SECTION_START;
+  }
+}
+const SECTION_TOTAL = SECTION_MODE ? +(SECTION_END - SECTION_START).toFixed(3) : null;
 const TOTAL = +(SPEECH + OUTRO).toFixed(3);
 
 // takes in recording order, for the gap-snap below. Array order is PLAYBACK order and may differ.
@@ -258,6 +296,7 @@ for (const s of SOURCES) {
   list.forEach((w, wi) => { if (own[wi] >= 0) wordsByTake[own[wi]].push(w); });
 }
 for (const [ti, k] of takes.entries()) {
+  if (SECTION_MODE && !k.inSection) continue;  // I-25 prototype: no captions for a take outside this section
   const ws = wordsByTake[ti];
   if (!ws.length) { warn.push(`take ${k.a}-${k.b} owns no words (a breath or a tail); fine for autocut takes`); continue; }
   ws.forEach((w, i) => {
@@ -504,6 +543,7 @@ for (const [i, k] of takes.entries()) {
 const stillAt = (t) => String(Math.max(0, Math.min(t, srcDur - 0.12)));
 const fadeLane = (d) => JSON.stringify({ version: 1, lanes: [{ target: "volume", points: [{ t: 0, v: 0 }, { t: r3(2 / FPS), v: 1 }, { t: r3(d - 3 / FPS), v: 1 }, { t: r3(d), v: 0 }] }] });
 const takeHtml = takes.map((k, i) => {
+  if (SECTION_MODE && !k.inSection) return "";  // I-25 prototype: this take isn't on screen in this section
   let h = `
       <video id="take-${i}" src="${k.src}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="0" muted playsinline></video>`;
   if (k.holdFrames) {
@@ -527,6 +567,9 @@ const takeJoins = [];
 for (let i = 1; i < takes.length; i++) {
   const kind = takes[i].transition;
   if (!kind) continue;
+  // I-25 prototype: a join between a take outside this section and one inside it has no "other
+  // side" to dissolve from/to in this composition - not render-verified (f01 has no transitions).
+  if (SECTION_MODE && (!takes[i - 1].inSection || !takes[i].inSection)) continue;
   if (!JOIN_TRANSITIONS.has(kind)) die(`take ${i}: unknown transition '${kind}'; have: ${[...JOIN_TRANSITIONS].join(", ")}`);
   if (takes[i - 1].holdFrames) die(`take ${i}: transition '${kind}' follows a hold on take ${i - 1} (a frozen still, nothing to dissolve from)`);
   if (Math.min(takes[i - 1].dur, takes[i].dur) < 0.3) warn.push(`take ${i}: '${kind}' transition on a take under 0.3s may clip`);
@@ -546,8 +589,11 @@ const pushJoinTransition = (outSel, inSel, kind, T, outDur, inDur) => {
   }
 };
 for (const { i, kind, T, outDur, inDur } of takeJoins) pushJoinTransition(`#take-${i - 1}`, `#take-${i}`, kind, T, outDur, inDur);
-const takeAudio = takes.map((k, i) => `
-  <audio id="take-${i}-audio" src="${k.src}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="${10 + (i % 2)}" data-automation='${fadeLane(k.dur)}'></audio>`).join("");
+const takeAudio = takes.map((k, i) => {
+  if (SECTION_MODE && !k.inSection) return "";  // I-25 prototype: this take's audio isn't in this section
+  return `
+  <audio id="take-${i}-audio" src="${k.src}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="${10 + (i % 2)}" data-automation='${fadeLane(k.dur)}'></audio>`;
+}).join("");
 let matteHtml = "";
 // I-16: the matte is deliberately NOT per-source yet. One talk-matte.webm is cut from SRC and then
 // every take indexes into it by its own k.a - so a take from a second recording would read the
@@ -668,7 +714,7 @@ for (const sname of SOURCES) {
 // global value was before this loop existed. makePlacer still takes these as its no-`crops`
 // default, and a single-source build never has more than this one entry anyway.
 const { scale: cropScale = 1, offsetX: cropOffsetX = 0, offsetY: cropOffsetY = 0 } = crops[PRIMARY_SRC] || {};
-const placer = makePlacer({ face, faces, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W, cropScale, cropOffsetX, cropOffsetY, crops, fps: FPS });
+const placer = makePlacer({ face, faces, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL: SECTION_MODE ? SECTION_TOTAL : TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W, cropScale, cropOffsetX, cropOffsetY, crops, fps: FPS });
 
 // ---------- overlays ----------
 const CARD = { x: 60, y: spec.layout?.cardY ?? 990, w: 870 };
@@ -1693,7 +1739,7 @@ const html = `<!doctype html>
 </style>
 </head>
 <body>
-<div id="root" class="${spec.layout?.compact ? "compact" : ""}" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${TOTAL}" data-fps="${FPS}">
+<div id="root" class="${spec.layout?.compact ? "compact" : ""}" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${SECTION_MODE ? SECTION_TOTAL : TOTAL}" data-fps="${FPS}">
   <div id="pip"><div id="base"><div id="snap"><div id="push">${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}
   </div></div></div></div>
   ${overlays.filter((o) => o.html).map((o) => o.html).join("\n  ")}
@@ -1725,6 +1771,19 @@ const html = `<!doctype html>
 </body>
 </html>
 `;
+// I-25 prototype: a section build writes ONLY its own composition HTML, to GE_SECTION_OUT, and
+// touches none of the whole-reel artifacts below - edit_truth.json/caption_layout.json/
+// sections.json/sfx_events.json/words.edit.json all describe the FULL reel's resolved timeline
+// (several of them, e.g. sections.json's own computeSections() call two lines down, read `takes`
+// and expect UN-rebased, whole-reel start times) and would be simply wrong if written from a
+// section's rebased state. The normal (non-section) build that produces them is expected to have
+// already run first; this never overwrites them.
+if (SECTION_MODE) {
+  fs.mkdirSync(path.dirname(SECTION_OUT), { recursive: true });
+  fs.writeFileSync(SECTION_OUT, html);
+  console.log(`-> ${SECTION_OUT} (section [${SECTION_START}, ${SECTION_END}), local duration ${SECTION_TOTAL}s)`);
+  process.exit(0);
+}
 fs.writeFileSync(path.join(proj, "index.html"), html);
 fs.mkdirSync(path.join(proj, "build"), { recursive: true });
 fs.writeFileSync(path.join(proj, "build", "sfx_events.json"), JSON.stringify({ total: TOTAL, speech: SPEECH, voiceP95: r3(voiceP95), roleDb: ROLE_DB, events: sfxEvents }, null, 2));
