@@ -708,7 +708,18 @@ const deferredLeaks = [];   // leak beats need the pack helpers, which are defin
 const beatsList = spec.beats || [];
 // a template can carry the name tag: on screen from the first frame until the hook page cuts in (or 2.4 s)
 // (R1b port)
-if (spec.nametag && !beatsList.some((b) => b.type === "nametag")) {
+// A12: this used to skip whenever ANY nametag beat existed, so a hand-authored plan that adds a
+// third-party nametag (a guest, a co-host) silently deleted the speaker's own - no warning, no
+// trace. The guard now asks "does a nametag beat for THIS speaker already exist" (matched by
+// spec.nametag.name, the same string brandLayer() and a hand-authored top-level `nametag` both
+// put there) instead of "does any nametag beat exist at all". A plan that repositions the self-tag
+// by hand (one nametag beat, name matching spec.nametag.name) still suppresses the duplicate,
+// unchanged from before; a plan that adds a DIFFERENT name no longer suppresses the self-tag.
+// `spec.nametag` with no `name` set falls back to the old "any nametag beat" check - there is
+// nothing to match against, so there is no self-tag identity to protect.
+const selfTagName = spec.nametag?.name;
+const hasSelfTag = beatsList.some((b) => b.type === "nametag" && (selfTagName ? b.name === selfTagName : true));
+if (spec.nametag && !hasSelfTag) {
   // first page as the VIEWER meets it, so pick by edit time - but keep its source `at`, because
   // `until` below is a source time that gets mapped through E() with every other beat. When takes
   // are in source order E() is monotonic, so this sorts identically to sorting by `at` and no
