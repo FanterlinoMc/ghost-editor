@@ -378,7 +378,14 @@ const icon = (slug) => {
 const userAsset = (p) => {
   const src = path.resolve(proj, p);
   if (!fs.existsSync(src)) die(`asset not found: ${p}`);
-  if (src.startsWith(A + path.sep)) return path.relative(proj, src);
+  // An HTML src is a URL, not a filesystem path. path.relative() returns the OS
+  // separator, so on Windows this emitted `assets\shot.png` and neither the
+  // browser nor the renderer resolved it. The copy branch below always wrote a
+  // forward slash, which is why ONLY assets already under assets/ were broken -
+  // that is every asset placed through the timeline, which uploads into it.
+  if (src.startsWith(A + path.sep)) {
+    return path.relative(proj, src).split(path.sep).join("/");
+  }
   const dst = path.join(A, path.basename(src));
   fs.copyFileSync(src, dst);
   return `assets/${path.basename(src)}`;
