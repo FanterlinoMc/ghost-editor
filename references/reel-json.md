@@ -135,6 +135,12 @@ a take join never depends on `library/sfx/` having a file behind the id. `takes[
 ignored (no earlier take to join from) and a transition right after a `hold` dies at build
 (nothing to dissolve from - resolve the hold first, or drop the transition).
 
+`takes[i].transitionDur` sets how long that join lasts, in seconds, 0.1 to 1.5. It is the TOTAL
+length: the out and in halves keep the kind's own proportion, so `"blur"` with `0.8` is 0.36s out
+and 0.44s in. Omit it for the lengths above. Each half is still capped at half the take it plays
+over. A value outside the range, or one that is not a number, dies at build. It is ignored on a
+take with no `transition`.
+
 | kind | fields | what it looks like |
 |---|---|---|
 | `card` | `bg`, `y`, `lines:[{text, at, size, color}]`, `pill:{text, at, size, gap}`, `cursor:{clickAt, dx, dy}` | Centred text plus a tilted accent pill; a cursor flies in and clicks it (ring, press). Sounds: pop, then click |

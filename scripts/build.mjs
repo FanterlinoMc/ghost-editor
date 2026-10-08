@@ -28,6 +28,7 @@ import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { wordOwners } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
+import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = path.join(SKILL, "library");
@@ -580,10 +581,14 @@ for (let i = 1; i < takes.length; i++) {
   if (!JOIN_TRANSITIONS.has(kind)) die(`take ${i}: unknown transition '${kind}'; have: ${[...JOIN_TRANSITIONS].join(", ")}`);
   if (takes[i - 1].holdFrames) die(`take ${i}: transition '${kind}' follows a hold on take ${i - 1} (a frozen still, nothing to dissolve from)`);
   if (Math.min(takes[i - 1].dur, takes[i].dur) < 0.3) warn.push(`take ${i}: '${kind}' transition on a take under 0.3s may clip`);
+  // transitionDur: the join's total length in seconds, optional. Unset, joinDurations() returns
+  // exactly what this block computed inline before the field existed (lib/joins.mjs and its
+  // test), so a reel that does not use it builds byte-identical.
+  const durProblem = joinDurProblem(takes[i].transitionDur);
+  if (durProblem) die(`take ${i}: transitionDur ${durProblem}`);
   takeJoins.push({
     i, kind, T: r3(takes[i].start),
-    outDur: Math.min(kind === "whip" ? 0.12 : 0.18, takes[i - 1].dur / 2),
-    inDur: Math.min(kind === "whip" ? 0.16 : 0.22, takes[i].dur / 2),
+    ...joinDurations(kind, takes[i].transitionDur, takes[i - 1].dur, takes[i].dur),
   });
 }
 const pushJoinTransition = (outSel, inSel, kind, T, outDur, inDur) => {
@@ -1807,7 +1812,7 @@ fs.writeFileSync(path.join(proj, "build", "caption_layout.json"), JSON.stringify
 // string and still reach the oracle. Take 0 never joins from an earlier take, so it never gets a
 // transition in the render - only takes 1.. do, once JOIN_TRANSITIONS has checked them. Dropped by
 // index here rather than by truthiness, so a genuine take-1+ transition is untouched.
-const editTruthTakes = takes.map((t, i) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(SOURCES.length > 1 ? { src: t.src, srcIndex: srcIndex.get(t.src) } : {}), ...(i > 0 && t.transition ? { transition: t.transition } : {}) }));
+const editTruthTakes = takes.map((t, i) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(SOURCES.length > 1 ? { src: t.src, srcIndex: srcIndex.get(t.src) } : {}), ...(i > 0 && t.transition ? { transition: t.transition } : {}), ...(i > 0 && t.transition && t.transitionDur !== undefined ? { transitionDur: t.transitionDur } : {}) }));
 const editTruthBeats = (spec.beats || []).map((b) => ({
   type: b.type, kind: b.kind ?? null,
   at: r3(E(b.at, `${b.type} at`)),
