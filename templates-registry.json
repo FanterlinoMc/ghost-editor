@@ -109,6 +109,30 @@
       "tagline": "Condensed caps captions and B-roll on every named subject",
       "status": "beta",
       "style": "headline"
+    },
+    {
+      "id": "the-monk-3",
+      "name": "The Monk 3",
+      "tagline": "Quiet serif captions, big enough to read on a phone",
+      "status": "beta",
+      "style": "monk-3",
+      "note": "Look ported from Ahmed's Monk 3.1 (his showcase: 6/6 SHIP on hand-planned reels). The hand planning, window finder and LUFS mastering are not part of the style. See the style file's _about for what was left out."
+    },
+    {
+      "id": "the-keynote-3",
+      "name": "The Keynote 3",
+      "tagline": "Bigger script keywords and a cleaner caption line, no grey boxes",
+      "status": "beta",
+      "style": "keynote-3",
+      "note": "Look ported from Ahmed's Keynote 3.1 (6/6 SHIP on hand-planned clips). Face-aware crop, face-safe light leaks and mastering are not ported; music stays off."
+    },
+    {
+      "id": "the-headline-2",
+      "name": "The Headline 2",
+      "tagline": "Condensed caps with a punch-in every second and a half",
+      "status": "beta",
+      "style": "headline-2",
+      "note": "Look ported from Ahmed's Headline 2.1 (6/6 SHIP on hand-planned reels). His Wikimedia B-roll with name labels is not ported: the studio planner cannot place fetched stills."
     }
   ],
   "customer_templates": [

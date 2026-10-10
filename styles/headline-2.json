@@ -1,0 +1,23 @@
+{
+  "_about": "The Headline 2 (look ported from Ahmed's template-the-headline, Headline 2.1, 9 Oct 2026; 6/6 SHIP on hand-planned reels). Extends the fork's `headline` and leaves it untouched. What changes: punch-ins every ~1.4 s alternating two framings with a whoosh on every 6th, restrained sound, a quarter-second minimum read time, repeated words shown once, and a light grade on framed B-roll. NOT ported, and the reason this style has no `director` block: his B-roll is Wikimedia Commons stills fetched by hand and placed with `srcOnly` rules (label lower-thirds on named subjects). The studio planner has no srcOnly support and refuses invented `src` paths, so a director block here would ask for scenes nothing can fill. Also not ported: face-size punch-in cap (cadence.faceAnchor), the audible voice fade-out and -15 LUFS mastering.",
+  "extends": "headline",
+  "captions": {
+    "upper": true,
+    "minRead": 0.25,
+    "dedupe": true,
+    "smartBreaks": true
+  },
+  "sfxProfile": "restrained",
+  "cadence": {
+    "every": 1.4,
+    "minGap": 0.7,
+    "scales": [1.0, 1.18],
+    "sfx": "whoosh",
+    "sfxEvery": 6,
+    "sfxDb": -10
+  },
+  "scenes": {
+    "image": {},
+    "window": { "grade": "contrast(1.05) saturate(1.05)" }
+  }
+}

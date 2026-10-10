@@ -1,0 +1,18 @@
+{
+  "_about": "The Monk 3 (look ported from Ahmed's template-the-monk, Monk 3.1, 9 Oct 2026; that branch's showcase went 6/6 SHIP on hand-planned reels). Extends the fork's `monk` and leaves it untouched. What changes: captions 52 -> 96 px so they read on a phone, three words a group, a lighter gold, a strong text shadow and a soft radial scrim in place of any grey box, repeated words shown once, the held last frame fading out. NOT ported: Ahmed's hard-fixed caption anchor (here `captions.y` is the ideal height and the placer still keeps captions off the face), -15 LUFS mastering, the locked-shot window finder and the sentence-clean cut points (those live in his plan scripts, not in the style).",
+  "extends": "monk",
+  "captions": {
+    "style": "serif",
+    "group": 3,
+    "y": 1405,
+    "size": 96,
+    "color": "#F0D58A",
+    "shadow": "strong",
+    "scrim": 0.38,
+    "backing": false,
+    "minWords": 2,
+    "dedupe": true,
+    "smartBreaks": true
+  },
+  "outroFade": true
+}
