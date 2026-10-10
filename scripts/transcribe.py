@@ -14,6 +14,9 @@ Times are ORIGINAL-recording seconds, the unit reel.json uses. Product names
 get mangled; fix them in reel.json -> captions.fixes, not here.
 Whisper is found on PATH (or $WHISPER); the audio goes in as 16 kHz mono.
 
+TRANSCRIBER=faster-whisper (or --engine faster-whisper) swaps in the CTranslate2 backend,
+int8 on CPU, for the same output json. Unset, nothing changes. See transcribe_faster_whisper().
+
 Every word keeps whisper's own `probability` (ISSUES D5 - it used to be
 discarded). Two independent signals flag a word as suspect, because neither
 alone is enough:
@@ -84,6 +87,40 @@ def transcribe(src, model, lang):
         return json.load(open(os.path.join(td, "audio.json")))
 
 
+def transcribe_faster_whisper(src, model, lang):
+    """Opt-in CTranslate2 backend (TRANSCRIBER=faster-whisper or --engine faster-whisper). It returns the same json shape the
+    openai-whisper CLI writes - segments[].words[] with word/start/end/probability - so
+    flag_words, build.mjs and the captions never learn which engine ran. Decode settings are
+    the openai CLI's own (beam 5, no VAD filter: a VAD pass would trim word edges and move
+    every time downstream), and the compute type is int8 on CPU unless $FASTER_WHISPER_COMPUTE
+    says otherwise. "turbo" resolves to mobiuslabsgmbh/faster-whisper-large-v3-turbo, the
+    CTranslate2 conversion of the same large-v3-turbo checkpoint the default path loads."""
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
+        sys.exit("faster-whisper not installed: pip install faster-whisper (the default engine does not need it)")
+    compute = os.environ.get("FASTER_WHISPER_COMPUTE", "int8")
+    wm = WhisperModel(model, device="cpu", compute_type=compute)
+    # Decode with our own ffmpeg to 16 kHz mono float32 and hand faster-whisper the array. Its own
+    # decoder is PyAV, and av 19 (what pip resolves today) rejects the metadata_errors argument
+    # faster-whisper 1.2.1 passes to av.open, so a path argument fails before any audio is read.
+    import numpy as np
+    raw = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", src, "-vn", "-ac", "1", "-ar", "16000",
+                          "-f", "f32le", "-"], check=True, stdout=subprocess.PIPE).stdout
+    audio = np.frombuffer(raw, dtype=np.float32)
+    segs, info = wm.transcribe(audio, language=lang, word_timestamps=True, beam_size=5, vad_filter=False)
+    out = []
+    for s in segs:  # a generator: the decode happens here, not in transcribe()
+        out.append({
+            "id": s.id, "seek": s.seek, "start": s.start, "end": s.end, "text": s.text,
+            "tokens": s.tokens, "temperature": s.temperature, "avg_logprob": s.avg_logprob,
+            "compression_ratio": s.compression_ratio, "no_speech_prob": s.no_speech_prob,
+            "words": [{"word": w.word, "start": w.start, "end": w.end, "probability": w.probability}
+                      for w in (s.words or [])],
+        })
+    return {"text": "".join(s["text"] for s in out), "segments": out, "language": info.language}
+
+
 def flag_words(data, min_confidence):
     """Return suspect words: low whisper confidence, or an implausibly long
     span for the word's length. Each has independent `reasons`, since they
@@ -122,13 +159,18 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", default="turbo")
     ap.add_argument("--lang", default=None)
+    ap.add_argument("--engine", choices=["whisper", "faster-whisper"],
+                     default=os.environ.get("TRANSCRIBER") or "whisper",
+                     help="whisper (default: the openai-whisper CLI) or faster-whisper (opt-in, "
+                          "CPU int8; also selectable with TRANSCRIBER=faster-whisper)")
     ap.add_argument("--raw", help="reuse an existing whisper json")
     ap.add_argument("--min-confidence", type=float, default=MIN_CONFIDENCE,
                      help=f"flag a word below this whisper probability (default {MIN_CONFIDENCE})")
     ap.add_argument("--flags-out", default=None,
                      help="where to write the flagged-word list (default: --out with .flags.json)")
     a = ap.parse_args()
-    data = json.load(open(a.raw)) if a.raw else transcribe(a.src, a.model, a.lang)
+    run = transcribe_faster_whisper if a.engine == "faster-whisper" else transcribe
+    data = json.load(open(a.raw)) if a.raw else run(a.src, a.model, a.lang)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     json.dump(data, open(a.out, "w"))
     print("\n  start    end   gap  text   (original seconds; * = restart marker)")
