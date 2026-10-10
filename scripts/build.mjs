@@ -326,6 +326,9 @@ for (const [from, to] of Object.entries(spec.captions?.phrases || {})) {
     }
   }
 }
+// captions.dedupe (opt-in): a word repeated back to back ("marketing marketing") is shown once.
+// Ported from main's template-the-monk / template-the-headline (Ahmed, 9 Oct); off unless a style asks.
+if (spec.captions?.dedupe) for (let i = words.length - 1; i > 0; i--) if (core(words[i].word).toLowerCase() === core(words[i - 1].word).toLowerCase() && words[i].start - words[i - 1].end < 0.5) { words[i - 1].end = words[i].end; if (/[.?!,]$/.test(words[i].word)) words[i - 1].word = words[i].word; words.splice(i, 1); }
 // A phrase mapped to "" removes it: grunts and noise whisper heard as words.
 for (let i = words.length - 1; i >= 0; i--) if (core(words[i].word) === "") words.splice(i, 1);
 
@@ -635,6 +638,8 @@ const last = takes.at(-1);
 if (OUTRO > 0) execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(last.a + last.dur - 1 / FPS), "-i", path.resolve(proj, last.src), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, "outro.jpg")]);
 const outroHtml = OUTRO > 0 ? `
       <img id="outro-still" class="fill" src="assets/outro.jpg" data-start="${r3(SPEECH)}" data-duration="${r3(OUTRO)}" data-track-index="0" />` : "";
+// outroFade (opt-in): the held last frame fades to black instead of freezing (Ahmed's The Monk 2)
+if (OUTRO > 0 && spec.outroFade) tl.push(`tl.fromTo("#outro-still", { autoAlpha: 1 }, { autoAlpha: 0, duration: ${r3(OUTRO)}, ease: "power1.inOut", immediateRender: false }, ${r3(SPEECH)});`);
 
 // ---------- caption placement: face-aware, inside the platform's safe area ----------
 // I-19: 4:5/1:1/16:9 have no stories-style swipe chrome, so "instagram" is the
@@ -1145,8 +1150,10 @@ const WEAK_END = /^(a|an|the|to|of|and|or|but|in|on|at|for|with|my|your|his|her|
 const SMART = cap.smartBreaks === true;
 const groups = [];
 let cur = [];
+// cap.breakOnCut (opt-in): a jump cut between hand-picked takes ends the caption group (a new sentence on a new take)
+const cutBetween = (a, b) => !!cap.breakOnCut && takes.some((k, ki) => ki > 0 && a.start < k.start - 0.01 && b.start >= k.start - 0.02);
 for (const w of words) {
-  if (cur.length && (w.start - cur.at(-1).end > 0.6)) { groups.push(cur); cur = []; }
+  if (cur.length && (w.start - cur.at(-1).end > 0.6 || cutBetween(cur.at(-1), w))) { groups.push(cur); cur = []; }
   cur.push(w);
   // don't strand a phrase on a weak word ("GONNA HAVE TO" / "OKAY OKAY HE'S"): allow one extra word
   const bare = w.word.replace(/[^a-z']/gi, "");
@@ -1158,10 +1165,11 @@ if (cur.length) groups.push(cur);
 // no one-word orphans ("it." / "okay," / "ChatGPT?"): fold into the phrase they belong to
 const wc = (g) => g.reduce((n, x) => n + x.word.trim().split(/\s+/).length, 0);
 for (let i = 0; i < groups.length; i++) {
-  if (!SMART || wc(groups[i]) !== 1 || groups.length < 2) continue;
+  // cap.minWords (opt-in, default 1 = the one-word-orphan rule as before): fold groups of up to this many words
+  if (!SMART || wc(groups[i]) > (cap.minWords ?? 1) || groups.length < 2) continue;
   const g = groups[i], prev = groups[i - 1], next = groups[i + 1];
-  const joinsPrev = prev && !/[.?!]$/.test(prev.at(-1).word) && g[0].start - prev.at(-1).end < 0.6 && wc(prev) <= cap.group + 1;
-  const joinsNext = next && !/[.?!]$/.test(g[0].word) && next[0].start - g[0].end < 0.6 && wc(next) <= cap.group;
+  const joinsPrev = prev && !/[.?!]$/.test(prev.at(-1).word) && g[0].start - prev.at(-1).end < 0.6 && wc(prev) <= cap.group + 1 && !cutBetween(prev.at(-1), g[0]);
+  const joinsNext = next && !/[.?!]$/.test(g[0].word) && next[0].start - g[0].end < 0.6 && wc(next) <= cap.group + ((cap.minWords ?? 1) > 1 ? 2 : 0) && !cutBetween(g.at(-1), next[0]);
   if (joinsPrev) { prev.push(...g); groups.splice(i--, 1); }
   else if (joinsNext) { next.unshift(...g); groups.splice(i--, 1); }
 }
@@ -1170,7 +1178,7 @@ const MIN_READ = cap.minRead ?? 0.5;
 for (let i = 0; i < groups.length - 1; i++) {
   const g = groups[i], next = groups[i + 1];
   if (!SMART || next[0].start - g[0].start >= MIN_READ || /[.?!]$/.test(g.at(-1).word)) continue;
-  if (wc(g) + wc(next) > cap.group + 4) continue;
+  if (wc(g) + wc(next) > cap.group + 4 || cutBetween(g.at(-1), next[0])) continue;
   g.push(...next); groups.splice(i + 1, 1); i--;
 }
 // captions.onlyInScenes: the recording already has burned-in captions, so ours
@@ -1184,6 +1192,7 @@ if (cap.style !== "editorial" && cap.style !== "none") {
   tl.push(`tl.set("#caps", { autoAlpha: 1 }, 0);`);
   for (const [a, b] of merged) { tl.push(`tl.to("#caps", { autoAlpha: 0, duration: 0.08 }, ${r3(a)});`); tl.push(`tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, ${r3(b - 0.05)});`); }
 }
+if (cap.breakOnCut) cap.cutTimes = takes.slice(1).map((k) => k.start);  // edit seconds of the jump cuts, for motion.mjs's editorial blocks
 const edit = cap.style === "editorial" ? buildEditorialCaptions(words, cap, motionCtx, cap.onlyInScenes ? complement(shownCaps) : hiddenCaps) : null;
 const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
@@ -1198,9 +1207,11 @@ const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   });
   const capSize = CAP_SIZES[cap.style] ?? (cap.style === "clean" ? (cap.size ?? brand.capSize) : (cap.size ?? 56));
   const pl = placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
-  const backed = pl.mode === "lower-face" && !["pill", "box", "sessions"].includes(cap.style);
+  // captions.backing false (opt-in): no grey box over the lower face, a heavy text shadow instead
+  const backed = pl.mode === "lower-face" && cap.backing !== false && !["pill", "box", "sessions"].includes(cap.style);
+  const shadowed = pl.mode === "lower-face" && cap.backing === false;
   const tilt = cap.tilt ? `;rotate:${gi % 2 ? -cap.tilt : cap.tilt * 0.7}deg` : "";  // R1b port (Broadsheet clippings)
-  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : ""}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(caseOf(w.word))}</span>`).join("<wbr>")}</div>`;
+  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : shadowed ? " cap-shadow" : ""}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(caseOf(w.word))}</span>`).join("<wbr>")}</div>`;
 }).join("\n      ");
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
@@ -1224,8 +1235,10 @@ const capCss = cap.style === "clean"
   .cap-group { background: rgba(98,98,104,.6); padding: 5px 14px 10px; border-radius: 1px; }
   .cap-group .w { margin: 0 0.055em; }`
   : cap.style === "serif"
-  ? `.cap-group { font-family: ${cap.font ?? "EB Garamond"}, "Noto Sans Arabic", Georgia, serif; font-size: ${CAP_SIZES.serif}px; font-weight: 500; line-height: 1.15; color: ${cap.color ?? "#E7C66B"}; max-width: 900px; text-align: center; text-shadow: 0 2px 12px rgba(0,0,0,.55); }
-  .cap-group .w { margin: 0 0.12em; }`
+  ? `.cap-group { font-family: ${cap.font ?? "EB Garamond"}, "Noto Sans Arabic", Georgia, serif; font-size: ${CAP_SIZES.serif}px; font-weight: 500; line-height: 1.15; color: ${cap.color ?? "#E7C66B"}; max-width: 900px; text-align: center; text-shadow: ${cap.shadow === "strong" ? "0 1px 2px rgba(0,0,0,.9), 0 3px 9px rgba(0,0,0,.75), 0 6px 26px rgba(0,0,0,.6)" : "0 2px 12px rgba(0,0,0,.55)"}; }
+  .cap-group .w { margin: 0 0.12em; }${cap.scrim ? `
+  /* captions.scrim (0-1, opt-in; Ahmed's The Monk 2): a soft dark radial scrim behind each caption, no hard box */
+  .cap-group::before { content: ""; position: absolute; z-index: -1; left: -170px; right: -170px; top: -80px; bottom: -70px; pointer-events: none; background: radial-gradient(ellipse at 50% 50%, rgba(0,0,0,${cap.scrim}) 0%, rgba(0,0,0,${(cap.scrim * 0.55).toFixed(2)}) 45%, rgba(0,0,0,0) 78%); }` : ""}`
   : `.cap-group { font-family: Arial, "Noto Sans Arabic", Helvetica, sans-serif; font-size: ${cap.size ?? 56}px; font-weight: 700; color: #fff; max-width: 900px;
       -webkit-text-stroke: 8px #000; paint-order: stroke fill; text-shadow: 0 4px 10px rgba(0,0,0,.35); }`;
 
@@ -1731,7 +1744,9 @@ const html = `<!doctype html>
   .ec-url { font-family: GeistMono, monospace; font-size: 30px; margin-top: 22px; color: #555; white-space: nowrap; }
   #caps { position: absolute; left: 0; right: 0; top: 0; height: 0; }
   .cap-group { position: absolute; left: 50%; transform: translateX(-50%); width: max-content; max-width: ${W - 2 * placer.sidePad}px !important; text-align: center; line-height: 1.18; }
-  .cap-backed { background: rgba(8,8,10,.55); border-radius: 20px; padding: 6px 22px; -webkit-text-stroke: 0 !important; }
+  .cap-backed { background: rgba(8,8,10,.55); border-radius: 20px; padding: 6px 22px; -webkit-text-stroke: 0 !important; }${cap.backing === false ? `
+  .cap-shadow { text-shadow: 0 2px 4px rgba(0,0,0,.85), 0 6px 22px rgba(0,0,0,.75), 0 0 2px rgba(0,0,0,.9) !important; }
+  .eshadow .ew { text-shadow: 0 2px 4px rgba(0,0,0,.85), 0 6px 22px rgba(0,0,0,.75), 0 0 2px rgba(0,0,0,.9); }` : ""}
   ${capCss}
   ${rtl ? `#caps, .cap-group { direction: rtl; unicode-bidi: plaintext; }` : ""}
   /* layout.compact: a smaller card grammar for a narrow band (e.g. under burned-in captions) */

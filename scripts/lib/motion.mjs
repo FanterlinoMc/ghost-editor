@@ -988,11 +988,15 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
   const lines = [];
   let cur = null;
   const push = (l) => { if (l && l.words.length) lines.push(l); };
+  // cap.cutTimes (edit seconds of jump cuts, set by build.mjs when captions.breakOnCut): a line and a block never span a cut
+  const cuts = cap.cutTimes || [];
+  const cutBetween = (a, b) => cuts.some((c) => a.start < c - 0.01 && b.start >= c - 0.02);
   for (let i = 0; i < words.length; i++) {
     const tag = tags.find((tw) => tw.every((x, k) => words[i + k] && norm(words[i + k].word) === x));
     if (tag) { push(cur); cur = null; lines.push({ tag: true, words: words.slice(i, i + tag.length) }); i += tag.length - 1; continue; }
     const w = words[i];
-    if (!cur || cur.words.length >= (cap.group ?? 3) || (w.start - cur.words.at(-1).end > 0.6)) { push(cur); cur = { words: [] }; }
+    const atCut = cur && cutBetween(cur.words.at(-1), w);
+    if (!cur || atCut || cur.words.length >= (cap.group ?? 3) || (w.start - cur.words.at(-1).end > 0.6)) { push(cur); cur = { words: [], afterCut: atCut || (lines.length && cutBetween(lines.at(-1).words.at(-1), w)) }; }
     cur.words.push(w);
     if (/[.?!,]$/.test(w.word)) { push(cur); cur = null; }
   }
@@ -1002,7 +1006,7 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
   for (let i = 0; i < lines.length;) {
     // a tag pill heads a block of up to two lines; plain blocks hold two lines
     let take = 1;
-    while (take < (lines[i].tag ? 3 : 2) && lines[i + take] && !lines[i + take].tag) take++;
+    while (take < (lines[i].tag ? 3 : 2) && lines[i + take] && !lines[i + take].tag && !lines[i + take].afterCut) take++;
     blocks.push(lines.slice(i, i + take));
     i += take;
   }
@@ -1021,7 +1025,7 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
         tl.push(`ft("#${lid}", { autoAlpha: 0, scale: 0.5, rotation: -16 }, { autoAlpha: 1, scale: 1, rotation: -6, duration: 0.3, ease: "back.out(1.7)" }, ${r3(t)});`);
         return `<span class="eline"><span id="${lid}" class="etag">${esc(ln.words.map((w) => w.word.replace(/[.,!?]$/, "")).join(" "))}</span></span>`;
       }
-      if (li > 0 && !bl[li - 1].tag && bl[li - 1].words) tl.push(`tl.to("#eb${bi}l${li - 1} .ew:not(.eser):not(.ebold):not(.ealarm)", { fontWeight: 300, color: "rgba(255,255,255,0.86)", duration: 0.2, ease: "power2.out" }, ${r3(ln.words[0].start - 0.03)});`);
+      if (li > 0 && !bl[li - 1].tag && bl[li - 1].words) tl.push(`tl.to("#eb${bi}l${li - 1} .ew:not(.eser):not(.ebold):not(.ealarm)", { fontWeight: ${cap.prevWeight ?? 300}, color: "rgba(255,255,255,${cap.prevAlpha ?? 0.86})", duration: 0.2, ease: "power2.out" }, ${r3(ln.words[0].start - 0.03)});`);
       return `<span id="${lid}" class="eline">${ln.words.map((w, wi) => {
         const wid = `${lid}w${wi}`;
         tl.push(`ft("#${wid}", { autoAlpha: 0, y: 10, filter: "blur(10px)" }, { autoAlpha: 1, y: 0, filter: "blur(0px)", duration: 0.26, ease: "power3.out" }, ${r3(w.start - 0.03)});`);
@@ -1034,7 +1038,7 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
           // normally; mirrored for rtl scripts so the reveal still tracks how the word is read)
           const clipFrom = rtl ? "inset(0% 0% 0% 100%)" : "inset(0% 100% 0% 0%)";
           const clipTo = rtl ? "inset(0% 0% 0% -10%)" : "inset(0% -10% 0% 0%)";
-          tl.push(`ft("#${wid}", { clipPath: "${clipFrom}" }, { clipPath: "${clipTo}", duration: ${r3(Math.max(0.35, Math.min(0.7, w.end - w.start + 0.2)))}, ease: "power1.inOut" }, ${r3(w.start - 0.02)});`);
+          tl.push(`ft("#${wid}", { clipPath: "${clipFrom}" }, { clipPath: "${clipTo}", duration: ${r3(cap.scriptDur ?? Math.max(0.35, Math.min(0.7, w.end - w.start + 0.2)))}, ease: "power1.inOut" }, ${r3(w.start - (cap.scriptDur ? 0.12 : 0.02))});`);
           if (cap.keywordSfx !== false && ctx.addSfx) ctx.addSfx(w.start, "whoosh", "keyword script", { db: -8 });
           return `<span id="${wid}" class="ew eser">${esc(txt)}</span>`;
         }
@@ -1044,7 +1048,7 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
           return `<span id="${wid}" class="ew ebold">${esc(txt)}</span>`;
         }
         if (kw === "alarm") {
-          const hold = Math.max(0.9, (w.end - w.start) + 0.8);
+          const hold = Math.max(0.9, (w.end - w.start) + (cap.alarmTail ?? 0.8));
           tl.push(`tl.to("#base", { filter: "grayscale(1) contrast(1.1)", duration: 0.12, ease: "none" }, ${r3(w.start - 0.05)});`);
           tl.push(`tl.to("#base", { filter: "grayscale(0) contrast(1)", duration: 0.25, ease: "power1.out" }, ${r3(w.start + hold)});`);
           if (cap.keywordSfx !== false && ctx.addSfx) ctx.addSfx(w.start, "impact", "keyword alarm", { db: -4 });
@@ -1057,7 +1061,7 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
         return `<span id="${wid}" class="ew">${esc(txt)}</span>`;
       }).join("")}</span>`;
     }).join("");
-    return `<div id="eb${bi}" class="eblock clip${pl.mode === "lower-face" ? " ebacked" : ""}" style="top:${y}px${pl.scale && pl.scale < 1 ? `;transform:scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(Math.max(0, s))}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${inner}</div>`;
+    return `<div id="eb${bi}" class="eblock clip${pl.mode === "lower-face" ? (cap.backing === false ? " eshadow" : " ebacked") : ""}" style="top:${y}px${pl.scale && pl.scale < 1 ? `;transform:scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(Math.max(0, s))}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${inner}</div>`;
   }).join("\n      ");
   // hide the captions under full-screen scenes that don't want them
   tl.push(`tl.set("#ecaps", { autoAlpha: 1 }, 0);`);
