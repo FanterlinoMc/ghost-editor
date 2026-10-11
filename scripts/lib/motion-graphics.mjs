@@ -12,6 +12,8 @@
 //   - A bad element/tween is dropped with a warning; only a beat with nothing left, or outside the
 //     0.6..8 s span, is dropped whole. compileMotion never throws and never calls die().
 
+import { normalizeRoom } from "./room.mjs";
+
 // The families the composition loads (templates/fonts, via build.mjs's @font-face loop) that suit
 // display text. Arabic (RTL) and GeistMono are deliberately out. The planner imports or mirrors this.
 export const DESIGNER_FONTS = [
@@ -95,7 +97,7 @@ export function revealClip(r, from, w, h, pad) {
  * @param b    the beat (reel.json)
  * @param ctx  { id: "b3", t0, t1 (edit seconds, resolved by the caller), W, H, brand,
  *               resolveImage(src) -> project-relative "assets/..." path or null }
- * @returns { ok: false, reason } | { ok: true, html, lines, hideCaptions, sfx, warnings }
+ * @returns { ok: false, reason } | { ok: true, html, lines, hideCaptions, room, sfx, warnings }
  */
 export function compileMotion(b, ctx) {
   const warnings = [];
@@ -107,6 +109,9 @@ export function compileMotion(b, ctx) {
   if (typeof b.id !== "string" || !ID_RE.test(b.id)) return { ok: false, reason: `bad id '${b.id}' (want [a-z0-9-]{1,24})` };
   if (!(len >= LIMITS.minSpan - 1e-6 && len <= LIMITS.maxSpan + 1e-6)) return { ok: false, reason: `span ${len}s outside ${LIMITS.minSpan}..${LIMITS.maxSpan}s` };
   if (!Array.isArray(b.elements) || !b.elements.length) return { ok: false, reason: "no elements" };
+  // room: only "below" changes anything; anything else is "none" with a warning (never a die). "below" implies hideCaptions.
+  const { room, warning: roomWarning } = normalizeRoom(b.room);
+  if (roomWarning) warn(roomWarning);
 
   // ---------- elements ----------
   const els = new Map();
@@ -397,5 +402,5 @@ export function compileMotion(b, ctx) {
   if (exitKind === "fade") lines.push(`ft("#${id}-in", { opacity: 1 }, { opacity: 0, duration: ${r3(fo)}, ease: "power1.in" }, ${r3(t1 - fo)});`);
 
   const sfx = b.sfx === undefined ? "whoosh" : b.sfx;
-  return { ok: true, html: dimHtml + `<div id="${id}-in" class="ov" style="left:0;top:0;width:${W}px;height:${H}px">${html.join("")}</div>`, lines, hideCaptions: b.hideCaptions === true, sfx, dim, exit: exitKind, warnings };
+  return { ok: true, html: dimHtml + `<div id="${id}-in" class="ov" style="left:0;top:0;width:${W}px;height:${H}px">${html.join("")}</div>`, lines, hideCaptions: b.hideCaptions === true || room === "below", room, sfx, dim, exit: exitKind, warnings };
 }
