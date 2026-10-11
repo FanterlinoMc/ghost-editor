@@ -467,6 +467,46 @@ const beatSfx = (b, t, def, why, opts) => {
   for (const id of [].concat(s)) addSfx(t, id, why, opts);
 };
 
+const motionBeats = spec.beats || [];   // the same array beatsList aliases below; dropped beats are spliced out of it here
+// Designer graphics (docs/MOTION-GRAPHICS-SPEC.md): a `motion` beat is opt-in per style (`"designer": true`).
+// A beat that cannot be placed - style not opted in, or `at`/`to` not inside one kept take - is dropped with a
+// warning, never fatal; the rest of the reel builds. Runs before anything resolves beat times, and splices the
+// beat out of spec.beats so edit_truth.json only ever lists beats that were built.
+for (let i = motionBeats.length - 1; i >= 0; i--) {
+  const b = motionBeats[i];
+  if (b.type !== "motion") continue;
+  let why = null;
+  if (spec.designer !== true) why = "this style does not set designer:true";
+  else if (b.to === undefined) why = "no `to`";
+  else {
+    try {
+      const a = E(b.at, "motion at"), z = E(b.to, "motion to");
+      const ka = locateTake(takes, a, FPS), kz = locateTake(takes, z - 0.001, FPS);
+      if (!(z > a)) why = "`to` is not after `at`";
+      else if (ka !== kz || z > ka.start + ka.dur + 1e-6) why = "`at` and `to` are not in the same kept take";
+    } catch (e) { why = String(e.message).split("\n")[0]; }
+  }
+  if (why) { warn.push(`motion beat ${b.id ?? i} dropped: ${why}`); motionBeats.splice(i, 1); }
+}
+
+// ---------- motion hold: the camera stays still under a designer graphic ----------
+// Owner decision (Ahmed): on close-up footage the automatic punches and the opening push grow the face
+// under the graphic. All times below are OUTPUT (edit-timeline) seconds - E() has already mapped the
+// beat's recording-second `at`/`to` - and every comparison is made in whole frames, round(t * FPS).
+//   1. A cadence snap (jump cut, emphasis or rhythm - anything in `cadenceSnaps`) whose start frame lies in
+//      [round(at * FPS), round((to + MOTION_HOLD_EXIT) * FPS)], both ends inclusive, of any KEPT motion beat
+//      is skipped. The cadence schedule is generated in full first and filtered afterwards, so every other
+//      snap keeps its time, its scale and its sfx slot (the every-Nth sfx counter still counts a skipped one).
+//   2. Because nothing in the window changes #snap, the scale in force at `at` - including a snap from before
+//      `at` - simply stays in force until the window ends; it is not reset to 1.
+//   3. openPush (the 0..dur ramp, reset at dur + 0.05) is dropped for the whole reel when any kept motion beat
+//      starts at or before frame round((dur + 0.05) * FPS).
+//   4. The director's explicit snaps and pushes are never touched.
+const MOTION_HOLD_EXIT = 0.2;
+const motionHold = motionBeats.filter((b) => b.type === "motion").map((b) => [Math.round(E(b.at) * FPS), Math.round((E(b.to) + MOTION_HOLD_EXIT) * FPS)]);
+const inMotionHold = (t) => motionHold.some(([fa, fb]) => { const f = Math.round(t * FPS); return f >= fa && f <= fb; });
+const openPushHeldByMotion = (dur) => motionHold.some(([fa]) => fa <= Math.round((dur + 0.05) * FPS));
+
 // ---------- zoom ----------
 const zoom = spec.zoom || {};
 const tl = []; // GSAP lines
@@ -502,7 +542,9 @@ if (cadence) {
 }
 tl.push(`tl.set("#snap", { scale: 1 }, 0);`);
 let cadenceIndex = 0;
+const heldCadence = new Set();
 for (const [t, z] of snaps) {
+  if (cadenceSnaps.has(t) && inMotionHold(t)) { heldCadence.add(t); cadenceIndex++; continue; }
   tl.push(`tl.set("#snap", { scale: ${z} }, ${t});`);
   if (cadenceSnaps.has(t)) {
     const every = cadence.sfxEvery ?? 4;
@@ -510,10 +552,15 @@ for (const [t, z] of snaps) {
     cadenceIndex++;
   } else if (zoom.snapSfx || SFX_PROFILE === "rich") addSfx(t, !zoom.snapSfx || zoom.snapSfx === true ? "whoosh" : zoom.snapSfx, "snap", { db: -6, lead: 0.05 });
 }
+if (heldCadence.size) {
+  for (let i = snaps.length - 1; i >= 0; i--) if (heldCadence.has(snaps[i][0])) snaps.splice(i, 1);
+  for (const t of heldCadence) cadenceSnaps.delete(t);
+  console.log(`motion hold: ${heldCadence.size} cadence punch-in(s) skipped under a motion beat`);
+}
 let lastPushEnd = -1;
 const pushesEdit = [];
 // openPush: a slow push-in on the speaker over the opening seconds (the hook breathes in)
-if (spec.openPush && !(zoom.pushes || []).some((p) => E(p.at, "push") < (spec.openPush.dur ?? 2.5))) {
+if (spec.openPush && !(zoom.pushes || []).some((p) => E(p.at, "push") < (spec.openPush.dur ?? 2.5)) && !openPushHeldByMotion(spec.openPush.dur ?? 2.5)) {
   const d = spec.openPush.dur ?? 2.5;
   tl.push(`ft("#push", { scale: 1 }, { scale: ${spec.openPush.z ?? 1.08}, duration: ${d}, ease: "sine.inOut" }, 0);`);
   tl.push(`tl.to("#push", { scale: 1, duration: 0.01 }, ${r3(d + 0.05)});`);
@@ -792,26 +839,6 @@ if (spec.nametag && !hasSelfTag) {
   const firstPage = pagesByEdit.length ? pagesByEdit[0].at : undefined;
   const until = spec.nametag.until === "hook" && firstPage != null && firstPage < 4.5 ? firstPage - 0.05 : (spec.nametag.to ?? 2.4);
   beatsList.unshift({ type: "nametag", name: spec.nametag.name, title: spec.nametag.title, subtitle: spec.nametag.subtitle, at: spec.nametag.at ?? 0.15, to: Math.max(1.2, until), sfx: false });
-}
-// Designer graphics (docs/MOTION-GRAPHICS-SPEC.md): a `motion` beat is opt-in per style (`"designer": true`).
-// A beat that cannot be placed - style not opted in, or `at`/`to` not inside one kept take - is dropped with a
-// warning, never fatal; the rest of the reel builds. Runs before anything resolves beat times, and splices the
-// beat out of spec.beats so edit_truth.json only ever lists beats that were built.
-for (let i = beatsList.length - 1; i >= 0; i--) {
-  const b = beatsList[i];
-  if (b.type !== "motion") continue;
-  let why = null;
-  if (spec.designer !== true) why = "this style does not set designer:true";
-  else if (b.to === undefined) why = "no `to`";
-  else {
-    try {
-      const a = E(b.at, "motion at"), z = E(b.to, "motion to");
-      const ka = locateTake(takes, a, FPS), kz = locateTake(takes, z - 0.001, FPS);
-      if (!(z > a)) why = "`to` is not after `at`";
-      else if (ka !== kz || z > ka.start + ka.dur + 1e-6) why = "`at` and `to` are not in the same kept take";
-    } catch (e) { why = String(e.message).split("\n")[0]; }
-  }
-  if (why) { warn.push(`motion beat ${b.id ?? i} dropped: ${why}`); beatsList.splice(i, 1); }
 }
 const HANDOVER = 0.45;
 // I-25: the resolved [t0, t1] every beat actually occupies on the output timeline, captured as a

@@ -49,6 +49,28 @@ const proj = makeProject(dir, { beat });
 const warns = proj.log.split("\n").filter((l) => /motion/i.test(l) && /(dropped|ignored|clamped|only the first|not allowed)/i.test(l));
 if (warns.length) { console.error("the fixture beat produced compiler warnings (it should be clean):\n  " + warns.join("\n  ")); process.exit(2); }
 
+// ---- the camera hold (owner decision: still camera under a motion beat; build.mjs "motion hold") ----
+// The fixture is keynote-3, which inherits keynote's cadence and openPush. Build the same reel with no beat as
+// the control: it must have cadence snaps inside the window [at, to + 0.2] (the "would-be" snaps) and an
+// openPush; the reel with the beat must have neither, and every snap outside the window must be unchanged.
+const holdFailures = [];
+{
+  const ctl = makeProject(dir + "-control", { beat: null });
+  const readTruth = (p) => JSON.parse(fs.readFileSync(path.join(p.dir, "build", "edit_truth.json"), "utf8"));
+  const withBeat = readTruth(proj), without = readTruth(ctl), FPSX = 30;
+  const lo = Math.round(BEAT_AT * FPSX), hi = Math.round((BEAT_TO + 0.2) * FPSX);
+  const inWin = (s) => { const f = Math.round(s.t * FPSX); return f >= lo && f <= hi; };
+  const wouldBe = without.snaps.filter(inWin);
+  if (!wouldBe.length) holdFailures.push("control has no cadence snap inside the window: the hold is not being exercised");
+  if (withBeat.snaps.some(inWin)) holdFailures.push(`snaps left inside the window: ${JSON.stringify(withBeat.snaps.filter(inWin))}`);
+  const key = (s) => `${s.t}@${s.scale}`;
+  const outside = (x) => x.snaps.filter((s) => !inWin(s)).map(key).join(",");
+  if (outside(withBeat) !== outside(without)) holdFailures.push(`snaps outside the window changed:\n    control ${outside(without)}\n    beat    ${outside(withBeat)}`);
+  if (!without.pushes.some((p) => p.start === 0)) holdFailures.push("control has no openPush: the openPush drop is not being exercised");
+  if (withBeat.pushes.some((p) => p.start === 0)) holdFailures.push("openPush survived a beat that starts inside it");
+  console.log(`  hold: control ${without.snaps.length} snaps (${wouldBe.length} inside ${BEAT_AT}-${BEAT_TO + 0.2}), with beat ${withBeat.snaps.length}; openPush control=${without.pushes.some((p) => p.start === 0)} beat=${withBeat.pushes.some((p) => p.start === 0)}`);
+}
+
 const puppeteer = findPuppeteer();
 const browser = await puppeteer.launch({ executablePath: findChrome(), headless: "shell", args: ["--no-sandbox", "--force-device-scale-factor=1", "--hide-scrollbars"], defaultViewport: { width: 1080, height: 1920, deviceScaleFactor: 1 } });
 const prefix = fs.readFileSync(proj.html, "utf8").match(new RegExp(`id="(b\\d+)-${beat.elements[0].id}"`))?.[1];
@@ -140,8 +162,14 @@ for (let p = 0; p < passes; p++) {
 }
 for (const t of [...SAMPLES].reverse()) { checks++; compare("reverse", t, ref.get(t), await at(page, t)); }   // backwards scrub
 for (const t of SAMPLES) { await page.evaluate((x) => window.__seek(x), t); checks++; compare("repeat", t, ref.get(t), await at(page, t)); }   // same time twice
+// the camera really is still: #snap and #push compute to the same transform at every frame of the window
+{
+  const cam = async (t) => { await page.evaluate((x) => window.__seek(x), t); return page.evaluate(() => ["snap", "push"].map((i) => getComputedStyle(document.getElementById(i)).transform).join(" ")); };
+  const want = await cam(BEAT_AT);
+  for (let f = Math.round(BEAT_AT * 30); f <= Math.round((BEAT_TO + 0.2) * 30); f++) { const got = await cam(f / 30); if (got !== want) { holdFailures.push(`camera moved at t=${(f / 30).toFixed(3)}: ${want} -> ${got}`); break; } }
+}
 await page.close();
-for (const t of SAMPLES) {                                                      // cold: first seek in a fresh page
+for (const t of SAMPLES) {                                                    // cold: first seek in a fresh page
   const pg = await open(); checks++; compare("cold", t, ref.get(t), await at(pg, t)); await pg.close();
 }
 await browser.close();
@@ -149,6 +177,7 @@ await browser.close();
 console.log(`motion determinism: variant=${variant} seek=${seekMode} samples=${SAMPLES.length} (${distinct} distinct images) comparisons=${checks}`);
 console.log(`  times: ${SAMPLES.join(", ")}   beat ${BEAT_AT}-${BEAT_TO}`);
 if (distinct < SAMPLES.length - 3) { console.log("  FAIL: sample frames are nearly all identical - the beat is not visible, the test proves nothing"); process.exitCode = 2; }
+if (holdFailures.length) { console.log(`  FAIL: camera hold\n   ${holdFailures.join("\n   ")}`); process.exitCode = 1; }
 if (failures.length) {
   console.log(`  FAIL: ${failures.length} mismatches (pixels differ: ${failures.filter((f) => f.pixels).length}); images in ${outDir}`);
   for (const f of failures.slice(0, 12)) console.log(`   ${f.label} t=${f.t} pixels=${f.pixels ? "DIFFER" : "same"} state keys: ${f.stateKeys.join(" ")}\n    ${f.detail.join("\n    ")}`);
