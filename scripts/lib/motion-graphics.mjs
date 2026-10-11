@@ -179,7 +179,7 @@ export function compileMotion(b, ctx) {
   const blurEls = new Set();
   const rawTw = Array.isArray(b.tweens) ? b.tweens.slice(0, LIMITS.tweens) : [];
   if (Array.isArray(b.tweens) && b.tweens.length > LIMITS.tweens) warn(`only the first ${LIMITS.tweens} tweens are used`);
-  const needsDraw = new Set(), needsClip = new Map(), countFmt = new Map(), kept = [];
+  const drawVis = new Map(), needsDraw = new Set(), needsClip = new Map(), countFmt = new Map(), kept = [];
   const pad = (el) => (el.shape === "text" ? (el.shadow === "none" ? 8 : 28) : Math.ceil((el.sw ?? 0) / 2) + 4);
 
   rawTw.forEach((tw, ti) => {
@@ -266,6 +266,8 @@ export function compileMotion(b, ctx) {
       needsDraw.add(el.uid);
       const sel = `#${el.uid}-s`, from = { strokeDashoffset: rd(1 - val.draw[0], 4) }, to = { strokeDashoffset: rd(1 - val.draw[1], 4) };
       calls.push({ sel, at: r3(at), dur, ease, from, to });
+      if (!drawVis.has(el.uid)) drawVis.set(el.uid, []);
+      drawVis.get(el.uid).push({ sel, at: r3(at), dur, from: val.draw[0], to: val.draw[1] });
       const kk = `${sel}|strokeDashoffset`;
       if (!segs.has(kk)) segs.set(kk, []);
       segs.get(kk).push({ at: r3(at), end: r3(at + dur), from: from.strokeDashoffset, to: to.strokeDashoffset });
@@ -328,21 +330,48 @@ export function compileMotion(b, ctx) {
   const lines = [];
   const J = JSON.stringify;
   const abs = (t) => r3(t0 + t);
+  // GSAP's CSS plugin ROUNDS a px-valued stroke-dashoffset to an integer, so a 1 -> 0 draw sat at 1 until its last
+  // frame and then popped. The dash offset goes through the attribute plugin (no rounding) instead.
+  const gv = (o) => ("strokeDashoffset" in o ? { attr: { "stroke-dashoffset": o.strokeDashoffset } } : o);
   // backfill (value before a key's first tween = its `from`) and holds across mismatched gaps
   for (const [kk, list] of segs) {
     const sel = kk.slice(0, kk.indexOf("|")), prop = kk.slice(kk.indexOf("|") + 1);
     list.sort((a, b2) => a.at - b2.at);
-    lines.push(`tl.set(${J(sel)}, ${J({ [prop]: list[0].from })}, 0);`);
+    lines.push(`tl.set(${J(sel)}, ${J(gv({ [prop]: list[0].from }))}, 0);`);
     for (let i = 1; i < list.length; i++) {
       const gap = r3(list[i].at - list[i - 1].end);
-      if (gap > 0.001 && list[i - 1].to !== list[i].from) lines.push(`tl.fromTo(${J(sel)}, ${J({ [prop]: list[i - 1].to })}, ${J({ [prop]: list[i - 1].to, duration: gap, ease: "none", immediateRender: false })}, ${abs(list[i - 1].end)});`);
+      if (gap > 0.001 && list[i - 1].to !== list[i].from) lines.push(`tl.fromTo(${J(sel)}, ${J(gv({ [prop]: list[i - 1].to }))}, ${J({ ...gv({ [prop]: list[i - 1].to }), duration: gap, ease: "none", immediateRender: false })}, ${abs(list[i - 1].end)});`);
     }
   }
   // tl.fromTo directly (not ft): ft's one-off set(from, 0) on a selector's first call would overwrite the
   // backfill above with whichever tween happened to be listed first
   calls.sort((a, b2) => a.at - b2.at);
-  for (const c of calls) lines.push(`tl.fromTo(${J(c.sel)}, ${J(c.from)}, ${J({ ...c.to, duration: c.dur, ease: c.ease, immediateRender: false })}, ${abs(c.at)});`);
-  // count-ups: a proxy-object tween; the text is a pure function of the tween's progress
+  // An overshooting ease (back.out, elastic.out) takes blur below 0, and "blur(-0.4px)" is an invalid value: the
+  // browser ignores the assignment and KEEPS the previous frame's filter, the one place a frame would depend on
+  // the one before it. The modifier floors it at 0 while the tween renders (modifiers run on every render, with
+  // or without events).
+  const FLOOR_BLUR = `(v) => String(v).replace(/\\(\\s*-[^)]*\\)/, "(0px)")`;
+  for (const c of calls) {
+    const to = J({ ...gv(c.to), duration: c.dur, ease: c.ease, immediateRender: false });
+    lines.push(`tl.fromTo(${J(c.sel)}, ${J(gv(c.from))}, ${"filter" in c.to ? `${to.slice(0, -1)},"modifiers":{"filter":${FLOOR_BLUR}}}` : to}, ${abs(c.at)});`);
+  }
+  // A stroke drawn to 0 is not invisible: dash offset 1 leaves the end of the dash on the path's first point and a
+  // round (or square) cap paints a dot there - before the draw starts, and flickering at sub-pixel level. So a
+  // drawn shape is `visibility: hidden` exactly while its draw is 0 (hidden -> visible just after a tween
+  // that starts at 0; visible -> hidden at the end of one that finishes at 0).
+  for (const [, list] of drawVis) {
+    list.sort((a, b2) => a.at - b2.at);
+    const sel = list[0].sel;
+    lines.push(`tl.set(${J(sel)}, { visibility: ${J(list[0].from > 0 ? "visible" : "hidden")} }, 0);`);
+    for (const d of list) {
+      if (d.from <= 0) lines.push(`tl.fromTo(${J(sel)}, { visibility: "hidden" }, { visibility: "visible", duration: 0.001, immediateRender: false }, ${abs(d.at)});`);
+      if (d.to <= 0) lines.push(`tl.fromTo(${J(sel)}, { visibility: "visible" }, { visibility: "hidden", duration: ${d.dur}, ease: "none", immediateRender: false }, ${abs(d.at)});`);
+    }
+  }
+  // count-ups: a proxy-object tween whose `v` modifier writes the text. NOT onUpdate: the renderer seeks with
+  // totalTime(t + .001, suppressEvents) then totalTime(t), and a callback only fires on that second, tiny step -
+  // so a jump to a time after (or before) the tween left the text stale, a frame that depended on where the
+  // playhead came from. A modifier runs whenever the tween renders, which makes the text a function of time.
   const byEl = new Map();
   for (const c of counts) { if (!byEl.has(c.el.uid)) byEl.set(c.el.uid, []); byEl.get(c.el.uid).push(c); }
   for (const [uid, list] of byEl) {
@@ -350,10 +379,11 @@ export function compileMotion(b, ctx) {
     const f = list[0].f;
     const fmt = `(v) => ${J(f.pre)} + (Math.round(v * ${10 ** f.dec}) / ${10 ** f.dec}).${f.comma ? `toLocaleString("en-US", { minimumFractionDigits: ${f.dec}, maximumFractionDigits: ${f.dec} })` : `toFixed(${f.dec})`} + ${J(f.post)}`;
     lines.push(`(() => { const el = document.getElementById(${J(uid + "-a")}).firstChild.firstChild, fmt = ${fmt};`);
+    const one = (from, to, dur, ease, at) => `  { const o = { v: ${rd(from, 6)} }; tl.fromTo(o, { v: ${rd(from, 6)} }, { v: ${rd(to, 6)}, duration: ${dur}, ease: ${J(ease)}, immediateRender: false, modifiers: { v: (x) => { el.textContent = fmt(x); return x; } } }, ${abs(at)}); }`;
     list.forEach((c, i) => {
-      lines.push(`  { const o = { v: ${rd(c.from, 6)} }; tl.fromTo(o, { v: ${rd(c.from, 6)} }, { v: ${rd(c.to, 6)}, duration: ${c.dur}, ease: ${J(c.ease)}, immediateRender: false, onUpdate: () => { el.textContent = fmt(o.v); } }, ${abs(c.at)}); }`);
+      lines.push(one(c.from, c.to, c.dur, c.ease, c.at));
       const nxt = list[i + 1];
-      if (nxt && r3(nxt.at - (c.at + c.dur)) > 0.001 && c.to !== nxt.from) lines.push(`  { const o = { v: ${rd(c.to, 6)} }; tl.fromTo(o, { v: ${rd(c.to, 6)} }, { v: ${rd(c.to, 6)}, duration: ${r3(nxt.at - (c.at + c.dur))}, ease: "none", immediateRender: false, onUpdate: () => { el.textContent = fmt(o.v); } }, ${abs(c.at + c.dur)}); }`);
+      if (nxt && r3(nxt.at - (c.at + c.dur)) > 0.001 && c.to !== nxt.from) lines.push(one(c.to, c.to, r3(nxt.at - (c.at + c.dur)), "none", c.at + c.dur));
     });
     lines.push(`})();`);
   }

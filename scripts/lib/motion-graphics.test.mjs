@@ -136,7 +136,12 @@ check("a minimal beat compiles", run(beat()).ok === true);
   const b = beat({ elements: [{ id: "p", shape: "path", x: 0, y: 0, w: 300, h: 300, d: "M0 0 L300 300", stroke: "#ffffff", strokeWidth: 8 }], tweens: [{ target: "p", at: 0, dur: 1, ease: "none", from: { draw: 0 }, to: { draw: 1 } }] });
   const r = run(b);
   check("draw uses pathLength 1 with a dash pattern longer than the path", r.html.includes('pathLength="1"') && r.html.includes('stroke-dasharray="1 2"'));
-  check("draw tweens dashoffset 1 -> 0 on the shape", r.lines.join("").includes('"#b3-p-s", {"strokeDashoffset":1}, {"strokeDashoffset":0'));
+  // GSAP's CSS plugin rounds a px stroke-dashoffset to an integer (the draw sat at 1, then popped), so it is an attribute tween
+  const dl = r.lines.join("\n");
+  check("draw tweens the stroke-dashoffset ATTRIBUTE 1 -> 0 on the shape, not a rounded CSS length", dl.includes('"#b3-p-s", {"attr":{"stroke-dashoffset":1}}, {"attr":{"stroke-dashoffset":0}') && !dl.includes('"strokeDashoffset"'), dl);
+  check("a stroke that starts undrawn is hidden until its draw begins (no round-cap dot at the path start)", dl.includes('tl.set("#b3-p-s", { visibility: "hidden" }, 0)') && dl.includes('{ visibility: "visible", duration: 0.001'), dl);
+  const out = run(beat({ elements: [{ id: "p", shape: "path", x: 0, y: 0, w: 300, h: 300, d: "M0 0 L300 300", stroke: "#ffffff", strokeWidth: 8 }], tweens: [{ target: "p", at: 0, dur: 1, from: { draw: 1 }, to: { draw: 0 } }] })).lines.join("\n");
+  check("a draw out ends hidden", out.includes('tl.set("#b3-p-s", { visibility: "visible" }, 0)') && out.includes('{ visibility: "hidden", duration: 1,'), out);
   const bad = run(beat({ tweens: [{ target: "t", at: 0, dur: 1, from: { draw: 0 }, to: { draw: 1 } }] }));
   check("draw on text is ignored", bad.warnings.some((w) => w.includes("draw needs")));
 }
@@ -159,6 +164,12 @@ check("a minimal beat compiles", run(beat()).ok === true);
   check("blur on a third element is dropped", r.warnings.some((w) => w.includes("third element")));
   check("blur on an element over half the canvas is dropped", r.warnings.some((w) => w.includes("over half")));
   check("blur compiles to filter: blur(px)", r.lines.join("").includes('"filter":"blur(20px)"'));
+  // back.out / elastic.out overshoot takes blur below 0; "blur(-1px)" is invalid CSS and would be ignored,
+  // leaving the previous frame's filter on the element
+  const modLine = r.lines.find((x) => x.includes('"filter":"blur(0px)"') && x.includes("duration"));
+  check("a blur tween carries a modifier that floors it at 0", !!modLine && modLine.includes('"modifiers":{"filter":'), modLine);
+  const floor = new Function(`return ${/"filter":(\(v\) => .*)\}\}, /.exec(modLine)[1]}`)();
+  check("the blur floor maps a negative blur to 0 and leaves the rest alone", floor("blur(-0.4px)") === "blur(0px)" && floor("blur(-1e-7px)") === "blur(0px)" && floor("blur(12.5px)") === "blur(12.5px)", floor("blur(-0.4px)"));
 }
 
 // split + stagger
@@ -182,7 +193,9 @@ check("a minimal beat compiles", run(beat()).ok === true);
   const b = beat({ elements: [{ id: "n", shape: "text", x: 0, y: 0, w: 900, h: 300, text: "1,200", font: "Inter", size: 200 }], tweens: [{ target: "n", at: 0, dur: 1.5, ease: "power2.out", from: { count: 0 }, to: { count: 1200 } }] });
   const r = run(b);
   const l = r.lines.join("\n");
-  check("count is a proxy-object tween", l.includes("const o = { v: 0 }") && l.includes("tl.fromTo(o,") && l.includes("onUpdate"), l);
+  check("count is a proxy-object tween", l.includes("const o = { v: 0 }") && l.includes("tl.fromTo(o,"), l);
+  // a callback only fires on the renderer's second, unsuppressed 0.001 s step, so a jump left the text stale
+  check("count writes its text from a modifier, never a callback", l.includes("modifiers: { v:") && !l.includes("onUpdate"), l);
   check("count shows the from value before the first tween", r.html.includes(">0<"), r.html);
   check("count on a non-number is ignored", run(beat({ tweens: [{ target: "t", at: 0, dur: 1, from: { count: 0 }, to: { count: 5 } }] })).warnings.some((w) => w.includes("count needs")));
 }
