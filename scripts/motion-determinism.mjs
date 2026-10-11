@@ -26,19 +26,24 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
-import { makeProject, BUSY_BEAT, BLUR_BEAT, BEAT_AT, BEAT_TO } from "./lib/motion-fixture.mjs";
+import { makeProject, BUSY_BEAT, BLUR_BEAT, ROOM_BEAT, ROOM_OVERLAP_BEATS } from "./lib/motion-fixture.mjs";
+import { ROOM_SCALE, roomFrames, roomWindows, roomScaleAt } from "./lib/room.mjs";
 
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(`--${k}`); return i < 0 ? d : (argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : true); };
 const variant = opt("variant", "busy"), seekMode = opt("seek", "render"), passes = +opt("passes", 3);
 const keep = !!opt("keep", false);
-const beat = variant === "blur" ? BLUR_BEAT : BUSY_BEAT;
+const beat = variant === "blur" ? BLUR_BEAT : variant === "room" ? ROOM_BEAT : BUSY_BEAT;
+const HOLD_EXIT = beat.room === "below" ? 0.55 : 0.2;
+const BEAT_AT = beat.at, BEAT_TO = beat.to, isRoom = variant === "room", FPS = 30;
 const dir = opt("dir", path.join(os.tmpdir(), `motion-determinism-${variant}`));
 
 // sample times, original = output seconds (one kept take): before, entrance, mid, exit, after
-const SAMPLES = [1.0, BEAT_AT, 2.15, 2.4, 3.1, 4.05, 5.1, 7.7, 7.9, BEAT_TO, 9.0];
+const SAMPLES = isRoom
+  ? [1.0, 1.9, 2.0, 2.1, 2.175, 2.25, 2.35, 3.2, 4.0, 6.1, 6.25, 6.3, 6.4, 6.5, 6.567, 6.9, 8.0]   // room: before, start, MID-EASE-IN (2.0-2.35), held (to 6.217), exit fade (6.0-6.2), MID-EASE-OUT (6.217-6.567), after
+  : [1.0, BEAT_AT, 2.15, 2.4, 3.1, 4.05, 5.1, 7.7, 7.9, BEAT_TO, 9.0];
 // detour targets: outside before, inside, outside after
-const DETOURS = [0, 0.5, 1.9, 2.9, 3.6, 4.6, 6.0, 7.95, 8.5, 9.9];
+const DETOURS = isRoom ? [0, 0.5, 1.5, 2.2, 3.3, 4.6, 5.95, 6.35, 7.5, 9.5] : [0, 0.5, 1.9, 2.9, 3.6, 4.6, 6.0, 7.95, 8.5, 9.9];
 
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex").slice(0, 16);
 let seed = 0x9e3779b9;
@@ -58,7 +63,7 @@ const holdFailures = [];
   const ctl = makeProject(dir + "-control", { beat: null });
   const readTruth = (p) => JSON.parse(fs.readFileSync(path.join(p.dir, "build", "edit_truth.json"), "utf8"));
   const withBeat = readTruth(proj), without = readTruth(ctl), FPSX = 30;
-  const lo = Math.round(BEAT_AT * FPSX), hi = Math.round((BEAT_TO + 0.2) * FPSX);
+  const lo = Math.round(BEAT_AT * FPSX), hi = Math.round((BEAT_TO + HOLD_EXIT) * FPSX);
   const inWin = (s) => { const f = Math.round(s.t * FPSX); return f >= lo && f <= hi; };
   const wouldBe = without.snaps.filter(inWin);
   if (!wouldBe.length) holdFailures.push("control has no cadence snap inside the window: the hold is not being exercised");
@@ -68,7 +73,7 @@ const holdFailures = [];
   if (outside(withBeat) !== outside(without)) holdFailures.push(`snaps outside the window changed:\n    control ${outside(without)}\n    beat    ${outside(withBeat)}`);
   if (!without.pushes.some((p) => p.start === 0)) holdFailures.push("control has no openPush: the openPush drop is not being exercised");
   if (withBeat.pushes.some((p) => p.start === 0)) holdFailures.push("openPush survived a beat that starts inside it");
-  console.log(`  hold: control ${without.snaps.length} snaps (${wouldBe.length} inside ${BEAT_AT}-${BEAT_TO + 0.2}), with beat ${withBeat.snaps.length}; openPush control=${without.pushes.some((p) => p.start === 0)} beat=${withBeat.pushes.some((p) => p.start === 0)}`);
+  console.log(`  hold: control ${without.snaps.length} snaps (${wouldBe.length} inside ${BEAT_AT}-${BEAT_TO + HOLD_EXIT}), with beat ${withBeat.snaps.length}; openPush control=${without.pushes.some((p) => p.start === 0)} beat=${withBeat.pushes.some((p) => p.start === 0)}`);
 }
 
 const puppeteer = findPuppeteer();
@@ -82,12 +87,16 @@ async function open() {
   await page.goto(pathToFileURL(proj.html).href, { waitUntil: "load", timeout: 60000 });
   await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 });
   await page.evaluate(() => document.fonts.ready.then(() => 0));
-  await page.evaluate((mode) => {
+  await page.evaluate((mode, roomRun) => {
     const tl = window.__timelines.main; tl.pause();
     // The footage is not under test and a bare page has no runtime to seek it: an autoplaying <video> would
     // put a different frame in every screenshot. Take it out of the picture; the graphics sit over it anyway.
     for (const m of document.querySelectorAll("video, audio")) { m.pause(); m.removeAttribute("autoplay"); m.style.visibility = "hidden"; }
     document.body.style.background = "#222";
+    if (roomRun) {   // footage stand-in: a static picture with a marked face, so the room transform changes real pixels
+      document.getElementById("push").style.background = "#2a4a78";
+      const f = document.createElement("div"); f.style.cssText = "position:absolute;left:340px;top:240px;width:400px;height:620px;background:#e8b48a;border:6px solid #fff;box-sizing:border-box"; document.getElementById("push").appendChild(f);
+    }
     window.__seek = (t) => {
       if (mode === "plain") tl.seek(t, true); else { tl.totalTime(t + 0.001, true); tl.totalTime(t, false); }
       // the hyperframes runtime shows a .clip only inside [data-start, data-start + data-duration); do the same
@@ -100,6 +109,7 @@ async function open() {
     // the attribute text differs between "never rendered" and "rendered" without any visible difference
     window.__state = (px) => {
       const out = {};
+      for (const i of ["room", "roomfill", "caps", "ecaps"]) { const e = document.getElementById(i); if (e) { const cs = getComputedStyle(e); out["#" + i] = [cs.opacity, cs.transform, cs.visibility].join(" | "); } }
       const root = document.getElementById(px + "-in");
       if (!root) return { "(missing)": "no root" };
       (function walk(e, p) {
@@ -109,7 +119,7 @@ async function open() {
       })(root, "r");
       return out;
     };
-  }, seekMode);
+  }, seekMode, isRoom);
   return page;
 }
 async function at(page, t) {
@@ -166,17 +176,65 @@ for (const t of SAMPLES) { await page.evaluate((x) => window.__seek(x), t); chec
 {
   const cam = async (t) => { await page.evaluate((x) => window.__seek(x), t); return page.evaluate(() => ["snap", "push"].map((i) => getComputedStyle(document.getElementById(i)).transform).join(" ")); };
   const want = await cam(BEAT_AT);
-  for (let f = Math.round(BEAT_AT * 30); f <= Math.round((BEAT_TO + 0.2) * 30); f++) { const got = await cam(f / 30); if (got !== want) { holdFailures.push(`camera moved at t=${(f / 30).toFixed(3)}: ${want} -> ${got}`); break; } }
+  for (let f = Math.round(BEAT_AT * 30); f <= Math.round((BEAT_TO + HOLD_EXIT) * 30); f++) { const got = await cam(f / 30); if (got !== want) { holdFailures.push(`camera moved at t=${(f / 30).toFixed(3)}: ${want} -> ${got}`); break; } }
+}
+// ---- making room (docs/MOTION-GRAPHICS-SPEC.md "Making room"; maths in lib/room.mjs) ----
+const roomFailures = [];
+if (isRoom) {
+  const truth = JSON.parse(fs.readFileSync(path.join(proj.dir, "build", "edit_truth.json"), "utf8"));
+  const wins = roomWindows([roomFrames(BEAT_AT, BEAT_TO, FPS)], FPS);
+  if (JSON.stringify(truth.room) !== JSON.stringify([{ start: +wins[0].tA.toFixed(3), end: +wins[0].tB.toFixed(3), scale: ROOM_SCALE }])) roomFailures.push(`edit_truth.room: ${JSON.stringify(truth.room)}`);
+  const read = async (pg, t) => { await pg.evaluate((x) => window.__seek(x), t); return pg.evaluate(() => {
+    const m = getComputedStyle(document.getElementById("room")).transform.match(/matrix\(([^)]+)\)/), r = document.getElementById("room").getBoundingClientRect();
+    return { a: m ? +m[1].split(",")[0] : NaN, rect: [r.x, r.y, r.width, r.height], fill: getComputedStyle(document.getElementById("roomfill")).opacity, fillBg: getComputedStyle(document.getElementById("roomfill")).backgroundColor, caps: getComputedStyle(document.getElementById("ecaps") || document.getElementById("caps")).opacity,
+      snapPush: ["snap", "push"].map((i) => getComputedStyle(document.getElementById(i)).transform).join(" ") }; }); };
+  for (const t of SAMPLES) {
+    const g = await read(page, t), want = roomScaleAt(t, wins), tA = wins[0].tA, tB = wins[0].tB;
+    if (Math.abs(g.a - want) > 2e-3) roomFailures.push(`t=${t}: #room scale ${g.a}, want ${want.toFixed(5)}`);
+    const wantRect = [540 + want * (0 - 540), 0, 1080 * want, 1920 * want];
+    if (g.rect.some((v, i) => Math.abs(v - wantRect[i]) > 2)) roomFailures.push(`t=${t}: #room rect ${g.rect.map((v) => v.toFixed(1))}, want ${wantRect.map((v) => v.toFixed(1))}`);
+    if (t > tA + 0.02 && t < tB - 0.001 && +g.fill !== 1) roomFailures.push(`t=${t}: #roomfill opacity ${g.fill} inside the window`);
+    if ((t < tA - 0.001 || t > tB + 0.02) && +g.fill !== 0) roomFailures.push(`t=${t}: #roomfill opacity ${g.fill} outside the window`);
+    if (t >= tA + 0.15 && t <= tB - 0.1 && +g.caps !== 0) roomFailures.push(`t=${t}: captions visible (opacity ${g.caps}) inside the window`);
+    if ((t < tA - 0.01 || t > tB + 0.2) && +g.caps !== 1) roomFailures.push(`t=${t}: captions hidden (opacity ${g.caps}) outside the window`);
+  }
+  const bg = (await read(page, 3)).fillBg;
+  if (bg !== "rgb(244, 239, 230)") roomFailures.push(`fill is not the style's paper colour (#f4efe6): ${bg}`);
+  // the room composes OUTSIDE the camera: #snap and #push hold still through the window (the camera hold)
+  const cams = new Set(); for (const t of [2.0, 2.2, 3.0, 4.0, 5.0, 6.0, 6.2, 6.4, 6.55]) cams.add((await read(page, t)).snapPush);
+  if (cams.size !== 1) roomFailures.push(`camera moved during the room window: ${[...cams].join(" ; ")}`);
+  console.log(`  room: ${SAMPLES.length} sample times checked against lib/room.mjs (scale, rect, fill, captions); window ${wins[0].tA.toFixed(3)}-${wins[0].tB.toFixed(3)}`);
+
+  // two overlapping beats merge into ONE shrink: two #room tweens in all, never a dip back to 1 between them
+  const ov = makeProject(dir + "-overlap", { beats: ROOM_OVERLAP_BEATS });
+  const ovHtml = fs.readFileSync(ov.html, "utf8"), ovTruth = JSON.parse(fs.readFileSync(path.join(ov.dir, "build", "edit_truth.json"), "utf8"));
+  const nTween = (ovHtml.match(/ft\("#room",/g) || []).length;
+  if (nTween !== 2) roomFailures.push(`overlapping beats made ${nTween} #room tweens, want 2 (one shrink, one return)`);
+  if (JSON.stringify(ovTruth.room) !== JSON.stringify([{ start: 2, end: 6.567, scale: ROOM_SCALE }])) roomFailures.push(`overlap edit_truth.room: ${JSON.stringify(ovTruth.room)}`);
+  const pg2 = await browser.newPage();
+  await pg2.evaluateOnNewDocument(() => { window.__timelines = {}; });
+  await pg2.goto(pathToFileURL(ov.html).href, { waitUntil: "load", timeout: 60000 });
+  await pg2.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 });
+  const scales = [], ovWins = roomWindows([[60, 197]], FPS);
+  for (const t of [2.0, 2.2, 2.4, 3.0, 3.6, 4.0, 4.2, 4.3, 4.6, 5.0, 5.8, 6.0, 6.2, 6.3, 6.4, 6.6]) {
+    const a = await pg2.evaluate((x) => { const tl = window.__timelines.main; tl.pause(); tl.totalTime(x + 0.001, true); tl.totalTime(x, false); const m = getComputedStyle(document.getElementById("room")).transform.match(/matrix\(([^)]+)\)/); return m ? +m[1].split(",")[0] : NaN; }, t);
+    scales.push([t, +a.toFixed(4)]);
+    if (Math.abs(a - roomScaleAt(t, ovWins)) > 2e-3) roomFailures.push(`overlap t=${t}: #room scale ${a}, want ${roomScaleAt(t, ovWins).toFixed(5)}`);
+  }
+  await pg2.close();
+  if (scales.filter(([t]) => t >= 2.4 && t <= 6.2).some(([, a]) => Math.abs(a - ROOM_SCALE) > 2e-3)) roomFailures.push(`footage left 0.73 between the two overlapping beats: ${JSON.stringify(scales)}`);
+  console.log(`  room overlap: 2 beats (2.0-4.55, 3.5-6.55) -> ${nTween} #room tweens, scale held ${ROOM_SCALE} from 2.35 to 6.217`);
 }
 await page.close();
-for (const t of SAMPLES) {                                                    // cold: first seek in a fresh page
+for (const t of SAMPLES) {                                                  // cold: first seek in a fresh page
   const pg = await open(); checks++; compare("cold", t, ref.get(t), await at(pg, t)); await pg.close();
 }
 await browser.close();
 
 console.log(`motion determinism: variant=${variant} seek=${seekMode} samples=${SAMPLES.length} (${distinct} distinct images) comparisons=${checks}`);
 console.log(`  times: ${SAMPLES.join(", ")}   beat ${BEAT_AT}-${BEAT_TO}`);
-if (distinct < SAMPLES.length - 3) { console.log("  FAIL: sample frames are nearly all identical - the beat is not visible, the test proves nothing"); process.exitCode = 2; }
+if (distinct < SAMPLES.length - (isRoom ? 6 : 3)) { console.log("  FAIL: sample frames are nearly all identical - the beat is not visible, the test proves nothing"); process.exitCode = 2; }
+if (roomFailures.length) { console.log(`  FAIL: making room\n   ${roomFailures.join("\n   ")}`); process.exitCode = 1; }
 if (holdFailures.length) { console.log(`  FAIL: camera hold\n   ${holdFailures.join("\n   ")}`); process.exitCode = 1; }
 if (failures.length) {
   console.log(`  FAIL: ${failures.length} mismatches (pixels differ: ${failures.filter((f) => f.pixels).length}); images in ${outDir}`);

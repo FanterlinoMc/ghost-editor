@@ -23,9 +23,9 @@ check("room 'above' clamps to none with a warning", normalizeRoom("above").room 
 check("room true clamps to none with a warning", normalizeRoom(true).room === "none" && !!normalizeRoom(true).warning);
 
 // frames: round half UP (JS Math.round), both ends inclusive
-eq("frames 12.4..15.1 @30", roomFrames(12.4, 15.1, 30), [372, 459]);
-eq("round half up (1.5 frames -> 2)", roomFrames(0.05, 0.5, 30), [2, 21]);
-eq("29.97 fps", roomFrames(10, 12, 29.97), [300, 366]);
+eq("frames 12.4..15.1 @30", roomFrames(12.4, 15.1, 30), [372, 470]);
+eq("round half up (1.5 frames -> 2)", roomFrames(0.05, 0.5, 30), [2, 32]);
+eq("29.97 fps", roomFrames(10, 12, 29.97), [300, 376]);
 
 // merging
 eq("overlap merges", mergeRoomFrames([[10, 40], [30, 60]]), [[10, 60]]);
@@ -74,7 +74,7 @@ check("room does not change the compiled graphic", none.html === below.html && J
 
 // the JSON a mirror can read
 const j = roomSpecJson();
-check("spec json carries the constants", j.scale === 0.73 && j.easeSeconds === 0.35 && j.exitSeconds === 0.2 && j.origin[0] === 540 && j.origin[1] === 0);
+check("spec json carries the constants", j.scale === 0.73 && j.easeSeconds === 0.35 && j.exitSeconds === 0.55 && j.origin[0] === 540 && j.origin[1] === 0);
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1); }
 console.log("\nall room checks passed");

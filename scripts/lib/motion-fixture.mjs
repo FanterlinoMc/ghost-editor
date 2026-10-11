@@ -87,6 +87,32 @@ export const BLUR_BEAT = {
   ],
 };
 
+// "Making room": a two-line headline and a count-up in the panel under the shrunk footage (y 1440..1800).
+// at 2.0, to 6.0 -> room window 2.0..6.567 s (frames 60..197), footage at 0.73 from 2.35 to 6.217.
+export const ROOM_BEAT = {
+  type: "motion", by: "designer", id: "room", at: 2.0, to: 6.0, room: "below", exit: "fade", sfx: "none",
+  elements: [
+    { id: "l1", shape: "text", x: 90, y: 1450, w: 900, h: 120, text: "Stop doing", font: "Montserrat", size: 96, weight: 800, upper: true, align: "left", color: "#ffffff", shadow: "strong", z: 3 },
+    { id: "l2", shape: "text", x: 90, y: 1560, w: 900, h: 120, text: "DMs by hand", font: "Montserrat", size: 96, weight: 800, upper: true, align: "left", color: "accent", z: 3 },
+    { id: "rule", shape: "line", x: 90, y: 1700, x2: 990, y2: 1700, stroke: "accent", strokeWidth: 8, cap: "round", z: 2 },
+    { id: "count", shape: "text", x: 90, y: 1720, w: 480, h: 170, text: "1,200", font: "Gloock", size: 140, weight: 700, align: "left", color: "#ffffff", z: 3 },
+    { id: "unit", shape: "text", x: 590, y: 1790, w: 400, h: 70, text: "DMs a month", font: "Inter", size: 44, weight: 600, align: "left", color: "#ffffff", z: 3 },
+  ],
+  tweens: [
+    { target: "l1", at: 0.35, dur: 0.4, ease: "power3.out", from: { y: 40, opacity: 0 }, to: { y: 0, opacity: 1 } },
+    { target: "l2", at: 0.35, dur: 0.4, ease: "power3.out", from: { y: 40, opacity: 0 }, to: { y: 0, opacity: 1 } },
+    { target: "rule", at: 0.5, dur: 0.5, ease: "power2.inOut", from: { draw: 0 }, to: { draw: 1 } },
+    { target: "count", at: 0.6, dur: 1.4, ease: "power2.out", from: { count: 0 }, to: { count: 1200 } },
+    { target: "count", at: 0.6, dur: 0.3, ease: "none", from: { opacity: 0 }, to: { opacity: 1 } },
+    { target: "unit", at: 0.8, dur: 0.4, ease: "power2.out", from: { opacity: 0 }, to: { opacity: 1 } },
+  ],
+};
+// two room beats whose windows overlap (2.0..4.55 and 3.5..6.55 -> frames 60..137 and 105..197): ONE shrink 60..197
+export const ROOM_OVERLAP_BEATS = [
+  { ...ROOM_BEAT, id: "room-a", to: 4.0, elements: ROOM_BEAT.elements.slice(0, 2), tweens: ROOM_BEAT.tweens.slice(0, 2) },
+  { ...ROOM_BEAT, id: "room-b", at: 3.5, elements: ROOM_BEAT.elements.slice(3, 5), tweens: ROOM_BEAT.tweens.slice(3, 4).concat(ROOM_BEAT.tweens.slice(5, 6)) },
+];
+
 export function stripBlur(beat) {
   const b = structuredClone(beat);
   for (const tw of b.tweens) { delete tw.from.blur; delete tw.to.blur; }
@@ -109,7 +135,7 @@ function words(seconds) {
  * Create (or rebuild) a project at `dir` and run the fork's build.mjs on it.
  * beat: a motion beat object, or null for the same reel with no motion beat.
  */
-export function makeProject(dir, { beat = null, seconds = SECONDS, style = "keynote-3", reuseSource = true } = {}) {
+export function makeProject(dir, { beat = null, beats = null, seconds = SECONDS, style = "keynote-3", reuseSource = true } = {}) {
   fs.mkdirSync(path.join(dir, "assets"), { recursive: true });
   fs.mkdirSync(path.join(dir, "build"), { recursive: true });
   const src = path.join(dir, "assets", "talk.mp4");
@@ -122,7 +148,7 @@ export function makeProject(dir, { beat = null, seconds = SECONDS, style = "keyn
   const samples = []; for (let t = 0; t <= seconds + 4; t += 2) samples.push([t, 300, 900, 340, 740, 480, 700]);
   fs.writeFileSync(path.join(dir, "build", "face.json"), JSON.stringify({ fps: 5, w: 1080, h: 1920, samples }));
   const reel = { title: "motion determinism fixture", source: "assets/talk.mp4", words: "build/words.whisper.json", face: "build/face.json",
-    style, fps: 30, outro: 0, music: null, takes: [{ a: 0, b: seconds }], zoom: {}, beats: beat ? [beat] : [] };
+    style, fps: 30, outro: 0, music: null, takes: [{ a: 0, b: seconds }], zoom: {}, beats: beats ?? (beat ? [beat] : []) };
   fs.writeFileSync(path.join(dir, "reel.json"), JSON.stringify(reel, null, 2));
   const log = sh(process.execPath, [BUILD_MJS, "."], { cwd: dir });
   return { dir, html: path.join(dir, "index.html"), log };

@@ -27,7 +27,8 @@ import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard } fr
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { wordOwners } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
-import { compileMotion } from "./lib/motion-graphics.mjs";
+import { compileMotion, resolveColor } from "./lib/motion-graphics.mjs";
+import { ROOM_SCALE, ROOM_EXIT_S, normalizeRoom, ROOM_EASE_NAME, roomFrames, roomWindows, roomOrigin } from "./lib/room.mjs";
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 
@@ -503,8 +504,12 @@ for (let i = motionBeats.length - 1; i >= 0; i--) {
 //      starts at or before frame round((dur + 0.05) * FPS).
 //   4. The director's explicit snaps and pushes are never touched.
 const MOTION_HOLD_EXIT = 0.2;
-const motionHold = motionBeats.filter((b) => b.type === "motion").map((b) => [Math.round(E(b.at) * FPS), Math.round((E(b.to) + MOTION_HOLD_EXIT) * FPS)]);
+// a room:"below" beat holds the camera (and hides captions) to to+0.55, until the footage has grown back
+const motionHold = motionBeats.filter((b) => b.type === "motion").map((b) => [Math.round(E(b.at) * FPS), Math.round((E(b.to) + (normalizeRoom(b.room).room === "below" ? ROOM_EXIT_S : MOTION_HOLD_EXIT)) * FPS)]);
 const inMotionHold = (t) => motionHold.some(([fa, fb]) => { const f = Math.round(t * FPS); return f >= fa && f <= fb; });
+// "Making room": the footage-shrink windows of kept `room:"below"` beats, collected as the beats compile (a beat the
+// compiler drops opens no room) and turned into #room tweens after the beat loop. See scripts/lib/room.mjs for the maths.
+const roomFrameWins = [];
 const openPushHeldByMotion = (dur) => motionHold.some(([fa]) => fa <= Math.round((dur + 0.05) * FPS));
 
 // ---------- zoom ----------
@@ -1154,6 +1159,7 @@ for (const b of beatsList) {
       inner = mg.html;
       for (const l of mg.lines) tl.push(l);
       if (mg.hideCaptions) hiddenCaps.push([t0, t1]);
+      if (mg.room === "below") roomFrameWins.push(roomFrames(t0, t1, FPS));
       beatSfx({ sfx: mg.sfx }, t0, "whoosh", "motion graphic");
       break;
     }
@@ -1167,6 +1173,19 @@ for (const b of beatsList) {
   overlays.push({ html: clipMeme
     ? `<div id="${id}" class="layer">${inner}</div>` // the <video> inside is the timed element; a timed wrapper would break it
     : `<div id="${id}" class="clip layer" data-start="${t0}" data-duration="${dur}" data-track-index="${b.type === "scene" ? 4 : inSlot ? 3 : 2}">${inner}</div>` });
+}
+
+// ---------- making room: shrink the whole footage stack under a `room:"below"` motion beat ----------
+// Windows merge (overlap -> one shrink); #room wraps #pip and scales about the canvas top centre, OUTSIDE the
+// camera, so a face point maps as room(camera(p)). The uncovered canvas shows the style's paper colour via #roomfill.
+// Captions hide over each merged [tA, tB]. Nothing is emitted when there is no such beat (byte-identical builds).
+const roomWins = roomWindows(roomFrameWins, FPS);
+for (const w of roomWins) {
+  tl.push(`ft("#room", { scale: 1 }, { scale: ${ROOM_SCALE}, force3D: false, duration: ${r3(w.easeIn[1] - w.easeIn[0])}, ease: "${ROOM_EASE_NAME}" }, ${r3(w.easeIn[0])});`);
+  tl.push(`ft("#room", { scale: ${ROOM_SCALE} }, { scale: 1, force3D: false, duration: ${r3(w.easeOut[1] - w.easeOut[0])}, ease: "${ROOM_EASE_NAME}" }, ${r3(w.easeOut[0])});`);
+  tl.push(`ft("#roomfill", { opacity: 0 }, { opacity: 1, duration: 0.01, ease: "none" }, ${r3(w.tA)});`);
+  tl.push(`ft("#roomfill", { opacity: 1 }, { opacity: 0, duration: 0.01, ease: "none" }, ${r3(w.tB)});`);
+  hiddenCaps.push([w.tA, w.tB]);
 }
 
 for (const s of spec.sfx || []) addSfx(E(s.at, "sfx"), s.id, "manual", { db: s.db ?? 0, lead: s.lead ?? 0 });
@@ -1761,7 +1780,9 @@ const html = `<!doctype html>
   #root { position: relative; width: ${W}px; height: ${H}px; overflow: hidden; background: #000; font-family: ${UI_FONT}, system-ui, sans-serif; }
   #base, #snap, #push { position: absolute; inset: 0; transform-origin: ${zoom.origin || "50% 29%"}; }
   #base { transform: scale(${zoom.base ?? 1});${look.grade ? ` filter: ${look.grade};` : ""} }
-  #pip { position: absolute; inset: 0; z-index: 1; transform-origin: ${W / 2}px ${faceY}px; }
+  #pip { position: absolute; inset: 0; z-index: 1; transform-origin: ${W / 2}px ${faceY}px; }${roomWins.length ? `
+  #roomfill { position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; background: ${resolveColor("paper", brand)}; }
+  #room { position: absolute; inset: 0; z-index: 1; transform-origin: ${roomOrigin(W)[0]}px ${roomOrigin(W)[1]}px; }` : ""}
   .behind { position: absolute; inset: 0; pointer-events: none; }
   .behind-in { position: absolute; left: -40px; right: -40px; text-align: center; font-weight: 900; line-height: .86; letter-spacing: -6px; text-transform: uppercase; white-space: nowrap; font-family: ${brand.displayFont ? `"${brand.displayFont}", ` : ""}${UI_FONT}, sans-serif; }
   .matte { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -1833,8 +1854,8 @@ const html = `<!doctype html>
 </head>
 <body>
 <div id="root" class="${spec.layout?.compact ? "compact" : ""}" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${SECTION_MODE ? SECTION_TOTAL : TOTAL}" data-fps="${FPS}">
-  <div id="pip"><div id="base"><div id="snap"><div id="push">${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}
-  </div></div></div></div>
+  ${roomWins.length ? `<div id="roomfill"></div><div id="room">` : ""}<div id="pip"><div id="base"><div id="snap"><div id="push">${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}
+  </div></div></div></div>${roomWins.length ? `</div>` : ""}
   ${overlays.filter((o) => o.html).map((o) => o.html).join("\n  ")}
   ${grainHtml}${vignetteHtml}
   <div id="caps">
@@ -1918,6 +1939,8 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
   // `to` matters as much as `at`: a scene animates in at `at` and out near `to`, so both are
   // events a frame-level analyzer should see.
   beats: editTruthBeats,
+  // "Making room": merged footage-shrink windows (output seconds), only when a room:"below" beat was built.
+  ...(roomWins.length ? { room: roomWins.map((w) => ({ start: r3(w.tA), end: r3(w.tB), scale: ROOM_SCALE })) } : {}),
 }, null, 2));
 // I-25: section boundaries and per-section invalidation hashes (ISSUES D3). Additive and written
 // AFTER edit_truth.json, from the same already-resolved arrays that file dumps (editTruthTakes,

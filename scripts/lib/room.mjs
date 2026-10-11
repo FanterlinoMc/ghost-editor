@@ -17,14 +17,14 @@
 //                  about (540, 0). Scales multiply (camera 1.28 x room 0.73 = 0.934 on the face); the
 //                  camera's translate is scaled too, because it happens before the room transform.
 //                  At rest the footage covers x 145.8..934.2, y 0..1401.6.
-//   window (frames) fa = floor(E(at) * fps + 0.5), fb = floor((E(to) + 0.2) * fps + 0.5)   [JS Math.round:
+//   window (frames) fa = floor(E(at) * fps + 0.5), fb = floor((E(to) + 0.55) * fps + 0.5)   [JS Math.round:
 //                  round half UP, not Python's banker's round()], E() = output seconds of the beat's
 //                  original-recording time, already rounded to the millisecond. Both ends inclusive.
 //                  The camera hold uses the same [fa, fb].
 //   times           tA = fa / fps, tB = fb / fps (emitted rounded to the millisecond: 0.033 for frame 1 at 30 fps;
 //                  the difference is under 0.5 ms and has no effect on any frame).
-//   ease            s goes 1 -> 0.73 over [tA, tA + 0.35] and 0.73 -> 1 over [tB - 0.35, tB], both power2.inOut:
-//                  e(p) = p < .5 ? 2 p^2 : 1 - (2 - 2 p)^2 / 2 ;  s = 1 - (1 - 0.73) * e(clamp(p, 0, 1)).
+//   ease            s goes 1 -> 0.73 over [tA, tA + 0.35] and 0.73 -> 1 over [tB - 0.35, tB], both power2.inOut. GSAP 3's power2 is CUBIC
+//                  (power1 = quad, power3 = quart): e(p) = p < .5 ? 4 p^3 : 1 - (2 - 2 p)^3 / 2 ;  s = 1 - (1 - 0.73) * e(clamp(p, 0, 1)).
 //   merging         windows (in frames) with next.fa <= current.fb are ONE window [min fa, max fb]: one shrink,
 //                  one ease in, one ease out, no fight between tweens on #room.
 //   captions        hidden over [tA, tB] of each merged window.
@@ -34,7 +34,7 @@ import { fileURLToPath } from "node:url";
 
 export const ROOM_SCALE = 0.73;
 export const ROOM_EASE_S = 0.35;     // seconds of each ease
-export const ROOM_EXIT_S = 0.2;      // the hold window ends this long after the beat's `to` (same as MOTION_HOLD_EXIT)
+export const ROOM_EXIT_S = 0.55;     // the room window ends this long after the beat's `to`: the graphic exits over [to, to+0.2], then the footage grows back over [to+0.2, to+0.55]
 export const ROOM_EASE_NAME = "power2.inOut";
 export const ROOM_VALUES = ["none", "below"];
 
@@ -68,7 +68,8 @@ export function roomWindows(frameWins, fps) {
   });
 }
 
-const power2InOut = (p) => (p < 0.5 ? 2 * p * p : 1 - ((2 - 2 * p) ** 2) / 2);
+// GSAP 3 "power2.inOut" is the cubic in/out (checked against getComputedStyle mid-ease in motion-determinism.mjs)
+const power2InOut = (p) => (p < 0.5 ? 4 * p * p * p : 1 - ((2 - 2 * p) ** 3) / 2);
 const ramp = (t, [t0, t1]) => Math.min(1, Math.max(0, (t - t0) / (t1 - t0)));
 
 /** The room scale at output time t (seconds) for windows from roomWindows(). */
