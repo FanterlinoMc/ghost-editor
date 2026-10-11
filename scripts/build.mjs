@@ -27,6 +27,7 @@ import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard } fr
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { wordOwners } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
+import { compileMotion } from "./lib/motion-graphics.mjs";
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 
@@ -792,6 +793,26 @@ if (spec.nametag && !hasSelfTag) {
   const until = spec.nametag.until === "hook" && firstPage != null && firstPage < 4.5 ? firstPage - 0.05 : (spec.nametag.to ?? 2.4);
   beatsList.unshift({ type: "nametag", name: spec.nametag.name, title: spec.nametag.title, subtitle: spec.nametag.subtitle, at: spec.nametag.at ?? 0.15, to: Math.max(1.2, until), sfx: false });
 }
+// Designer graphics (docs/MOTION-GRAPHICS-SPEC.md): a `motion` beat is opt-in per style (`"designer": true`).
+// A beat that cannot be placed - style not opted in, or `at`/`to` not inside one kept take - is dropped with a
+// warning, never fatal; the rest of the reel builds. Runs before anything resolves beat times, and splices the
+// beat out of spec.beats so edit_truth.json only ever lists beats that were built.
+for (let i = beatsList.length - 1; i >= 0; i--) {
+  const b = beatsList[i];
+  if (b.type !== "motion") continue;
+  let why = null;
+  if (spec.designer !== true) why = "this style does not set designer:true";
+  else if (b.to === undefined) why = "no `to`";
+  else {
+    try {
+      const a = E(b.at, "motion at"), z = E(b.to, "motion to");
+      const ka = locateTake(takes, a, FPS), kz = locateTake(takes, z - 0.001, FPS);
+      if (!(z > a)) why = "`to` is not after `at`";
+      else if (ka !== kz || z > ka.start + ka.dur + 1e-6) why = "`at` and `to` are not in the same kept take";
+    } catch (e) { why = String(e.message).split("\n")[0]; }
+  }
+  if (why) { warn.push(`motion beat ${b.id ?? i} dropped: ${why}`); beatsList.splice(i, 1); }
+}
 const HANDOVER = 0.45;
 // I-25: the resolved [t0, t1] every beat actually occupies on the output timeline, captured as a
 // side effect of this loop (same pattern as sfxEvents/slotUsed below) rather than re-derived later
@@ -1092,11 +1113,29 @@ for (const b of beatsList) {
       break;
     }
 
+    case "motion": {
+      const resolveImage = (src) => {
+        if (/^assets\/[^\0]+\.(png|jpe?g|webp|gif|svg)$/i.test(src) && !src.split("/").includes("..")) {
+          const full = path.resolve(proj, src);
+          return full.startsWith(A + path.sep) && fs.existsSync(full) ? src : null;
+        }
+        return /^[a-z0-9-]{1,48}$/.test(src) && fs.existsSync(path.join(LIB, "art", `${src}.jpg`)) ? artAsset(src) : null;
+      };
+      const mg = compileMotion(b, { id, t0, t1, W, H, brand, resolveImage });
+      for (const m of mg.warnings || []) warn.push(m);
+      if (!mg.ok) { warn.push(`motion beat ${b.id ?? "?"} dropped: ${mg.reason}`); continue; }
+      inner = mg.html;
+      for (const l of mg.lines) tl.push(l);
+      if (mg.hideCaptions) hiddenCaps.push([t0, t1]);
+      beatSfx({ sfx: mg.sfx }, t0, "whoosh", "motion graphic");
+      break;
+    }
+
     default:
       die(`unknown beat type '${b.type}'`);
   }
   if (b.type === "behind") continue;
-  if (!["endcard", "scene"].includes(b.type) && !(b.type === "meme" && memeLib(b.id).meta.clip)) tl.push(exit(`#${id}-in`, t1));
+  if (!["endcard", "scene", "motion"].includes(b.type) && !(b.type === "meme" && memeLib(b.id).meta.clip)) tl.push(exit(`#${id}-in`, t1));
   const clipMeme = b.type === "meme" && memeLib(b.id).meta.clip;
   overlays.push({ html: clipMeme
     ? `<div id="${id}" class="layer">${inner}</div>` // the <video> inside is the timed element; a timed wrapper would break it
