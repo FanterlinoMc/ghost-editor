@@ -77,19 +77,22 @@ const holdFailures = [];
 }
 
 const puppeteer = findPuppeteer();
-// HOW A FRAME IS CAPTURED (the part that makes pixel equality a fair test; found by bisecting a 1-pixel flake):
-// Chrome does not draw a frame from scratch. Tiles are re-rastered only where invalid and the compositor redraws only the
-// damage rect, so a frame's pixels depend on the frame DRAWN BEFORE it: a layer with a fractional translate leaves a stale
-// anti-aliasing row at its old edge (one 630 px row, 39 vs 26 of 255, on the card at t=2.15), a dashed stroke or a blur
-// tail a few levels. The DOM is identical in both cases - computed style and GSAP's attribute values match to the last
-// digit, which this harness also compares. Two things remove the dependence on the previous draw:
-//   1. the capture is driven like hyperframes' render container (captureMode "beginframe"): HeadlessExperimental.beginFrame
-//      with its flags, so a frame is rastered, composited and read back exactly once per call. A plain
-//      Page.captureScreenshot lets the async compositor race the capture and the SAME state then screenshots as one of two
-//      images (~5% of seeks, any order).
-//   2. a blank frame (#root hidden) is drawn between the seek and the capture, so every capture starts from the same
-//      predecessor, whatever order the times are visited in. Without it: 14/75 captures differ, with it 0/75.
-// --capture screenshot and --no-reset keep the old behaviour, to reproduce the flake.
+// HOW A FRAME IS CAPTURED (what makes pixel equality a fair test; found by bisecting a 1-pixel flake):
+// Chrome does not draw a frame from scratch. It re-rasters only invalid tiles and redraws only the damage rect, so a
+// frame's pixels depend on the frames DRAWN BEFORE it (a stale anti-aliasing row at the edge of a fractional-translate
+// layer, 39 vs 26 of 255 along one 630 px row of the card at t=2.15; a few levels along a dashed stroke). The DOM is
+// identical in those cases - computed style and GSAP's attribute values match to the last digit, and this harness compares
+// both. So this test asks the engine's question: is the state, and a FULL DRAW of it, a pure function of time?
+//   1. Capture is driven like hyperframes' LINUX render container (captureMode "beginframe": HeadlessExperimental.beginFrame
+//      with its flags). Local Windows/macOS renders use plain Page.captureScreenshot, which also races the async compositor:
+//      the same state then screenshots as one of two images, ~5% of seeks.
+//   2. A blank frame (#root hidden) is drawn BEFORE each seek, so every capture starts from the same predecessor whatever
+//      the visiting order. Without it: 14/75 captures differ in one probe, 10-11/66 in the harness.
+// What this does NOT claim: a forward render (frame N drawn right after N-1) differs from the blank-predecessor image on
+// ~half the frames of the busy beat, by anti-aliasing levels. That residue is Chrome's incremental drawing, is repeatable
+// for a given draw sequence (a fresh page started mid-range reproduces the forward pass, 61/61 frames), and is not
+// removable from the engine: gsap force3D:false makes it worse (77/95 frames). --capture screenshot and --no-reset keep
+// the unprotected behaviour, to reproduce the flake.
 const captureMode = opt("capture", "beginframe"), resetFrame = captureMode === "beginframe" && !opt("no-reset", false);
 const BEGINFRAME_ARGS = ["--deterministic-mode", "--enable-begin-frame-control", "--disable-new-content-rendering-timeout", "--run-all-compositor-stages-before-draw", "--disable-threaded-animation", "--disable-threaded-scrolling", "--disable-checker-imaging", "--disable-image-animation-resync", "--enable-surface-synchronization", "--disable-gpu-compositing", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"];
 const browser = await puppeteer.launch({ executablePath: findChrome(), headless: "shell", args: ["--no-sandbox", "--force-device-scale-factor=1", "--hide-scrollbars", ...(captureMode === "beginframe" ? BEGINFRAME_ARGS : [])], defaultViewport: { width: 1080, height: 1920, deviceScaleFactor: 1 } });
