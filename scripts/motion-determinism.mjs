@@ -27,7 +27,7 @@ import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
 import { makeProject, BUSY_BEAT, BLUR_BEAT, ROOM_BEAT, ROOM_OVERLAP_BEATS } from "./lib/motion-fixture.mjs";
-import { ROOM_SCALE, roomFrames, roomWindows, roomScaleAt } from "./lib/room.mjs";
+import { ROOM_SCALE, roomFrames, roomWindows, roomScaleAt, roomCardAt } from "./lib/room.mjs";
 
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(`--${k}`); return i < 0 ? d : (argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : true); };
@@ -109,7 +109,7 @@ async function open() {
     // the attribute text differs between "never rendered" and "rendered" without any visible difference
     window.__state = (px) => {
       const out = {};
-      for (const i of ["room", "roomfill", "caps", "ecaps"]) { const e = document.getElementById(i); if (e) { const cs = getComputedStyle(e); out["#" + i] = [cs.opacity, cs.transform, cs.visibility].join(" | "); } }
+      for (const i of ["room", "roomfill", "caps", "ecaps"]) { const e = document.getElementById(i); if (e) { const cs = getComputedStyle(e); out["#" + i] = [cs.opacity, cs.transform, cs.visibility, cs.borderRadius, cs.boxShadow].join(" | "); } }
       const root = document.getElementById(px + "-in");
       if (!root) return { "(missing)": "no root" };
       (function walk(e, p) {
@@ -186,20 +186,26 @@ if (isRoom) {
   if (JSON.stringify(truth.room) !== JSON.stringify([{ start: +wins[0].tA.toFixed(3), end: +wins[0].tB.toFixed(3), scale: ROOM_SCALE }])) roomFailures.push(`edit_truth.room: ${JSON.stringify(truth.room)}`);
   const read = async (pg, t) => { await pg.evaluate((x) => window.__seek(x), t); return pg.evaluate(() => {
     const m = getComputedStyle(document.getElementById("room")).transform.match(/matrix\(([^)]+)\)/), r = document.getElementById("room").getBoundingClientRect();
-    return { a: m ? +m[1].split(",")[0] : NaN, rect: [r.x, r.y, r.width, r.height], fill: getComputedStyle(document.getElementById("roomfill")).opacity, fillBg: getComputedStyle(document.getElementById("roomfill")).backgroundColor, caps: getComputedStyle(document.getElementById("ecaps") || document.getElementById("caps")).opacity,
+    return { a: m ? +m[1].split(",")[0] : NaN, rect: [r.x, r.y, r.width, r.height], fill: getComputedStyle(document.getElementById("roomfill")).opacity, fillBg: getComputedStyle(document.getElementById("roomfill")).backgroundColor, radius: getComputedStyle(document.getElementById("room")).borderTopLeftRadius, shadow: getComputedStyle(document.getElementById("room")).boxShadow, caps: getComputedStyle(document.getElementById("ecaps") || document.getElementById("caps")).opacity,
       snapPush: ["snap", "push"].map((i) => getComputedStyle(document.getElementById(i)).transform).join(" ") }; }); };
   for (const t of SAMPLES) {
     const g = await read(page, t), want = roomScaleAt(t, wins), tA = wins[0].tA, tB = wins[0].tB;
     if (Math.abs(g.a - want) > 2e-3) roomFailures.push(`t=${t}: #room scale ${g.a}, want ${want.toFixed(5)}`);
     const wantRect = [540 + want * (0 - 540), 0, 1080 * want, 1920 * want];
     if (g.rect.some((v, i) => Math.abs(v - wantRect[i]) > 2)) roomFailures.push(`t=${t}: #room rect ${g.rect.map((v) => v.toFixed(1))}, want ${wantRect.map((v) => v.toFixed(1))}`);
+    // the card AS RENDERED: corner radius x scale, shadow offset/blur x scale, alpha; same ease as the scale
+    const cw = roomCardAt(t, wins), px = (g.radius.match(/[\d.]+/) || [0])[0] * ROOM_SCALE, sm = /rgba?\(([^)]+)\)\s+([-\d.]+)px\s+([-\d.]+)px\s+([-\d.]+)px/.exec(g.shadow);
+    const sh = sm ? { a: sm[1].split(",").length > 3 ? +sm[1].split(",")[3] : 1, y: +sm[3] * ROOM_SCALE, b: +sm[4] * ROOM_SCALE } : { a: 0, y: 0, b: 0 };
+    if (Math.abs(px - cw.radius) > 0.15) roomFailures.push(`t=${t}: card radius ${px.toFixed(2)} rendered px, want ${cw.radius.toFixed(2)}`);
+    if (Math.abs(sh.y - cw.shadowY) > 0.15 || Math.abs(sh.b - cw.shadowBlur) > 0.3 || Math.abs(sh.a - cw.shadowAlpha) > 0.003) roomFailures.push(`t=${t}: card shadow ${JSON.stringify(sh)}, want ${JSON.stringify(cw)}`);
+    if (t <= tA && g.shadow !== "none" && !/^rgba\(0, 0, 0, 0\) 0px 0px 0px/.test(g.shadow)) roomFailures.push(`t=${t}: shadow outside the window: ${g.shadow}`);
     if (t > tA + 0.02 && t < tB - 0.001 && +g.fill !== 1) roomFailures.push(`t=${t}: #roomfill opacity ${g.fill} inside the window`);
     if ((t < tA - 0.001 || t > tB + 0.02) && +g.fill !== 0) roomFailures.push(`t=${t}: #roomfill opacity ${g.fill} outside the window`);
     if (t >= tA + 0.15 && t <= tB - 0.1 && +g.caps !== 0) roomFailures.push(`t=${t}: captions visible (opacity ${g.caps}) inside the window`);
     if ((t < tA - 0.01 || t > tB + 0.2) && +g.caps !== 1) roomFailures.push(`t=${t}: captions hidden (opacity ${g.caps}) outside the window`);
   }
   const bg = (await read(page, 3)).fillBg;
-  if (bg !== "rgb(244, 239, 230)") roomFailures.push(`fill is not the style's paper colour (#f4efe6): ${bg}`);
+  if (bg !== "rgb(17, 17, 17)") roomFailures.push(`fill is not the style's ink colour (#111111): ${bg}`);
   // the room composes OUTSIDE the camera: #snap and #push hold still through the window (the camera hold)
   const cams = new Set(); for (const t of [2.0, 2.2, 3.0, 4.0, 5.0, 6.0, 6.2, 6.4, 6.55]) cams.add((await read(page, t)).snapPush);
   if (cams.size !== 1) roomFailures.push(`camera moved during the room window: ${[...cams].join(" ; ")}`);

@@ -38,6 +38,14 @@ export const ROOM_EXIT_S = 0.55;     // the room window ends this long after the
 export const ROOM_EASE_NAME = "power2.inOut";
 export const ROOM_VALUES = ["none", "below"];
 
+// The card: the shrunk footage is a rounded card with a soft shadow. Both numbers are AS RENDERED on the canvas at
+// full room (scale 0.73). #room is scaled, so its CSS values are divided by ROOM_SCALE (a 36 px radius on a 0.73
+// element is 26.3 px on the canvas). Both follow the scale's eased progress p = (1 - s) / (1 - ROOM_SCALE): 0 when s is
+// 1, full at 0.73, same cubic ease, so nothing changes outside a window. The fill behind the card is the style's INK.
+export const ROOM_RADIUS = 36;                                   // canvas px at full room
+export const ROOM_SHADOW = { x: 0, y: 24, blur: 60, alpha: 0.45 };   // canvas px, black; CSS `0 24px 60px rgba(0,0,0,.45)` as rendered
+export const ROOM_FILL = "ink";                                  // style colour token behind the card
+
 /** "none" | "below" for any input; `warning` says what was wrong (undefined input is silently "none"). */
 export function normalizeRoom(v) {
   if (v === undefined || v === null || v === "none") return { room: "none" };
@@ -83,6 +91,22 @@ export function roomScaleAt(t, windows) {
   return s;
 }
 
+const r3 = (x) => +x.toFixed(3);
+/** The card's CSS on #room (pre-scale px) at progress p in 0..1: the `--room-r` variable that #room's border-radius reads, and box-shadow. */
+export function roomCardCss(p = 1) {
+  const k = 1 / ROOM_SCALE;
+  // The radius rides a CSS variable (#room { border-radius: var(--room-r) }): GSAP 3.14 rounds a `border-radius` px value to a whole
+  // pixel (even as a four-value string), which would step the corner through the ease; a custom property is interpolated as is.
+  return { "--room-r": `${r3(ROOM_RADIUS * k * p)}px`, boxShadow: `${r3(ROOM_SHADOW.x * k * p)}px ${r3(ROOM_SHADOW.y * k * p)}px ${r3(ROOM_SHADOW.blur * k * p)}px rgba(0,0,0,${r3(ROOM_SHADOW.alpha * p)})` };
+}
+/** Eased progress 0..1 of the card (and of the shrink) at output time t. */
+export const roomProgressAt = (t, windows) => (1 - roomScaleAt(t, windows)) / (1 - ROOM_SCALE);
+/** The card AS RENDERED on the canvas at time t: corner radius px, shadow offset-y and blur px, alpha. */
+export function roomCardAt(t, windows) {
+  const p = roomProgressAt(t, windows);
+  return { radius: ROOM_RADIUS * p, shadowY: ROOM_SHADOW.y * p, shadowBlur: ROOM_SHADOW.blur * p, shadowAlpha: ROOM_SHADOW.alpha * p };
+}
+
 /** room(q): a point already in camera-output canvas pixels -> final canvas pixels, for scale s. */
 export function roomPoint([x, y], s = ROOM_SCALE, W = 1080) {
   const [ox, oy] = roomOrigin(W);
@@ -99,13 +123,15 @@ export function roomBox([x, y, w, h], s = ROOM_SCALE, W = 1080) {
 export function roomSpecJson(W = 1080, H = 1920) {
   return {
     scale: ROOM_SCALE, origin: roomOrigin(W), easeSeconds: ROOM_EASE_S, exitSeconds: ROOM_EXIT_S, ease: ROOM_EASE_NAME,
-    values: ROOM_VALUES, frameRounding: "floor(x + 0.5)", canvas: [W, H],
+    values: ROOM_VALUES, fill: ROOM_FILL, radius: ROOM_RADIUS, shadow: ROOM_SHADOW,
+    cardCssFull: roomCardCss(1), cardCssNone: roomCardCss(0), frameRounding: "floor(x + 0.5)", canvas: [W, H],
     footageBoxAtRest: roomBox([0, 0, W, H], ROOM_SCALE, W),
     // golden vectors for a mirror's tests
     examples: {
       fps30Frames: roomFrames(12.4, 15.1, 30),
       merge: mergeRoomFrames([[10, 40], [30, 60], [60, 80], [100, 120]]),
       scaleAt: [0, 0.1, 0.175, 0.25, 0.35, 1, 3.6].map((d) => { const w = roomWindows([[30, 120]], 30); return [1 + d, roomScaleAt(1 + d, w)]; }),
+      cardAt: [0, 0.1, 0.175, 0.25, 0.35, 1, 3.6].map((d) => { const w = roomWindows([[30, 120]], 30), c = roomCardAt(1 + d, w); return [1 + d, +c.radius.toFixed(4), +c.shadowY.toFixed(4), +c.shadowBlur.toFixed(4), +c.shadowAlpha.toFixed(5)]; }),
       point: { in: [540, 1317], out: roomPoint([540, 1317]) },
     },
   };

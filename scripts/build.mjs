@@ -28,7 +28,7 @@ import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { wordOwners } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
 import { compileMotion, resolveColor } from "./lib/motion-graphics.mjs";
-import { ROOM_SCALE, ROOM_EXIT_S, normalizeRoom, ROOM_EASE_NAME, roomFrames, roomWindows, roomOrigin } from "./lib/room.mjs";
+import { ROOM_SCALE, ROOM_EXIT_S, ROOM_FILL, normalizeRoom, ROOM_EASE_NAME, roomFrames, roomWindows, roomOrigin, roomCardCss } from "./lib/room.mjs";
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 
@@ -1177,12 +1177,14 @@ for (const b of beatsList) {
 
 // ---------- making room: shrink the whole footage stack under a `room:"below"` motion beat ----------
 // Windows merge (overlap -> one shrink); #room wraps #pip and scales about the canvas top centre, OUTSIDE the
-// camera, so a face point maps as room(camera(p)). The uncovered canvas shows the style's paper colour via #roomfill.
+// camera, so a face point maps as room(camera(p)). The uncovered canvas shows the style's ink colour via #roomfill.
 // Captions hide over each merged [tA, tB]. Nothing is emitted when there is no such beat (byte-identical builds).
 const roomWins = roomWindows(roomFrameWins, FPS);
 for (const w of roomWins) {
-  tl.push(`ft("#room", { scale: 1 }, { scale: ${ROOM_SCALE}, force3D: false, duration: ${r3(w.easeIn[1] - w.easeIn[0])}, ease: "${ROOM_EASE_NAME}" }, ${r3(w.easeIn[0])});`);
-  tl.push(`ft("#room", { scale: ${ROOM_SCALE} }, { scale: 1, force3D: false, duration: ${r3(w.easeOut[1] - w.easeOut[0])}, ease: "${ROOM_EASE_NAME}" }, ${r3(w.easeOut[0])});`);
+  // the card (rounded corners + shadow) rides the same tween, so it shares the scale's duration and ease
+  const cardOff = JSON.stringify(roomCardCss(0)).slice(1, -1), cardOn = JSON.stringify(roomCardCss(1)).slice(1, -1);
+  tl.push(`ft("#room", { scale: 1, ${cardOff} }, { scale: ${ROOM_SCALE}, ${cardOn}, force3D: false, duration: ${r3(w.easeIn[1] - w.easeIn[0])}, ease: "${ROOM_EASE_NAME}" }, ${r3(w.easeIn[0])});`);
+  tl.push(`ft("#room", { scale: ${ROOM_SCALE}, ${cardOn} }, { scale: 1, ${cardOff}, force3D: false, duration: ${r3(w.easeOut[1] - w.easeOut[0])}, ease: "${ROOM_EASE_NAME}" }, ${r3(w.easeOut[0])});`);
   tl.push(`ft("#roomfill", { opacity: 0 }, { opacity: 1, duration: 0.01, ease: "none" }, ${r3(w.tA)});`);
   tl.push(`ft("#roomfill", { opacity: 1 }, { opacity: 0, duration: 0.01, ease: "none" }, ${r3(w.tB)});`);
   hiddenCaps.push([w.tA, w.tB]);
@@ -1781,8 +1783,8 @@ const html = `<!doctype html>
   #base, #snap, #push { position: absolute; inset: 0; transform-origin: ${zoom.origin || "50% 29%"}; }
   #base { transform: scale(${zoom.base ?? 1});${look.grade ? ` filter: ${look.grade};` : ""} }
   #pip { position: absolute; inset: 0; z-index: 1; transform-origin: ${W / 2}px ${faceY}px; }${roomWins.length ? `
-  #roomfill { position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; background: ${resolveColor("paper", brand)}; }
-  #room { position: absolute; inset: 0; z-index: 1; transform-origin: ${roomOrigin(W)[0]}px ${roomOrigin(W)[1]}px; }` : ""}
+  #roomfill { position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; background: ${resolveColor(ROOM_FILL, brand)}; }
+  #room { position: absolute; inset: 0; z-index: 1; overflow: hidden; border-radius: var(--room-r, 0px); will-change: transform; transform-origin: ${roomOrigin(W)[0]}px ${roomOrigin(W)[1]}px; }` : ""}
   .behind { position: absolute; inset: 0; pointer-events: none; }
   .behind-in { position: absolute; left: -40px; right: -40px; text-align: center; font-weight: 900; line-height: .86; letter-spacing: -6px; text-transform: uppercase; white-space: nowrap; font-family: ${brand.displayFont ? `"${brand.displayFont}", ` : ""}${UI_FONT}, sans-serif; }
   .matte { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
