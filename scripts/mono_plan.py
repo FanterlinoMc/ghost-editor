@@ -68,7 +68,8 @@ def mono_cfg(proj, spec: dict) -> dict:
     """
     cfg = {"hook": HOOK, "hookRotation": list(HOOK_ROTATION), "burst": "hook"}
     name = spec.get("style")
-    if name:
+    # same id rule as scripts/lib/style-path.mjs; a "user:" style has no mono card (mono is not in the user allowlist)
+    if isinstance(name, str) and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", name):
         card = Path(__file__).resolve().parent.parent / "styles" / f"{name}.json"
         if card.is_file():
             try:

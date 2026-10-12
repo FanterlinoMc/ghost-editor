@@ -79,6 +79,16 @@ auto name tag.
 3. Add a row to the table above, and save the reel.json that defined it as `examples/gallery/<new-name>.reel.json`.
 4. Render one existing example in the new style to confirm it reads as its own look.
 
+### User styles (`user:<id>`)
+
+A reel can use a style that is not in `styles/`: set `"style": "user:<id>"`. `build.mjs` loads it from `$USER_STYLES_DIR/<id>/style.json` (on staging `USER_STYLES_DIR=/data/templates`). If `USER_STYLES_DIR` is unset, a `user:` style stops the build with a clear message.
+
+- A user style's `extends` may name only a **built-in** style from `styles/` (no `user:` chains). A cycle among built-ins is still refused.
+- `brandKit` inside a user style is ignored with a warning (a reel's own `brandKit` is unaffected).
+- Every style name, built-in or user, must match `^[a-z0-9][a-z0-9-]{0,63}$` (with the optional `user:` prefix); anything else stops the build with "bad style name". Brand kit names must match `[a-z0-9-]`. The one resolver is `scripts/lib/style-path.mjs` (tests: `node --test scripts/lib/style-path.test.mjs`).
+- Built-in styles build byte-identically with or without this feature.
+- Which keys a user style may set is the allowlist in the assistant-edits spec (B3); `build.mjs` does not enforce it, the planner's style validator does.
+
 ## Caption and overlay safety (all styles)
 
 `scripts/face_track.py` must run before the build. The placer then:

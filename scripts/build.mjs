@@ -30,6 +30,7 @@ import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from 
 import { compileMotion, resolveColor } from "./lib/motion-graphics.mjs";
 import { ROOM_SCALE, ROOM_EXIT_S, ROOM_FILL, normalizeRoom, ROOM_EASE_NAME, roomFrames, roomWindows, roomOrigin, roomCardCss } from "./lib/room.mjs";
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
+import { loadStyleChain, checkBrandName } from "./lib/style-path.mjs";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -49,15 +50,13 @@ const deepMerge = (a, b) => {
 const STYLE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "styles");
 // a style can extend another ("extends": "editorial-collage"): the base loads first, the style overrides it
 // (R1b port: brand-kit layering, ported from main's engine/core/scripts/build.mjs)
-const loadStyle = (name, seen = []) => {
-  const sp = path.join(STYLE_DIR, `${name}.json`);
-  if (!fs.existsSync(sp)) { console.error(`ERROR: unknown style '${name}'; have: ${fs.readdirSync(STYLE_DIR).map((f) => f.replace(".json", "")).join(", ")}`); process.exit(1); }
-  if (seen.includes(name)) { console.error(`ERROR: style '${name}' extends itself`); process.exit(1); }
-  const own = JSON.parse(fs.readFileSync(sp, "utf8"));
-  delete own._about;
-  const base = own.extends ? loadStyle(own.extends, [...seen, name]) : {};
-  delete own.extends;
-  return deepMerge(base, own);
+const styleWarnings = [];
+const loadStyle = (name) => {
+  try {
+    const r = loadStyleChain(name, { stylesDir: STYLE_DIR, deepMerge });
+    styleWarnings.push(...r.warnings);
+    return r.style;
+  } catch (e) { console.error("ERROR: " + e.message); process.exit(1); }
 };
 // a brand kit (brands/<id>.json) turns one customer's identity into template settings: colours, watermark, name tag,
 // and a flash/burn tint derived from the accent colour (so every brand gets its own burn, not ours)
@@ -75,6 +74,7 @@ const hslToRgb = (h, s, l) => {
   return `${f(0)},${f(8)},${f(4)}`;
 };
 const brandLayer = (id) => {
+  try { checkBrandName(id); } catch (e) { console.error("ERROR: " + e.message); process.exit(1); }
   const bp = path.join(STYLE_DIR, "..", "brands", `${id}.json`);
   if (!fs.existsSync(bp)) { console.error(`ERROR: unknown brand kit '${id}' (brands/)`); process.exit(1); }
   const kit = JSON.parse(fs.readFileSync(bp, "utf8"));
@@ -103,7 +103,7 @@ const spec = deepMerge(preset, rawSpec);
 const FPS = spec.fps ?? 30;
 // brand kit: one accent (60/30/10), ink for text on light scenes, caption size
 const brand = { accent: "#D13F34", accentDark: "#B93026", ink: "#262626", capSize: 58, font: null, ...(spec.brand || {}) };
-const warn = [];
+const warn = [...styleWarnings];
 const die = (m) => { console.error("ERROR: " + m); process.exit(1); };
 // I-19: output format. Canonical WxH comes from safezone.mjs's FORMATS map (one
 // source of truth prep.sh and build.mjs both read, rather than build.mjs holding
@@ -1966,7 +1966,7 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
     // Settings that invalidate every section at once, kept separate from each section's own hash
     // so a manifest diff can tell "one caption changed" apart from "the whole reel's look
     // changed" - see lib/sections.mjs's invalidation note.
-    globalHash: globalHash({ style: rawSpec.style ?? null, format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE }),
+    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE }),
     sections: manifest,
   }, null, 2));
   console.log(`sections: ${sections.length} (${sections.map((s) => `${s.start}-${s.end}`).join(", ")})`);
