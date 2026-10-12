@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Is every frame of a `motion` beat a pure function of time? (docs/MOTION-GRAPHICS-SPEC.md, hard rule 2)
 //
-//   node scripts/motion-determinism.mjs [--variant busy|blur] [--seek render|plain] [--passes 3]
+//   node scripts/motion-determinism.mjs [--variant busy|blur|room] [--seek render|plain] [--capture beginframe|screenshot] [--no-reset] [--passes 3]
 //                                       [--dir <project dir>] [--keep]
 //
 // Builds a synthetic keynote-3 reel with a busy hand-written motion beat (scripts/lib/motion-fixture.mjs),
@@ -77,10 +77,41 @@ const holdFailures = [];
 }
 
 const puppeteer = findPuppeteer();
-const browser = await puppeteer.launch({ executablePath: findChrome(), headless: "shell", args: ["--no-sandbox", "--force-device-scale-factor=1", "--hide-scrollbars"], defaultViewport: { width: 1080, height: 1920, deviceScaleFactor: 1 } });
+// HOW A FRAME IS CAPTURED (the part that makes pixel equality a fair test; found by bisecting a 1-pixel flake):
+// Chrome does not draw a frame from scratch. Tiles are re-rastered only where invalid and the compositor redraws only the
+// damage rect, so a frame's pixels depend on the frame DRAWN BEFORE it: a layer with a fractional translate leaves a stale
+// anti-aliasing row at its old edge (one 630 px row, 39 vs 26 of 255, on the card at t=2.15), a dashed stroke or a blur
+// tail a few levels. The DOM is identical in both cases - computed style and GSAP's attribute values match to the last
+// digit, which this harness also compares. Two things remove the dependence on the previous draw:
+//   1. the capture is driven like hyperframes' render container (captureMode "beginframe"): HeadlessExperimental.beginFrame
+//      with its flags, so a frame is rastered, composited and read back exactly once per call. A plain
+//      Page.captureScreenshot lets the async compositor race the capture and the SAME state then screenshots as one of two
+//      images (~5% of seeks, any order).
+//   2. a blank frame (#root hidden) is drawn between the seek and the capture, so every capture starts from the same
+//      predecessor, whatever order the times are visited in. Without it: 14/75 captures differ, with it 0/75.
+// --capture screenshot and --no-reset keep the old behaviour, to reproduce the flake.
+const captureMode = opt("capture", "beginframe"), resetFrame = captureMode === "beginframe" && !opt("no-reset", false);
+const BEGINFRAME_ARGS = ["--deterministic-mode", "--enable-begin-frame-control", "--disable-new-content-rendering-timeout", "--run-all-compositor-stages-before-draw", "--disable-threaded-animation", "--disable-threaded-scrolling", "--disable-checker-imaging", "--disable-image-animation-resync", "--enable-surface-synchronization", "--disable-gpu-compositing", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"];
+const browser = await puppeteer.launch({ executablePath: findChrome(), headless: "shell", args: ["--no-sandbox", "--force-device-scale-factor=1", "--hide-scrollbars", ...(captureMode === "beginframe" ? BEGINFRAME_ARGS : [])], defaultViewport: { width: 1080, height: 1920, deviceScaleFactor: 1 } });
 const prefix = fs.readFileSync(proj.html, "utf8").match(new RegExp(`id="(b\\d+)-${beat.elements[0].id}"`))?.[1];
 if (!prefix) throw new Error("motion elements not found in index.html");
 
+// reset: draw a blank frame first. The seek must come AFTER it (`after`): a seek made while #root is hidden is not drawn
+// from a blank state - the same 14/75 captures differ as with no reset at all.
+async function grab(page, reset = false, after = null) {
+  if (captureMode !== "beginframe") { if (after) await after(); return page.screenshot({ type: "png" }); }
+  if (!page.__cdp) { page.__cdp = await page.createCDPSession(); await page.__cdp.send("HeadlessExperimental.enable"); page.__tick = 1000; await page.__cdp.send("HeadlessExperimental.beginFrame", { frameTimeTicks: page.__tick, interval: 33, noDisplayUpdates: true }); }
+  const frame = async (shot) => {
+    for (let a = 0; a < 10; a++) {   // a frame with no visual change returns no screenshot: ask again with the next tick
+      page.__tick += 33;
+      const r = await page.__cdp.send("HeadlessExperimental.beginFrame", { frameTimeTicks: page.__tick, interval: 33, ...(shot ? { screenshot: { format: "png" } } : {}) });
+      if (!shot || r.screenshotData) return r.screenshotData && Buffer.from(r.screenshotData, "base64");
+    }
+    throw new Error("beginFrame returned no screenshot");
+  };
+  if (reset) { await page.evaluate(() => { document.getElementById("root").style.visibility = "hidden"; }); await frame(false); await page.evaluate(() => { document.getElementById("root").style.visibility = ""; }); }
+  return after ? after().then(() => frame(true)) : frame(true);
+}
 async function open() {
   const page = await browser.newPage();
   await page.evaluateOnNewDocument(() => { window.__timelines = {}; });   // the hyperframes runtime creates this registry; the composition only fills it
@@ -123,8 +154,8 @@ async function open() {
   return page;
 }
 async function at(page, t) {
-  await page.evaluate((x) => window.__seek(x), t);
-  const [png, state] = [await page.screenshot({ type: "png" }), await page.evaluate((px) => window.__state(px), prefix)];
+  const png = await grab(page, resetFrame, () => page.evaluate((x) => window.__seek(x), t));
+  const state = await page.evaluate((px) => window.__state(px), prefix);
   return { png, shot: sha(png), state, stateHash: sha(JSON.stringify(state)) };
 }
 
