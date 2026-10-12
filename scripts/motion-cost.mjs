@@ -11,7 +11,8 @@
 //      of --runs rounds. Rounds are interleaved (none, busy, busy-nb, blur, none, ...) so machine drift hits every
 //      variant alike rather than one variant.
 //   2. per-frame capture time in headless Chrome: for every frame, seek the GSAP timeline the way the renderer does
-//      and take a screenshot; median over --passes passes per frame, then mean / median / p95 of the frames inside
+//      and take a screenshot (--capture screenshot, the Windows/macOS renderer) or a
+//      HeadlessExperimental.beginFrame capture with the Linux container flags (--capture beginframe); median over --passes passes per frame, then mean / median / p95 of the frames inside
 //      the beat span versus outside it. This bare page has NO video element (the footage cannot be seeked without
 //      the hyperframes runtime), so it is the DOM + overlay cost only - what the beat adds, not what a frame costs
 //      in the real renderer. The real-renderer per-frame figure is (variant wall - none wall) / beat frames.
@@ -19,6 +20,8 @@
 //   none     the reel with no motion beat
 //   busy     12 elements, 30 tweens, blur on 2 elements, draw, reveal by word and by char, count (BUSY_BEAT)
 //   busy-nb  busy with its blur keys removed: busy - busy-nb is what blur costs inside a busy beat
+//   room     busy with room: "below": footage shrunk to 0.73 on a rounded card with ink fill and shadow; window
+//            2.0..8.55 s (frames 60..256), so room - busy is what the room card costs
 //   blur     the blur limit case: 2 elements of 1000 x 1000 (48% of the canvas), blurred for the whole 6 s beat
 //
 // The copy is one 6 s beat at output 2.0..8.0 of a single take (the reel's last six takes merged into source
@@ -37,12 +40,16 @@ const HYPERFRAMES = "0.8.81";   // engine/tests/common.py HYPERFRAMES_VERSION
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(`--${k}`); return i < 0 ? d : (argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : true); };
 const reelSrc = String(opt("reel", "D:/Projects/reels/wa-test-designer"));
-const variants = String(opt("variants", "none,busy,busy-nb,blur")).split(",");
+const variants = String(opt("variants", "none,busy,busy-nb,blur,room")).split(",");
 const workers = String(opt("workers", "1")), runs = +opt("runs", 3), passes = +opt("passes", 3);
 const base = String(opt("dir", path.join(os.tmpdir(), "motion-cost")));
-const BEATS = { none: null, busy: BUSY_BEAT, "busy-nb": stripBlur(BUSY_BEAT), blur: BLUR_BEAT };
+const BEATS = { none: null, busy: BUSY_BEAT, "busy-nb": stripBlur(BUSY_BEAT), blur: BLUR_BEAT, room: { ...BUSY_BEAT, room: "below" } };
+const capture = String(opt("capture", "screenshot"));   // screenshot = hyperframes on Windows/macOS; beginframe = its Linux render container
+const BEGINFRAME_ARGS = ["--deterministic-mode", "--enable-begin-frame-control", "--disable-new-content-rendering-timeout", "--run-all-compositor-stages-before-draw", "--disable-threaded-animation", "--disable-threaded-scrolling", "--disable-checker-imaging", "--disable-image-animation-resync", "--enable-surface-synchronization", "--disable-gpu-compositing", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"];
 const FPS = 30, SRC_A = 10.15, SRC_B = 22.42;   // the merged take of the real reel
 const beatFrom = Math.round(BEAT_AT * FPS), beatTo = Math.round(BEAT_TO * FPS), beatFrames = beatTo - beatFrom;
+// frames a variant's beat touches. The room window runs to + 0.55 s (grow-back after the exit).
+const span = (v) => v === "room" ? [beatFrom, Math.round((BEAT_TO + 0.55) * FPS)] : [beatFrom, beatTo];
 
 const median = (a) => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const pct = (a, p) => { const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
@@ -100,7 +107,7 @@ if (!opt("skip-render", false)) {
 const perFrame = {};
 if (!opt("skip-frames", false)) {
   const puppeteer = findPuppeteer();
-  const browser = await puppeteer.launch({ executablePath: findChrome(), headless: "shell", args: ["--no-sandbox", "--force-device-scale-factor=1", "--hide-scrollbars"], defaultViewport: { width: 1080, height: 1920, deviceScaleFactor: 1 } });
+  const browser = await puppeteer.launch({ executablePath: findChrome(), headless: "shell", args: ["--no-sandbox", "--force-device-scale-factor=1", "--hide-scrollbars", ...(capture === "beginframe" ? BEGINFRAME_ARGS : [])], defaultViewport: { width: 1080, height: 1920, deviceScaleFactor: 1 } });
   for (const v of variants) {
     const page = await browser.newPage();
     await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
@@ -120,7 +127,13 @@ if (!opt("skip-frames", false)) {
       for (let f = 0; f < frames; f++) {
         const t0 = process.hrtime.bigint();
         await page.evaluate((x) => window.__seek(x), f / FPS);
-        await page.screenshot({ type: "jpeg", quality: 80 });
+        if (capture !== "beginframe") await page.screenshot({ type: "jpeg", quality: 80 });
+        else {   // like motion-determinism.mjs: HeadlessExperimental.beginFrame, asking again when a frame has no visual change
+          if (!page.__cdp) { page.__cdp = await page.createCDPSession(); await page.__cdp.send("HeadlessExperimental.enable"); page.__tick = 1000; await page.__cdp.send("HeadlessExperimental.beginFrame", { frameTimeTicks: page.__tick, interval: 33, noDisplayUpdates: true }); }
+          let got = false;
+          for (let a = 0; a < 10 && !got; a++) { page.__tick += 33; got = !!(await page.__cdp.send("HeadlessExperimental.beginFrame", { frameTimeTicks: page.__tick, interval: 33, screenshot: { format: "jpeg", quality: 80 } })).screenshotData; }
+          if (!got) throw new Error("beginFrame returned no screenshot");
+        }
         if (pass > 0) samples[f].push(Number(process.hrtime.bigint() - t0) / 1e6);
       }
     }
@@ -139,19 +152,24 @@ if (runs && !opt("skip-render", false)) {
   const nm = wall.none && wall.none.length ? median(wall.none) : null;
   for (const v of variants) {
     const m = median(wall[v]), d = nm == null ? null : m - nm;
-    console.log(`${v.padEnd(10)} ${wall[v].map(f1).join(", ").padEnd(27)} ${f1(m).padStart(7)}   ${d == null || v === "none" ? "".padStart(8) : ((d >= 0 ? "+" : "") + f1(d) + " s").padStart(8)}   ${d == null || v === "none" ? `${(m / frames * 1000).toFixed(0)} ms/frame overall` : ((d >= 0 ? "+" : "") + (d / beatFrames * 1000).toFixed(0) + " ms")}`);
+    console.log(`${v.padEnd(10)} ${wall[v].map(f1).join(", ").padEnd(27)} ${f1(m).padStart(7)}   ${d == null || v === "none" ? "".padStart(8) : ((d >= 0 ? "+" : "") + f1(d) + " s").padStart(8)}   ${d == null || v === "none" ? `${(m / frames * 1000).toFixed(0)} ms/frame overall` : ((d >= 0 ? "+" : "") + (d / (span(v)[1] - span(v)[0]) * 1000).toFixed(0) + " ms")}`);
   }
 }
 if (Object.keys(perFrame).length) {
   console.log(`\n=== per-frame capture (seek + jpeg screenshot, no video layer), median of ${passes} pass(es) per frame, ms ===`);
   console.log("variant     in beat: mean median   p95   max  |  outside: mean median   p95   max  |  in/out (mean)");
   for (const v of variants) {
-    const a = perFrame[v], inside = a.slice(beatFrom, beatTo), outside = [...a.slice(0, beatFrom), ...a.slice(beatTo)];
+    const [b0, b1] = span(v), a = perFrame[v], inside = a.slice(b0, b1), outside = [...a.slice(0, b0), ...a.slice(b1)];
     const row = (x) => [mean(x), median(x), pct(x, 0.95), Math.max(...x)].map((n) => f1(n).padStart(6)).join(" ");
     console.log(`${v.padEnd(10)}  ${row(inside)}  |  ${row(outside)}  |  ${(mean(inside) / mean(outside)).toFixed(2)}x`);
   }
   if (perFrame.none) {
     console.log("\nbeat minus none, same frames (isolates the beat from captions and camera): ms per frame inside the span");
-    for (const v of variants) if (v !== "none") { const d = perFrame[v].slice(beatFrom, beatTo).map((x, i) => x - perFrame.none[beatFrom + i]); console.log(`  ${v.padEnd(8)} mean ${f1(mean(d))}  median ${f1(median(d))}  p95 ${f1(pct(d, 0.95))}  max ${f1(Math.max(...d))}`); }
+    for (const v of variants) if (v !== "none") { const [b0, b1] = span(v); const d = perFrame[v].slice(b0, b1).map((x, i) => x - perFrame.none[b0 + i]); console.log(`  ${v.padEnd(8)} mean ${f1(mean(d))}  median ${f1(median(d))}  p95 ${f1(pct(d, 0.95))}  max ${f1(Math.max(...d))}`); }
   }
 }
+
+// Status, 12 Oct 2026: the script builds all five variants (none, busy, busy-nb, blur, room) without a dropped-beat
+// warning (build.mjs words it "motion beat <id> dropped: <why>", which the regex matches; it prints on stdout under
+// WARNINGS). NO TIMINGS WERE TAKEN: the laptop never reached the 900 MB free-RAM floor for >40 min (free 370-790 MB,
+// CPU 100%, ~1.8 GB held by another user's browser), so no render or browser was launched.
