@@ -12,7 +12,23 @@ and print the segment table: the take map you choose takes from.
 
 Times are ORIGINAL-recording seconds, the unit reel.json uses. Product names
 get mangled; fix them in reel.json -> captions.fixes, not here.
-Whisper is found on PATH (or $WHISPER); the audio goes in as 16 kHz mono.
+The audio goes in as 16 kHz mono. Two interchangeable backends write the SAME json:
+
+  --engine faster   faster-whisper (CTranslate2, CPU, int8). `--model turbo` is its alias for
+                    mobiuslabsgmbh/faster-whisper-large-v3-turbo, the CT2 conversion of the same
+                    large-v3-turbo checkpoint. Several times faster on CPU. Default when the
+                    package imports (see DEFAULT_ENGINE).
+  --engine openai   the openai-whisper CLI, found on PATH (or $WHISPER).
+
+--partial <path> is the studio's live-progress feed: a JSONL file, one line flushed per
+finished segment. Line 1 is {"duration": <audio seconds>}; every later line is
+{"start": s, "end": s, "text": "..."}. The faster backend streams it as segments decode (in
+bursts of one 30 s window, which is how faster-whisper yields); the openai backend writes the
+segment lines once, at the end. words.whisper.json is still written last, exactly as before.
+
+Model cache: $XDG_CACHE_HOME is honoured by both backends (openai-whisper caches under
+$XDG_CACHE_HOME/whisper); HF_HOME is defaulted to $XDG_CACHE_HOME/huggingface when unset so
+faster-whisper's download lands on the same volume.
 
 Every word keeps whisper's own `probability` (ISSUES D5 - it used to be
 discarded). Two independent signals flag a word as suspect, because neither
@@ -41,6 +57,12 @@ import subprocess
 import sys
 import tempfile
 
+# Model cache on the volume: staging sets XDG_CACHE_HOME=/data/cache. openai-whisper already
+# caches under $XDG_CACHE_HOME/whisper; huggingface_hub (faster-whisper) looks at HF_HOME
+# instead, so derive it - before anything imports huggingface_hub.
+if os.environ.get("XDG_CACHE_HOME") and not os.environ.get("HF_HOME") and not os.environ.get("HF_HUB_CACHE"):
+    os.environ["HF_HOME"] = os.path.join(os.environ["XDG_CACHE_HOME"], "huggingface")
+
 RESTART = re.compile(r"(okay,? again|let me (do|say) that again|one more time|take two|from the top|let's try again|wait,? no)", re.I)
 
 # Duration plausibility: BASE + PER_CHAR * len(word) is the expected span for a
@@ -64,6 +86,10 @@ DURATION_MIN_ABS = 0.5
 # different reel needs it.
 MIN_CONFIDENCE = 0.72
 
+# "auto" = faster-whisper when it imports, else openai. Set to "openai" to make the openai CLI
+# the default regardless of what is installed (see the parity numbers in the commit message).
+DEFAULT_ENGINE = "auto"
+
 
 def find_whisper():
     w = os.environ.get("WHISPER") or shutil.which("whisper")
@@ -72,16 +98,100 @@ def find_whisper():
     return w
 
 
-def transcribe(src, model, lang):
+def audio_f32(src):
+    """16 kHz mono float32 PCM via our own ffmpeg. faster-whisper's own decoder is PyAV, and
+    av 19 (what pip resolves today) rejects an argument faster-whisper 1.2.1 passes to av.open,
+    so a path argument fails before any audio is read. A numpy array sidesteps that and is
+    ~38 MB per 10 minutes."""
+    import numpy as np
+    raw = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", src, "-vn", "-ac", "1", "-ar", "16000",
+                          "-f", "f32le", "-"], check=True, stdout=subprocess.PIPE).stdout
+    return np.frombuffer(raw, dtype=np.float32)
+
+
+class Partial:
+    """Append-only JSONL progress feed for the studio's waiting screen. None path = no-op."""
+    def __init__(self, path):
+        self.f = None
+        if path:
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            self.f = open(path, "w", encoding="utf-8")
+
+    def line(self, obj):
+        if self.f:
+            self.f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+            self.f.flush()
+            try:
+                os.fsync(self.f.fileno())
+            except OSError:
+                pass
+
+    def duration(self, seconds):
+        self.line({"duration": round(seconds, 3)})
+
+    def segment(self, start, end, text):
+        self.line({"start": round(start, 3), "end": round(end, 3), "text": text.strip()})
+
+    def close(self):
+        if self.f:
+            self.f.close()
+
+
+def faster_available():
+    try:
+        import faster_whisper  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def transcribe_faster(src, model, lang, partial):
+    """CTranslate2 backend. Returns the json shape the openai CLI writes - segments[].words[]
+    with word/start/end/probability and the per-segment decode stats - so flag_words,
+    build.mjs, the planner and the studio never learn which engine ran. Decode settings are the
+    openai CLI's own (beam 5, temperature fallback, condition_on_previous_text)."""
+    from faster_whisper import WhisperModel
+    audio = audio_f32(src)
+    partial.duration(len(audio) / 16000.0)
+    threads = os.cpu_count() or 4
+    try:  # a container's cpuset can be smaller than the host's core count
+        threads = min(threads, len(os.sched_getaffinity(0)))
+    except AttributeError:
+        pass
+    threads = int(os.environ.get("FASTER_WHISPER_THREADS") or threads)
+    compute = os.environ.get("FASTER_WHISPER_COMPUTE", "int8")
+    wm = WhisperModel(model, device="cpu", compute_type=compute, cpu_threads=threads)
+    vad = os.environ.get("FASTER_WHISPER_VAD") == "1"
+    segs, info = wm.transcribe(audio, language=lang, word_timestamps=True, beam_size=5, vad_filter=vad)
+    out = []
+    for s in segs:  # a generator: the decode happens as it is iterated
+        out.append({
+            "id": s.id, "seek": s.seek, "start": s.start, "end": s.end, "text": s.text,
+            "tokens": s.tokens, "temperature": s.temperature, "avg_logprob": s.avg_logprob,
+            "compression_ratio": s.compression_ratio, "no_speech_prob": s.no_speech_prob,
+            "words": [{"word": w.word, "start": w.start, "end": w.end, "probability": w.probability}
+                      for w in (s.words or [])],
+        })
+        partial.segment(s.start, s.end, s.text)
+    return {"text": "".join(s["text"] for s in out), "segments": out, "language": info.language}
+
+
+def transcribe_openai(src, model, lang, partial):
     with tempfile.TemporaryDirectory() as td:
         wav = os.path.join(td, "audio.wav")
-        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-vn", "-ac", "1", "-ar", "16000", wav], check=True)
+        subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", src, "-vn", "-ac", "1", "-ar", "16000", wav], check=True)
+        import wave
+        with wave.open(wav) as wf:
+            partial.duration(wf.getnframes() / float(wf.getframerate()))
         cmd = [find_whisper(), wav, "--model", model, "--word_timestamps", "True",
                "--output_format", "json", "--output_dir", td, "--fp16", "False"]
         if lang:
             cmd += ["--language", lang]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
-        return json.load(open(os.path.join(td, "audio.json")))
+        data = json.load(open(os.path.join(td, "audio.json")))
+    for seg in data.get("segments", []):  # the CLI only returns at the end: all lines at once
+        partial.segment(seg["start"], seg["end"], seg["text"])
+    return data
 
 
 def flag_words(data, min_confidence):
@@ -117,18 +227,50 @@ def flag_words(data, min_confidence):
 
 
 def main():
+    # The segment table prints transcript text. On a cp1252 Windows console a "ť" raised
+    # UnicodeEncodeError after words.whisper.json was written but before the flags sidecar
+    # was, exiting 1. A console codepage must never decide whether ingest succeeds.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser()
     ap.add_argument("src")
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", default="turbo")
     ap.add_argument("--lang", default=None)
+    ap.add_argument("--engine", choices=["faster", "openai"], default=None,
+                     help="faster = faster-whisper (CTranslate2, CPU int8); openai = the openai-whisper CLI. "
+                          "Default: faster if the package imports, else openai (with a notice)")
+    ap.add_argument("--partial", default=None,
+                     help="JSONL progress feed: {\"duration\":s} then one {start,end,text} line per segment")
     ap.add_argument("--raw", help="reuse an existing whisper json")
     ap.add_argument("--min-confidence", type=float, default=MIN_CONFIDENCE,
                      help=f"flag a word below this whisper probability (default {MIN_CONFIDENCE})")
     ap.add_argument("--flags-out", default=None,
                      help="where to write the flagged-word list (default: --out with .flags.json)")
     a = ap.parse_args()
-    data = json.load(open(a.raw)) if a.raw else transcribe(a.src, a.model, a.lang)
+    partial = Partial(a.partial)
+    if a.raw:
+        data = json.load(open(a.raw))
+        for seg in data.get("segments", []):
+            partial.segment(seg["start"], seg["end"], seg["text"])
+    else:
+        engine = a.engine or DEFAULT_ENGINE
+        if engine == "auto":
+            if faster_available():
+                engine = "faster"
+            else:
+                engine = "openai"
+                print("transcribe: faster-whisper is not installed; using the openai-whisper CLI "
+                      "(pip install faster-whisper for the faster CPU backend)", file=sys.stderr)
+        elif engine == "faster" and not faster_available():
+            sys.exit("transcribe: --engine faster needs the faster-whisper package (pip install faster-whisper)")
+        print(f"transcribe: engine={engine}", file=sys.stderr)
+        run = transcribe_faster if engine == "faster" else transcribe_openai
+        data = run(a.src, a.model, a.lang, partial)
+    partial.close()
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     json.dump(data, open(a.out, "w"))
     print("\n  start    end   gap  text   (original seconds; * = restart marker)")
