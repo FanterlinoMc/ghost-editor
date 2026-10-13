@@ -31,6 +31,7 @@ import { compileMotion, resolveColor } from "./lib/motion-graphics.mjs";
 import { ROOM_SCALE, ROOM_EXIT_S, ROOM_FILL, normalizeRoom, ROOM_EASE_NAME, roomFrames, roomWindows, roomOrigin, roomCardCss } from "./lib/room.mjs";
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 import { loadStyleChain, checkBrandName } from "./lib/style-path.mjs";
+import { takeEndAt } from "./lib/caption-span.mjs";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 
@@ -1379,7 +1380,7 @@ const edit = cap.style === "editorial" ? buildEditorialCaptions(words, cap, moti
 const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
   const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.05 : SPEECH;
-  const e = Math.min(g.at(-1).end + 0.3, nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99));
+  const e = Math.min(g.at(-1).end + 0.3, nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99), takeEndAt(takes, FPS, g.at(-1).start, SPEECH));
   g.forEach((w, wi) => {
     if (cap.pop !== false) tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: 1.08, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
     // reveal: word -> each word appears when it's spoken; the box is already sized for the whole phrase
