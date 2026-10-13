@@ -56,6 +56,46 @@ if [ "$fmt" = "9:16" ]; then out="$proj/assets/talk$sfx.mp4"
 else out="$proj/assets/talk$sfx-$fmtdash.mp4"; fi
 mkdir -p "$proj/assets" "$proj/build"
 
+# ---- blank timeline (BLANK-TIMELINE-SPEC.md, Stage 1): any file can become a source ----
+# Every source ends up as a 9:16-or-chosen-format H.264 + stereo AAC mp4 with an audio track, so
+# build.mjs never has to ask "does this source have sound". What kind of input it was is recorded
+# in a sidecar assets/talk[-N].json (written for every kind, a normal video included):
+#
+#   (hasAudio = the ORIGINAL had an audio stream; the output always does)
+#   { "kind": "video"|"silent"|"image", "duration": <s>, "hasAudio": bool, "speechLikely": bool }
+#
+#   video   has video and an audio stream: today's path, untouched (two-pass loudnorm to -16 LUFS)
+#   silent  video with NO audio stream: a silent stereo AAC track of the same length is added
+#   image   a still (jpg png webp heic bmp tiff avif): a 30 s still clip, 30 fps, silent audio.
+#           Its aspect decides the fit, with the same two looks the video path already has:
+#           cover-crop when the picture is within 1.34x of the target aspect, otherwise the
+#           blurred-fill letterbox (the "pad" mode the face-aware crop uses for wide footage).
+#
+# speechLikely is a CHEAP pre-check (one ffmpeg volumedetect + silencedetect pass over the source
+# audio, before loudnorm) so the studio can skip transcription and face tracking where there is
+# nothing to find. It is true when ALL of:
+#     mean volume  >= -45 dB   (volumedetect mean_volume; below that it is near-silence/room tone)
+#     max volume   >= -25 dB   (some real peak - a mic hiss floor never gets there)
+#     non-silent   >= 25 %     (share of the file ABOVE -35 dB, silencedetect d=0.3 s)
+# It cannot tell speech from music (that is transcription's job - an empty transcript is a fine
+# answer), so it errs toward true. A source with no audio, and every image, is always false.
+kind=video
+case "$(printf '%s' "${src##*.}" | tr 'A-Z' 'a-z')" in
+  jpg|jpeg|png|webp|heic|heif|bmp|tif|tiff|avif|jfif) kind=image ;;
+esac
+if [ "$kind" = video ]; then
+  # an image with an unexpected extension still shows up as an image2/*_pipe demuxer
+  case "$(ffprobe -v error -show_entries format=format_name -of csv=p=0 "$src" | tr -d '\r')" in
+    image2|*_pipe|png_pipe|webp_pipe|tiff_pipe) kind=image ;;
+  esac
+fi
+hasAudio=false
+if [ -n "$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 "$src" | tr -d '\r')" ]; then hasAudio=true; fi
+[ "$kind" = video ] && [ "$hasAudio" = false ] && kind=silent
+[ "$kind" = image ] && hasAudio=false
+sidecar="$proj/assets/talk$sfx.json"
+IMG_SECONDS="${PREP_IMAGE_SECONDS:-30}"   # env override exists for tests only; the contract is 30
+
 # tr -d '\r': ffprobe writes CRLF on Windows. This no longer feeds a branch that picks the crop
 # filter (see vf= below -- one filter now covers every source orientation and every target
 # format), but $w/$h are still printed in the log line right after, and a stray \r there is worth
@@ -108,6 +148,9 @@ mode="centre"
 # space of the file face_track.py ran on, so consulting face.json while prepping source 1 would
 # offset the crop by a face that is not in this footage.
 facejson="$proj/build/face$sfx.json"
+# a still image has no face track to consult (and a stale one from an earlier file at this index
+# must not steer it)
+[ "$kind" = image ] && facejson=""
 if [ -s "$facejson" ] && [ "$sh" -gt "$th" ]; then
   FH=$(sed -nE 's/.*"h":[[:space:]]*([0-9]+).*/\1/p' "$facejson" | head -1)
   tops=$(tr -d ' ' < "$facejson" | sed 's/\[/\n[/g' | sed -nE 's/^\[[0-9.]+,([0-9]+),.*/\1/p')
@@ -133,6 +176,16 @@ if [ -s "$facejson" ] && [ "$sh" -gt "$th" ]; then
   fi
 elif [ -s "$facejson" ]; then
   echo "crop: centred ($fmt needs no vertical crop)"
+elif [ "$kind" = image ]; then
+  # cover-crop loses the part of the picture outside the target aspect; past 1.34x either way
+  # that is too much of a landscape photo (or a very tall screenshot), so fall back to the
+  # blurred-fill letterbox, the same "pad" look a wide video gets
+  if awk -v w="$w" -v h="$h" -v tw="$tw" -v th="$th" 'BEGIN{a=w/h; t=tw/th; r=(a>t)?a/t:t/a; exit !(r>1.34)}'; then
+    mode="pad"
+    echo "crop: image aspect ${w}x${h} is more than 1.34x off $fmt -- blurred-fill letterbox"
+  else
+    echo "crop: image cover-crop (aspect within 1.34x of $fmt)"
+  fi
 else
   echo "crop: centred (no $facejson yet)"
 fi
@@ -179,20 +232,68 @@ printf '{"format":"%s","W":%s,"H":%s,"srcW":%s,"srcH":%s,"mode":"%s","scale":%s,
   "$fmt" "$tw" "$th" "$w" "$h" "$mode" "$planScale" "$planOffX" "$planOffY" > "$cropfile"
 echo "-> $cropfile (mode=$mode, for safezone.mjs's cropScale/cropOffsetX/cropOffsetY)"
 
-echo "== measuring voice loudness"
-stats=$(ffmpeg -hide_banner -nostats -i "$src" -vn -af loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json -f null - 2>&1 | sed -n '/^{/,/^}/p')
-# loudnorm's JSON is flat and every value is a quoted string, so sed reads it directly. This used to
-# shell out to `python3`, which fails on Windows: there `python3` is the Microsoft Store stub, and a
-# venv provides python.exe but no python3.exe, so even an activated venv does not help. prep.sh now
-# needs nothing but ffmpeg.
-g() { printf '%s' "$stats" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"; }
-echo "input: $(g input_i) LUFS, true peak $(g input_tp) dBTP"
-af="loudnorm=I=-16:TP=-1.5:LRA=11:measured_I=$(g input_i):measured_TP=$(g input_tp):measured_LRA=$(g input_lra):measured_thresh=$(g input_thresh):offset=$(g target_offset):linear=true,aresample=48000"
+if [ "$kind" = video ]; then
+  echo "== measuring voice loudness"
+  stats=$(ffmpeg -hide_banner -nostats -i "$src" -vn -af loudnorm=I=-16:TP=-1.5:LRA=11:print_format=json -f null - 2>&1 | sed -n '/^{/,/^}/p')
+  # loudnorm's JSON is flat and every value is a quoted string, so sed reads it directly. This used to
+  # shell out to `python3`, which fails on Windows: there `python3` is the Microsoft Store stub, and a
+  # venv provides python.exe but no python3.exe, so even an activated venv does not help. prep.sh now
+  # needs nothing but ffmpeg.
+  g() { printf '%s' "$stats" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"; }
+  echo "input: $(g input_i) LUFS, true peak $(g input_tp) dBTP"
+  af="loudnorm=I=-16:TP=-1.5:LRA=11:measured_I=$(g input_i):measured_TP=$(g input_tp):measured_LRA=$(g input_lra):measured_thresh=$(g input_thresh):offset=$(g target_offset):linear=true,aresample=48000"
+  # An audio track that is (nearly) digital silence has no loudness to normalise: loudnorm reports
+  # -inf/-70 and then rejects its own numbers ("measured_I ... out of range"), which used to abort
+  # the whole prep. Screen recordings with a muted mic do this. Keep the track, resample only.
+  case "$(g input_i)" in
+    ''|*inf*|-[6-9][0-9]*) af="aresample=48000"; echo "input is silent (no loudness to normalise): resampling only" ;;
+  esac
 
-enc=(-c:v h264_videotoolbox -b:v 14M)
-ffmpeg -hide_banner -encoders 2>/dev/null | grep -q h264_videotoolbox || enc=(-c:v libx264 -crf 17 -preset fast)
-ffmpeg -v error -y -i "$src" -vf "$vf" "${enc[@]}" -pix_fmt yuv420p -g 30 \
-  -af "$af" -c:a aac -b:a 192k -ac 2 -movflags +faststart "$out"
-echo "-> $out"
-ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate -of csv=p=0 "$out"
-ffmpeg -hide_banner -nostats -i "$out" -af ebur128 -f null - 2>&1 | grep -E "^\s+I:" | sed 's/^/output voice /'
+  enc=(-c:v h264_videotoolbox -b:v 14M)
+  ffmpeg -hide_banner -encoders 2>/dev/null | grep -q h264_videotoolbox || enc=(-c:v libx264 -crf 17 -preset fast)
+  ffmpeg -v error -y -i "$src" -vf "$vf" "${enc[@]}" -pix_fmt yuv420p -g 30 \
+    -af "$af" -c:a aac -b:a 192k -ac 2 -movflags +faststart "$out"
+  echo "-> $out"
+  ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate -of csv=p=0 "$out"
+  ffmpeg -hide_banner -nostats -i "$out" -af ebur128 -f null - 2>&1 | grep -E "^\s+I:" | sed 's/^/output voice /'
+else
+  # silent video or still image: no voice to normalise, so no loudnorm. Add a silent stereo 48 kHz
+  # AAC track instead (anullsrc), trimmed to the picture's length with -shortest (a clip) or -t (a
+  # looped still), so every source has audio and the mixer never meets a file without one.
+  enc=(-c:v h264_videotoolbox -b:v 14M)
+  ffmpeg -hide_banner -encoders 2>/dev/null | grep -q h264_videotoolbox || enc=(-c:v libx264 -crf 17 -preset fast)
+  if [ "$kind" = image ]; then
+    # fit the picture ONCE to a canvas-sized PNG (the blurred-fill filter is the expensive part and a
+    # still does not change), then loop that PNG: 900 frames of a static image encode in seconds
+    stillpng="$proj/build/talk$sfx-still.png"
+    ffmpeg -v error -y -i "$src" -vf "$vf" -frames:v 1 "$stillpng"
+    ffmpeg -v error -y -loop 1 -framerate 30 -t "$IMG_SECONDS" -i "$stillpng" -f lavfi -i "anullsrc=r=48000:cl=stereo" -t "$IMG_SECONDS"       "${enc[@]}" -pix_fmt yuv420p -g 30 -c:a aac -b:a 192k -ac 2 -shortest -movflags +faststart "$out"
+    rm -f "$stillpng"
+  else
+    ffmpeg -v error -y -i "$src" -f lavfi -i "anullsrc=r=48000:cl=stereo" -map 0:v:0 -map 1:a:0       -vf "$vf" "${enc[@]}" -pix_fmt yuv420p -g 30 -c:a aac -b:a 192k -ac 2 -shortest -movflags +faststart "$out"
+  fi
+  echo "-> $out ($kind: silent audio track added)"
+  ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate -of csv=p=0 "$out"
+fi
+
+# ---- sidecar (see the kind/speechLikely notes near the top) ----
+speech=false
+if [ "$hasAudio" = true ]; then
+  # one pass over the SOURCE audio (before loudnorm, which would raise a quiet room to -16 LUFS)
+  ad=$(ffmpeg -hide_banner -nostats -i "$src" -vn -af "volumedetect,silencedetect=noise=-35dB:d=0.3" -f null - 2>&1 | tr -d '\r' || true)
+  srcdur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$src" | tr -d '\r')
+  speech=$(printf '%s\n' "$ad" | awk -v dur="${srcdur:-0}" '
+    /mean_volume:/ { mean=$(NF-1) }
+    /max_volume:/  { mx=$(NF-1) }
+    /silence_start:/ { ss=$NF; open=1 }
+    /silence_duration:/ { sil+=$NF; open=0 }
+    END {
+      if (open && dur>ss) sil+=dur-ss
+      ns=(dur>0)?(dur-sil)/dur:0
+      print (mean!="" && mean>=-45 && mx>=-25 && ns>=0.25) ? "true" : "false"
+    }')
+  echo "speech check: mean/max volume and non-silent share say speechLikely=$speech"
+fi
+dur_out=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$out" | tr -d '\r')
+printf '{"kind":"%s","duration":%s,"hasAudio":%s,"speechLikely":%s}\n' "$kind" "$(awk -v d="${dur_out:-0}" 'BEGIN{printf "%.3f", d}')" "$hasAudio" "$speech" > "$sidecar"
+echo "-> $sidecar"
