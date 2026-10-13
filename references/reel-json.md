@@ -48,6 +48,22 @@ hold after take 1. Any on-screen text with Cyrillic switches the card font from 
 }
 ```
 
+## Blank projects and sources without speech
+
+- `"origin": "blank"` (optional, the only value) marks a project started without a recording. With it,
+  `"takes": []` builds a valid 1 s black page (so a preview has something to show) plus empty
+  `build/*.json`; without it an empty reel still fails (`reel.json has no takes`). It does nothing once
+  there are takes, and the planner carries it through a re-plan.
+- Several recordings: set `src` on a take (`assets/talk-1.mp4`, ...; `prep.sh <file> <proj> 9:16 <N>`
+  writes `assets/talk-N.mp4`). `prep.sh` accepts a video with sound, a video with NO audio (a silent AAC
+  track is added), or a still image (a 30 s clip), and writes `assets/talk-N.json`:
+  `{ "kind": "video" | "silent" | "image", "duration": s, "hasAudio": bool, "speechLikely": bool }`.
+  `speechLikely` (mean volume >= -45 dB, max >= -25 dB, >= 25 % of the file above -35 dB) tells the
+  caller whether transcribing is worth it.
+- `words` may be left out, and a source may have no `build/words-N.whisper.json` or
+  `build/face-N.json`: its takes get no captions, and it is framed as "no face" (the caption/card
+  placer uses its no-face positions). A `words` path that is named but missing is still an error.
+
 ## Beats
 
 All beats take `at`, `to` (optional; default 2.5 s, meme 1.8 s) and `sfx`
