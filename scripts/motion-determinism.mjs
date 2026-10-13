@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Is every frame of a `motion` beat a pure function of time? (docs/MOTION-GRAPHICS-SPEC.md, hard rule 2)
 //
-//   node scripts/motion-determinism.mjs [--variant busy|blur|room] [--seek render|plain] [--capture beginframe|screenshot] [--no-reset] [--passes 3]
+//   node scripts/motion-determinism.mjs [--variant busy|blur|room|layers] [--seek render|plain] [--capture beginframe|screenshot] [--no-reset] [--passes 3]
 //                                       [--dir <project dir>] [--keep]
 //
 // Builds a synthetic keynote-3 reel with a busy hand-written motion beat (scripts/lib/motion-fixture.mjs),
@@ -26,31 +26,38 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
-import { makeProject, BUSY_BEAT, BLUR_BEAT, ROOM_BEAT, ROOM_OVERLAP_BEATS } from "./lib/motion-fixture.mjs";
+import { makeProject, BUSY_BEAT, BLUR_BEAT, ROOM_BEAT, ROOM_OVERLAP_BEATS, LAYERS_FIXTURE } from "./lib/motion-fixture.mjs";
 import { ROOM_SCALE, roomFrames, roomWindows, roomScaleAt, roomCardAt } from "./lib/room.mjs";
 
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(`--${k}`); return i < 0 ? d : (argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : true); };
 const variant = opt("variant", "busy"), seekMode = opt("seek", "render"), passes = +opt("passes", 3);
 const keep = !!opt("keep", false);
-const beat = variant === "blur" ? BLUR_BEAT : variant === "room" ? ROOM_BEAT : BUSY_BEAT;
+// --variant layers: reel.layers[] instead of a beat (BLANK-TIMELINE-SPEC.md, Stage 3) - a video PiP, an image logo,
+// a sticker, a text box over the captions and a motion layer. Same questions, same capture; the state compared is
+// every [data-layer-id] subtree, and there is no camera hold / making-room to assert. The PiP's <video> is taken out
+// of the picture like all footage here, so its box gets a flat colour to have pixels of its own.
+const isLayers = variant === "layers";
+const beat = isLayers ? { at: 2.0, to: 8.0, elements: [{ id: "head" }] } : variant === "blur" ? BLUR_BEAT : variant === "room" ? ROOM_BEAT : BUSY_BEAT;
 const HOLD_EXIT = beat.room === "below" ? 0.55 : 0.2;
 const BEAT_AT = beat.at, BEAT_TO = beat.to, isRoom = variant === "room", FPS = 30;
 const dir = opt("dir", path.join(os.tmpdir(), `motion-determinism-${variant}`));
 
 // sample times, original = output seconds (one kept take): before, entrance, mid, exit, after
-const SAMPLES = isRoom
+const SAMPLES = isLayers
+  ? [0.5, 1.0, 1.15, 1.5, 2.1, 2.4, 3.0, 3.15, 4.0, 4.9, 5.1, 5.3, 6.4, 6.5, 7.0, 7.9, 8.0, 8.9, 9.5]   // each layer's enter, middle and exit, and the gaps
+  : isRoom
   ? [1.0, 1.9, 2.0, 2.1, 2.175, 2.25, 2.35, 3.2, 4.0, 6.1, 6.25, 6.3, 6.4, 6.5, 6.567, 6.9, 8.0]   // room: before, start, MID-EASE-IN (2.0-2.35), held (to 6.217), exit fade (6.0-6.2), MID-EASE-OUT (6.217-6.567), after
   : [1.0, BEAT_AT, 2.15, 2.4, 3.1, 4.05, 5.1, 7.7, 7.9, BEAT_TO, 9.0];
 // detour targets: outside before, inside, outside after
-const DETOURS = isRoom ? [0, 0.5, 1.5, 2.2, 3.3, 4.6, 5.95, 6.35, 7.5, 9.5] : [0, 0.5, 1.9, 2.9, 3.6, 4.6, 6.0, 7.95, 8.5, 9.9];
+const DETOURS = isLayers ? [0, 0.7, 1.9, 2.9, 3.6, 4.6, 6.0, 7.5, 8.5, 9.9] : isRoom ? [0, 0.5, 1.5, 2.2, 3.3, 4.6, 5.95, 6.35, 7.5, 9.5] : [0, 0.5, 1.9, 2.9, 3.6, 4.6, 6.0, 7.95, 8.5, 9.9];
 
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex").slice(0, 16);
 let seed = 0x9e3779b9;
 const rnd = () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const shuffle = (a) => { const r = [...a]; for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; };
 
-const proj = makeProject(dir, { beat });
+const proj = makeProject(dir, isLayers ? { layers: LAYERS_FIXTURE } : { beat });
 const warns = proj.log.split("\n").filter((l) => /motion/i.test(l) && /(dropped|ignored|clamped|only the first|not allowed)/i.test(l));
 if (warns.length) { console.error("the fixture beat produced compiler warnings (it should be clean):\n  " + warns.join("\n  ")); process.exit(2); }
 
@@ -59,7 +66,7 @@ if (warns.length) { console.error("the fixture beat produced compiler warnings (
 // the control: it must have cadence snaps inside the window [at, to + 0.2] (the "would-be" snaps) and an
 // openPush; the reel with the beat must have neither, and every snap outside the window must be unchanged.
 const holdFailures = [];
-{
+if (!isLayers) {
   const ctl = makeProject(dir + "-control", { beat: null });
   const readTruth = (p) => JSON.parse(fs.readFileSync(path.join(p.dir, "build", "edit_truth.json"), "utf8"));
   const withBeat = readTruth(proj), without = readTruth(ctl), FPSX = 30;
@@ -96,8 +103,8 @@ const puppeteer = findPuppeteer();
 const captureMode = opt("capture", "beginframe"), resetFrame = captureMode === "beginframe" && !opt("no-reset", false);
 const BEGINFRAME_ARGS = ["--deterministic-mode", "--enable-begin-frame-control", "--disable-new-content-rendering-timeout", "--run-all-compositor-stages-before-draw", "--disable-threaded-animation", "--disable-threaded-scrolling", "--disable-checker-imaging", "--disable-image-animation-resync", "--enable-surface-synchronization", "--disable-gpu-compositing", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"];
 const browser = await puppeteer.launch({ executablePath: findChrome(), headless: "shell", args: ["--no-sandbox", "--force-device-scale-factor=1", "--hide-scrollbars", ...(captureMode === "beginframe" ? BEGINFRAME_ARGS : [])], defaultViewport: { width: 1080, height: 1920, deviceScaleFactor: 1 } });
-const prefix = fs.readFileSync(proj.html, "utf8").match(new RegExp(`id="(b\\d+)-${beat.elements[0].id}"`))?.[1];
-if (!prefix) throw new Error("motion elements not found in index.html");
+const prefix = isLayers ? "ly-gfx_m" : fs.readFileSync(proj.html, "utf8").match(new RegExp(`id="(b\\d+)-${beat.elements[0].id}"`))?.[1];
+if (!prefix || (isLayers && !fs.readFileSync(proj.html, "utf8").includes(`id="${prefix}-head"`))) throw new Error("motion elements not found in index.html");
 
 // reset: draw a blank frame first. The seek must come AFTER it (`after`): a seek made while #root is hidden is not drawn
 // from a blank state - the same 14/75 captures differ as with no reset at all.
@@ -121,7 +128,7 @@ async function open() {
   await page.goto(pathToFileURL(proj.html).href, { waitUntil: "load", timeout: 60000 });
   await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 });
   await page.evaluate(() => document.fonts.ready.then(() => 0));
-  await page.evaluate((mode, roomRun) => {
+  await page.evaluate((mode, roomRun, layersRun) => {
     const tl = window.__timelines.main; tl.pause();
     // The footage is not under test and a bare page has no runtime to seek it: an autoplaying <video> would
     // put a different frame in every screenshot. Take it out of the picture; the graphics sit over it anyway.
@@ -131,6 +138,7 @@ async function open() {
       document.getElementById("push").style.background = "#2a4a78";
       const f = document.createElement("div"); f.style.cssText = "position:absolute;left:340px;top:240px;width:400px;height:620px;background:#e8b48a;border:6px solid #fff;box-sizing:border-box"; document.getElementById("push").appendChild(f);
     }
+    if (layersRun) for (const b of document.querySelectorAll("[data-layer-box]")) if (b.querySelector("video")) b.style.background = "#2e8b57";   // layers: the PiP's footage stand-in
     window.__seek = (t) => {
       if (mode === "plain") tl.seek(t, true); else { tl.totalTime(t + 0.001, true); tl.totalTime(t, false); }
       // the hyperframes runtime shows a .clip only inside [data-start, data-start + data-duration); do the same
@@ -144,6 +152,15 @@ async function open() {
     window.__state = (px) => {
       const out = {};
       for (const i of ["room", "roomfill", "caps", "ecaps"]) { const e = document.getElementById(i); if (e) { const cs = getComputedStyle(e); out["#" + i] = [cs.opacity, cs.transform, cs.visibility, cs.borderRadius, cs.boxShadow].join(" | "); } }
+      if (layersRun) {   // every layer's wrapper subtree, keyed by its data-layer-id
+        const walkL = (e, p) => {
+          const cs = getComputedStyle(e);
+          out[p + (e.id ? "#" + e.id : "")] = [cs.opacity, cs.transform, cs.filter, cs.clipPath, cs.visibility, cs.strokeDashoffset, cs.boxShadow, e.children.length === 0 ? e.textContent : ""].join(" | ");
+          [...e.children].forEach((c, i) => walkL(c, p + "/" + i));
+        };
+        for (const w of document.querySelectorAll("[data-layer-id]")) walkL(w, "L:" + w.dataset.layerId);
+        return out;
+      }
       const root = document.getElementById(px + "-in");
       if (!root) return { "(missing)": "no root" };
       (function walk(e, p) {
@@ -153,7 +170,7 @@ async function open() {
       })(root, "r");
       return out;
     };
-  }, seekMode, isRoom);
+  }, seekMode, isRoom, isLayers);
   return page;
 }
 async function at(page, t) {
@@ -207,7 +224,7 @@ for (let p = 0; p < passes; p++) {
 for (const t of [...SAMPLES].reverse()) { checks++; compare("reverse", t, ref.get(t), await at(page, t)); }   // backwards scrub
 for (const t of SAMPLES) { await page.evaluate((x) => window.__seek(x), t); checks++; compare("repeat", t, ref.get(t), await at(page, t)); }   // same time twice
 // the camera really is still: #snap and #push compute to the same transform at every frame of the window
-{
+if (!isLayers) {
   const cam = async (t) => { await page.evaluate((x) => window.__seek(x), t); return page.evaluate(() => ["snap", "push"].map((i) => getComputedStyle(document.getElementById(i)).transform).join(" ")); };
   const want = await cam(BEAT_AT);
   for (let f = Math.round(BEAT_AT * 30); f <= Math.round((BEAT_TO + HOLD_EXIT) * 30); f++) { const got = await cam(f / 30); if (got !== want) { holdFailures.push(`camera moved at t=${(f / 30).toFixed(3)}: ${want} -> ${got}`); break; } }

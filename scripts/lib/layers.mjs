@@ -160,8 +160,12 @@ export function layerTweens(l, off = 0) {
   const ft = (from, to) => lines.push(`ft("${sel}", ${JSON.stringify(from)}, ${JSON.stringify({ ...to, force3D: false })}, ${t0});`);
   if (l.enter === "slide-up") ft({ autoAlpha: 0, y: 60 }, { autoAlpha: op, y: 0, duration: ed, ease: "power3.out" });
   else if (l.enter === "pop") ft({ autoAlpha: 0, scale: 0.7 }, { autoAlpha: op, scale: 1, duration: ed, ease: "back.out(1.7)" });
-  else if (l.enter === "none") ft({ autoAlpha: 0 }, { autoAlpha: op, duration: 0.001, ease: "none" });
-  else ft({ autoAlpha: 0 }, { autoAlpha: op, duration: ed, ease: "power1.out" });
+  // fade / none also carry y: 0 on both sides. GSAP writes an identity transform on the first render of a
+  // force3D:false tween that has none, so without it the box's DOM would read "transform: none" until the
+  // playhead first reached it and "translate(0,0)" ever after - same pixels, but not a pure function of time
+  // (motion-determinism --variant layers caught it). The baseline set at 0 now writes it up front.
+  else if (l.enter === "none") ft({ autoAlpha: 0, y: 0 }, { autoAlpha: op, y: 0, duration: 0.001, ease: "none" });
+  else ft({ autoAlpha: 0, y: 0 }, { autoAlpha: op, y: 0, duration: ed, ease: "power1.out" });
   const out = l.exit === "fade" ? ed : 0.001;
   lines.push(`tl.fromTo("${sel}", ${JSON.stringify({ autoAlpha: op })}, ${JSON.stringify({ autoAlpha: 0, duration: out, ease: l.exit === "fade" ? "power1.in" : "none", force3D: false, immediateRender: false })}, ${r3(t1 - out)});`);
   return lines;

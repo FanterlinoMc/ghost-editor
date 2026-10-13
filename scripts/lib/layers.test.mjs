@@ -97,7 +97,7 @@ test("enter/exit tween shapes: explicit from and to, force3D false, about 0.3 s"
   const l = (enter, exit, dur = 4) => ({ id: "x", t0: 2, t1: 2 + dur, dur, opacity: 0.8, enter, exit });
   const fade = layerTweens(l("fade", "fade"));
   assert.equal(fade.length, 2);
-  assert.equal(fade[0], `ft("#ly-x_box", {"autoAlpha":0}, {"autoAlpha":0.8,"duration":0.3,"ease":"power1.out","force3D":false}, 2);`);
+  assert.equal(fade[0], `ft("#ly-x_box", {"autoAlpha":0,"y":0}, {"autoAlpha":0.8,"y":0,"duration":0.3,"ease":"power1.out","force3D":false}, 2);`);
   assert.equal(fade[1], `tl.fromTo("#ly-x_box", {"autoAlpha":0.8}, {"autoAlpha":0,"duration":0.3,"ease":"power1.in","force3D":false,"immediateRender":false}, 5.7);`);
   assert.match(layerTweens(l("slide-up", "none"))[0], /"y":60.*"y":0,"duration":0\.3,"ease":"power3\.out"/);
   assert.match(layerTweens(l("pop", "fade"))[0], /"scale":0\.7.*"scale":1,"duration":0\.3,"ease":"back\.out\(1\.7\)"/);

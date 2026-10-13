@@ -113,6 +113,28 @@ export const ROOM_OVERLAP_BEATS = [
   { ...ROOM_BEAT, id: "room-b", at: 3.5, elements: ROOM_BEAT.elements.slice(3, 5), tweens: ROOM_BEAT.tweens.slice(3, 4).concat(ROOM_BEAT.tweens.slice(5, 6)) },
 ];
 
+// reel.layers[] (BLANK-TIMELINE-SPEC.md, Stage 3) over the same single 10 s take: a video picture-in-picture
+// (anchored, so it rides take 0), an image logo pinned for the whole reel, a text box over the captions, a
+// still image sliding up, and a motion layer. All five kinds, every enter/exit shape the layers use.
+export const LAYERS_FIXTURE = [
+  { id: "pip", kind: "video", src: "assets/pip.mp4", anchor: { take: 0, offset: 3 }, dur: 3.5, in: 0.5, box: { x: 620, y: 140, w: 380, h: 676 }, fit: "cover", radius: 28, shadow: true, z: 2, audio: "off", enter: "pop", exit: "fade", by: "user" },
+  { id: "logo", kind: "logo", src: "assets/mark.png", pin: true, at: 0, dur: 10, z: 6, by: "user" },
+  { id: "note", kind: "text", pin: true, at: 5, dur: 4, text: "Over the captions", font: "Gloock", size: 72, color: "#ffffff", bg: "#000000b0", align: "center", box: { x: 90, y: 1500, w: 900, h: 170 }, radius: 24, z: 4, overCaptions: true, enter: "fade", exit: "fade", by: "user" },
+  { id: "sticker", kind: "image", src: "assets/mark.png", pin: true, at: 1, dur: 3, box: { x: 60, y: 1100, w: 260, h: 260 }, fit: "contain", radius: 40, shadow: "strong", opacity: 0.9, z: 1, enter: "slide-up", exit: "none", by: "user" },
+  { id: "gfx", kind: "motion", pin: true, at: 2, dur: 6, z: 3, enter: "slide-up", exit: "fade", by: "user",
+    elements: [
+      el({ id: "plate", shape: "rect", x: 80, y: 860, w: 920, h: 220, fill: "ink", fill2: "accent", gradientAngle: 120, radius: 32, z: 1 }),
+      el({ id: "head", shape: "text", x: 120, y: 880, w: 840, h: 90, text: "Twelve seconds long", font: "Inter", size: 64, weight: 800, align: "left", color: "#ffffff", z: 2 }),
+      el({ id: "num", shape: "text", x: 120, y: 970, w: 600, h: 100, text: "1,200", font: "Gloock", size: 84, weight: 700, align: "left", color: "accent", z: 2 }),
+      el({ id: "rule", shape: "line", x: 120, y: 1100, x2: 960, y2: 1100, stroke: "#ffffff", strokeWidth: 6, z: 2 }),
+    ],
+    tweens: [
+      { target: "head", at: 0.3, dur: 0.5, ease: "power3.out", from: { y: 30, opacity: 0 }, to: { y: 0, opacity: 1 } },
+      { target: "num", at: 0.5, dur: 1.4, ease: "power2.out", from: { count: 0 }, to: { count: 1200 } },
+      { target: "rule", at: 0.6, dur: 0.8, ease: "power2.inOut", from: { draw: 0 }, to: { draw: 1 } },
+    ] },
+];
+
 export function stripBlur(beat) {
   const b = structuredClone(beat);
   for (const tw of b.tweens) { delete tw.from.blur; delete tw.to.blur; }
@@ -135,7 +157,7 @@ function words(seconds) {
  * Create (or rebuild) a project at `dir` and run the fork's build.mjs on it.
  * beat: a motion beat object, or null for the same reel with no motion beat.
  */
-export function makeProject(dir, { beat = null, beats = null, seconds = SECONDS, style = "keynote-3", reuseSource = true } = {}) {
+export function makeProject(dir, { beat = null, beats = null, layers = null, seconds = SECONDS, style = "keynote-3", reuseSource = true } = {}) {
   fs.mkdirSync(path.join(dir, "assets"), { recursive: true });
   fs.mkdirSync(path.join(dir, "build"), { recursive: true });
   const src = path.join(dir, "assets", "talk.mp4");
@@ -144,11 +166,16 @@ export function makeProject(dir, { beat = null, beats = null, seconds = SECONDS,
     sh("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", `testsrc2=size=1080x1920:rate=30:duration=${seconds}`, "-f", "lavfi", "-i", `sine=frequency=180:duration=${seconds}`,
       "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-keyint_min", "30", "-c:a", "aac", "-shortest", "-movflags", "+faststart", "-y", src]);
   }
+  if (layers) {   // media the layers point at: a moving clip for the picture-in-picture, a still for the logo / sticker
+    const pip = path.join(dir, "assets", "pip.mp4"), mark = path.join(dir, "assets", "mark.png");
+    if (!fs.existsSync(pip)) sh("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "testsrc=size=540x960:rate=30:duration=5", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-an", "-y", pip]);
+    if (!fs.existsSync(mark)) sh("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "testsrc2=size=256x256:rate=1", "-frames:v", "1", "-y", mark]);
+  }
   fs.writeFileSync(path.join(dir, "build", "words.whisper.json"), JSON.stringify(words(seconds)));
   const samples = []; for (let t = 0; t <= seconds + 4; t += 2) samples.push([t, 300, 900, 340, 740, 480, 700]);
   fs.writeFileSync(path.join(dir, "build", "face.json"), JSON.stringify({ fps: 5, w: 1080, h: 1920, samples }));
   const reel = { title: "motion determinism fixture", source: "assets/talk.mp4", words: "build/words.whisper.json", face: "build/face.json",
-    style, fps: 30, outro: 0, music: null, takes: [{ a: 0, b: seconds }], zoom: {}, beats: beats ?? (beat ? [beat] : []) };
+    style, fps: 30, outro: 0, music: null, takes: [{ a: 0, b: seconds }], zoom: {}, beats: beats ?? (beat ? [beat] : []), ...(layers ? { layers } : {}) };
   fs.writeFileSync(path.join(dir, "reel.json"), JSON.stringify(reel, null, 2));
   const log = sh(process.execPath, [BUILD_MJS, "."], { cwd: dir });
   return { dir, html: path.join(dir, "index.html"), log };
