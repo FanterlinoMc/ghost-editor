@@ -105,6 +105,42 @@ const FPS = spec.fps ?? 30;
 const brand = { accent: "#D13F34", accentDark: "#B93026", ink: "#262626", capSize: 58, font: null, ...(spec.brand || {}) };
 const warn = [...styleWarnings];
 const die = (m) => { console.error("ERROR: " + m); process.exit(1); };
+// Blank project (origin "blank", no takes): a black W x H page, 1 s long, with the same root and
+// timeline contract as a real build, plus the build/*.json files other tools read - all empty.
+function writeBlankPage() {
+  const BLANK_S = 1;
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=${W}, height=${H}" />
+<title>${String(spec.title || "reel").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+  body { margin: 0; background: #000; }
+  #root { position: relative; width: ${W}px; height: ${H}px; overflow: hidden; background: #000; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${BLANK_S}" data-fps="${FPS}"></div>
+<script>
+  const tl = gsap.timeline({ paused: true });
+  window.__timelines["main"] = tl;
+</script>
+</body>
+</html>
+`;
+  fs.writeFileSync(path.join(proj, "index.html"), html);
+  fs.mkdirSync(path.join(proj, "build"), { recursive: true });
+  const j = (name, v) => fs.writeFileSync(path.join(proj, "build", name), JSON.stringify(v, null, 2));
+  j("edit_truth.json", { total: BLANK_S, speech: 0, fps: FPS, takes: [], snaps: [], pushes: [], beats: [] });
+  j("sfx_events.json", { total: BLANK_S, speech: 0, voiceP95: 0, roleDb: {}, events: [] });
+  j("words.edit.json", []);
+  j("caption_layout.json", { platform: null, safeTop: 0, safeBottom: H, blocks: [] });
+  j("sections.json", { total: BLANK_S, fps: FPS, globalHash: null, sections: [] });
+  console.log(`blank project: no takes yet -> ${BLANK_S}s black ${W}x${H} page\n\n-> ${path.join(proj, "index.html")}`);
+  process.exit(0);
+}
 // I-19: output format. Canonical WxH comes from safezone.mjs's FORMATS map (one
 // source of truth prep.sh and build.mjs both read, rather than build.mjs holding
 // its own second copy of these four numbers). Unknown spec.format dies loudly
@@ -141,6 +177,14 @@ if (SECTION_MODE && !(SECTION_END > SECTION_START)) die(`GE_SECTION_END (${SECTI
 // Scope, deliberately: this is Gaps 1 and 2 (schema + renderer). Gap 3 - prep.sh / transcribe.py /
 // face_track.py writing per-source outputs - is NOT in this change; a multi-source project today
 // needs its assets/*.mp4 placed by hand. Recorded in NEXT.md so it does not expand silently.
+// BLANK TIMELINE (BLANK-TIMELINE-SPEC.md, Stage 1): a project that has no clips yet. An empty reel
+// with `origin: "blank"` builds a valid black page of 1 s (so the editor's preview iframe has
+// something to show) and stops here. Without the marker an empty reel is still an error - a plan
+// that lost all its takes by accident must not look like a deliberate blank project.
+if (!(spec.takes || []).length) {
+  if (rawSpec.origin !== "blank") die(`reel.json has no takes (an empty reel is only valid with "origin": "blank")`);
+  writeBlankPage();
+}
 const takes = spec.takes.map((t, i) => {
   if (!(t.b > t.a)) die(`take ${i} has b <= a`);
   if (t.src != null && typeof t.src !== "string") die(`take ${i}: src must be a string path, got ${typeof t.src}`);
@@ -242,7 +286,11 @@ const loadWords = (rel) => {
 };
 // Still required, and still named by spec.words - a missing primary transcript is a build failure,
 // not a reel with no captions.
-const allWords = loadWords(spec.words);
+// BLANK TIMELINE: `spec.words` may be absent (a project whose clips have no speech). Then the primary
+// source's transcript is looked up by the per-source convention, and a missing one just means no
+// captions - the same honest degradation every other transcript-less source gets below. A
+// `spec.words` that IS set but points at nothing stays a build failure, as it always was.
+const allWords = spec.words != null ? loadWords(spec.words) : (loadWords(wordsPathFor(PRIMARY_SRC)) ?? []);
 if (!allWords) die(`words file not found: ${spec.words} (run transcribe.py first)`);
 const fixes = Object.entries(spec.captions?.fixes || {});
 const words = [];
@@ -278,7 +326,7 @@ console.log("\n edit-start   orig a  ->  orig b   dur   text");
 // and stay in that list's order - no cross-source interleaving to re-sort.
 const wordsByTake = takes.map(() => []);
 for (const s of SOURCES) {
-  const rel = s === PRIMARY_SRC ? spec.words : wordsPathFor(s);
+  const rel = s === PRIMARY_SRC ? (spec.words ?? wordsPathFor(s)) : wordsPathFor(s);
   // Two sources must never resolve to the SAME transcript - that is A30 wearing a convention.
   // A source not named per lib/sources.mjs (`assets/talk-1.mp4`) derives index 0 and therefore the
   // PRIMARY path, which would hand one recording's words to another recording's takes. Caught by
@@ -408,7 +456,10 @@ const userAsset = (p) => {
 // land in pauses.
 const ROLE_DB = { ui: -14, whoosh: -12, impact: -8, meme: -3, ...(spec.mix?.roleDb || {}) };
 const voiceP95 = (() => {
-  const raw = execFileSync("ffmpeg", ["-v", "error", "-i", path.resolve(proj, spec.source), "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "-"], { maxBuffer: 1 << 30 });
+  // Nothing to measure without a transcript (the loop below visits words only), so the decode is
+  // skipped - which also means a primary source that is a still image or a silent clip never
+  // reaches ffmpeg here. The result is the same constant the empty loop produced before.
+  const raw = allWords.length === 0 ? Buffer.alloc(0) : execFileSync("ffmpeg", ["-v", "error", "-i", path.resolve(proj, spec.source ?? PRIMARY_SRC), "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "-"], { maxBuffer: 1 << 30 });
   const x = new Float32Array(raw.buffer, raw.byteOffset, Math.floor(raw.length / 4));
   const win = 800, pk = [];
   // allWords is the PRIMARY source's transcript, matched against every take. That is deliberate
@@ -596,7 +647,6 @@ for (const s of SOURCES) {
   }
 }
 const srcDurOf = new Map(SOURCES.map((s) => [s, parseFloat(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path.resolve(proj, s)]).toString())]));
-const srcDur = srcDurOf.get(SRC);
 // Every take must fit inside its OWN recording. With one source this is the check that already
 // existed implicitly via srcDur; with several it is the only thing standing between a typo in
 // take.src and a take that silently plays black.
@@ -604,14 +654,16 @@ for (const [i, k] of takes.entries()) {
   const d = srcDurOf.get(k.src);
   if (k.b > d + 0.05) die(`take ${i} ends at ${k.b}s but ${k.src} is only ${d.toFixed(2)}s long`);
 }
-const stillAt = (t) => String(Math.max(0, Math.min(t, srcDur - 0.12)));
+// clamped against the duration of the take's OWN recording (a hold or outro still taken from a second
+// source must not be limited by the first one's length)
+const stillAt = (t, src = SRC) => String(Math.max(0, Math.min(t, srcDurOf.get(src) - 0.12)));
 const fadeLane = (d) => JSON.stringify({ version: 1, lanes: [{ target: "volume", points: [{ t: 0, v: 0 }, { t: r3(2 / FPS), v: 1 }, { t: r3(d - 3 / FPS), v: 1 }, { t: r3(d), v: 0 }] }] });
 const takeHtml = takes.map((k, i) => {
   if (SECTION_MODE && !k.inSection) return "";  // I-25 prototype: this take isn't on screen in this section
   let h = `
       <video id="take-${i}" src="${k.src}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="0" muted playsinline></video>`;
   if (k.holdFrames) {
-    execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(k.a + k.dur - 1 / FPS), "-i", path.resolve(proj, k.src), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, `hold-${i}.jpg`)]);
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(k.a + k.dur - 1 / FPS, k.src), "-i", path.resolve(proj, k.src), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, `hold-${i}.jpg`)]);
     h += `
       <img id="hold-${i}" class="fill" src="assets/hold-${i}.jpg" data-start="${r3(k.holdStart)}" data-duration="${r3(k.holdFrames / FPS)}" data-track-index="0" />`;
   }
@@ -688,7 +740,7 @@ if (spec.matte) {
 }
 // the outro is a real still of the last frame, frozen under the end card
 const last = takes.at(-1);
-if (OUTRO > 0) execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(last.a + last.dur - 1 / FPS), "-i", path.resolve(proj, last.src), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, "outro.jpg")]);
+if (OUTRO > 0) execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(last.a + last.dur - 1 / FPS, last.src), "-i", path.resolve(proj, last.src), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, "outro.jpg")]);
 const outroHtml = OUTRO > 0 ? `
       <img id="outro-still" class="fill" src="assets/outro.jpg" data-start="${r3(SPEECH)}" data-duration="${r3(OUTRO)}" data-track-index="0" />` : "";
 // outroFade (opt-in): the held last frame fades to black instead of freezing (Ahmed's The Monk 2)
@@ -713,8 +765,14 @@ for (const sname of SOURCES) {
   const rel = sname === PRIMARY_SRC ? (spec.face || "build/face.json") : facePathFor(sname);
   const abs = path.resolve(proj, rel);
   if (fs.existsSync(abs)) faces[sname] = JSON.parse(fs.readFileSync(abs, "utf8"));
-  else if (SOURCES.length > 1)
-    warn.push(`source ${sname} has no face track at ${rel} - its captions are placed against ${PRIMARY_SRC}'s face, which is not the face on screen (MULTIANGLE Gap 3: run face_track.py per source)`);
+  else if (SOURCES.length > 1) {
+    // BLANK TIMELINE: a source with no face track of its own (a screen recording, a photo, a clip
+    // without a person) is framed as "no face seen": captions and cards use the no-face placement,
+    // not the primary source's face, which is not what is on screen. Empty samples, not null -
+    // makePlacer only falls back to the single-source `face` when a source has no entry at all.
+    faces[sname] = { samples: [] };
+    warn.push(`source ${sname} has no face track at ${rel} - treated as having no face (centre framing); run face_track.py for it if it shows a person`);
+  }
 }
 if (!face) warn.push(`no ${path.relative(proj, facePath)}: captions sit at a fixed height and may cover the face; run scripts/face_track.py first`);
 // A face.json is pixel coordinates in whatever W/H face_track.py measured. If that
@@ -814,7 +872,7 @@ const faceFile = path.join(proj, spec.face || "build/face.json");
 //     median, falling back to the primary's (i.e. this `faceY`) for a source with no track of its
 //     own. `#pip`'s baked origin still uses `faceY` directly, unchanged.
 const faceY = medianFaceY(fs.existsSync(faceFile) ? JSON.parse(fs.readFileSync(faceFile, "utf8")) : null, 700);
-const faceYBySrc = new Map(SOURCES.map((s) => [s, medianFaceY(faces[s], faceY)]));
+const faceYBySrc = new Map(SOURCES.map((s) => [s, medianFaceY(faces[s], SOURCES.length > 1 && s !== PRIMARY_SRC && !faces[s]?.samples?.length ? 700 : faceY)]));
 const faceYAt = (t) => faceYBySrc.get(locateTake(takes, t, FPS)?.src) ?? faceY;
 const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
