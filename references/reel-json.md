@@ -44,6 +44,7 @@ hold after take 1. Any on-screen text with Cyrillic switches the card font from 
               "compact": false },                  // smaller cards for a narrow band, e.g. under burned-in captions
   "mix": { "roleDb": { "ui": -14, "whoosh": -12, "impact": -8, "meme": -3 } },  // SFX peak vs voice p95 peak, dB
   "beats": [ /* see below */ ],
+  "layers": [ /* optional, output seconds: PiP, B-roll, logos, text - see Layers */ ],
   "sfx": [{ "at": 24.4, "id": "record-scratch", "db": 0, "lead": 0 }]   // extra hand-placed sounds
 }
 ```
@@ -63,6 +64,67 @@ hold after take 1. Any on-screen text with Cyrillic switches the card font from 
 - `words` may be left out, and a source may have no `build/words-N.whisper.json` or
   `build/face-N.json`: its takes get no captions, and it is framed as "no face" (the caption/card
   placer uses its no-face positions). A `words` path that is named but missing is still an error.
+
+## Layers (`layers[]`, output seconds)
+
+Everything else in reel.json is in SOURCE seconds and moves with its words when a take is cut. A **layer**
+stays at a point of the FINISHED video: a picture-in-picture, B-roll over the voice, a logo, a sticker, a text
+box, or a graphic on a clip with no speech. The planner never writes layers (`"by": "user"`); it carries them
+through a re-plan untouched. A reel without `layers` builds byte-identically to one built before the field
+existed (`scripts/byte-identity.mjs`).
+
+```jsonc
+"layers": [
+  { "id": "pip", "kind": "video", "src": "assets/broll-2.mp4",
+    "anchor": { "take": 3, "offset": 1.2 },     // OR  "pin": true, "at": 12.5
+    "dur": 4.0, "in": 0.0,                       // seconds on screen; seek offset into the video
+    "box": { "x": 640, "y": 120, "w": 380, "h": 676 }, "fit": "cover", "radius": 24, "shadow": true,
+    "z": 2, "opacity": 1, "audio": "off",        // "off" | "duck" | "mix"
+    "enter": "pop", "exit": "fade",              // enter: fade | slide-up | pop | none   exit: fade | none
+    "overCaptions": false, "by": "user" }
+]
+```
+
+- **Timing.** `pin: true` means `at` is absolute output seconds and nothing can move it. Otherwise
+  `anchor: { take, offset }` places the layer `offset` seconds into take `take`'s stretch of the finished video
+  (its hold included), resolved AFTER the take layout, so trimming an earlier take slides the layer with its take.
+  A bare `at` with no anchor is read as pinned. Times are clamped to the reel's length (a warning); a layer
+  shorter than 0.1 s once clamped is dropped (a warning). The build dies on a take index out of range, a missing
+  `dur`, a bad `box` or a `src` that is not a file inside the project.
+- **`kind`.**
+  - `video` and `image`: a positioned `<video>` / `<img>` (`src` is a path inside the project, any folder;
+    `fit` is `cover` or `contain`; `in` seeks into the video; a video longer than its file is shortened with
+    a warning). `audio`: `off` (muted, the voice keeps playing), `mix` (the video's own sound plays with the
+    voice), `duck` (as `mix`, and the main track's volume drops to 0.25 under the layer, 0.15 s ramps). A video
+    with no audio stream ignores `mix`/`duck` with a warning.
+  - `logo`: an image with defaults: `pin: true`, `at: 0`, `dur` to the end of the reel, `fit: contain`, and when
+    `box` is left out a 200 px square at the top right (`{x: W-260, y: 96, w: 200, h: 200}`).
+  - `text`: a styled box: `text` (up to 200 characters), `font` (one of the motion fonts; default the reel's
+    UI font), `size` (default 64), `weight` (default 700), `color` (`#rrggbb[aa]` or `accent|ink|paper`),
+    `align` (`left|center|right`), `bg` (an optional backing colour; the box then gets padding).
+  - `motion`: `elements` and `tweens` in exactly the format of a motion beat (see below), compiled by the same
+    `compileMotion`, but timed by the layer: tween times are seconds from the layer's start and the beat's 0.6 to
+    8 s limit does NOT apply (a layer may run to the reel's length). Element coordinates are canvas coordinates;
+    `box` is ignored. `room` is never honoured and a layer's own `exit` runs on the whole graphic.
+- **Where it sits.** Above the footage and the beats' `.layer` band (z 3), below the captions (z 8), unless
+  `overCaptions: true` (then above them). Within one band, ordered by `z` (0 to 99), ties by array order.
+- **Enter and exit** are explicit `fromTo` tweens with `force3D: false`, 0.3 s (a third of the layer if it is
+  shorter). `fade` and `none` also carry `y: 0` so the box's transform never depends on history.
+- **The box may hang off the canvas** (a sticker over an edge) but the validator requires at least 20 % of it to
+  show. Layers on a clip with no speech and no take at all are possible only as `pin` (a blank project has no
+  take to anchor to).
+- **Handles for live editing** (the studio changes these in the preview iframe, then writes reel.json and
+  rebuilds): `[data-layer-id="<id>"]` is the layer's wrapper (also `data-layer-kind`); `[data-layer-box="<id>"]`
+  is the box inside it (inline `left/top/width/height`, the element to move and resize; for `motion` it is the
+  whole canvas); `[data-layer-text="<id>"]` the text of a `text` layer; `[data-el-id="<element id>"]` each element
+  of a `motion` layer (inside its wrapper). Beats' elements do NOT carry `data-el-id`.
+- **`edit_truth.json`** gains `layers: [{ id, kind, start, end, z, pin, audio?, overCaptions? }]` (resolved output
+  seconds, anchors applied) only when the reel has layers; nothing else in it changes.
+- **Sections** (`build/sections.json`): a layer's span counts like a beat's, so a section boundary never falls
+  inside a layer. In a section build only the layers that start inside the section are emitted.
+- The validator (`engine/planner/validate.py`, `layer_problems`) has a check for every `die()` above. A scoped
+  re-cut keeps `layers` as written, so an `anchor.take` index is NOT renumbered if the re-cut changes how many
+  takes there are.
 
 ## Beats
 
