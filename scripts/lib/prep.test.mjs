@@ -26,7 +26,12 @@ const inputs = {
   quiet: () => ff(...V, "-f", "lavfi", "-i", "sine=frequency=300:duration=2,volume=0.0005", ...enc, "-c:a", "aac", p("quiet.mp4")),
   png: () => ff("-f", "lavfi", "-i", "testsrc=size=160x284", "-frames:v", "1", p("near.png")),     // 9:16-ish -> cover
   wide: () => ff("-f", "lavfi", "-i", "testsrc=size=320x180", "-frames:v", "1", p("wide.jpg")),     // 16:9 on 9:16 -> blurred fill
+  // 4:5 and 16:9 are far from 9:16 -> the pad (blurred fill) path, which on ffmpeg 5.1 once wrote no PNG
+  tall: () => ff("-f", "lavfi", "-i", "testsrc=size=320x400", "-frames:v", "1", p("tall45.png")),
+  tallJpg: () => ff("-f", "lavfi", "-i", "testsrc=size=320x400", "-frames:v", "1", p("tall45.jpg")),
+  widePng: () => ff("-f", "lavfi", "-i", "testsrc=size=320x180", "-frames:v", "1", p("wide169.png")),
 };
+inputs.tall(); inputs.tallJpg(); inputs.widePng();
 inputs.silent(); inputs.loud(); inputs.quiet(); inputs.png(); inputs.wide();
 // a 0.2 s loud blip in 2 s of silence: loud, but well under 25% non-silent
 ff("-f", "lavfi", "-i", "sine=frequency=300:duration=0.2", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono:d=1.8", "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[a]", "-map", "[a]", p("blip.wav"));
@@ -69,6 +74,14 @@ try {
   r = prep("wide.jpg", 6);
   assert.equal(r.side.kind, "image");
   assert.equal(JSON.parse(fs.readFileSync(`${r.proj}/build/crop-6-9x16.json`, "utf8")).mode, "pad");
+  // pad path on 4:5 (PNG and JPG) and 16:9 PNG: the mp4 must exist and the intermediate PNG be cleaned up
+  for (const [f, i] of [["tall45.png", 8], ["tall45.jpg", 9], ["wide169.png", 10]]) {
+    r = prep(f, i);
+    assert.ok(fs.existsSync(r.out), `${f}: ${r.out} was not written`);
+    assert.equal(probe(r.out, "stream=width,height,r_frame_rate", "v:0"), "1080,1920,30/1");
+    assert.equal(JSON.parse(fs.readFileSync(`${r.proj}/build/crop-${i}-9x16.json`, "utf8")).mode, "pad");
+    assert.ok(!fs.existsSync(`${r.proj}/build/talk-${i}-still.png`));
+  }
   // another format: a 16:9 picture on a 16:9 canvas is a plain cover
   r = prep("wide.jpg", 6, "16:9");
   assert.equal(probe(r.out, "stream=width,height", "v:0"), "1920,1080");

@@ -266,8 +266,15 @@ else
     # fit the picture ONCE to a canvas-sized PNG (the blurred-fill filter is the expensive part and a
     # still does not change), then loop that PNG: 900 frames of a static image encode in seconds
     stillpng="$proj/build/talk$sfx-still.png"
-    ffmpeg -v error -y -i "$src" -vf "$vf" -frames:v 1 "$stillpng"
+    # The trailing fps=30 is dropped for the still: on a single frame it is a no-op, but after the
+    # split/overlay of the pad path ffmpeg 5.1 (Debian bookworm) emits NO frame through it, exits 0
+    # and writes no PNG. -update 1 names the single-image output explicitly for older muxers. The
+    # video below is timed to 30 fps by -framerate anyway.
+    stillvf="${vf%,fps=30}"
+    ffmpeg -v error -y -i "$src" -vf "$stillvf" -frames:v 1 -update 1 "$stillpng"
+    [ -s "$stillpng" ] || { echo "prep.sh: step 1 (fit still image to canvas) wrote no $stillpng although ffmpeg exited 0" >&2; exit 1; }
     ffmpeg -v error -y -loop 1 -framerate 30 -t "$IMG_SECONDS" -i "$stillpng" -f lavfi -i "anullsrc=r=48000:cl=stereo" -t "$IMG_SECONDS"       "${enc[@]}" -pix_fmt yuv420p -g 30 -c:a aac -b:a 192k -ac 2 -shortest -movflags +faststart "$out"
+    [ -s "$out" ] || { echo "prep.sh: step 2 (encode still image to mp4) wrote no $out" >&2; exit 1; }
     rm -f "$stillpng"
   else
     ffmpeg -v error -y -i "$src" -f lavfi -i "anullsrc=r=48000:cl=stereo" -map 0:v:0 -map 1:a:0       -vf "$vf" "${enc[@]}" -pix_fmt yuv420p -g 30 -c:a aac -b:a 192k -ac 2 -shortest -movflags +faststart "$out"
