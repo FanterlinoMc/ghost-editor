@@ -123,6 +123,15 @@ try {
   assert.ok(!("layers" in truth(dir)));
   console.log("ok    a reel without layers carries nothing of them");
 
+  // ---- the logo BEAT honours its own x/y (it used to fall back to the reaction slot) ----
+  dir = project({ takes: TAKES, beats: [{ type: "logo", src: "assets/logo.png", at: 1, to: 3, x: 123, y: 777 }, { type: "logo", src: "assets/logo.png", at: 5, to: 7 }] });
+  r = build(dir);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  html = read(dir, "index.html");
+  assert.match(html, /id="b0-in" class="ov logo" style="left:123px;top:777px;/);
+  assert.match(html, /id="b1-in" class="ov logo" style="left:\d+px;top:\d+px;/, "no x/y: still placed by the slot");
+  console.log("ok    a logo beat's explicit x/y is used; without them it keeps the reaction slot");
+
   // ---- failures that must stop the build ----
   const fails = (layers, re) => { const d = project({ takes: TAKES, layers }); const x = build(d); assert.notEqual(x.status, 0, "should have failed: " + JSON.stringify(layers)); assert.match(x.stderr, re); };
   fails([{ id: "a", kind: "image", src: "assets/nope.png", pin: true, at: 0, dur: 1, box: { x: 0, y: 0, w: 5, h: 5 } }], /is not a file inside the project/);

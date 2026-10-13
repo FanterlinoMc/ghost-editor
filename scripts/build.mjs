@@ -1115,7 +1115,7 @@ for (const b of beatsList) {
     }
     case "logo": {
       const img = b.icon ? icon(b.icon) : userAsset(b.src);
-      inner = `<div id="${id}-in" class="ov logo" style="left:${slotPos ? slotPos.x : SLOT.x}px;top:${slotPos ? slotPos.y : SLOT.y}px;background:${b.bg || "#fff"}"><img src="${img}" style="${b.invert ? "filter:invert(1);" : ""}"/></div>`;
+      inner = `<div id="${id}-in" class="ov logo" style="left:${b.x ?? (slotPos ? slotPos.x : SLOT.x)}px;top:${b.y ?? (slotPos ? slotPos.y : SLOT.y)}px;background:${b.bg || "#fff"}"><img src="${img}" style="${b.invert ? "filter:invert(1);" : ""}"/></div>`;
       tl.push(enter(`#${id}-in`, t0));
       beatSfx(b, t0, "pop", "logo");
       break;
