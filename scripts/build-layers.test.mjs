@@ -132,6 +132,14 @@ try {
   assert.match(html, /id="b1-in" class="ov logo" style="left:\d+px;top:\d+px;/, "no x/y: still placed by the slot");
   console.log("ok    a logo beat's explicit x/y is used; without them it keeps the reaction slot");
 
+  // ---- a blank reel (no takes) builds the black page only: layers are ignored, with a warning ----
+  dir = project({ origin: "blank", takes: [], layers: [LAYERS[1]] });
+  r = build(dir);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.ok(r.stdout.includes("layer(s) ignored"), r.stdout);
+  assert.ok(!read(dir, "index.html").includes("data-layer-id"));
+  console.log("ok    layers on a reel with no takes are ignored with a warning");
+
   // ---- failures that must stop the build ----
   const fails = (layers, re) => { const d = project({ takes: TAKES, layers }); const x = build(d); assert.notEqual(x.status, 0, "should have failed: " + JSON.stringify(layers)); assert.match(x.stderr, re); };
   fails([{ id: "a", kind: "image", src: "assets/nope.png", pin: true, at: 0, dur: 1, box: { x: 0, y: 0, w: 5, h: 5 } }], /is not a file inside the project/);

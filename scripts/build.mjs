@@ -184,6 +184,8 @@ if (SECTION_MODE && !(SECTION_END > SECTION_START)) die(`GE_SECTION_END (${SECTI
 // that lost all its takes by accident must not look like a deliberate blank project.
 if (!(spec.takes || []).length) {
   if (rawSpec.origin !== "blank") die(`reel.json has no takes (an empty reel is only valid with "origin": "blank")`);
+  // layers are resolved against the take layout, and there is none: say so rather than drop them silently
+  if (Array.isArray(rawSpec.layers) && rawSpec.layers.length) console.log(`WARNING: ${rawSpec.layers.length} layer(s) ignored - a reel with no takes builds the blank page only; add a clip first`);
   writeBlankPage();
 }
 const takes = spec.takes.map((t, i) => {

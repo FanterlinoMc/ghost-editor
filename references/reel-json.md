@@ -111,8 +111,9 @@ existed (`scripts/byte-identity.mjs`).
 - **Enter and exit** are explicit `fromTo` tweens with `force3D: false`, 0.3 s (a third of the layer if it is
   shorter). `fade` and `none` also carry `y: 0` so the box's transform never depends on history.
 - **The box may hang off the canvas** (a sticker over an edge) but the validator requires at least 20 % of it to
-  show. Layers on a clip with no speech and no take at all are possible only as `pin` (a blank project has no
-  take to anchor to).
+  show. A reel with NO takes at all (a blank project before its first clip) builds only the black 1 s page: its layers are
+  ignored, with a warning, pinned or not. Layers need at least one take; once there is one, a layer on a clip
+  with no speech is just a layer (anchored to that take, or pinned).
 - **Handles for live editing** (the studio changes these in the preview iframe, then writes reel.json and
   rebuilds): `[data-layer-id="<id>"]` is the layer's wrapper (also `data-layer-kind`); `[data-layer-box="<id>"]`
   is the box inside it (inline `left/top/width/height`, the element to move and resize; for `motion` it is the
