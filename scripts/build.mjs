@@ -277,16 +277,19 @@ const bySourceOf = new Map(SOURCES.map((s) => [s, takes.filter((t) => t.src === 
 // names it, and every bare time that beat (and its inner lines, items, pills...) hands to E() is read
 // as {src, t}. CUR_BEAT is the beat whose body is being compiled (set by the beat loop), so nested
 // E(l.at) calls need no change; EB(b, "at") is for the sites that resolve a beat's own at/to outside it.
-// Without `src` the old rule stands, except that an ambiguous bare time INSIDE A BEAT no longer throws
-// (which dropped motion beats without a trace): it resolves to the first take, in output order, that
-// covers it, and says so in the build warnings. Snaps, pushes and the like still throw - they have no
-// beat to carry a src.
+// Without `src` the old rule stands, except that an ambiguous bare time INSIDE A BEAT no longer throws (which dropped motion beats
+// without a trace): it resolves to the primary source if that covers it, else the first covering take in output order, and warns.
+// Snaps, pushes and the like still throw when ambiguous - they have no beat to carry a src.
 let CUR_BEAT = null;
+// A beat's `src` names a recording only where it cannot mean something else: popcard/logo/meme beats already use `src` for an
+// image ASSET, so there it counts only when it is one of the reel's sources; a motion beat has no asset src, so any value counts
+// (and an unknown one drops the beat with a warning).
+const beatRec = (b) => (b && typeof b.src === "string" && (b.type === "motion" || SOURCES.includes(b.src)) ? b.src : null);
 const ambiguousWarned = new Set();
 const E = (t, what = "", src) => {
   if (t === "end") return TOTAL;
   if (typeof t === "string" && t.startsWith("outro+")) return SPEECH + parseFloat(t.slice(6));
-  const beatSrc = src !== undefined ? src : CUR_BEAT?.src;
+  const beatSrc = src !== undefined ? src : beatRec(CUR_BEAT);
   if (typeof t === "number" && beatSrc != null && SOURCES.length > 1) {
     if (!SOURCES.includes(beatSrc)) throw new Error(`E(${t})${what ? " for " + what : ""}: src ${JSON.stringify(beatSrc)} is not a source of this reel (${SOURCES.join(", ")})`);
     t = { src: beatSrc, t };
@@ -328,7 +331,7 @@ const E = (t, what = "", src) => {
   if (typeof t === "string" && t.startsWith("hold:")) { const [i, off] = t.slice(5).split("+"); return +(takes[+i].holdStart + (parseFloat(off) || 0)).toFixed(3); }
   throw new Error(`E(${t})${what ? " for " + what : ""}: not inside any take`);
 };
-const EB = (b, key, what = "") => E(b[key], what, b.src ?? null);
+const EB = (b, key, what = "") => E(b[key], what, beatRec(b));
 const r3 = (x) => Math.round(x * 1000) / 1000;
 
 // ---------- words -> edit-time captions ----------
