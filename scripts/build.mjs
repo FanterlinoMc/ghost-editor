@@ -32,6 +32,7 @@ import { ROOM_SCALE, ROOM_EXIT_S, ROOM_FILL, normalizeRoom, ROOM_EASE_NAME, room
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 import { loadStyleChain, checkBrandName } from "./lib/style-path.mjs";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
+import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = path.join(SKILL, "library");
@@ -204,6 +205,37 @@ for (const t of takes) {
 }
 const SPEECH = acc / FPS;
 const OUTRO = spec.outro ?? 3;
+// reel.layers[] (BLANK-TIMELINE-SPEC.md, Stage 3): picture-in-picture, B-roll over the voice, logos, stickers,
+// text and graphics on a clip without speech. Their times are OUTPUT seconds, so they are resolved HERE,
+// straight after the take layout and BEFORE the SECTION_MODE rebase below (anchors read the whole-reel
+// t.start). Timing + validation is lib/layers.mjs (pure); this only adds what needs the filesystem: the
+// file must exist, and a video layer's sound is only used if the file has any. No layers key = nothing in
+// this block runs and the build is byte-identical to before it existed.
+const LAYERS = [];
+if (spec.layers !== undefined) {
+  const lr = resolveLayers(spec.layers, { takes, total: +(SPEECH + OUTRO).toFixed(3), fps: FPS, W });
+  if (lr.errors.length) die("layers: " + lr.errors.join("; "));
+  for (const m of lr.warnings) warn.push(m);
+  for (const l of lr.layers) {
+    if (MEDIA_EXT[l.kind]) {
+      const full = path.resolve(proj, l.src);
+      if (!full.startsWith(proj + path.sep) || !fs.existsSync(full)) die(`layer ${l.id}: ${l.kind} src ${l.src} is not a file inside the project`);
+      if (l.kind === "video") {
+        const probe = (...a) => execFileSync("ffprobe", ["-v", "error", ...a, full]).toString().trim();
+        const dur = parseFloat(probe("-show_entries", "format=duration", "-of", "csv=p=0"));
+        l.hasAudio = probe("-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0") !== "";
+        if (Number.isFinite(dur) && l.in + l.dur > dur + 0.05) {
+          const avail = +(Math.max(0, dur - l.in)).toFixed(3);
+          if (avail < 0.1) die(`layer ${l.id}: in ${l.in}s is past the end of ${l.src} (${dur.toFixed(2)}s)`);
+          warn.push(`layer ${l.id}: ${l.src} has only ${avail}s after in ${l.in}s, shortened from ${l.dur}s`);
+          l.dur = avail; l.t1 = +(l.t0 + avail).toFixed(3);
+        }
+      }
+    }
+    LAYERS.push(l);
+  }
+}
+const DUCK = duckWindows(LAYERS);
 // I-25 prototype: every take's edit-time position shifts by -SECTION_START, UNCHANGED array,
 // UNCHANGED indices - take-join-transition adjacency (takes[i-1]/takes[i], below) and E()'s own
 // take lookup (which reads t.start) both still work exactly as in the full build, just in a
@@ -712,7 +744,7 @@ for (const { i, kind, T, outDur, inDur } of takeJoins) pushJoinTransition(`#take
 const takeAudio = takes.map((k, i) => {
   if (SECTION_MODE && !k.inSection) return "";  // I-25 prototype: this take's audio isn't in this section
   return `
-  <audio id="take-${i}-audio" src="${k.src}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="${10 + (i % 2)}" data-automation='${fadeLane(k.dur)}'></audio>`;
+  <audio id="take-${i}-audio" src="${k.src}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="${10 + (i % 2)}" data-automation='${DUCK.length ? takeVolumeLane(k.dur, FPS, k.start, DUCK.map(([a, b]) => [a - (SECTION_MODE ? SECTION_START : 0), b - (SECTION_MODE ? SECTION_START : 0)])) : fadeLane(k.dur)}'></audio>`;
 }).join("");
 let matteHtml = "";
 // I-16: the matte is deliberately NOT per-source yet. One talk-matte.webm is cut from SRC and then
@@ -1233,6 +1265,9 @@ for (const b of beatsList) {
     : `<div id="${id}" class="clip layer" data-start="${t0}" data-duration="${dur}" data-track-index="${b.type === "scene" ? 4 : inSlot ? 3 : 2}">${inner}</div>` });
 }
 
+// a layer never straddles a section boundary (lib/sections.mjs): its span counts like a beat's
+for (const l of LAYERS) beatSpans.push({ t0: l.t0, t1: l.t1 });
+
 // ---------- making room: shrink the whole footage stack under a `room:"below"` motion beat ----------
 // Windows merge (overlap -> one shrink); #room wraps #pip and scales about the canvas top centre, OUTSIDE the
 // camera, so a face point maps as room(camera(p)). The uncovered canvas shows the style's ink colour via #roomfill.
@@ -1422,6 +1457,35 @@ for (const { b, t0, t1 } of deferredLeaks) {
   const clip = packClip(packOf, b.kind ?? "leaks") || packClip(packOf, "burns");
   if (clip) packOverlay(clip, t0, Math.max(0.3, t1 - t0), { blend: "screen", z: 7, opacity: b.opacity ?? 1, media: b.media ?? 0.2, fadeIn: 0.06, fadeOut: 0.2 });
   else warn.push(`leak at ${b.at}: no leak/burn clip (turn a pack on in the style's "packs")`);
+}
+
+// ---------- layers (reel.layers[]; lib/layers.mjs) ----------
+// Two containers, both their own stacking context: #layers sits above the footage and the beats' .layer band
+// (z 3) and below the captions (z 8); #layers-top (overCaptions) above them. Within one, `z` then array order.
+let layersUnderHtml = "", layersOverHtml = "", layerAudioHtml = "";
+if (LAYERS.length) {
+  const resolveLayerImage = (src) => {
+    if (/^assets\/[^\0]+\.(png|jpe?g|webp|gif|svg)$/i.test(src) && !src.split("/").includes("..")) {
+      const full = path.resolve(proj, src);
+      return full.startsWith(A + path.sep) && fs.existsSync(full) ? src : null;
+    }
+    return /^[a-z0-9-]{1,48}$/.test(src) && fs.existsSync(path.join(LIB, "art", `${src}.jpg`)) ? artAsset(src) : null;
+  };
+  const under = [], over = [];
+  for (const l of [...LAYERS].sort((x, y) => x.z - y.z || x.index - y.index)) {
+    if (SECTION_MODE && !(l.t0 >= SECTION_START - 1e-6 && l.t0 < SECTION_END - 1e-6)) continue;   // another section's layer
+    const r = renderLayer(l, { W, H, brand, uiFont: UI_FONT, esc, compileMotion, resolveColor, resolveImage: resolveLayerImage, off: SECTION_MODE ? SECTION_START : 0 }, l.index);
+    for (const m of r.warnings) warn.push(m);
+    if (r.dropped) continue;
+    for (const line of r.lines) tl.push(line);
+    (l.overCaptions ? over : under).push(r.html);
+    if (r.audio) layerAudioHtml += `
+  ${r.audio}`;
+  }
+  if (under.length) layersUnderHtml = `<div id="layers" class="lyr" style="z-index:4">${under.join("")}</div>
+  `;
+  if (over.length) layersOverHtml = `
+  <div id="layers-top" class="lyr" style="z-index:9">${over.join("")}</div>`;
 }
 
 // ---------- watermark (spec.watermark = { text, opacity?, font? }) and colour tint (spec.look.tint) ----------
@@ -1910,7 +1974,7 @@ const html = `<!doctype html>
   .compact .l-line { font-size: 36px; margin: 2px 0; }
   .compact .strike-x { font-size: 80px; top: 8px; }
   .w { display: inline-block; margin: 0 0.2em; transform-origin: 50% 80%; }
-  ${MOTION_CSS(brand, rtl)}
+  ${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}
 </style>
 </head>
 <body>
@@ -1918,16 +1982,16 @@ const html = `<!doctype html>
   ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip"><div id="base"><div id="snap"><div id="push">${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}
   </div></div></div></div>${roomWins.length ? `</div></div>` : ""}
   ${overlays.filter((o) => o.html).map((o) => o.html).join("\n  ")}
-  ${grainHtml}${vignetteHtml}
+  ${layersUnderHtml}${grainHtml}${vignetteHtml}
   <div id="caps">
       ${capHtml}
   </div>
   ${titleHtml}
-  ${brandHtml}
+  ${brandHtml}${layersOverHtml}
   ${leakHtml}
   ${topOverlays.join("\n  ")}
   ${edit ? edit.html : ""}
-  ${takeAudio}
+  ${takeAudio}${layerAudioHtml}
   ${overlays.filter((o) => o.audio).map((o) => o.audio).join("\n  ")}
   ${sfxAudio.join("\n  ")}
   ${musicHtml}
@@ -2002,6 +2066,8 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
   beats: editTruthBeats,
   // "Making room": merged footage-shrink windows (output seconds), only when a room:"below" beat was built.
   ...(roomWins.length ? { room: roomWins.map((w) => ({ start: r3(w.tA), end: r3(w.tB), scale: ROOM_SCALE })) } : {}),
+  // reel.layers[]: where each layer actually landed on the output timeline (anchors resolved). Only when the reel has layers.
+  ...(LAYERS.length ? { layers: layerTruth(LAYERS) } : {}),
 }, null, 2));
 // I-25: section boundaries and per-section invalidation hashes (ISSUES D3). Additive and written
 // AFTER edit_truth.json, from the same already-resolved arrays that file dumps (editTruthTakes,

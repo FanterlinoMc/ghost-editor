@@ -107,7 +107,9 @@ export function compileMotion(b, ctx) {
   const len = r3(t1 - t0);
   if (!isObj(b)) return { ok: false, reason: "not an object" };
   if (typeof b.id !== "string" || !ID_RE.test(b.id)) return { ok: false, reason: `bad id '${b.id}' (want [a-z0-9-]{1,24})` };
-  if (!(len >= LIMITS.minSpan - 1e-6 && len <= LIMITS.maxSpan + 1e-6)) return { ok: false, reason: `span ${len}s outside ${LIMITS.minSpan}..${LIMITS.maxSpan}s` };
+  // a layer (reel.layers[], kind "motion") is timed by the layer, not by words: it passes its own limits
+  const minSpan = ctx.minSpan ?? LIMITS.minSpan, maxSpan = ctx.maxSpan ?? LIMITS.maxSpan;
+  if (!(len >= minSpan - 1e-6 && len <= maxSpan + 1e-6)) return { ok: false, reason: `span ${len}s outside ${minSpan}..${maxSpan}s` };
   if (!Array.isArray(b.elements) || !b.elements.length) return { ok: false, reason: "no elements" };
   // room: only "below" changes anything; anything else is "none" with a warning (never a die). "below" implies hideCaptions.
   const { room, warning: roomWarning } = normalizeRoom(b.room);
@@ -328,7 +330,8 @@ export function compileMotion(b, ctx) {
       else shape = `<path id="${el.uid}-s" d="${escHtml(el.d)}"${fillAttr}${strokeAttr}${dash}/>`;
       inner = `<div id="${el.uid}-a" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:${rd(el.opacity, 3)}">${svgOpen(el.w, el.h)}${defs}${shape}</svg></div>`;
     }
-    html.push(`<div id="${el.uid}" class="ov" style="${outer}">${inner}</div>`);
+    // ctx.dataIds (layers only): a stable handle for the studio's live editing; a motion beat's markup is unchanged
+    html.push(`<div id="${el.uid}" class="ov"${ctx.dataIds ? ` data-el-id="${el.id}"` : ""} style="${outer}">${inner}</div>`);
   });
 
   // ---------- timeline lines ----------
