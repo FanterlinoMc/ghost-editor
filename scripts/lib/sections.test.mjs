@@ -140,5 +140,22 @@ const take = (start, dur) => ({ start, dur });
   check("globalHash is stable for identical settings", globalHash({ style: "clean", format: "9:16" }) === a);
 }
 
+// ---- reel.layers[]: a layer belongs to the section it starts in, and editing it invalidates only that section ----
+{
+  const sections = computeSections(13, [take(0, 4), take(4, 6), take(10, 3)], {});
+  const base = { takes: [{ start: 0 }, { start: 4 }, { start: 10 }], beats: [], words: [] };
+  const L = (t0, extra = {}) => ({ id: "a", kind: "image", t0, t1: t0 + 1, z: 0, ...extra });
+  const without = buildSectionManifest(sections, base);
+  check("no layers: the manifest entries carry no layers key and keep their hashes",
+        without.every((e) => !("layers" in e)) && JSON.stringify(buildSectionManifest(sections, { ...base, layers: [] })) === JSON.stringify(without));
+  const m1 = buildSectionManifest(sections, { ...base, layers: [L(5)] });
+  check("a layer is listed under the section it starts in", m1.map((e) => e.layers.join()).join("|") === "|0|", JSON.stringify(m1.map((e) => e.layers)));
+  const m2 = buildSectionManifest(sections, { ...base, layers: [L(5, { z: 3 })] });
+  check("editing the layer moves exactly that section's hash",
+        m1.map((e, i) => e.hash !== m2[i].hash).join() === "false,true,false", JSON.stringify(m1.map((e, i) => e.hash !== m2[i].hash)));
+  check("adding a layer changes the hash of its section only",
+        m1.map((e, i) => e.hash !== without[i].hash).join() === "false,true,false");
+}
+
 console.log(failures ? `\n${failures} failure(s)` : "\nsection boundaries and invalidation hold");
 process.exit(failures ? 1 : 0);

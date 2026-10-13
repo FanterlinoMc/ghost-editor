@@ -121,7 +121,7 @@ existed (`scripts/byte-identity.mjs`).
 - **`edit_truth.json`** gains `layers: [{ id, kind, start, end, z, pin, audio?, overCaptions? }]` (resolved output
   seconds, anchors applied) only when the reel has layers; nothing else in it changes.
 - **Sections** (`build/sections.json`): a layer's span counts like a beat's, so a section boundary never falls
-  inside a layer. In a section build only the layers that start inside the section are emitted.
+  inside a layer. In a section build only the layers that start inside the section are emitted. The resolved layer is part of the hash of the section it starts in (`sections.json` lists it under `layers`, only when the reel has any), so editing a layer re-renders that one section.
 - The validator (`engine/planner/validate.py`, `layer_problems`) has a check for every `die()` above. A scoped
   re-cut keeps `layers` as written, so an `anchor.take` index is NOT renumbered if the re-cut changes how many
   takes there are.

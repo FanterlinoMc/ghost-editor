@@ -91,7 +91,7 @@ const sha1 = (value) => crypto.createHash("sha1").update(JSON.stringify(value)).
  * `{type, kind, at, to, in, out}` shape edit_truth.json already dumps, passed straight through, so
  * this hash moves exactly when edit_truth.json's own beat dump would.
  */
-export function buildSectionManifest(sections, { takes, beats, words }) {
+export function buildSectionManifest(sections, { takes, beats, words, layers = [] }) {
   return sections.map((sec) => {
     const takeIdx = [];
     takes.forEach((t, i) => { if (t.start < sec.end - 1e-6 && t.start + t.dur > sec.start + 1e-6) takeIdx.push(i); });
@@ -99,12 +99,18 @@ export function buildSectionManifest(sections, { takes, beats, words }) {
     beats.forEach((b, i) => { if (sectionOf(sections, b.at) === sec.index) beatIdx.push(i); });
     const wordIdx = [];
     words.forEach((w, i) => { if (sectionOf(sections, w.start) === sec.index) wordIdx.push(i); });
+    // reel.layers[] (lib/layers.mjs): a layer belongs to the section it STARTS in (build.mjs counts its span like a
+    // beat's, so a boundary never falls inside one) and editing it must invalidate that section. Left out of the
+    // payload and the entry when the reel has none, so a reel without layers keeps its exact hashes.
+    const layerIdx = [];
+    layers.forEach((l, i) => { if (sectionOf(sections, l.t0) === sec.index) layerIdx.push(i); });
     const payload = {
       takes: takeIdx.map((i) => takes[i]),
       beats: beatIdx.map((i) => beats[i]),
       words: wordIdx.map((i) => words[i]),
+      ...(layerIdx.length ? { layers: layerIdx.map((i) => layers[i]) } : {}),
     };
-    return { index: sec.index, start: sec.start, end: sec.end, takes: takeIdx, beats: beatIdx, words: wordIdx, hash: sha1(payload) };
+    return { index: sec.index, start: sec.start, end: sec.end, takes: takeIdx, beats: beatIdx, words: wordIdx, ...(layers.length ? { layers: layerIdx } : {}), hash: sha1(payload) };
   });
 }
 

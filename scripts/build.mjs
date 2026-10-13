@@ -2085,7 +2085,7 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
 // them to accept a time origin, which is the real remaining surface, not a detail).
 {
   const sections = computeSections(TOTAL, takes, { beatSpans, pushes: pushesEdit, joins: takeJoins });
-  const manifest = buildSectionManifest(sections, { takes: editTruthTakes, beats: editTruthBeats, words });
+  const manifest = buildSectionManifest(sections, { takes: editTruthTakes, beats: editTruthBeats, words, layers: LAYERS });
   fs.writeFileSync(path.join(proj, "build", "sections.json"), JSON.stringify({
     total: TOTAL, fps: FPS,
     // Settings that invalidate every section at once, kept separate from each section's own hash
