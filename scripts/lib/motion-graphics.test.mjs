@@ -215,7 +215,7 @@ check("a minimal beat compiles", run(beat()).ok === true);
 {
   const many = Array.from({ length: 20 }, (_, i) => ({ id: `e${i}`, shape: "rect", x: 0, y: 0, w: 50, h: 50, fill: "#fff" }));
   const r = run(beat({ elements: many }));
-  check("only 12 elements are kept", (r.html.match(/class="ov" style="left:0px/g) || []).length === 12 && r.warnings.some((w) => w.includes("12 elements")));
+  check("only 12 elements are kept", (r.html.match(/class="ov" data-el-id="[^"]*" style="left:0px/g) || []).length === 12 && r.warnings.some((w) => w.includes("12 elements")));
   const tws = Array.from({ length: 40 }, (_, i) => ({ target: "e0", at: i * 0.05, dur: 0.05, from: { x: 0 }, to: { x: 1 } }));
   const r2 = run(beat({ elements: many, tweens: tws }));
   check("only 30 tweens are kept", r2.warnings.some((w) => w.includes("30 tweens")));

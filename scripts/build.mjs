@@ -1245,7 +1245,7 @@ for (const b of beatsList) {
         }
         return /^[a-z0-9-]{1,48}$/.test(src) && fs.existsSync(path.join(LIB, "art", `${src}.jpg`)) ? artAsset(src) : null;
       };
-      const mg = compileMotion(b, { id, t0, t1, W, H, brand, resolveImage });
+      const mg = compileMotion(b, { id, t0, t1, W, H, brand, resolveImage, beatId: b.id });
       for (const m of mg.warnings || []) warn.push(m);
       if (!mg.ok) { warn.push(`motion beat ${b.id ?? "?"} dropped: ${mg.reason}`); continue; }
       inner = mg.html;

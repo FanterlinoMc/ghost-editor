@@ -330,8 +330,8 @@ export function compileMotion(b, ctx) {
       else shape = `<path id="${el.uid}-s" d="${escHtml(el.d)}"${fillAttr}${strokeAttr}${dash}/>`;
       inner = `<div id="${el.uid}-a" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:${rd(el.opacity, 3)}">${svgOpen(el.w, el.h)}${defs}${shape}</svg></div>`;
     }
-    // ctx.dataIds (layers only): a stable handle for the studio's live editing; a motion beat's markup is unchanged
-    html.push(`<div id="${el.uid}" class="ov"${ctx.dataIds ? ` data-el-id="${el.id}"` : ""} style="${outer}">${inner}</div>`);
+    // data-el-id: a stable handle for the studio's live editing (motion layers and motion beats alike)
+    html.push(`<div id="${el.uid}" class="ov" data-el-id="${escHtml(el.id)}" style="${outer}">${inner}</div>`);
   });
 
   // ---------- timeline lines ----------
@@ -405,5 +405,5 @@ export function compileMotion(b, ctx) {
   if (exitKind === "fade") lines.push(`ft("#${id}-in", { opacity: 1 }, { opacity: 0, duration: ${r3(fo)}, ease: "power1.in" }, ${r3(t1 - fo)});`);
 
   const sfx = b.sfx === undefined ? "whoosh" : b.sfx;
-  return { ok: true, html: dimHtml + `<div id="${id}-in" class="ov" style="left:0;top:0;width:${W}px;height:${H}px">${html.join("")}</div>`, lines, hideCaptions: b.hideCaptions === true || room === "below", room, sfx, dim, exit: exitKind, warnings };
+  return { ok: true, html: dimHtml + `<div id="${id}-in" class="ov"${ctx.beatId != null ? ` data-beat-id="${escHtml(ctx.beatId)}"` : ""} style="left:0;top:0;width:${W}px;height:${H}px">${html.join("")}</div>`, lines, hideCaptions: b.hideCaptions === true || room === "below", room, sfx, dim, exit: exitKind, warnings };
 }

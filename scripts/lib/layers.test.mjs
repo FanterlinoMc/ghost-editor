@@ -180,8 +180,9 @@ test("a motion layer: same compiler, element ids as data-el-id, no 0.6-8 s limit
   assert.ok(r.lines.some((x) => x.includes("#ly-m1_m-title")));
   // 12 s would be rejected as a beat
   assert.equal(compileMotion({ id: "m1", elements: els, tweens: tw }, { id: "b0", t0: 1, t1: 13, W, H, brand: {} }).ok, false);
-  // a motion BEAT's markup has no data-el-id: byte-identity of existing reels
-  assert.ok(!compileMotion({ id: "m1", elements: els, tweens: tw }, { id: "b0", t0: 1, t1: 4, W, H, brand: {} }).html.includes("data-el-id"));
+  // a motion BEAT carries data-el-id too, and data-beat-id on its root when given a beatId
+  const bh = compileMotion({ id: "m1", elements: els, tweens: tw }, { id: "b0", t0: 1, t1: 4, W, H, brand: {}, beatId: "m1" }).html;
+  assert.match(bh, /data-el-id="title"/); assert.match(bh, /data-beat-id="m1"/);
 });
 
 test("z ordering: build sorts by z then array order (the sort build.mjs uses)", () => {
