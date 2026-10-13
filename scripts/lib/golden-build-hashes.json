@@ -1,0 +1,34 @@
+{
+  "edit": {
+    "index.html": "c440bfc19ab1a903e598855ccd5d5210629028295349ba51a3c4266f7d08ea54",
+    "build/caption_layout.json": "eaa2f6d5530f1fd4cf9a2bf483aea0f527a965abfd165e21bb2ed04f74a20a18",
+    "build/edit_truth.json": "9b304367cdef91133635162314af9c2df4986210df453f90f441d392edc8e892",
+    "build/sections.json": "526193c46adc9ac6d2dc55ea7f7a6d2296b46be0a2549b30509fcd1630bf7035",
+    "build/sfx_events.json": "f86513035b9b68d4dae5ad8889c670d96c4730597f18299f7ae3e7fdc7d8fd10",
+    "build/words.edit.json": "d6d5059aff0988b4b31b13fcc71724f66b67778a7e31750a7404368bcfdd2dae"
+  },
+  "busy": {
+    "index.html": "972c67cd4bd95d8de9a80521648afcc9763a72b108b4efc5ce8ff40bfa9364c0",
+    "build/caption_layout.json": "50dc59073a25380288dd08468d97d8ea019a6154204f64481cea365f1a149b52",
+    "build/edit_truth.json": "259ba6fe322754ae8db6cd3942d7ae62f9b94737138f243aa53ce2c61dd2438c",
+    "build/sections.json": "eeaebc0807da4142e646eafdb949ed3e7df8128c459fad340b5fa42eba1da7d6",
+    "build/sfx_events.json": "f25c393f1d7312cc18fec1e7e4c658a82bd0381f71fc34c9dd1b075d81baa49c",
+    "build/words.edit.json": "cdea480101f661202b19e224c42d9d6741372ad3321ebe84ead4ed2db71724bb"
+  },
+  "room": {
+    "index.html": "35fb3ccbb8f4d6cfb1447bd1041e88fcd273377430bf28a7d63db58d265048b3",
+    "build/caption_layout.json": "50dc59073a25380288dd08468d97d8ea019a6154204f64481cea365f1a149b52",
+    "build/edit_truth.json": "97b1e8ee416ece69ba50d40adfe6c36dee10a79fd3f847e4fd7ed3abb9303466",
+    "build/sections.json": "4ed6b5a7d3dd985c33c270d0cc3e1553a2553176416e47ee93c256d97431f92a",
+    "build/sfx_events.json": "f25c393f1d7312cc18fec1e7e4c658a82bd0381f71fc34c9dd1b075d81baa49c",
+    "build/words.edit.json": "cdea480101f661202b19e224c42d9d6741372ad3321ebe84ead4ed2db71724bb"
+  },
+  "noface": {
+    "index.html": "741a229b35a580e71275ab490e40c1e757aa87eb6d793c00dff4ade822ec30e6",
+    "build/caption_layout.json": "466337812d1540d62670485a2d7883bcd093305afc36cb982228a9271c437a9a",
+    "build/edit_truth.json": "1aec5ef07b9e17c88064e44a3c4326784792b1eb0b1680aa5a19bc5b6a1300bc",
+    "build/sections.json": "0f0d7a282e6f78775f512d079e6f06af1b65db307f58d935b3f7aeca0318e06a",
+    "build/sfx_events.json": "ddd74beffc0f3532485a19e31951811cb681dddc6cad3057430c43034275f629",
+    "build/words.edit.json": "931863fb74e2722a4f2806910f0b8d95e61254647940f568e6e2ba3a6bc9953e"
+  }
+}
