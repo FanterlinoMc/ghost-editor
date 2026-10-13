@@ -46,6 +46,22 @@ export const ROOM_RADIUS = 36;                                   // canvas px at
 export const ROOM_SHADOW = { x: 0, y: 24, blur: 60, alpha: 0.45 };   // canvas px, black; CSS `0 24px 60px rgba(0,0,0,.45)` as rendered
 export const ROOM_FILL = "ink";                                  // style colour token behind the card
 
+// The card's edges are SNAPPED to whole canvas pixels at full room. Unsnapped, the footage covers x 145.8..934.2, y 0..1401.6, so the
+// first/last pixel row and column are part-covered: they blend card with ink, and anything laid flush against the card (a text
+// panel under it) adds its own part-covered row over the same pixel, which shows as a thin dark hairline along the seam and at the
+// panel corners. The card is cut INWARD to the whole pixel (left ceil, right floor, bottom floor; top is the canvas edge), losing at
+// most 0.6 px of footage, so every card edge lands on a pixel boundary. A panel that meets the card should start at or above
+// cardBox's bottom (1401) and be whole-pixel itself. Spec JSON: cardBox, cardInset.
+export function roomCardBox(W = 1080, H = 1920, s = ROOM_SCALE) {
+  const ox = W / 2, x0 = Math.ceil(ox + s * (0 - ox) - 1e-9), x1 = Math.floor(ox + s * (W - ox) + 1e-9), y1 = Math.floor(s * H + 1e-9);
+  return [x0, 0, x1 - x0, y1];   // x, y, w, h in canvas px
+}
+/** The inset of that box from the full footage rect, in #room's pre-scale px: { x: each side, b: bottom }. */
+export function roomCardInset(W = 1080, H = 1920, s = ROOM_SCALE) {
+  const [x, , , h] = roomCardBox(W, H, s), ox = W / 2;
+  return { x: (x - (ox + s * (0 - ox))) / s, b: H - h / s };
+}
+
 /** "none" | "below" for any input; `warning` says what was wrong (undefined input is silently "none"). */
 export function normalizeRoom(v) {
   if (v === undefined || v === null || v === "none") return { room: "none" };
@@ -93,11 +109,11 @@ export function roomScaleAt(t, windows) {
 
 const r3 = (x) => +x.toFixed(3);
 /** The card's CSS on #room (pre-scale px) at progress p in 0..1: the `--room-r` variable that #room's border-radius reads, and box-shadow. */
-export function roomCardCss(p = 1) {
-  const k = 1 / ROOM_SCALE;
+export function roomCardCss(p = 1, W = 1080, H = 1920) {
+  const k = 1 / ROOM_SCALE, ins = roomCardInset(W, H);
   // The radius rides a CSS variable (#room { border-radius: var(--room-r) }): GSAP 3.14 rounds a `border-radius` px value to a whole
   // pixel (even as a four-value string), which would step the corner through the ease; a custom property is interpolated as is.
-  return { "--room-r": `${r3(ROOM_RADIUS * k * p)}px`, boxShadow: `${r3(ROOM_SHADOW.x * k * p)}px ${r3(ROOM_SHADOW.y * k * p)}px ${r3(ROOM_SHADOW.blur * k * p)}px rgba(0,0,0,${r3(ROOM_SHADOW.alpha * p)})` };
+  return { "--room-r": `${r3(ROOM_RADIUS * k * p)}px`, "--room-ix": `${r3(ins.x * p)}px`, "--room-ib": `${r3(ins.b * p)}px`, "--room-ix": `${r3(ins.x * p)}px`, "--room-ib": `${r3(ins.b * p)}px`, boxShadow: `${r3(ROOM_SHADOW.x * k * p)}px ${r3(ROOM_SHADOW.y * k * p)}px ${r3(ROOM_SHADOW.blur * k * p)}px rgba(0,0,0,${r3(ROOM_SHADOW.alpha * p)})` };
 }
 /** Eased progress 0..1 of the card (and of the shrink) at output time t. */
 export const roomProgressAt = (t, windows) => (1 - roomScaleAt(t, windows)) / (1 - ROOM_SCALE);
@@ -123,7 +139,7 @@ export function roomBox([x, y, w, h], s = ROOM_SCALE, W = 1080) {
 export function roomSpecJson(W = 1080, H = 1920) {
   return {
     scale: ROOM_SCALE, origin: roomOrigin(W), easeSeconds: ROOM_EASE_S, exitSeconds: ROOM_EXIT_S, ease: ROOM_EASE_NAME,
-    values: ROOM_VALUES, fill: ROOM_FILL, radius: ROOM_RADIUS, shadow: ROOM_SHADOW,
+    values: ROOM_VALUES, fill: ROOM_FILL, cardBox: roomCardBox(W, H), cardInset: roomCardInset(W, H), cardBox: roomCardBox(W, H), cardInset: roomCardInset(W, H), radius: ROOM_RADIUS, shadow: ROOM_SHADOW,
     cardCssFull: roomCardCss(1), cardCssNone: roomCardCss(0), frameRounding: "floor(x + 0.5)", canvas: [W, H],
     footageBoxAtRest: roomBox([0, 0, W, H], ROOM_SCALE, W),
     // golden vectors for a mirror's tests

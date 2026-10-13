@@ -2,7 +2,7 @@
 // Asserts the "making room" maths (lib/room.mjs) and how the motion compiler reports `room`.
 //
 //   node scripts/lib/room.test.mjs
-import { ROOM_SCALE, roomFrames, mergeRoomFrames, roomWindows, roomScaleAt, ROOM_RADIUS, ROOM_SHADOW, ROOM_FILL, roomCardCss, roomCardAt, roomPoint, roomBox, normalizeRoom, roomSpecJson } from "./room.mjs";
+import { ROOM_SCALE, roomFrames, mergeRoomFrames, roomWindows, roomScaleAt, ROOM_RADIUS, ROOM_SHADOW, ROOM_FILL, roomCardCss, roomCardAt, roomCardBox, roomCardInset, roomPoint, roomBox, normalizeRoom, roomSpecJson } from "./room.mjs";
 import { compileMotion } from "./motion-graphics.mjs";
 
 let failures = 0;
@@ -74,8 +74,8 @@ check("room does not change the compiled graphic", none.html === below.html && J
 
 // the card: rounded corners + shadow, as rendered 36 px and 0 24px 60px black 45%, following the scale's eased progress
 eq("card constants", [ROOM_RADIUS, ROOM_SHADOW, ROOM_FILL], [36, { x: 0, y: 24, blur: 60, alpha: 0.45 }, "ink"]);
-eq("card css at full room is the rendered value / 0.73", roomCardCss(1), { "--room-r": "49.315px", boxShadow: "0px 32.877px 82.192px rgba(0,0,0,0.45)" });
-eq("card css at 0 is nothing", roomCardCss(0), { "--room-r": "0px", boxShadow: "0px 0px 0px rgba(0,0,0,0)" });
+eq("card css at full room is the rendered value / 0.73", roomCardCss(1), { "--room-r": "49.315px", "--room-ix": "0.274px", "--room-ib": "0.822px", boxShadow: "0px 32.877px 82.192px rgba(0,0,0,0.45)" });
+eq("card css at 0 is nothing", roomCardCss(0), { "--room-r": "0px", "--room-ix": "0px", "--room-ib": "0px", boxShadow: "0px 0px 0px rgba(0,0,0,0)" });
 near("card radius 0 at scale 1", roomCardAt(0.99, w).radius, 0); near("card radius 36 at 0.73", roomCardAt(2.5, w).radius, 36);
 near("card shadow alpha at 0.73", roomCardAt(2.5, w).shadowAlpha, 0.45); near("card shadow blur 0 outside", roomCardAt(4.5, w).shadowBlur, 0);
 near("card is half-way at the scale's half-way point", roomCardAt(1.175, w).radius, 18);
@@ -84,6 +84,12 @@ near("rendered radius = css radius x scale", parseFloat(roomCardCss(1)["--room-r
 // the JSON a mirror can read
 const j = roomSpecJson();
 check("spec json carries the constants", j.scale === 0.73 && j.easeSeconds === 0.35 && j.exitSeconds === 0.55 && j.origin[0] === 540 && j.origin[1] === 0);
+// the card is snapped to whole canvas pixels at full room (no part-covered edge row/column): 145.8..934.2 x 0..1401.6 -> 146..934 x 0..1401
+eq("card box is whole pixels", roomCardBox(), [146, 0, 788, 1401]);
+{ const ins = roomCardInset(), s = ROOM_SCALE, ox = 540, edge = (v) => ox + s * (v - ox);
+  near("snapped left edge lands on 146", edge(ins.x), 146, 1e-9); near("snapped right edge lands on 934", edge(1080 - ins.x), 934, 1e-9); near("snapped bottom lands on 1401", s * (1920 - ins.b), 1401, 1e-9);
+  check("snap loses under a pixel of footage", ins.x * s < 0.21 && ins.b * s < 0.61 && ins.x >= 0 && ins.b >= 0); }
+check("spec json carries the card box", roomSpecJson().cardBox.join() === "146,0,788,1401");
 check("spec json carries the card", j.radius === 36 && j.shadow.y === 24 && j.shadow.blur === 60 && j.shadow.alpha === 0.45 && j.fill === "ink" && j.examples.cardAt.length === 7);
 
 if (failures) { console.log(`\n${failures} FAILED`); process.exit(1); }

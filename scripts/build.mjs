@@ -1182,7 +1182,7 @@ for (const b of beatsList) {
 const roomWins = roomWindows(roomFrameWins, FPS);
 for (const w of roomWins) {
   // the card (rounded corners + shadow) rides the same tween, so it shares the scale's duration and ease
-  const cardOff = JSON.stringify(roomCardCss(0)).slice(1, -1), cardOn = JSON.stringify(roomCardCss(1)).slice(1, -1);
+  const cardOff = JSON.stringify(roomCardCss(0, W, H)).slice(1, -1), cardOn = JSON.stringify(roomCardCss(1, W, H)).slice(1, -1);
   tl.push(`ft("#room", { scale: 1, ${cardOff} }, { scale: ${ROOM_SCALE}, ${cardOn}, force3D: false, duration: ${r3(w.easeIn[1] - w.easeIn[0])}, ease: "${ROOM_EASE_NAME}" }, ${r3(w.easeIn[0])});`);
   tl.push(`ft("#room", { scale: ${ROOM_SCALE}, ${cardOn} }, { scale: 1, ${cardOff}, force3D: false, duration: ${r3(w.easeOut[1] - w.easeOut[0])}, ease: "${ROOM_EASE_NAME}" }, ${r3(w.easeOut[0])});`);
   tl.push(`ft("#roomfill", { opacity: 0 }, { opacity: 1, duration: 0.01, ease: "none" }, ${r3(w.tA)});`);
@@ -1784,7 +1784,8 @@ const html = `<!doctype html>
   #base { transform: scale(${zoom.base ?? 1});${look.grade ? ` filter: ${look.grade};` : ""} }
   #pip { position: absolute; inset: 0; z-index: 1; transform-origin: ${W / 2}px ${faceY}px; }${roomWins.length ? `
   #roomfill { position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; background: ${resolveColor(ROOM_FILL, brand)}; }
-  #room { position: absolute; inset: 0; z-index: 1; overflow: hidden; border-radius: var(--room-r, 0px); will-change: transform; transform-origin: ${roomOrigin(W)[0]}px ${roomOrigin(W)[1]}px; }` : ""}
+  #room { position: absolute; left: var(--room-ix, 0px); right: var(--room-ix, 0px); top: 0; bottom: var(--room-ib, 0px); z-index: 1; overflow: hidden; border-radius: var(--room-r, 0px); will-change: transform; transform-origin: 50% 0; }
+  #roomin { position: absolute; left: calc(var(--room-ix, 0px) * -1); top: 0; width: ${W}px; height: ${H}px; }` : ""}
   .behind { position: absolute; inset: 0; pointer-events: none; }
   .behind-in { position: absolute; left: -40px; right: -40px; text-align: center; font-weight: 900; line-height: .86; letter-spacing: -6px; text-transform: uppercase; white-space: nowrap; font-family: ${brand.displayFont ? `"${brand.displayFont}", ` : ""}${UI_FONT}, sans-serif; }
   .matte { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -1856,8 +1857,8 @@ const html = `<!doctype html>
 </head>
 <body>
 <div id="root" class="${spec.layout?.compact ? "compact" : ""}" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${SECTION_MODE ? SECTION_TOTAL : TOTAL}" data-fps="${FPS}">
-  ${roomWins.length ? `<div id="roomfill"></div><div id="room">` : ""}<div id="pip"><div id="base"><div id="snap"><div id="push">${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}
-  </div></div></div></div>${roomWins.length ? `</div>` : ""}
+  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip"><div id="base"><div id="snap"><div id="push">${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}
+  </div></div></div></div>${roomWins.length ? `</div></div>` : ""}
   ${overlays.filter((o) => o.html).map((o) => o.html).join("\n  ")}
   ${grainHtml}${vignetteHtml}
   <div id="caps">
