@@ -64,6 +64,18 @@ hold after take 1. Any on-screen text with Cyrillic switches the card font from 
 - `words` may be left out, and a source may have no `build/words-N.whisper.json` or
   `build/face-N.json`: its takes get no captions, and it is framed as "no face" (the caption/card
   placer uses its no-face positions). A `words` path that is named but missing is still an error.
+- **Beats in a multi-source reel.** A beat's `at`/`to` (and its inner line/item times) are seconds of ONE
+  recording. Add an optional `"src": "assets/talk.mp4"` to the beat (same value as a take's `src`) to say
+  which; it then resolves like `{src, t}`. A beat without `src` and a time that only one source covers
+  resolves as before. A bare time that two or more sources cover (every source starts at 0 s) no longer
+  drops the beat or fails the build: it resolves to the PRIMARY source (`spec.source`, the recording the
+  transcript belongs to) if that covers it, else the first covering take in output order, and the build warns
+  `... is in N sources ...: used <src>`. A `src` that is not a source of the reel drops the beat with a warning.
+  Snaps, pushes and other non-beat times still need the explicit `{src, t}` when ambiguous.
+- **`type: "motion"` beats are placed in any style when the beat is `"by": "user"` or the reel is
+  `"origin": "blank"`**; otherwise a motion beat needs the style to set `designer: true`, and is dropped with
+  a warning if not. In a multi-source or blank-origin reel the preview timeline is padded to the full output
+  length (`tl.duration()` equals `data-duration`), so a player never stops at the last tween.
 
 ## Layers (`layers[]`, output seconds)
 
@@ -106,6 +118,8 @@ existed (`scripts/byte-identity.mjs`).
     `compileMotion`, but timed by the layer: tween times are seconds from the layer's start and the beat's 0.6 to
     8 s limit does NOT apply (a layer may run to the reel's length). Element coordinates are canvas coordinates;
     `box` is ignored. `room` is never honoured and a layer's own `exit` runs on the whole graphic.
+    `hideCaptions: true` (`motion` and `text` layers) hides the captions while the layer is up, as it does on a
+    beat; edit_truth.json's layer entry carries `hideCaptions: true` then.
 - **Where it sits.** Above the footage and the beats' `.layer` band (z 3), below the captions (z 8), unless
   `overCaptions: true` (then above them). Within one band, ordered by `z` (0 to 99), ties by array order.
 - **Enter and exit** are explicit `fromTo` tweens with `force3D: false`, 0.3 s (a third of the layer if it is

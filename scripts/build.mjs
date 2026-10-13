@@ -127,6 +127,9 @@ function writeBlankPage() {
 <div id="root" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${BLANK_S}" data-fps="${FPS}"></div>
 <script>
   const tl = gsap.timeline({ paused: true });
+  // the timeline is as long as the reel, not as long as its last tween: a preview or player that reads
+  // tl.duration() would otherwise stop at the last caption/graphic and freeze the footage after it
+  tl.set({}, {}, ${BLANK_S});
   window.__timelines["main"] = tl;
 </script>
 </body>
@@ -270,23 +273,46 @@ const TOTAL = +(SPEECH + OUTRO).toFixed(3);
 // worse failure, so the partition is load-bearing and not a tidy-up. With one source this is the
 // same single sorted array as before.
 const bySourceOf = new Map(SOURCES.map((s) => [s, takes.filter((t) => t.src === s).sort((x, y) => x.a - y.a)]));
-const E = (t, what = "") => {
+// Beat-level `src` (blank-timeline multi-source): a beat's times are seconds of ONE recording. `beat.src`
+// names it, and every bare time that beat (and its inner lines, items, pills...) hands to E() is read
+// as {src, t}. CUR_BEAT is the beat whose body is being compiled (set by the beat loop), so nested
+// E(l.at) calls need no change; EB(b, "at") is for the sites that resolve a beat's own at/to outside it.
+// Without `src` the old rule stands, except that an ambiguous bare time INSIDE A BEAT no longer throws
+// (which dropped motion beats without a trace): it resolves to the first take, in output order, that
+// covers it, and says so in the build warnings. Snaps, pushes and the like still throw - they have no
+// beat to carry a src.
+let CUR_BEAT = null;
+const ambiguousWarned = new Set();
+const E = (t, what = "", src) => {
   if (t === "end") return TOTAL;
   if (typeof t === "string" && t.startsWith("outro+")) return SPEECH + parseFloat(t.slice(6));
+  const beatSrc = src !== undefined ? src : CUR_BEAT?.src;
+  if (typeof t === "number" && beatSrc != null && SOURCES.length > 1) {
+    if (!SOURCES.includes(beatSrc)) throw new Error(`E(${t})${what ? " for " + what : ""}: src ${JSON.stringify(beatSrc)} is not a source of this reel (${SOURCES.join(", ")})`);
+    t = { src: beatSrc, t };
+  }
   // I-16: with more than one source a bare number is "t seconds into WHICH file?". Resolve it only
   // when exactly one source can claim it; if two different recordings both contain that time, the
   // reel has to say which, because guessing is how an edit silently cuts to the wrong camera.
   // `{src, t}` is the explicit form. Single-source reels never reach the ambiguity branch.
   if (typeof t === "object" && t !== null && t.src != null && typeof t.t === "number") {
     const k = takes.find((q) => q.src === t.src && t.t >= q.a - 1e-6 && t.t <= q.b + 1e-6);
-    if (!k) throw new Error(`E({src:${t.src}, t:${t.t}})${what ? " for " + what : ""}: not inside any take of that source`);
-    return +(k.start + (t.t - k.a)).toFixed(3);
+    if (k) return +(k.start + (t.t - k.a)).toFixed(3);
+    // a removed gap (< 1.2 s) inside the named recording snaps to the next kept take, as for a bare time
+    const bs = bySourceOf.get(t.src) || [];
+    for (let i = 0; i + 1 < bs.length; i++) if (t.t > bs[i].b && t.t < bs[i + 1].a && bs[i + 1].a - bs[i].b < 1.2) return +bs[i + 1].start.toFixed(3);
+    throw new Error(`E({src:${t.src}, t:${t.t}})${what ? " for " + what : ""}: not inside any take of that source`);
   }
   if (typeof t === "number" && SOURCES.length > 1) {
     const hits = takes.filter((k) => t >= k.a - 1e-6 && t <= k.b + 1e-6);
     const srcs = [...new Set(hits.map((k) => k.src))];
     if (srcs.length > 1) {
-      throw new Error(`E(${t})${what ? " for " + what : ""}: ambiguous across ${srcs.length} sources (${srcs.join(", ")}) - this reel is multi-source, so write {"src": "<file>", "t": ${t}} instead of a bare time`);
+      if (!CUR_BEAT && src === undefined) throw new Error(`E(${t})${what ? " for " + what : ""}: ambiguous across ${srcs.length} sources (${srcs.join(", ")}) - this reel is multi-source, so write {"src": "<file>", "t": ${t}} instead of a bare time`);
+      // deterministic rule: the primary source (spec.source, the recording the transcript belongs to - what a
+      // speech-anchored beat means) wins; if it does not cover the time, the first covering take in output order
+      const first = hits.find((k) => k.src === PRIMARY_SRC) ?? hits[0], key = `${CUR_BEAT?.id ?? CUR_BEAT?.type ?? what}@${t}`;
+      if (!ambiguousWarned.has(key)) { ambiguousWarned.add(key); warn.push(`${what || "time"} ${t}s is in ${srcs.length} sources (${srcs.join(", ")}): used ${first.src} (${first.src === PRIMARY_SRC ? "the primary source" : "the first take in output order that covers it"}) - add "src" to the beat to say which recording it means`); }
+      return +(first.start + (t - first.a)).toFixed(3);
     }
   }
   for (const k of takes) if (t >= k.a - 1e-6 && t <= k.b + 1e-6) return +(k.start + (t - k.a)).toFixed(3);
@@ -302,6 +328,7 @@ const E = (t, what = "") => {
   if (typeof t === "string" && t.startsWith("hold:")) { const [i, off] = t.slice(5).split("+"); return +(takes[+i].holdStart + (parseFloat(off) || 0)).toFixed(3); }
   throw new Error(`E(${t})${what ? " for " + what : ""}: not inside any take`);
 };
+const EB = (b, key, what = "") => E(b[key], what, b.src ?? null);
 const r3 = (x) => Math.round(x * 1000) / 1000;
 
 // ---------- words -> edit-time captions ----------
@@ -563,11 +590,13 @@ for (let i = motionBeats.length - 1; i >= 0; i--) {
   const b = motionBeats[i];
   if (b.type !== "motion") continue;
   let why = null;
-  if (spec.designer !== true) why = "this style does not set designer:true";
+  // opt-in per style, EXCEPT a beat the user placed themselves ("by":"user") or any beat of a blank-origin reel: a studio
+  // reel is not tied to a designer style, and silently dropping a graphic the user just added was bug 1 of the blank-timeline staging test
+  if (spec.designer !== true && b.by !== "user" && spec.origin !== "blank") why = "this style does not set designer:true (and the beat is not by:\"user\" and the reel is not origin:\"blank\")";
   else if (b.to === undefined) why = "no `to`";
   else {
     try {
-      const a = E(b.at, "motion at"), z = E(b.to, "motion to");
+      const a = EB(b, "at", "motion at"), z = EB(b, "to", "motion to");
       const ka = locateTake(takes, a, FPS), kz = locateTake(takes, z - 0.001, FPS);
       if (!(z > a)) why = "`to` is not after `at`";
       else if (ka !== kz || z > ka.start + ka.dur + 1e-6) why = "`at` and `to` are not in the same kept take";
@@ -591,7 +620,7 @@ for (let i = motionBeats.length - 1; i >= 0; i--) {
 //   4. The director's explicit snaps and pushes are never touched.
 const MOTION_HOLD_EXIT = 0.2;
 // a room:"below" beat holds the camera (and hides captions) to to+0.55, until the footage has grown back
-const motionHold = motionBeats.filter((b) => b.type === "motion").map((b) => [Math.round(E(b.at) * FPS), Math.round((E(b.to) + (normalizeRoom(b.room).room === "below" ? ROOM_EXIT_S : MOTION_HOLD_EXIT)) * FPS)]);
+const motionHold = motionBeats.filter((b) => b.type === "motion").map((b) => [Math.round(EB(b, "at") * FPS), Math.round((EB(b, "to") + (normalizeRoom(b.room).room === "below" ? ROOM_EXIT_S : MOTION_HOLD_EXIT)) * FPS)]);
 const inMotionHold = (t) => motionHold.some(([fa, fb]) => { const f = Math.round(t * FPS); return f >= fa && f <= fb; });
 // "Making room": the footage-shrink windows of kept `room:"below"` beats, collected as the beats compile (a beat the
 // compiler drops opens no room) and turned into #room tweens after the beat loop. See scripts/lib/room.mjs for the maths.
@@ -892,6 +921,10 @@ const enter = (sel, t, kind = "pop") => kind === "slide"
 const exit = (sel, end) => `tl.to("${sel}", { autoAlpha: 0, scale: 0.9, duration: 0.18, ease: "power2.in" }, ${r3(end - 0.22)});`;
 const slotUsed = [];
 const hiddenCaps = [];
+// reel.layers[]: a motion or text layer with hideCaptions:true hides the captions while it is up, the way a
+// beat's hideCaptions does. Layer times are output seconds, so a section build (which rebases takes)
+// rebases them with the same offset renderLayer() uses.
+for (const l of LAYERS) if (l.hideCaptions === true && (l.kind === "motion" || l.kind === "text")) hiddenCaps.push([r3(l.t0 - (SECTION_MODE ? SECTION_START : 0)), r3(l.t1 - (SECTION_MODE ? SECTION_START : 0))]);
 const behindHtml = [];
 const shownCaps = []; // scenes that keep captions (captions.onlyInScenes shows ONLY these)
 const faceFile = path.join(proj, spec.face || "build/face.json");
@@ -933,7 +966,7 @@ if (spec.nametag && !hasSelfTag) {
   // `until` below is a source time that gets mapped through E() with every other beat. When takes
   // are in source order E() is monotonic, so this sorts identically to sorting by `at` and no
   // existing plan changes; it only differs once a take has been moved.
-  const pagesByEdit = beatsList.filter((b) => b.type === "scene").sort((x, y) => E(x.at) - E(y.at));
+  const pagesByEdit = beatsList.filter((b) => b.type === "scene").sort((x, y) => EB(x, "at") - EB(y, "at"));
   const firstPage = pagesByEdit.length ? pagesByEdit[0].at : undefined;
   const until = spec.nametag.until === "hook" && firstPage != null && firstPage < 4.5 ? firstPage - 0.05 : (spec.nametag.to ?? 2.4);
   beatsList.unshift({ type: "nametag", name: spec.nametag.name, title: spec.nametag.title, subtitle: spec.nametag.subtitle, at: spec.nametag.at ?? 0.15, to: Math.max(1.2, until), sfx: false });
@@ -946,10 +979,11 @@ const HANDOVER = 0.45;
 // a beat spans, so it never becomes a section boundary.
 const beatSpans = [];
 for (const b of beatsList) {
+  CUR_BEAT = b;
   const id = `b${n++}`;
-  const t0 = E(b.at, `${b.type} at`);
-  let t1 = b.to === undefined ? (b.type === "endcard" ? TOTAL : t0 + (b.type === "meme" ? 1.8 : 2.5)) : E(b.to, `${b.type} to`);
-  if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(E(o.at) - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
+  const t0 = EB(b, "at", `${b.type} at`);
+  let t1 = b.to === undefined ? (b.type === "endcard" ? TOTAL : t0 + (b.type === "meme" ? 1.8 : 2.5)) : EB(b, "to", `${b.type} to`);
+  if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(EB(o, "at") - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
   beatSpans.push({ t0, t1 });
   const dur = r3(t1 - t0);
   const inSlot = ["emoji", "logo", "meme", "icon"].includes(b.type);
@@ -1268,6 +1302,7 @@ for (const b of beatsList) {
     : `<div id="${id}" class="clip layer" data-start="${t0}" data-duration="${dur}" data-track-index="${b.type === "scene" ? 4 : inSlot ? 3 : 2}">${inner}</div>` });
 }
 
+CUR_BEAT = null;
 // a layer never straddles a section boundary (lib/sections.mjs): its span counts like a beat's
 for (const l of LAYERS) beatSpans.push({ t0: l.t0, t1: l.t1 });
 
@@ -1523,7 +1558,7 @@ if (spec.leaks) {
 if (packOf) for (const b of beatsList) {
   const sd = (spec.scenes || {})[b.kind] || {};
   if (b.type !== "scene" || (b.gate ?? sd.gate) !== "8mm") continue;
-  const t0 = E(b.at), t1 = E(b.to);
+  const t0 = EB(b, "at"), t1 = EB(b, "to");
   const matte = packClip(packOf, "8mm-gate"), dust = packClip(packOf, "8mm-dust");
   if (matte) packOverlay(matte, t0, t1 - t0, { blend: "multiply", z: 6, opacity: 1, fadeIn: 0.05, fadeOut: 0.1 });
   if (dust) packOverlay(dust, t0, t1 - t0, { blend: "screen", z: 6, opacity: 0.7, fadeIn: 0.05, fadeOut: 0.1 });
@@ -1532,7 +1567,7 @@ if (packOf) for (const b of beatsList) {
 // ---------- film burns (spec.burns = { at?, onScenes? }) ----------
 if (spec.burns && packOf) {
   const times = (spec.burns.at || []).map((t) => E(t, "burn"));
-  if (spec.burns.onScenes) for (const b of beatsList) if (b.type === "scene" && ["image", "window", "tv"].includes(b.kind)) times.push(E(b.at));
+  if (spec.burns.onScenes) for (const b of beatsList) if (b.type === "scene" && ["image", "window", "tv"].includes(b.kind)) times.push(EB(b, "at"));
   for (const t of [...new Set(times.map(r3))].sort((a, b) => a - b)) {
     const clip = packClip(packOf, "burns");
     if (clip) packOverlay(clip, t - 0.2, 0.9, { blend: "screen", z: 9, opacity: 1, fadeIn: 0.08, fadeOut: 0.35 });
@@ -1559,8 +1594,8 @@ if (spec.sceneFlash && spec.openFlash) {
   const scenes = beatsList.filter((b) => b.type === "scene" && kinds.includes(b.kind));
   const chosen = sf.which === "all" ? scenes : sf.which === "last" ? scenes.slice(-1) : scenes.slice(0, sf.count ?? 1);
   for (const b of chosen) {
-    brandFlash({ ...spec.openFlash, dur: sf.dur ?? 0.35, db: sf.db ?? -10, sfx: sf.sfxIn ?? spec.openFlash.sfx }, r3(Math.max(0, E(b.at) - 0.12)), "burn into cutaway");
-    if (sf.out !== false) brandFlash({ ...spec.openFlash, dur: sf.dur ?? 0.35, db: (sf.db ?? -10) - 3, sfx: sf.sfxOut ?? spec.openFlash.sfx }, r3(E(b.to) - 0.2), "burn out to speaker", { side: "right" });
+    brandFlash({ ...spec.openFlash, dur: sf.dur ?? 0.35, db: sf.db ?? -10, sfx: sf.sfxIn ?? spec.openFlash.sfx }, r3(Math.max(0, EB(b, "at") - 0.12)), "burn into cutaway");
+    if (sf.out !== false) brandFlash({ ...spec.openFlash, dur: sf.dur ?? 0.35, db: (sf.db ?? -10) - 3, sfx: sf.sfxOut ?? spec.openFlash.sfx }, r3(EB(b, "to") - 0.2), "burn out to speaker", { side: "right" });
   }
 }
 if (spec.openFlash) {
@@ -1603,7 +1638,7 @@ if (spec.listMarks) {
     if (marks.length && label === "step") label = marks[0].label;    // "number one ... secondly" stays "number 02"
     marks.push({ n, label, t: r3(Math.max(0, words[i].start - 0.05)) });
   }
-  const scenes = beatsList.filter((b) => b.type === "scene").map((b) => [E(b.at), E(b.to)]);
+  const scenes = beatsList.filter((b) => b.type === "scene").map((b) => [EB(b, "at"), EB(b, "to")]);
   marks.forEach((m, k) => {
     if (scenes.some(([a, b]) => m.t >= a - 0.3 && m.t <= b)) return;  // a full-screen page is up: it already carries the point
     const id = `lm${k}`, hold = L.hold ?? 1.8, x = L.x ?? 70, y = L.y ?? 300;
@@ -1632,7 +1667,7 @@ const BRANDS = [
 if (spec.toolLogos) {
   const T = spec.toolLogos === true ? {} : spec.toolLogos;
   const size = T.size ?? 230, hold = T.hold ?? 1.5;
-  const scenes = beatsList.filter((b) => b.type === "scene").map((b) => [E(b.at), E(b.to)]);
+  const scenes = beatsList.filter((b) => b.type === "scene").map((b) => [EB(b, "at"), EB(b, "to")]);
   const shown = [];
   fs.mkdirSync(path.join(A, "logos"), { recursive: true });
   words.forEach((w) => {
@@ -1693,7 +1728,7 @@ if (spec.objectPops) {
   const hold = P.hold ?? 1.5, gap = P.gap ?? 4.5, w = P.w ?? 300;
   const have = (k) => fs.existsSync(path.join(LIB, "engravings", "png", `${k}.png`));
   // stay clear of pages, list marks, logos and the first/last beats
-  const busy = beatsList.filter((b) => b.type === "scene" || b.type === "nametag" || b.type === "slam").map((b) => [E(b.at) - 0.6, E(b.to) + 0.8]);
+  const busy = beatsList.filter((b) => b.type === "scene" || b.type === "nametag" || b.type === "slam").map((b) => [EB(b, "at") - 0.6, EB(b, "to") + 0.8]);
   // number cards sit top-left and pop-ups top-right, so they can share the screen; logos share the pop-up slot
   busy.push(...[...leakHtml.matchAll(/id="(logo\d+)" class="clip" data-start="([\d.]+)" data-duration="([\d.]+)"/g)].map((m) => [parseFloat(m[2]) - 0.6, parseFloat(m[2]) + parseFloat(m[3]) + 0.6]));
   // never repeat a picture a page already showed
@@ -1740,7 +1775,7 @@ if (spec.objectPops) {
   const norm = (t) => t.toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
   const spoken = words.map((w) => ({ t: w.start, w: norm(w.word) })).flatMap((x) => x.w.map((w) => ({ t: x.t, w })));
   for (const b of beatsList.filter((b) => b.type === "scene" && (b.lines || b.items))) {
-    const a = E(b.at), z = E(b.to);
+    const a = EB(b, "at"), z = EB(b, "to");
     const lines = (b.lines || (b.items || []).filter((it) => it.type === "text")).map((l) => l.text).filter(Boolean);
     for (const text of lines) {
       const first = norm(text).find((w) => w.length > 2);
@@ -1772,7 +1807,7 @@ if (spec.banner?.text) {
   // window so a scene before `from` or after `to` pushes no tween at all.
   if (spec.banner.hideOnScenes !== false) {
     const raw = beatsList.filter((b) => b.type === "scene" && typeof b.at === "number")
-      .map((b) => [E(b.at) - 0.12, E(b.to ?? b.at) + 0.12])
+      .map((b) => [EB(b, "at") - 0.12, EB(b, b.to !== undefined ? "to" : "at") + 0.12])
       .filter(([a, z]) => z > from && a < to)
       .map(([a, z]) => [Math.max(a, from), Math.min(z, to)])
       .sort((x, y) => x[0] - y[0]);
@@ -1794,7 +1829,7 @@ if (spec.banner?.text) {
 let musicHtml = "";
 // Alif: a punch-in is barely audible, a tiny air swish ~20 dB under the voice (not during full-screen scenes)
 if (spec.sound?.zoom && cadenceSnaps.size) {
-  const sceneWins = beatsList.filter((b) => b.type === "scene").map((b) => [E(b.at) - 0.1, E(b.to) + 0.1]);
+  const sceneWins = beatsList.filter((b) => b.type === "scene").map((b) => [EB(b, "at") - 0.1, EB(b, "to") + 0.1]);
   let zn = 0;
   for (const t of [...cadenceSnaps].sort((a, b) => a - b)) {
     if (t < 0.6 || sceneWins.some(([a, b]) => t >= a && t <= b)) continue;   // the open flash owns the first beat
@@ -1812,7 +1847,7 @@ if (spec.music) {
   if (drops) {
     const times = [];
     if (drops === "auto" || drops.auto) {
-      const scenes = beatsList.filter((b) => b.type === "scene").map((b) => E(b.at));
+      const scenes = beatsList.filter((b) => b.type === "scene").map((b) => EB(b, "at"));
       // the payoff: set explicitly (the page that carries the core promise) or else the last page
       // (R1b port)
       if (spec.music.payoffAt != null) times.push(E(spec.music.payoffAt, "payoff"));
@@ -1847,7 +1882,7 @@ if (spec.music) {
   }
   // the payoff: a riser into the last page, the drop's silence, a soft hit as the page lands
   // (R1b port)
-  const lastScene = spec.music.payoffAt != null ? E(spec.music.payoffAt, "payoff") : beatsList.filter((b) => b.type === "scene").map((b) => E(b.at)).sort((a, b) => a - b).at(-1);
+  const lastScene = spec.music.payoffAt != null ? E(spec.music.payoffAt, "payoff") : beatsList.filter((b) => b.type === "scene").map((b) => EB(b, "at")).sort((a, b) => a - b).at(-1);
   if (lastScene && spec.music.payoff !== false && spec.music.drops) {
     const len = spec.music.dropLen ?? 0.5;
     addSfx(r3(lastScene - len - 1.25), spec.music.riserSfx ?? "riser-1", "riser into the payoff", { db: spec.music.riserDb ?? -2 });
@@ -2008,7 +2043,9 @@ const html = `<!doctype html>
   const based = new Set();
   const ft = (sel, from, to, at) => { if (!based.has(sel)) { based.add(sel); tl.set(sel, from, 0); } tl.fromTo(sel, from, { ...to, immediateRender: false }, Math.max(0, at)); };
   ${tl.join("\n  ")}
-  window.__timelines["main"] = tl;
+  ${SOURCES.length > 1 || spec.origin === "blank" ? `// the timeline is as long as the reel, not as long as its last tween: a preview/player that reads tl.duration() would stop at the last caption and freeze the footage
+  tl.set({}, {}, ${SECTION_MODE ? SECTION_TOTAL : TOTAL});
+  ` : ""}window.__timelines["main"] = tl;
 </script>
 </body>
 </html>
@@ -2045,8 +2082,8 @@ fs.writeFileSync(path.join(proj, "build", "caption_layout.json"), JSON.stringify
 const editTruthTakes = takes.map((t, i) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(SOURCES.length > 1 ? { src: t.src, srcIndex: srcIndex.get(t.src) } : {}), ...(i > 0 && t.transition ? { transition: t.transition } : {}), ...(i > 0 && t.transition && t.transitionDur !== undefined ? { transitionDur: t.transitionDur } : {}) }));
 const editTruthBeats = (spec.beats || []).map((b) => ({
   type: b.type, kind: b.kind ?? null,
-  at: r3(E(b.at, `${b.type} at`)),
-  to: b.to === undefined ? null : r3(E(b.to, `${b.type} to`)),
+  at: r3(EB(b, "at", `${b.type} at`)),
+  to: b.to === undefined ? null : r3(EB(b, "to", `${b.type} to`)),
   in: b.in ?? null, out: b.out ?? null,
 }));
 fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({

@@ -117,6 +117,7 @@ export function resolveLayers(raw, { takes, total, fps, W }) {
 /** Where a layer was asked to start, for edit_truth.json: the facts a measurement needs, resolved. */
 export const layerTruth = (layers) => layers.map((l) => ({
   id: l.id, kind: l.kind, start: l.t0, end: l.t1, z: l.z, pin: l.pin, ...(l.overCaptions ? { overCaptions: true } : {}),
+  ...(l.hideCaptions === true && (l.kind === "motion" || l.kind === "text") ? { hideCaptions: true } : {}),
   ...(l.audio !== "off" ? { audio: l.audio } : {}),
 }));
 
