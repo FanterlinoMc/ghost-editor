@@ -1,0 +1,7 @@
+{
+  "_about": "headline in yellow",
+  "extends": "headline",
+  "captions": {
+    "color": "#FFD60A"
+  }
+}

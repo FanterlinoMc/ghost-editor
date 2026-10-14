@@ -1,0 +1,7 @@
+{
+  "_about": "headline in lime",
+  "extends": "headline",
+  "captions": {
+    "color": "#A3E635"
+  }
+}

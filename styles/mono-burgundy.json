@@ -1,0 +1,8 @@
+{
+  "_about": "Mono in Burgundy: the mono pages with a burgundy accent instead of forest green.",
+  "extends": "mono",
+  "brand": {
+    "accent": "#6E1A26",
+    "accentDark": "#4F121B"
+  }
+}

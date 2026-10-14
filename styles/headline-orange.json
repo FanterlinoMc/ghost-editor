@@ -1,0 +1,7 @@
+{
+  "_about": "headline in orange",
+  "extends": "headline",
+  "captions": {
+    "color": "#FF8A1F"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "_about": "Mono in Rust: the mono pages with a rust accent instead of forest green.",
+  "extends": "mono",
+  "brand": {
+    "accent": "#9A3B14",
+    "accentDark": "#72290C"
+  }
+}

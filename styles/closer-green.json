@@ -1,0 +1,8 @@
+{
+  "_about": "closer in green",
+  "extends": "closer",
+  "captions": {
+    "boxColor": "#22C55E",
+    "ink": "#0B0B0B"
+  }
+}

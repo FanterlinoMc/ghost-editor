@@ -1,0 +1,8 @@
+{
+  "_about": "Mono in Royal Blue: the mono pages with a royal blue accent instead of forest green.",
+  "extends": "mono",
+  "brand": {
+    "accent": "#1F3FB8",
+    "accentDark": "#162E88"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "_about": "headline in red",
+  "extends": "headline",
+  "captions": {
+    "color": "#FF3B30"
+  }
+}

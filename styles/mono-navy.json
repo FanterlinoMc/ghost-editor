@@ -1,0 +1,8 @@
+{
+  "_about": "Mono in Navy: the mono pages with a navy accent instead of forest green.",
+  "extends": "mono",
+  "brand": {
+    "accent": "#14254A",
+    "accentDark": "#0D1A36"
+  }
+}

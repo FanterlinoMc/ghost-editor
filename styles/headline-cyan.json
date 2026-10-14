@@ -1,0 +1,7 @@
+{
+  "_about": "headline in cyan",
+  "extends": "headline",
+  "captions": {
+    "color": "#22D3EE"
+  }
+}

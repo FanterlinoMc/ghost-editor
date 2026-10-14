@@ -1,0 +1,7 @@
+{
+  "_about": "keynote in sky",
+  "extends": "keynote",
+  "brand": {
+    "accent": "#7CC4FF"
+  }
+}

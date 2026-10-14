@@ -1,0 +1,7 @@
+{
+  "_about": "keynote in rose",
+  "extends": "keynote",
+  "brand": {
+    "accent": "#FF8FA3"
+  }
+}

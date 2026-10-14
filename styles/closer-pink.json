@@ -1,0 +1,8 @@
+{
+  "_about": "closer in pink",
+  "extends": "closer",
+  "captions": {
+    "boxColor": "#FF3D8B",
+    "ink": "#FFFFFF"
+  }
+}
