@@ -1445,7 +1445,7 @@ const capCss = cap.style === "clean"
   ? `.cap-group { font-family: ${brand.font || "Montserrat"}, "Noto Sans Arabic", system-ui, sans-serif; font-size: ${CAP_SIZES.box}px; font-weight: 900; line-height: 1.08; color: ${cap.ink ?? brand.ink ?? "#111"}; background: ${cap.boxColor ?? brand.accent}; border-radius: 12px; padding: 10px 24px 14px; max-width: 860px; text-align: center; box-shadow: 0 10px 28px rgba(0,0,0,.28); }
   .cap-group .w { margin: 0 0.14em; }`
   : cap.style === "condensed"
-  ? `.cap-group { font-family: ${cap.font ?? "Oswald"}, "Noto Sans Arabic", sans-serif; font-size: ${CAP_SIZES.condensed}px; font-weight: 700; line-height: .95; letter-spacing: 1px; color: #fff; max-width: 920px; text-align: center; text-shadow: 0 6px 22px rgba(0,0,0,.6), 0 2px 4px rgba(0,0,0,.7); }`
+  ? `.cap-group { font-family: ${cap.font ?? "Oswald"}, "Noto Sans Arabic", sans-serif; font-size: ${CAP_SIZES.condensed}px; font-weight: 700; line-height: .95; letter-spacing: 1px; color: ${cap.color ?? "#fff"}; max-width: 920px; text-align: center; text-shadow: 0 6px 22px rgba(0,0,0,.6), 0 2px 4px rgba(0,0,0,.7); }`
   : cap.style === "clipping"
   ? `.cap-group { font-family: Gloock, "Noto Sans Arabic", Georgia, serif; font-size: ${cap.size ?? 58}px; line-height: 1.08; letter-spacing: -0.01em; color: #fbf8f1; background: #141210; padding: 6px 20px 12px; max-width: 900px; text-align: center; box-shadow: 0 10px 22px rgba(0,0,0,.35); }
   .cap-group .w { margin: 0 0.12em; }`
