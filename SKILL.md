@@ -110,8 +110,14 @@ the meme clipped by the frame edge, captions colliding with a card.
 ### 7. Render and QA
 ```bash
 npx hyperframes render -o build/reel.mp4 --quiet
+python3 $S/scripts/tailhold.py build/reel.mp4 build/tail.json
 python3 $S/scripts/qa.py $P build/reel.mp4
 ```
+`tailhold.py` is a no-op unless the build wrote `build/tail.json`, which it does
+when the reel has an outro and no end card, scene or motion beat covers it:
+the outro would otherwise show the RAW source still after the last styled
+frame, so the last styled frame is held over it instead (audio untouched,
+same length). Not written with `outroFade`.
 QA renders an SFX-only stem and prints each hit's peak against the voice
 and its role target. Targets: ui ≈ -14, whoosh -12, impact -8, meme -3 dB
 vs voice p95 peak; flags anything louder than the voice or inaudible. It

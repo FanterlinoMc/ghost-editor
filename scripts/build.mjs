@@ -23,7 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard } from "./lib/motion.mjs";
+import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard, isLightColor } from "./lib/motion.mjs";
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { wordOwners } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
@@ -911,6 +911,34 @@ for (const sname of SOURCES) {
 const { scale: cropScale = 1, offsetX: cropOffsetX = 0, offsetY: cropOffsetY = 0 } = crops[PRIMARY_SRC] || {};
 const placer = makePlacer({ face, faces, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL: SECTION_MODE ? SECTION_TOTAL : TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W, cropScale, cropOffsetX, cropOffsetY, crops, fps: FPS });
 
+// legibility gate (OFF unless spec.legibility.behind is set; ported from engine/review-fixes a30d106). The value is the
+// share of a behind-the-head word that must stay visible (e.g. 0.6): the speaker's matte is modelled as head (face
+// box + hair margin) + neck + shoulders/body to the bottom of the frame, over the beat's whole span. A word that
+// would be hidden more than allowed moves above the head (shrinking to 60% at most); with no headroom it is drawn IN
+// FRONT of the speaker at the same place, with a soft shadow. Outcomes are build warnings, never failures.
+const gateBehind = (text, size, y, t0, t1, charW, what) => {
+  const min = spec.legibility?.behind;
+  if (!min || !face) return { y, size, front: false };
+  const sp = placer.span(t0, t1);
+  if (!sp.seen) return { y, size, front: false };
+  const fw = sp.right - sp.left, fh = sp.bottom - sp.top;
+  const occ = [
+    { x0: sp.left - fw * 0.1, x1: sp.right + fw * 0.1, y0: sp.top - fh * 0.04, y1: sp.bottom },
+    { x0: sp.left + fw * 0.12, x1: sp.right - fw * 0.12, y0: sp.bottom, y1: sp.bottom + fh * 0.16 },
+    { x0: sp.left - fw * 0.8, x1: sp.right + fw * 0.8, y0: sp.bottom + fh * 0.16, y1: H },
+  ];
+  const box = (yy, ss) => { const w = Math.min(W * 0.99, String(text).length * ss * charW), top = yy + ss * 0.06; return { x0: W / 2 - w / 2, x1: W / 2 + w / 2, y0: top, y1: top + ss * 0.78 }; };
+  const vis = (bx) => 1 - occ.reduce((a, o) => a + Math.max(0, Math.min(bx.x1, o.x1) - Math.max(bx.x0, o.x0)) * Math.max(0, Math.min(bx.y1, o.y1) - Math.max(bx.y0, o.y0)), 0) / ((bx.x1 - bx.x0) * (bx.y1 - bx.y0));
+  const v0 = vis(box(y, size));
+  if (v0 >= min) return { y, size, front: false };
+  const headTop = occ[0].y0;
+  for (const k of [1, 0.85, 0.7, 0.6]) {
+    const ss = Math.round(size * k), yy = Math.round(headTop - 20 - ss * 0.86);
+    if (yy >= placer.safeTop && vis(box(yy, ss)) >= min) { warn.push(`${what}: ${Math.round(v0 * 100)}% visible behind the head, moved above it${k < 1 ? ` at ${Math.round(k * 100)}%` : ""}`); return { y: yy, size: ss, front: false }; }
+  }
+  warn.push(`${what}: ${Math.round(v0 * 100)}% visible behind the head and no headroom, drawn in front of the speaker`);
+  return { y, size, front: true };
+};
 // ---------- overlays ----------
 const CARD = { x: 60, y: spec.layout?.cardY ?? 990, w: 870 };
 const SLOT = { x: 720, y: spec.layout?.slotY ?? 240 }; // reaction slot next to the head
@@ -929,6 +957,8 @@ const hiddenCaps = [];
 // rebases them with the same offset renderLayer() uses.
 for (const l of LAYERS) if (l.hideCaptions === true && (l.kind === "motion" || l.kind === "text")) hiddenCaps.push([r3(l.t0 - (SECTION_MODE ? SECTION_START : 0)), r3(l.t1 - (SECTION_MODE ? SECTION_START : 0))]);
 const behindHtml = [];
+const frontHtml = [];   // behind-the-head words promoted in front of the matte by the legibility gate (spec.legibility.behind)
+let outroCovered = false;   // a full-frame beat (end card, scene, motion graphic) is drawn over the whole outro
 const shownCaps = []; // scenes that keep captions (captions.onlyInScenes shows ONLY these)
 const faceFile = path.join(proj, spec.face || "build/face.json");
 // MULTIANGLE Gap 6. This median comes from the PRIMARY source's track and has two consumers with
@@ -945,7 +975,7 @@ const faceFile = path.join(proj, spec.face || "build/face.json");
 const faceY = medianFaceY(fs.existsSync(faceFile) ? JSON.parse(fs.readFileSync(faceFile, "utf8")) : null, 700);
 const faceYBySrc = new Map(SOURCES.map((s) => [s, medianFaceY(faces[s], SOURCES.length > 1 && s !== PRIMARY_SRC && !faces[s]?.samples?.length ? 700 : faceY)]));
 const faceYAt = (t) => faceYBySrc.get(locateTake(takes, t, FPS)?.src) ?? faceY;
-const motionCtx = { tl, E, r3, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
+const motionCtx = { tl, E, r3, safeTop: placer.safeTop, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
 // a scene that hands over to an expand/wipe scene stays underneath until the
 // incoming panel has covered it
@@ -989,6 +1019,7 @@ for (const b of beatsList) {
   if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(EB(o, "at") - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
   beatSpans.push({ t0, t1 });
   const dur = r3(t1 - t0);
+  if (["endcard", "scene", "motion"].includes(b.type) && t0 <= SPEECH + 1e-3 && t1 >= TOTAL - 0.5 / FPS) outroCovered = true;
   const inSlot = ["emoji", "logo", "meme", "icon"].includes(b.type);
   if (inSlot) {
     for (const [s, e] of slotUsed) if (t0 < e && t1 > s) warn.push(`reaction slot double-booked at ${b.at} (${b.type})`);
@@ -1206,7 +1237,8 @@ for (const b of beatsList) {
       const size = Math.min(b.size ?? 300, Math.floor(1180 / Math.max(1, b.text.length * 0.8)));
       let y = b.y;
       if (y === undefined) { const sp = face ? placer.span(t0, t1) : null; y = sp && sp.seen ? Math.round(Math.max(placer.safeTop, sp.top + (sp.eyes - sp.top) * 0.35 - size * 0.55)) : 380; }
-      behindHtml.push(`<div id="${id}" class="clip behind" data-start="${t0}" data-duration="${dur}" data-track-index="1"><div id="${id}-in" class="behind-in" style="top:${y}px;font-size:${size}px;color:${b.color ?? brand.accent}">${esc(b.text)}</div></div>`);
+      const g = gateBehind(b.text, size, y, t0, t1, 0.74, `behind word "${b.text}" at ${b.at}`);
+      (g.front ? frontHtml : behindHtml).push(`<div id="${id}" class="clip behind" data-start="${t0}" data-duration="${dur}" data-track-index="1"><div id="${id}-in" class="behind-in" style="top:${g.y}px;font-size:${g.size}px;color:${b.color ?? brand.accent}${g.front ? ";text-shadow:0 6px 28px rgba(0,0,0,.45)" : ""}">${esc(b.text)}</div></div>`);
       tl.push(`ft("#${id}-in", { autoAlpha: 0, y: 80, scaleY: 1.6 }, { autoAlpha: 1, y: 0, scaleY: 1, duration: 0.45, ease: "expo.out" }, ${t0});`);
       tl.push(`tl.to("#${id}-in", { autoAlpha: 0, y: -40, duration: 0.2, ease: "power2.in" }, ${r3(t1 - 0.22)});`);
       beatSfx(b, t0, "impact", "behind word");
@@ -1409,7 +1441,10 @@ const complement = (wins) => { const out = []; let c = 0; for (const [a, b] of [
 if (cap.style !== "editorial" && cap.style !== "none") {
   const wins = cap.onlyInScenes ? complement(shownCaps) : hiddenCaps;
   const merged = [];
-  for (const [a, b] of [...wins].sort((x, y) => x[0] - y[0])) { if (merged.length && a <= merged.at(-1)[1] + 0.05) merged.at(-1)[1] = Math.max(merged.at(-1)[1], b); else merged.push([a, b]); }
+  // a page that runs to the end of speech keeps the captions hidden to the end (they faded back in for the last
+  // frames and the tail hold froze a stray word over an end card); local times in a section build
+  const speechL = SECTION_MODE ? SPEECH - SECTION_START : SPEECH, totalL = SECTION_MODE ? SECTION_TOTAL : TOTAL;
+  for (const [a, b0] of [...wins].sort((x, y) => x[0] - y[0])) { const b = b0 >= speechL - 0.1 ? totalL + 1 : b0; if (merged.length && a <= merged.at(-1)[1] + 0.05) merged.at(-1)[1] = Math.max(merged.at(-1)[1], b); else merged.push([a, b]); }
   tl.push(`tl.set("#caps", { autoAlpha: 1 }, 0);`);
   for (const [a, b] of merged) { tl.push(`tl.to("#caps", { autoAlpha: 0, duration: 0.08 }, ${r3(a)});`); tl.push(`tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, ${r3(b - 0.05)});`); }
 }
@@ -1531,7 +1566,8 @@ if (LAYERS.length) {
 
 // ---------- watermark (spec.watermark = { text, opacity?, font? }) and colour tint (spec.look.tint) ----------
 let brandHtml = "";
-if (spec.watermark?.text) brandHtml += `<div style="position:absolute;top:${spec.watermark.y ?? 120}px;right:${spec.watermark.x ?? 60}px;z-index:9;font-family:'${spec.watermark.font ?? "Instrument Serif"}',Georgia,serif;font-size:${spec.watermark.size ?? 54}px;letter-spacing:-0.5px;color:#fff;opacity:${spec.watermark.opacity ?? 0.38};pointer-events:none">${esc(spec.watermark.text)}</div>`;
+const TOP_UI = Math.round(H * 0.08);   // nothing static in the top 8% (phone status bar / app header)
+if (spec.watermark?.text) brandHtml += `<div style="position:absolute;top:${Math.max(TOP_UI, spec.watermark.y ?? 120)}px;right:${spec.watermark.x ?? 60}px;z-index:9;font-family:'${spec.watermark.font ?? "Instrument Serif"}',Georgia,serif;font-size:${spec.watermark.size ?? 54}px;letter-spacing:-0.5px;color:#fff;opacity:${spec.watermark.opacity ?? 0.38};pointer-events:none">${esc(spec.watermark.text)}</div>`;
 if (spec.look?.tint) brandHtml += `<div style="position:absolute;inset:0;z-index:3;pointer-events:none;background:${spec.look.tint.color ?? "#1d6b75"};mix-blend-mode:${spec.look.tint.blend ?? "soft-light"};opacity:${spec.look.tint.opacity ?? 0.22}"></div>`;
 if (spec.look?.grade) tl.push(`tl.set("#base", { filter: "${spec.look.grade}" }, 0);`);
 
@@ -2020,7 +2056,7 @@ const html = `<!doctype html>
 </head>
 <body>
 <div id="root" class="${spec.layout?.compact ? "compact" : ""}" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${SECTION_MODE ? SECTION_TOTAL : TOTAL}" data-fps="${FPS}">
-  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip"><div id="base"><div id="snap"><div id="push">${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}
+  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip"><div id="base"><div id="snap"><div id="push">${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}${frontHtml.join("")}
   </div></div></div></div>${roomWins.length ? `</div></div>` : ""}
   ${overlays.filter((o) => o.html).map((o) => o.html).join("\n  ")}
   ${layersUnderHtml}${grainHtml}${vignetteHtml}
@@ -2070,6 +2106,12 @@ fs.writeFileSync(path.join(proj, "index.html"), html);
 fs.mkdirSync(path.join(proj, "build"), { recursive: true });
 fs.writeFileSync(path.join(proj, "build", "sfx_events.json"), JSON.stringify({ total: TOTAL, speech: SPEECH, voiceP95: r3(voiceP95), roleDb: ROLE_DB, events: sfxEvents }, null, 2));
 fs.writeFileSync(path.join(proj, "build", "words.edit.json"), JSON.stringify(words));
+// tail hold: with an outro and nothing full-frame drawn over it, the outro shows the RAW source still
+// (assets/outro.jpg) after the last styled frame. scripts/tailhold.py (run on the render, see SKILL.md) holds the last
+// styled frame over it instead. Written only when there is something to hold, and removed otherwise (a stale file
+// from an earlier build must not freeze a reel that now ends on a page).
+if (OUTRO > 0 && !outroCovered && !spec.outroFade) fs.writeFileSync(path.join(proj, "build", "tail.json"), JSON.stringify({ speech: r3(SPEECH), total: TOTAL, fps: FPS, hold: true }));
+else fs.rmSync(path.join(proj, "build", "tail.json"), { force: true });
 fs.writeFileSync(path.join(proj, "build", "caption_layout.json"), JSON.stringify({ platform: placer.platform, safeTop: placer.safeTop, safeBottom: placer.safeBottom, blocks: placer.log }, null, 1));
 // Resolved edit-time motion events, for the style-study accuracy harness (A1). Beat times in
 // reel.json are SOURCE seconds; these are what the render actually contains, after E() maps them

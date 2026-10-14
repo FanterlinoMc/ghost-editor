@@ -137,7 +137,7 @@ export const MOTION_CSS = (brand, rtl) => `
   .cc-img { position: absolute; left: 50%; top: 0; transform: translateX(-50%); max-width: 800px; max-height: 860px; object-fit: contain; mix-blend-mode: multiply; }
   .mn-ink { position: absolute; inset: 0; color: var(--ink); }
   .mn-col { position: absolute; left: 40px; right: 40px; display: flex; flex-direction: column; align-items: center; text-align: center; }
-  .mn-lead { font-family: Inter, system-ui, sans-serif; font-weight: 400; font-size: ${brand.leadSize ?? 54}px; letter-spacing: -0.04em; line-height: 1.05; margin-bottom: -6px; }
+  .mn-lead { font-family: Inter, system-ui, sans-serif; font-weight: 400; font-size: ${Math.max(brand.leadSize ?? 54, brand.minLead ?? (brand.leadSerif ? 62 : 50))}px; letter-spacing: -0.04em; line-height: 1.05; margin-bottom: -6px; }
   .mn-ring { position: absolute; left: -14%; right: -14%; top: -12%; bottom: -18%; width: 128%; height: 130%; overflow: visible; transform: rotate(-3deg); pointer-events: none; }
   .mn-ring ellipse { fill: none; stroke: currentColor; stroke-width: 0.9; vector-effect: non-scaling-stroke; stroke-width: 3px; }
   .mn-key { position: relative; font-family: ${brand.keyFont ?? "Inter, system-ui, sans-serif"}; font-weight: 900; letter-spacing: -0.065em; line-height: .9; white-space: nowrap; padding: 0 .06em; }
@@ -168,6 +168,17 @@ export const MOTION_CSS = (brand, rtl) => `
 const CURSOR_SVG = `<svg viewBox="0 0 64 64"><path d="M22 6c-2.8 0-5 2.2-5 5v25l-4.6-4.3c-2-1.9-5.2-1.7-7 .4-1.7 2-1.5 5 .3 6.8l13.8 13.8C23.6 56.9 28.4 59 33.5 59H38c9.4 0 17-7.6 17-17V30c0-2.8-2.2-5-5-5-.9 0-1.8.3-2.5.7-.6-2.2-2.6-3.7-4.9-3.7-1.2 0-2.3.4-3.2 1.1-.8-1.9-2.7-3.1-4.8-3.1-.9 0-1.8.2-2.6.7V11c0-2.8-2.2-5-5-5z" fill="#fff" stroke="#111" stroke-width="3" stroke-linejoin="round"/></svg>`;
 const X_SVG = (color, id) => `<svg viewBox="0 0 120 90"><path id="${id}a" d="M8 12 Q60 50 112 80" fill="none" stroke="${color}" stroke-width="9" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/><path id="${id}b" d="M110 8 Q58 42 10 84" fill="none" stroke="${color}" stroke-width="9" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/></svg>`;
 
+// contrast guard: relative luminance of a #hex colour (null for anything else), and the first candidate ink that
+// reads on a white/pale page (WCAG contrast >= 3 against white). Ported from engine/review-fixes a30d106.
+const lumOf = (c) => {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(c ?? "").trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? [...m[1]].map((x) => x + x).join("") : m[1];
+  const [r, g, b] = [0, 2, 4].map((i) => { const v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+export const isLightColor = (c) => (lumOf(c) ?? 0) > 0.6;
+const inkOnLight = (...cands) => cands.find((c) => lumOf(c) != null && 1.05 / (lumOf(c) + 0.05) >= 3) ?? "#141414";
 const norm = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}%]+/gu, "");
 
 // transitions ----------------------------------------------------------------
@@ -754,6 +765,10 @@ export function buildScene(b, id, t0, t1, ctx) {
     // (transparent page), the footage in a rounded card, or the footage in a phone with a reels UI. Icons
     // (engraving or brand logo) pop above the key; flips swap accent <-> paper on the beat.
     const ground = b.bg ?? "accent", bgIsPhone = ground === "phone";
+    // contrast guard: words over a pale card page (the card ground is the brand accent here) get a dark ink (the key
+    // colour or accent when it reads on white) and the key's ghost stays >= 60% so it is not lost on the page
+    const lightBack = ground === "card" && isLightColor(brand.accent);
+    const ghostA = lightBack ? 0.6 : 0.32;
     const spoken = words.filter((w) => w.start >= t0 - 0.05 && w.start < t1);
     let si = 0;
     const timeOf = (text, fallback) => {
@@ -801,10 +816,10 @@ export function buildScene(b, id, t0, t1, ctx) {
         tl.push(`tl.set("#${kid}", { autoAlpha: 1 }, ${ka});`);
         chars.forEach((_, ci) => tl.push(`ft("#${kid}c${ci}", { autoAlpha: 0, y: 90, rotation: ${ci % 2 ? 8 : -8}, filter: "blur(10px)" }, { autoAlpha: 1, y: 0, rotation: 0, filter: "blur(0px)", duration: 0.22, ease: "back.out(2)" }, ${r3(ka + ci * step)});`));
       } else if (l.enter === "rise") {
-        tl.push(`ft("#${kid}", { autoAlpha: 0, y: 140, scaleY: 1.5, filter: "blur(16px)" }, { autoAlpha: 0.5, y: 40, scaleY: 1.2, filter: "blur(10px)", duration: ${r3(Math.max(0.08, solid - ka))}, ease: "power1.out" }, ${ka});`);
+        tl.push(`ft("#${kid}", { autoAlpha: 0, y: 140, scaleY: 1.5, filter: "blur(16px)" }, { autoAlpha: ${Math.max(0.5, ghostA)}, y: 40, scaleY: 1.2, filter: "blur(10px)", duration: ${r3(Math.max(0.08, solid - ka))}, ease: "power1.out" }, ${ka});`);
         tl.push(`tl.to("#${kid}", { autoAlpha: 1, y: 0, scaleY: 1, filter: "blur(0px)", duration: 0.14, ease: "power3.out" }, ${solid});`);
       } else if (l.enter !== "letters") {
-        tl.push(`ft("#${kid}", { autoAlpha: 0, scale: 1.06, filter: "blur(10px)" }, { autoAlpha: 0.32, scale: 1.02, filter: "blur(2px)", duration: 0.08, ease: "none" }, ${ka});`);
+        tl.push(`ft("#${kid}", { autoAlpha: 0, scale: 1.06, filter: "blur(10px)" }, { autoAlpha: ${ghostA}, scale: 1.02, filter: "blur(2px)", duration: 0.08, ease: "none" }, ${ka});`);
         tl.push(`tl.to("#${kid}", { autoAlpha: 1, scale: 1, filter: "blur(0px)", duration: 0.14, ease: "power3.out" }, ${solid});`);
       }
       addSfx(solid, b.sfx ?? "click-1", "stack key", { db: -10 });
@@ -845,7 +860,8 @@ export function buildScene(b, id, t0, t1, ctx) {
     // the block's height, so tall stacks centre on pages and stay inside the safe area on footage
     const est = lines.reduce((h, l) => h + (l.role === "k" ? (l.size ?? Math.min(b.keyMax ?? 240, Math.round(1640 / Math.max(4, String(l.text).length)))) * 0.92
       : l.role === "m" ? (brand.midSize ?? 96) * 1.04 : l.role === "t" ? (brand.tailSize ?? 46) * 1.4 : (l.size ?? brand.leadSize ?? 56) * 1.08), 0) + (iconHtml ? 240 : 0);
-    const column = (top) => `<div class="mn-col" style="top:${top}px">${iconHtml}${lead}${rest}</div>`;
+    // never under the platform's top bar (status bar / app header)
+    const column = (top0) => { const top = Math.max(ctx.safeTop ?? 0, top0); return `<div class="mn-col" style="top:${top}px">${iconHtml}${lead}${rest}</div>`; };
     const selfAt = b.self ?? b.at;
     const film = (cls) => `<video class="${cls}" src="${ctx.source}" data-start="${t0}" data-duration="${r3(t1 - t0)}" data-media-start="${selfAt}" data-track-index="19" muted playsinline></video>`;
     if (ground === "footage") {
@@ -876,8 +892,8 @@ export function buildScene(b, id, t0, t1, ctx) {
       customBg = ground === "paper" ? (brand.paper ?? "#FEFEFE") : brand.accent;
     }
     if (b.push) tl.push(`ft("#${id}-ink", { scale: 1.25, filter: "blur(8px)" }, { scale: 1, filter: "blur(0px)", duration: 0.3, ease: "expo.out" }, ${t0});`);
-    const inkOf = (g) => (g === "paper" ? brand.accent : "#fff");
-    body = `<div id="${id}-ink" class="mn-ink mn-on-${ground}" style="--ink:${inkOf(ground)}">${body}</div>`;
+    const inkOf = (g) => (g === "paper" ? brand.accent : lightBack ? inkOnLight(b.keyColor, brand.leadColor, brand.accent, brand.ink) : "#fff");
+    body = `<div id="${id}-ink" class="mn-ink mn-on-${ground}" style="--ink:${inkOf(ground)}${lightBack ? ";text-shadow:0 0 18px rgba(255,255,255,.7)" : ""}">${body}</div>`;
     // flips: the page swaps accent <-> paper (and the ink swaps with it) on a beat, a hard cut like the reference
     if (ground === "accent" || ground === "paper") {
       let g = ground;
