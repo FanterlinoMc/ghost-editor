@@ -222,9 +222,11 @@ export function renderLayer(l, ctx, n = 0) {
   const radius = fin(l.radius) && l.radius > 0 ? `border-radius:${r3(Math.min(l.radius, 2000))}px;` : "";
   const sh = l.shadow === true ? SHADOWS.soft : SHADOWS[l.shadow] ?? "";
   const shadowCss = sh ? `box-shadow:${sh};` : "";
-  const box = `<div id="${wid}_box" class="lyr-box${free ? " lyr-free" : ""}" data-layer-box="${esc(l.id)}" style="${boxCss};${radius}${shadowCss}">${content}</div>`;
+  const box = `<div id="${wid}_box" class="lyr-box${free ? " lyr-free" : ""}" data-layer-box="${esc(l.id)}" style="visibility:hidden;${boxCss};${radius}${shadowCss}">${content}</div>`;
   // a <video> must be timed itself (a timed wrapper around it breaks the media clock), so its wrapper is
   // untimed and the box's own autoAlpha tweens are what show and hide it; every other kind sits in a timed .clip
+  // (the box starts visibility:hidden inline: GSAP's baseline set is not applied at seek(0) on a fresh paused timeline,
+  // so without it an empty card and its shadow show at 0:00; the enter tween's autoAlpha > 0 flips it to inherit)
   const timed = isVideo ? "" : ` clip" data-start="${t0}" data-duration="${dur}" data-track-index="${2}`;
   const html = `<div id="${wid}" class="lyr${timed}" data-layer-id="${esc(l.id)}" data-layer-kind="${l.kind}" style="z-index:${l.z}">${box}</div>`;
   return { html, lines: [...lines, ...layerTweens(l, off)], audio, warnings };

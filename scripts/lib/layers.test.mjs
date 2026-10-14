@@ -138,7 +138,7 @@ test("a video layer: timed <video>, untimed wrapper, in as the seek offset, PiP 
   const r = renderLayer(l, ctx, 0);
   assert.match(r.html, /<video id="ly-pip_v" src="assets\/b\.mp4" data-start="3" data-duration="4" data-media-start="1\.5" data-track-index="40" muted/);
   assert.match(r.html, /^<div id="ly-pip" class="lyr" data-layer-id="pip" data-layer-kind="video" style="z-index:2">/);   // untimed wrapper
-  assert.match(r.html, /data-layer-box="pip" style="left:640px;top:120px;width:380px;height:676px;border-radius:24px;box-shadow:/);
+  assert.match(r.html, /data-layer-box="pip" style="visibility:hidden;left:640px;top:120px;width:380px;height:676px;border-radius:24px;box-shadow:/);
   assert.equal(r.audio, "");
   assert.ok(r.lines.length === 2);
 });
@@ -195,6 +195,18 @@ test("z ordering: build sorts by z then array order (the sort build.mjs uses)", 
 test("layer truth lists the resolved output times", () => {
   const r = run([{ ...base, id: "a", anchor: { take: 1, offset: 1 }, overCaptions: true }]);
   assert.deepEqual(layerTruth(r.layers), [{ id: "a", kind: "image", start: 5, end: 7, z: 1, pin: false, overCaptions: true }]);
+});
+
+test("a layer box starts hidden inline, so a layer that starts later is not visible at t=0", () => {
+  const r = run([{ ...base, id: "late", anchor: { take: 1, offset: 1 }, radius: 24, shadow: true }, { ...base, id: "vid", kind: "video", src: "assets/v.mp4", anchor: { take: 1, offset: 1 }, radius: 24, shadow: true }]);
+  for (const l of r.layers) {
+    assert.ok(l.t0 > 0);
+    const html = renderLayer(l, ctx).html;
+    assert.match(html, /data-layer-box="[^"]+" style="visibility:hidden;/);
+    // the enter tween reveals it: explicit fromTo from autoAlpha 0 to a positive autoAlpha, force3D:false
+    const enter = layerTweens(l)[0];
+    assert.match(enter, /"autoAlpha":0/); assert.match(enter, /"force3D":false/);
+  }
 });
 
 test("layersCss is plain, deterministic text", () => { assert.equal(layersCss(), layersCss()); assert.match(layersCss(), /\.lyr \{/); });
