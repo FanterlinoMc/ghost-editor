@@ -1,0 +1,59 @@
+{
+  "_about": "Noir (premium-noir, BETA): black-and-white cinema documentary. Letterbox bars, cinema subtitles (sentence-case serif in the lower bar) with ONE gold italic word per line, noir-gold grade (skin mono, gold kept), heavy grain, slow eased push-ins, serif chapter cards on black, piano bed. Needs no B-roll: works on any talking clip.",
+  "brand": {
+    "accent": "#E2BE6A",
+    "accentDark": "#9C7A2E",
+    "ink": "#0A0A0A",
+    "capSize": 54,
+    "font": "Instrument Serif"
+  },
+  "captions": {
+    "style": "noir",
+    "size": 74,
+    "fixedY": 1668,
+    "group": 6
+  },
+  "letterbox": {
+    "h": 270
+  },
+  "sfxProfile": "restrained",
+  "music": {
+    "id": "silent-descent",
+    "optional": true,
+    "db": -15,
+    "fadeIn": 0.8,
+    "fadeOut": 1.2,
+    "drops": false,
+    "reveal": false,
+    "payoff": false
+  },
+  "look": {
+    "preset": "noir-film",
+    "grain": 0.09,
+    "vignette": 0.5
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.1
+    ],
+    "emphasisScale": 1.1,
+    "faceAnchor": {
+      "headroom": 24
+    }
+  },
+  "punch": {
+    "frames": 20,
+    "blur": 0,
+    "ease": "sine.inOut"
+  },
+  "outro": 0.4,
+  "master": {
+    "lufs": -14,
+    "ratio": 2,
+    "threshold": -20,
+    "lra": 5
+  }
+}

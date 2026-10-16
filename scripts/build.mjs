@@ -678,9 +678,43 @@ if (cadence) {
 tl.push(`tl.set("#snap", { scale: 1 }, 0);`);
 let cadenceIndex = 0;
 const heldCadence = new Set();
-for (const [t, z] of snaps) {
+// punch (premium kit, opt-in; hand port of phantasic 1c15911): a punch-in eases over punch.frames (default 7) instead of
+// snapping, optionally with a blur that follows the zoom speed (punch.blur > 0 puts the picture on a #tx wrapper). A snap
+// on a jump cut stays a hard snap (the cut hides it) unless punch.joins is true. Unset = the plain tl.set below, unchanged.
+const PUNCH = spec.punch ? { frames: 7, blur: 5, ease: "power3.out", joins: false, ...spec.punch } : null;
+const TX = !!(PUNCH && PUNCH.blur);
+const joinTimesPunch = PUNCH ? takes.slice(1).map((k) => r3(k.start)) : [];
+const easedSnaps = new Set();
+const FACE_ANCHOR = !!cadence?.faceAnchor;
+const snapOriginDefault = zoom.origin || "50% 29%";
+let curSnapOrigin = null;   // the transform-origin last written to #snap (null = the CSS default)
+let prevZ = 1;
+// the GSAP lines of one applied snap. sn[2] = [x, y] (optional): the point the punch-in scales around (cadence.faceAnchor)
+const snapLines = (sn, fromZ) => {
+  const [t, z, so] = sn;
+  const out = [];
+  const eased = PUNCH && Math.abs(z - fromZ) > 0.005 && (PUNCH.joins || !joinTimesPunch.some((j) => Math.abs(j - t) < 0.04));
+  const oStr = so ? `${so[0]}px ${so[1]}px` : null;
+  let originStr = null;   // a transform-origin to write at this snap, or null = leave it as it is
+  if (oStr && oStr !== curSnapOrigin) { originStr = oStr; curSnapOrigin = oStr; }
+  else if (!oStr && curSnapOrigin && z > 1.001) { originStr = snapOriginDefault; curSnapOrigin = null; }
+  const origin = originStr ? `, transformOrigin: "${originStr}"` : "";
+  if (eased) {
+    easedSnaps.add(sn);
+    const d = r3(PUNCH.frames / FPS);
+    if (originStr) out.push(`tl.set("#snap", { transformOrigin: "${originStr}" }, ${t});`);
+    out.push(`tl.fromTo("#snap", { scale: ${fromZ} }, { scale: ${z}, duration: ${d}, ease: "${PUNCH.ease}", immediateRender: false }, ${t});`);
+    if (PUNCH.blur) out.push(`tl.fromTo("#tx", { filter: "blur(${PUNCH.blur}px)" }, { filter: "blur(0px)", duration: ${r3(Math.max(3, PUNCH.frames - 2) / FPS)}, ease: "power2.out", immediateRender: false }, ${t});`);
+  } else out.push(`tl.set("#snap", { scale: ${z}${origin} }, ${t});`);
+  return out.join("\n  ");
+};
+const snapPatches = [];   // faceAnchor: the origin needs the face tracks, loaded further down - these lines are written then
+for (const sn of snaps) {
+  const [t, z] = sn;
   if (cadenceSnaps.has(t) && inMotionHold(t)) { heldCadence.add(t); cadenceIndex++; continue; }
-  tl.push(`tl.set("#snap", { scale: ${z} }, ${t});`);
+  if (FACE_ANCHOR) { snapPatches.push({ sn, idx: tl.length, fromZ: prevZ }); tl.push(""); }
+  else tl.push(snapLines(sn, prevZ));
+  prevZ = z;
   if (cadenceSnaps.has(t)) {
     const every = cadence.sfxEvery ?? 4;
     if (cadence.sfx && cadenceIndex % every === 0) addSfx(t, cadence.sfx, "cadence snap", { db: cadence.sfxDb ?? -6, lead: 0.04 });
@@ -921,6 +955,37 @@ for (const sname of SOURCES) {
 // global value was before this loop existed. makePlacer still takes these as its no-`crops`
 // default, and a single-source build never has more than this one entry anyway.
 const { scale: cropScale = 1, offsetX: cropOffsetX = 0, offsetY: cropOffsetY = 0 } = crops[PRIMARY_SRC] || {};
+// cadence.faceAnchor (opt-in; hand port of phantasic 1c15911): every punch-in scales around the speaker's face instead of a fixed
+// point - x = the face centre, y = the top of the head (or the default origin when the head sits lower) minus headroom - measured
+// over the whole hold of that snap. A punch then never pushes the head out of frame, on any framing. Per source: each take's
+// own face track (and crop plan) is used, a source with no track gets no anchor (plain punch around zoom.origin).
+// The caption placer (safezone.mjs) is NOT told the origin: it still models the face scaling around zoom.origin.
+if (FACE_ANCHOR) {
+  const [dox, doy] = snapOriginDefault.split(/\s+/).map((v, i) => (parseFloat(v) / 100) * (i ? H : W));
+  const pad = cadence.faceAnchor.headroom ?? 24;
+  const track = new Map(SOURCES.map((s) => [s, ((faces[s] || {}).samples || []).filter((x) => x[1] != null)]));
+  const nearest = (samples, o) => { let b = null, bd = 1e9; for (const x of samples) { const d = Math.abs(x[0] - o); if (d < bd) { bd = d; b = x; } } return bd < 1.5 ? b : null; };
+  const faceAt = (t) => {
+    const k = locateTake(takes, t, FPS);
+    const o = (t >= k.start && t < k.start + k.dur) ? k.a + (t - k.start) : k.b;
+    const f = nearest(track.get(k.src) || [], o);
+    if (!f) return null;
+    const { scale: cs, offsetX: cox, offsetY: coy } = crops[k.src] || { scale: 1, offsetX: 0, offsetY: 0 };
+    return { top: f[1] * cs + coy, cx: ((f[3] + f[4]) / 2) * cs + cox };
+  };
+  for (const [i, sn] of snaps.entries()) {
+    if (sn[1] <= 1.001) continue;
+    const t1 = i + 1 < snaps.length ? snaps[i + 1][0] : SPEECH;
+    const fs0 = [];
+    for (let t = sn[0]; t < t1; t += 0.2) { const f = faceAt(Math.min(t, TOTAL - 0.01)); if (f) fs0.push(f); }
+    if (!fs0.length) continue;
+    const top = Math.min(...fs0.map((f) => f.top));
+    const cx = fs0.map((f) => f.cx).sort((a, b) => a - b)[Math.floor(fs0.length / 2)];
+    sn[2] = [Math.round(Math.max(0, Math.min(W, cx))), Math.round(Math.max(0, Math.min(doy, top - pad)))];
+  }
+  console.log(`cadence faceAnchor: ${snaps.filter((x) => x[2]).length} punch-ins anchored on the face`);
+  for (const p of snapPatches) tl[p.idx] = snapLines(p.sn, p.fromZ);
+}
 const placer = makePlacer({ face, faces, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL: SECTION_MODE ? SECTION_TOTAL : TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W, cropScale, cropOffsetX, cropOffsetY, crops, fps: FPS });
 
 // legibility gate (OFF unless spec.legibility.behind is set; ported from engine/review-fixes a30d106). The value is the
@@ -1234,6 +1299,37 @@ for (const b of beatsList) {
       break;
     }
     case "endcard": {
+      if (b.variant === "caps") {
+        // Caps / chapter card (opt-in, hand port of phantasic Empire + Noir): a black frame (b.bg "none" = a soft dark band
+        // over the picture, "smoke" = dark smoke), small letter-spaced caps typed on - or, with font "serif", an italic
+        // Instrument Serif chapter title that keeps its case ("|" in a title is a line break), optional arrow, optional fade
+        // to black. {title, accent, at, to, fade, color, font: "serif"|"mono", size, y, arrow, instant, bg}
+        const col = b.color ?? "#3BFF6B", fade = b.fade ?? 0.8, title = b.font === "serif" ? (b.title ?? "Follow for more") : (b.title ?? "FOLLOW FOR MORE").toUpperCase();
+        const acc = (b.accent ?? "").toUpperCase();
+        const chars = [...title].map((c, k) => c === "|" ? `<br id="${id}-c${k}">` : `<span id="${id}-c${k}" style="display:none">${c === " " ? "&nbsp;" : esc(c)}</span>`);
+        if (acc && title.includes(acc)) { const i0 = title.indexOf(acc); chars.splice(i0, 0, `<span style="color:${col};text-shadow:0 0 16px ${col}">`); chars.splice(i0 + acc.length + 1, 0, "</span>"); }
+        const mono = b.font === "mono";
+        // every card face fits its longest line in the 960 px text box (letters + tracking per em: mono .66, tracked caps .86, serif .5)
+        const tSize = Math.min(b.size ?? (mono ? 40 : 60), Math.floor(960 / Math.max(1, Math.max(...title.split("|").map((l) => l.length)) * (mono ? 0.66 : b.font === "serif" ? 0.5 : 0.86))));
+        const bgCss = b.bg === "none" ? "linear-gradient(180deg, transparent 38%, rgba(0,0,0,.55) 47%, rgba(0,0,0,.55) 55%, transparent 64%)" : b.bg === "smoke" ? "radial-gradient(70% 40% at 30% 30%, #2a2a2e 0%, transparent 70%), radial-gradient(60% 35% at 75% 70%, #232327 0%, transparent 70%), #111113" : "#000";
+        const ty = b.y ?? Math.round(860 * H / 1920);
+        inner = `<div id="${id}-bg" style="position:absolute;inset:0;background:${bgCss}"></div>`
+          + `<div id="${id}-t" style="position:absolute;left:60px;right:60px;top:${ty}px;text-align:center;font:${b.font === "serif" ? `italic 400 ${tSize}px/1.15 'Instrument Serif', Georgia, serif;letter-spacing:.02em` : mono ? `700 ${tSize}px/1.3 'JetBrains Mono', monospace;letter-spacing:.06em` : `800 ${tSize}px/1.2 Montserrat, system-ui, sans-serif;letter-spacing:.24em`};color:#fff;text-shadow:0 0 14px rgba(255,255,255,.45)">${chars.join("")}</div>`
+          + (b.arrow === false ? "" : `<svg id="${id}-a" viewBox="0 0 40 48" style="position:absolute;left:${Math.round(W / 2 - 30)}px;top:${ty + 90}px;width:84px;height:100px;margin-left:-12px;filter:drop-shadow(0 0 12px ${col})"><path d="M20 4 V40 M6 27 L20 42 L34 27" fill="none" stroke="${col}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>`)
+          + (fade > 0 ? `<div id="${id}-k" style="position:absolute;inset:0;background:#000"></div>` : "");
+        tl.push(`ft("#${id}-bg", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.2 }, ${t0});`);
+        // b.instant: the title lands whole (a cut, not typed), so no frame ever shows half a word
+        const n = [...title].length, cps = b.instant ? 1e6 : Math.max(30, n / 0.5);
+        tl.push(`tl.set("#${id}-t span[id]", { display: "none" }, 0);`);
+        for (let k = 0; k < n; k++) if ([...title][k] !== "|") tl.push(`tl.set("#${id}-c${k}", { display: "inline" }, ${r3(t0 + 0.2 + k / cps)});`);
+        const ta = r3(t0 + 0.25 + n / cps);
+        if (b.arrow !== false) tl.push(`ft("#${id}-a", { autoAlpha: 0, y: -24 }, { autoAlpha: 1, y: 0, duration: 0.25, ease: "back.out(2)" }, ${ta});`);
+        if (b.arrow !== false) tl.push(`tl.to("#${id}-a", { y: 12, duration: 0.3, yoyo: true, repeat: 5, ease: "sine.inOut" }, ${r3(ta + 0.25)});`);
+        if (fade > 0) tl.push(`ft("#${id}-k", { autoAlpha: 0 }, { autoAlpha: 1, duration: ${fade}, ease: "power1.in" }, ${r3(Math.max(ta + 0.3, t1 - fade))});`);
+        hiddenCaps.push([t0, t1]);
+        beatSfx(b, b.arrow === false ? t0 : ta, b.arrow === false ? "tick-1" : "ding-1", b.arrow === false ? "mono card" : "end card arrow", { db: -6 });
+        break;
+      }
       inner = `<div id="${id}-dim" class="ov dim"></div><div id="${id}-in" class="ov endcard">${b.title ? `<div class="ec-title">${esc(b.title)}</div>` : ""}${b.line ? `<div class="ec-line">${esc(b.line)}</div>` : ""}${b.url ? `<div class="ec-url">${esc(b.url)}</div>` : ""}</div>`;
       tl.push(`ft("#${id}-dim", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3 }, ${t0});`);
       tl.push(enter(`#${id}-in`, r3(t0 + 0.1), "slide"));
@@ -1400,7 +1496,11 @@ const cap = { style: "house", group: 3, highlight: null, ...(spec.captions || {}
 if (cap.style === "clean" && !cap.highlight) cap.highlight = brand.accent;
 // box: the Closer (whole phrase on a solid accent box); condensed: the Headline (tall 1-2 word caps);
 // serif: the Monk (small lowercase serif, no motion)
-const CAP_SIZES = { pill: 66, box: cap.size ?? 60, condensed: cap.size ?? 104, serif: cap.size ?? 52, sessions: cap.size ?? 64 };
+const CAP_SIZES = { noir: cap.size ?? 54, pill: 66, box: cap.size ?? 60, condensed: cap.size ?? 104, serif: cap.size ?? 52, sessions: cap.size ?? 64 };
+// noir (premium kit, hand port of phantasic dc92283): cinema subtitles - sentence-case serif, the whole line at once, sitting
+// in the lower letterbox bar at a fixed height (it does not go through the face-aware placer); ONE emphasis word per line
+// goes gold italic (captions.emph words, else the longest word of 5+ letters; captions.gold sets the colour)
+if (cap.style === "noir") { cap.pop ??= false; cap.reveal ??= "none"; if (spec.captions?.group == null) cap.group = 6; }
 if (cap.style === "sessions") { cap.pop ??= false; cap.reveal ??= "word"; }
 if (cap.style === "clipping") { cap.pop ??= false; cap.reveal ??= "none"; }  // R1b port (Broadsheet)
 if (cap.style === "serif") { cap.pop ??= false; cap.lowercase ??= true; }
@@ -1461,6 +1561,17 @@ if (cap.style !== "editorial" && cap.style !== "none") {
   for (const [a, b] of merged) { tl.push(`tl.to("#caps", { autoAlpha: 0, duration: 0.08 }, ${r3(a)});`); tl.push(`tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, ${r3(b - 0.05)});`); }
 }
 if (cap.breakOnCut) cap.cutTimes = takes.slice(1).map((k) => k.start);  // edit seconds of the jump cuts, for motion.mjs's editorial blocks
+// One emphasis word per caption group (styles that mark a hero word: Noir today; the same hook serves Lux / Authority).
+// -1 for every other style, which keeps their span markup exactly class="w".
+const EMPH_STYLES = new Set(["noir"]);
+const emphSet = new Set((cap.emph || []).map((x) => x.toLowerCase().replace(/[^a-z0-9']/g, "")));
+const bareEmph = (w) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
+const emphIndexOf = (g) => {
+  if (!EMPH_STYLES.has(cap.style)) return -1;
+  let i = g.findIndex((w) => emphSet.has(bareEmph(w.word)));
+  if (i < 0 && cap.autoEmph !== false) { let best = 4; g.forEach((w, k) => { const L = bareEmph(w.word).length; if (L > best) { best = L; i = k; } }); }
+  return i;
+};
 const edit = cap.style === "editorial" ? buildEditorialCaptions(words, cap, motionCtx, cap.onlyInScenes ? complement(shownCaps) : hiddenCaps) : null;
 const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
@@ -1474,17 +1585,24 @@ const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
     if (cap.highlight) tl.push(`tl.set("#cg${gi}w${wi}", { color: "${cap.highlight}" }, ${r3(w.start)}); tl.set("#cg${gi}w${wi}", { color: "#fff" }, ${r3(Math.min(w.end + 0.02, e - 0.01))});`);
   });
   const capSize = CAP_SIZES[cap.style] ?? (cap.style === "clean" ? (cap.size ?? brand.capSize) : (cap.size ?? 56));
-  const pl = placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
+  const emphI = emphIndexOf(g);
+  // noir sits at a fixed height in the lower letterbox bar (cap.fixedY is in 9:16 pixels, scaled to other formats);
+  // the block is still logged so caption_layout.json / qa.py see it
+  const pl = cap.style === "noir" ? { y: Math.round((cap.fixedY ?? 1690) * H / 1920), mode: "noir", scale: 1 } : placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
+  if (cap.style === "noir") placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: pl.y, h: Math.round(capSize * 1.3), mode: "noir", scale: 1, face: null });
   // captions.backing false (opt-in): no grey box over the lower face, a heavy text shadow instead
   const backed = pl.mode === "lower-face" && cap.backing !== false && !["pill", "box", "sessions"].includes(cap.style);
   const shadowed = pl.mode === "lower-face" && cap.backing === false;
   const tilt = cap.tilt ? `;rotate:${gi % 2 ? -cap.tilt : cap.tilt * 0.7}deg` : "";  // R1b port (Broadsheet clippings)
-  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : shadowed ? " cap-shadow" : ""}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w">${esc(caseOf(w.word))}</span>`).join("<wbr>")}</div>`;
+  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : shadowed ? " cap-shadow" : ""}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w${wi === emphI ? " emph" : ""}">${esc(caseOf(w.word))}</span>`).join("<wbr>")}</div>`;
 }).join("\n      ");
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
 const UI_FONT = brand.font || (cyr ? "Inter" : "Geist");
-const capCss = cap.style === "clean"
+const capCss = cap.style === "noir"
+  ? `.cap-group { font-family: 'Instrument Serif', 'EB Garamond', Georgia, serif; font-size: ${cap.size ?? 54}px; font-weight: 400; color: #F2EFE8; letter-spacing: .01em; line-height: 1.12; max-width: 900px; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+     .cap-group .w { margin: 0 .12em; } .cap-group .w.emph { font-style: italic; color: ${cap.gold ?? "#E2BE6A"}; text-shadow: 0 0 14px rgba(226,190,106,.45), 0 1px 6px rgba(0,0,0,.8); }`
+  : cap.style === "clean"
   ? `.cap-group { font-family: ${UI_FONT}, "Noto Sans Arabic", system-ui, sans-serif; font-size: ${cap.size ?? brand.capSize}px; font-weight: 800; color: #fff; letter-spacing: -1px; text-shadow: 0 4px 18px rgba(0,0,0,.55), 0 1px 3px rgba(0,0,0,.6); }`
   : cap.style === "pill"
   ? `.cap-group { font-family: ${UI_FONT}, "Noto Sans Arabic", system-ui, sans-serif; font-size: 66px; font-weight: 800; color: #fff; background: rgba(12,12,14,.88); border-radius: 22px; padding: 16px 32px; max-width: 900px; }`
@@ -1940,9 +2058,20 @@ if (spec.music) {
     addSfx(r3(lastScene - len - 1.25), spec.music.riserSfx ?? "riser-1", "riser into the payoff", { db: spec.music.riserDb ?? -2 });
     addSfx(r3(lastScene), spec.music.hitSfx ?? "cinematic-cine-hit", "payoff hit", { db: spec.music.hitDb ?? -6 });
   }
-  const m = buildMusic(spec.music, motionCtx, execFileSync, path, fs);
-  musicHtml = m.html;
-  console.log(`music: ${spec.music.id || spec.music.src} at ${m.I} LUFS -> volume ${m.vol} (${spec.music.db ?? -20} dB under the voice)`);
+  // music.optional (opt-in, set by premium-noir): a bed whose audio is not shipped (library/music has the manifest, not the
+  // mp3s - see buildMusic) is skipped with a warning instead of failing the build. Every other music spec still fails loudly.
+  const musicMissing = spec.music.optional === true && spec.music.id && !spec.music.src && (() => {
+    const man = JSON.parse(fs.readFileSync(path.join(LIB, "music", "manifest.json"), "utf8"));
+    return !man[spec.music.id] || !fs.existsSync(path.join(LIB, "music", man[spec.music.id].file));
+  })();
+  if (musicMissing) {
+    warn.push(`music '${spec.music.id}' is not available on disk (music.optional): the reel builds without a music bed`);
+    console.log(`music: '${spec.music.id}' not on disk, skipped (music.optional)`);
+  } else {
+    const m = buildMusic(spec.music, motionCtx, execFileSync, path, fs);
+    musicHtml = m.html;
+    console.log(`music: ${spec.music.id || spec.music.src} at ${m.I} LUFS -> volume ${m.vol} (${spec.music.db ?? -20} dB under the voice)`);
+  }
 }
 
 // ---------- write ----------
@@ -1969,6 +2098,10 @@ const fontFaces = fs.readdirSync(path.join(A, "fonts")).filter((f) => /-(latin-e
 const look = spec.look || {};
 if (look.exposure && look.exposure !== 1) tl.push(`tl.set("#pip", { filter: "brightness(${look.exposure}) contrast(${look.contrast ?? 1.04})" }, 0);`);
 const grainHtml = look.grain ? `<div id="grain" class="look-grain" style="opacity:${look.grain}"></div>` : "";
+// spec.letterbox { h }: black cinema bars top + bottom (h px each, 9:16 pixels scaled to the format), above the picture and
+// grain, under the captions (z 7; captions z 8, layers/watermark z 9)
+const lbxH = spec.letterbox ? Math.round((spec.letterbox.h ?? 300) * H / 1920) : 0;
+const letterboxHtml = spec.letterbox ? `<div class="lbx" style="position:absolute;left:0;right:0;top:0;height:${lbxH}px;background:#000;z-index:7"></div><div class="lbx" style="position:absolute;left:0;right:0;bottom:0;height:${lbxH}px;background:#000;z-index:7"></div>` : "";
 const vignetteHtml = look.vignette ? `<div class="look-vignette" style="background:radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 45%, rgba(0,0,0,${look.vignette}) 100%)"></div>` : "";
 if (look.grain) for (let t = 0, k = 0; t < TOTAL; t += 1 / 12, k++) tl.push(`tl.set("#grain", { backgroundPosition: "${(k * 137) % 400}px ${(k * 251) % 400}px" }, ${r3(t)});`);
 
@@ -2069,10 +2202,10 @@ const html = `<!doctype html>
 </head>
 <body>
 <div id="root" class="${spec.layout?.compact ? "compact" : ""}" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${SECTION_MODE ? SECTION_TOTAL : TOTAL}" data-fps="${FPS}">
-  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip"><div id="base"><div id="snap"><div id="push">${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}${frontHtml.join("")}
+  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip"><div id="base"><div id="snap"><div id="push">${TX ? `<div id="tx" style="position:absolute;inset:0;transform-origin:50% 45%">` : ""}${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}${TX ? "</div>" : ""}${frontHtml.join("")}
   </div></div></div></div>${roomWins.length ? `</div></div>` : ""}
   ${overlays.filter((o) => o.html).map((o) => o.html).join("\n  ")}
-  ${layersUnderHtml}${grainHtml}${vignetteHtml}
+  ${layersUnderHtml}${grainHtml}${vignetteHtml}${letterboxHtml}
   <div id="caps">
       ${capHtml}
   </div>
@@ -2157,7 +2290,7 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
   // still needs A2/A5 to work (NEXT.md item 6); this just stops the oracle being the blocker.
   ...(SOURCES.length > 1 ? { sources: SOURCES } : {}),
   takes: editTruthTakes,
-  snaps: snaps.map(([t, z]) => ({ t: r3(t), scale: z })),
+  snaps: snaps.map((sn) => ({ t: r3(sn[0]), scale: sn[1], ...(sn[2] ? { origin: sn[2] } : {}), ...(easedSnaps.has(sn) ? { dur: r3(PUNCH.frames / FPS), ease: PUNCH.ease } : {}) })),
   pushes: pushesEdit.map((p) => ({ start: r3(p.a), end: r3(p.b), z: p.z, up: p.up, down: p.down })),
   // `to` matters as much as `at`: a scene animates in at `at` and out near `to`, so both are
   // events a frame-level analyzer should see.

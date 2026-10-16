@@ -1,0 +1,7 @@
+{
+  "_about": "premium-noir in red",
+  "extends": "premium-noir",
+  "captions": {
+    "gold": "#E0533F"
+  }
+}

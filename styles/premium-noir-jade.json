@@ -1,0 +1,7 @@
+{
+  "_about": "premium-noir in jade",
+  "extends": "premium-noir",
+  "captions": {
+    "gold": "#8FD1B0"
+  }
+}
