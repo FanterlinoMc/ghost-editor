@@ -1,0 +1,77 @@
+{
+  "_about": "Premium grade presets for look.preset (lib/premium.mjs gradePreset). curves = 5-point tone tables per channel (input 0, .25, .5, .75, 1 -> output), an SVG feComponentTransfer, i.e. a 1D LUT per channel. keep = selective colour (mask alpha = r*R + g*G + b*B + offset). css runs after the SVG filter. Any look.* key on the style overrides the preset's vignette/grain/tint.",
+  "belmar-teal": {
+    "about": "Prestige (Belmar look): teal shadows (#0E3A40), warm orange highlights (#FFC48A), contrast +12, sat 1.12, blacks lifted ~2%, skin natural",
+    "curves": {
+      "r": [0.02, 0.2, 0.5, 0.82, 1.0],
+      "g": [0.045, 0.235, 0.5, 0.77, 0.95],
+      "b": [0.06, 0.26, 0.48, 0.69, 0.84]
+    },
+    "saturate": 1.12,
+    "sharpen": 0.15,
+    "css": "contrast(1.06)",
+    "vignette": 0.3,
+    "grain": 0.04
+  },
+  "noir-film": {
+    "about": "Noir: noir-gold with a highlight knee (white hair keeps texture) and slightly lifted blacks; skin mono, gold kept",
+    "keep": {"mask": [2.2, 3.8, -6.8, -1.9], "sat": 1.15, "baseSat": 0},
+    "curves": {
+      "r": [0.035, 0.2, 0.46, 0.72, 0.84],
+      "g": [0.035, 0.2, 0.45, 0.705, 0.825],
+      "b": [0.04, 0.2, 0.43, 0.68, 0.8]
+    },
+    "css": "contrast(1.08)",
+    "vignette": 0.42,
+    "grain": 0.06
+  },
+  "luxe-warm": {
+    "about": "lifted blacks, warm highlights, slight teal in the shadows; rich but soft",
+    "curves": {
+      "r": [0.045, 0.265, 0.53, 0.79, 1.0],
+      "g": [0.06, 0.275, 0.515, 0.765, 0.965],
+      "b": [0.085, 0.29, 0.5, 0.715, 0.89]
+    },
+    "saturate": 1.04,
+    "css": "contrast(1.03)",
+    "vignette": 0.28,
+    "grain": 0.035
+  },
+  "editorial-clean": {
+    "about": "bright, low saturation, crisp: magazine daylight",
+    "curves": {
+      "r": [0.02, 0.29, 0.575, 0.82, 0.99],
+      "g": [0.02, 0.295, 0.58, 0.825, 0.99],
+      "b": [0.03, 0.30, 0.585, 0.825, 0.985]
+    },
+    "saturate": 0.72,
+    "sharpen": 0.3,
+    "css": "contrast(1.05)",
+    "vignette": 0
+  },
+  "noir-gold": {
+    "about": "black and white with gold/amber accents kept (jewellery, lamps, logos in gold); skin goes mono",
+    "keep": { "mask": [2.2, 3.8, -6.8, -1.9], "sat": 1.15, "baseSat": 0 },
+    "curves": {
+      "r": [0.02, 0.19, 0.47, 0.78, 0.98],
+      "g": [0.02, 0.19, 0.46, 0.76, 0.96],
+      "b": [0.025, 0.19, 0.44, 0.72, 0.92]
+    },
+    "css": "contrast(1.1)",
+    "vignette": 0.42,
+    "grain": 0.06
+  },
+  "empire-noir": {
+    "about": "Empire (Iman Gadzhi look): crushed blacks to #08080C, punchy contrast, cool teal shadows, warm-neutral skin, sat 1.12; dark and expensive",
+    "curves": {
+      "r": [0.03, 0.17, 0.47, 0.8, 1.0],
+      "g": [0.03, 0.185, 0.475, 0.79, 0.98],
+      "b": [0.047, 0.215, 0.48, 0.77, 0.95]
+    },
+    "saturate": 1.12,
+    "sharpen": 0.2,
+    "css": "contrast(1.08)",
+    "vignette": 0.34,
+    "grain": 0.03
+  }
+}

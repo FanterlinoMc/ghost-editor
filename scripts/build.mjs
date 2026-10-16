@@ -32,6 +32,7 @@ import { ROOM_SCALE, ROOM_EXIT_S, ROOM_FILL, normalizeRoom, ROOM_EASE_NAME, room
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 import { loadStyleChain, checkBrandName } from "./lib/style-path.mjs";
 import { takeEndAt } from "./lib/caption-span.mjs";
+import * as PK from "./lib/premium.mjs";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 
@@ -107,6 +108,17 @@ const FPS = spec.fps ?? 30;
 const brand = { accent: "#D13F34", accentDark: "#B93026", ink: "#262626", capSize: 58, font: null, ...(spec.brand || {}) };
 const warn = [...styleWarnings];
 const die = (m) => { console.error("ERROR: " + m); process.exit(1); };
+// premium kit (opt-in, lib/premium.mjs): SVG defs collected here are written inside #root next to the watermark.
+// look.preset names a grade in presets/grades.json (an SVG tone-curve filter on #base); unset = nothing changes.
+const premiumDefs = [];
+let brollGrade;
+let gradePresetUsed = null;
+if (spec.look?.preset) {
+  const gp = PK.gradePreset(spec.look, path.join(SKILL, "presets", "grades.json"));
+  if (gp.error) die(gp.error);
+  spec.look = gp.look; premiumDefs.push(gp.svg); brollGrade = gp.brollGrade ?? undefined; gradePresetUsed = gp.resolved;
+  console.log(`grade preset ${spec.look.preset}: ${spec.look.grade}`);
+}
 // Blank project (origin "blank", no takes): a black W x H page, 1 s long, with the same root and
 // timeline contract as a real build, plus the build/*.json files other tools read - all empty.
 function writeBlankPage() {
@@ -975,7 +987,7 @@ const faceFile = path.join(proj, spec.face || "build/face.json");
 const faceY = medianFaceY(fs.existsSync(faceFile) ? JSON.parse(fs.readFileSync(faceFile, "utf8")) : null, 700);
 const faceYBySrc = new Map(SOURCES.map((s) => [s, medianFaceY(faces[s], SOURCES.length > 1 && s !== PRIMARY_SRC && !faces[s]?.samples?.length ? 700 : faceY)]));
 const faceYAt = (t) => faceYBySrc.get(locateTake(takes, t, FPS)?.src) ?? faceY;
-const motionCtx = { tl, E, r3, safeTop: placer.safeTop, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
+const motionCtx = { tl, E, r3, brollGrade, safeTop: placer.safeTop, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
 // a scene that hands over to an expand/wipe scene stays underneath until the
 // incoming panel has covered it
@@ -1570,6 +1582,7 @@ const TOP_UI = Math.round(H * 0.08);   // nothing static in the top 8% (phone st
 if (spec.watermark?.text) brandHtml += `<div style="position:absolute;top:${Math.max(TOP_UI, spec.watermark.y ?? 120)}px;right:${spec.watermark.x ?? 60}px;z-index:9;font-family:'${spec.watermark.font ?? "Instrument Serif"}',Georgia,serif;font-size:${spec.watermark.size ?? 54}px;letter-spacing:-0.5px;color:#fff;opacity:${spec.watermark.opacity ?? 0.38};pointer-events:none">${esc(spec.watermark.text)}</div>`;
 if (spec.look?.tint) brandHtml += `<div style="position:absolute;inset:0;z-index:3;pointer-events:none;background:${spec.look.tint.color ?? "#1d6b75"};mix-blend-mode:${spec.look.tint.blend ?? "soft-light"};opacity:${spec.look.tint.opacity ?? 0.22}"></div>`;
 if (spec.look?.grade) tl.push(`tl.set("#base", { filter: "${spec.look.grade}" }, 0);`);
+if (premiumDefs.length) brandHtml += premiumDefs.join("");
 
 // ---------- light leaks (spec.leaks = { every, color?, at? }) ----------
 // A warm burn-through flash that hides a cut between sections. Auto: on take joins, spaced by `every` seconds.
@@ -2176,7 +2189,7 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
     // Settings that invalidate every section at once, kept separate from each section's own hash
     // so a manifest diff can tell "one caption changed" apart from "the whole reel's look
     // changed" - see lib/sections.mjs's invalidation note.
-    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE }),
+    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE, ...(gradePresetUsed ? { gradePreset: gradePresetUsed } : {}) }),
     sections: manifest,
   }, null, 2));
   console.log(`sections: ${sections.length} (${sections.map((s) => `${s.start}-${s.end}`).join(", ")})`);

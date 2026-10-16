@@ -386,7 +386,7 @@ export function buildScene(b, id, t0, t1, ctx) {
     // image: full-screen B-roll. window: the same inside a rounded vintage frame on black.
     // src can be a still or a video clip; { self: <source seconds> } uses the speaker's own footage.
     const [z0, z1] = b.zoom ?? [1.0, 1.12];
-    const grade = b.grade ?? (b.kind === "window" ? "sepia(.18) contrast(1.06) saturate(.9)" : "");
+    const grade = b.grade ?? (b.kind === "window" ? "sepia(.18) contrast(1.06) saturate(.9)" : (ctx.brollGrade ?? ""));
     const media = b.self !== undefined ? ctx.source : userAsset(b.src);
     const isVideo = b.self !== undefined || /\.(mp4|mov|webm)$/i.test(media);
     const tag = isVideo
