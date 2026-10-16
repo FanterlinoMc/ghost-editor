@@ -24,6 +24,7 @@ recording (`examples/gallery/`) to check that they read as different.
 | `editorial-collage` | vintage engraving collage pages (CRT screen fringe) on the speaker's own words, name tag from frame 1 to the hook page, one type "slam" per video, condensed serif captions in a phrase-sized box that fill in word by word | calm premium founder interviews, brand-neutral base template | `paper` scenes with `engraving` + `lines` (auto-converted to `collage`), `slam`, `nametag`, automatic tool logos / object pop-ups | restrained | none shipped (see below) |
 | `ak-consulting-content` | `editorial-collage` + the `ak-consulting` brand kit (navy accent, watermark, auto name tag from the kit's `person`) | Ahmed Karrar's own reels | same as `editorial-collage`; the name tag is automatic (from `brands/ak-consulting.json`, no `nametag` beat needed) | restrained | none shipped (see below) |
 | `broadsheet` | `editorial-collage`'s engine with a newsprint page (heavy display headline, brand-colour kicker, italic deck) slapped in from the right, white serif-on-black tilted "clipping" captions, byline name tag ("By \<name\>"), fast punch-ins | newsroom energy, fast-cut talking heads | `paper` scenes (auto-remapped serif/box/marker lines to deck/headline/kicker via `pageMap`), `slam`, byline `nametag` | restrained | none shipped (see below) |
+| `premium-noir` | black-and-white cinema documentary: letterbox bars, serif subtitles in the lower bar with ONE gold italic word per line, noir-film grade (skin mono, gold kept), heavy grain, slow eased push-ins anchored on the face | stories, life lessons, calm serious talking heads; needs no B-roll | optional `endcard` chapter cards (`variant: "caps"`, `font: "serif"`); `captions.emph` picks the gold word | restrained | `silent-descent` piano, skipped with a warning when the file is not on disk |
 
 `closer`, `headline`, `keynote`, `monk` and `alif` were ported from main's
 `engine/core` (BRANCH-AUDIT.md R1) rather than rendered from
@@ -100,3 +101,8 @@ A reel can use a style that is not in `styles/`: set `"style": "user:<id>"`. `bu
 - steps captions around cards on screen at the same time
 
 `build/caption_layout.json` records every block's zone. `qa.py` prints the counts and fails on anything outside the safe area.
+
+`premium-noir` (and `premium-noir-ice|jade|red|rose|silver`, which extend it and change only the gold word's colour) was
+hand-ported from Ahmed's Noir (phantasic `origin/template-hormozi`, `engine/core/styles/premium-noir.json`) with the
+engine features it needs - see "Premium kit: Noir" in `references/reel-json.md`. It differs from his JSON in one key:
+`music.optional: true`. Not part of the port: his `noir_score.py` sound pass and the vendored GSAP.

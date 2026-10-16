@@ -133,6 +133,14 @@
       "status": "beta",
       "style": "headline-2",
       "note": "Look ported from Ahmed's Headline 2.1 (6/6 SHIP on hand-planned reels). His Wikimedia B-roll with name labels is not ported: the studio planner cannot place fetched stills."
+    },
+    {
+      "id": "premium-noir",
+      "name": "Noir",
+      "tagline": "Black-and-white cinema documentary: letterbox bars, serif subtitles with one gold word, slow push-ins, chapter cards",
+      "status": "beta",
+      "style": "premium-noir",
+      "note": "Look ported from Ahmed's Noir (premium-noir, public BETA on his side). Needs no B-roll. The piano bed (silent-descent) is not shipped in this fork, so the reel builds without music (music.optional); chapter cards are optional endcard beats (variant caps, font serif). His noir_score.py sound pass is not part of the style. Colour variants premium-noir-ice / -jade / -red / -rose / -silver are styles only, as with the other colour themes."
     }
   ],
   "customer_templates": [
