@@ -113,7 +113,7 @@ export function roomCardCss(p = 1, W = 1080, H = 1920) {
   const k = 1 / ROOM_SCALE, ins = roomCardInset(W, H);
   // The radius rides a CSS variable (#room { border-radius: var(--room-r) }): GSAP 3.14 rounds a `border-radius` px value to a whole
   // pixel (even as a four-value string), which would step the corner through the ease; a custom property is interpolated as is.
-  return { "--room-r": `${r3(ROOM_RADIUS * k * p)}px`, "--room-ix": `${r3(ins.x * p)}px`, "--room-ib": `${r3(ins.b * p)}px`, "--room-ix": `${r3(ins.x * p)}px`, "--room-ib": `${r3(ins.b * p)}px`, boxShadow: `${r3(ROOM_SHADOW.x * k * p)}px ${r3(ROOM_SHADOW.y * k * p)}px ${r3(ROOM_SHADOW.blur * k * p)}px rgba(0,0,0,${r3(ROOM_SHADOW.alpha * p)})` };
+  return { "--room-r": `${r3(ROOM_RADIUS * k * p)}px`, "--room-ix": `${r3(ins.x * p)}px`, "--room-ib": `${r3(ins.b * p)}px`, boxShadow: `${r3(ROOM_SHADOW.x * k * p)}px ${r3(ROOM_SHADOW.y * k * p)}px ${r3(ROOM_SHADOW.blur * k * p)}px rgba(0,0,0,${r3(ROOM_SHADOW.alpha * p)})` };
 }
 /** Eased progress 0..1 of the card (and of the shrink) at output time t. */
 export const roomProgressAt = (t, windows) => (1 - roomScaleAt(t, windows)) / (1 - ROOM_SCALE);
@@ -139,7 +139,7 @@ export function roomBox([x, y, w, h], s = ROOM_SCALE, W = 1080) {
 export function roomSpecJson(W = 1080, H = 1920) {
   return {
     scale: ROOM_SCALE, origin: roomOrigin(W), easeSeconds: ROOM_EASE_S, exitSeconds: ROOM_EXIT_S, ease: ROOM_EASE_NAME,
-    values: ROOM_VALUES, fill: ROOM_FILL, cardBox: roomCardBox(W, H), cardInset: roomCardInset(W, H), cardBox: roomCardBox(W, H), cardInset: roomCardInset(W, H), radius: ROOM_RADIUS, shadow: ROOM_SHADOW,
+    values: ROOM_VALUES, fill: ROOM_FILL, cardBox: roomCardBox(W, H), cardInset: roomCardInset(W, H), radius: ROOM_RADIUS, shadow: ROOM_SHADOW,
     cardCssFull: roomCardCss(1), cardCssNone: roomCardCss(0), frameRounding: "floor(x + 0.5)", canvas: [W, H],
     footageBoxAtRest: roomBox([0, 0, W, H], ROOM_SCALE, W),
     // golden vectors for a mirror's tests

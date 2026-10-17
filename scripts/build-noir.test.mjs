@@ -139,6 +139,18 @@ try {
   assert.equal(truth(dir).sources.length, 2);
   check("multi-source Noir: punch-ins anchor on the face of the take's own recording");
 
+  // ---- noir orphan guard: a 3+1 wrap moves one word down, so the last line has 2 words; other styles never get a <br> ----
+  for (const [style, expectBr] of [["premium-noir", true], ["clean", false]]) {
+    dir = project({ style });
+    const ow = ["village", "journey", "morning", "evening."];
+    fs.writeFileSync(path.join(dir, "build", "words.whisper.json"), JSON.stringify({ segments: [{ start: 0, end: SEC, words: ow.map((word, i) => ({ word, start: +(0.3 + i * 0.35).toFixed(2), end: +(0.55 + i * 0.35).toFixed(2) })) }] }));
+    build(dir);
+    h = html(dir);
+    if (expectBr) assert.match(h, /id="cg0w1"[^>]*>journey<\/span><br><span id="cg0w2"/, "the line break lands before the third word");
+    else assert.ok(!/class="cap-group[^>]*>(?:(?!<\/div>).)*<br>/s.test(h), `${style}: no <br> inside a caption block`);
+  }
+  check("noir orphan guard: 3+1 wrap becomes 2+2 (noir only)");
+
   // ---- sections mode (I-25 prototype) ----
   dir = project({ style: "premium-noir" });
   build(dir);

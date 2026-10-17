@@ -1903,6 +1903,18 @@ if (cap.keywordAt) {
   for (const [wd, ts] of Object.entries(cap.keywordAt)) cap.keywordTimes[wd] = ts.map((t) => { try { return E(t, "keywordAt"); } catch { return -99; } });
 }
 const edit = cap.style === "editorial" ? buildEditorialCaptions(words, cap, motionCtx, cap.onlyInScenes ? complement(shownCaps) : hiddenCaps) : null;
+// noir orphan guard (opt-in by style): the browser wraps a caption block at max-width 900px, which can strand ONE word alone
+// on the last line. Estimate the greedy wrap (Instrument Serif ~0.42em per character, 0.24em of margin per word, a 0.25em
+// space) and, when the last line would be a single word and the line before it holds 3+ words, return the index of the word
+// that should open the last line instead (one word moves down, so the last line has 2). -1 = leave the block alone.
+const noirOrphanBreak = (g, size) => {
+  const room = 900, wd = (w) => (caseOf(w.word).length * 0.42 + 0.24) * size, sp = 0.25 * size;
+  const lines = []; let line = [], x = 0;
+  g.forEach((w, i) => { const ww = wd(w); if (line.length && x + sp + ww > room) { lines.push(line); line = []; x = 0; } x += (line.length ? sp : 0) + ww; line.push(i); });
+  lines.push(line);
+  if (lines.length < 2 || lines.at(-1).length !== 1 || lines.at(-2).length < 3) return -1;
+  return lines.at(-2).at(-1);
+};
 const capHtml = cap.style === "glow" ? glowHtml : cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
   const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.05 : SPEECH;
@@ -1925,8 +1937,9 @@ const capHtml = cap.style === "glow" ? glowHtml : cap.style === "none" || edit ?
   // captions.backing false (opt-in): no grey box over the lower face, a heavy text shadow instead
   const backed = pl.mode === "lower-face" && cap.backing !== false && !["pill", "box", "sessions"].includes(cap.style);
   const shadowed = pl.mode === "lower-face" && cap.backing === false;
+  const orphanAt = cap.style === "noir" ? noirOrphanBreak(g, capSize) : -1;   // index of the word that opens the last line, or -1
   const tilt = cap.tilt ? `;rotate:${gi % 2 ? -cap.tilt : cap.tilt * 0.7}deg` : "";  // R1b port (Broadsheet clippings)
-  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : shadowed ? " cap-shadow" : ""}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w${wi === emphI ? " emph" : ""}">${esc(caseOf(w.word))}</span>`).join("<wbr>")}</div>`;
+  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : shadowed ? " cap-shadow" : ""}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w${wi === emphI ? " emph" : ""}">${esc(caseOf(w.word))}</span>`).map((sp, wi) => wi === 0 ? sp : (wi === orphanAt ? "<br>" : "<wbr>") + sp).join("")}</div>`;
 }).join("\n      ");
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
