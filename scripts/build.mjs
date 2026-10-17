@@ -797,10 +797,22 @@ const srcDurOf = new Map(SOURCES.map((s) => [s, parseFloat(execFileSync("ffprobe
 // look from its own exposure; the hash includes that recording's gamma. Take timing, words, faces and edit_truth keep the
 // ORIGINAL recording's name; only the media tags and the stills read the graded file (mediaOf).
 const mediaOf = new Map(SOURCES.map((s) => [s, s]));
-const gradeGamma = {};
+const gradeGamma = {}, gradeCast = {};
 if (spec.sourceGrade) {
   for (const s of SOURCES) {
     let chain = spec.sourceGrade;
+    // spec.sourceNeutral (0..1, opt-in; Chrome Motion sets 0.65): cast neutralising. The recording's mean chroma (U/V over the
+    // whole frame, one sample a second) is measured and that fraction of it is subtracted before exposure and the grade, so a
+    // coloured room (a purple LED studio) comes out steel grey instead of magenta. Per recording, like the exposure.
+    if (spec.sourceNeutral) {
+      const k = Math.min(1, Math.max(0, +spec.sourceNeutral || 0));
+      const cs = execFileSync("ffmpeg", ["-v", "error", "-i", path.resolve(proj, s), "-vf", "fps=1,signalstats,metadata=print:key=lavfi.signalstats.UAVG:file=-,metadata=print:key=lavfi.signalstats.VAVG:file=-", "-f", "null", "-"], { maxBuffer: 1 << 26 }).toString();
+      const avg = (key) => { const v = [...cs.matchAll(new RegExp(key + "=([\\d.]+)", "g"))].map((m) => +m[1]); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 128; };
+      const du = r3((avg("UAVG") - 128) * k), dv = r3((avg("VAVG") - 128) * k);
+      gradeCast[s] = [du, dv];
+      if (Math.abs(du) + Math.abs(dv) > 1) chain = `lutyuv=u='clip(val-(${du}),16,240)':v='clip(val-(${dv}),16,240)',${chain}`;
+      console.log(`cast ${s}: mean chroma U ${(du / k + 128).toFixed(1)} V ${(dv / k + 128).toFixed(1)} -> subtract (${du}, ${dv})`);
+    }
     if (spec.sourceExposure !== false) {
       const out = execFileSync("ffmpeg", ["-v", "error", "-i", path.resolve(proj, s), "-vf", "fps=1,crop=iw*0.5:ih*0.35:iw*0.25:ih*0.15,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-", "-f", "null", "-"], { maxBuffer: 1 << 26 }).toString();
       const ys = [...out.matchAll(/YAVG=([\d.]+)/g)].map((m) => +m[1]);
@@ -2757,7 +2769,7 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
     // Settings that invalidate every section at once, kept separate from each section's own hash
     // so a manifest diff can tell "one caption changed" apart from "the whole reel's look
     // changed" - see lib/sections.mjs's invalidation note.
-    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE, ...(spec.sourceGrade ? { sourceGrade: spec.sourceGrade, sourceExposure: spec.sourceExposure ?? null, gradeGamma } : {}), ...(gradePresetUsed ? { gradePreset: gradePresetUsed } : {}) }),
+    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE, ...(spec.sourceGrade ? { sourceGrade: spec.sourceGrade, sourceExposure: spec.sourceExposure ?? null, gradeGamma, ...(spec.sourceNeutral ? { sourceNeutral: spec.sourceNeutral, gradeCast } : {}) } : {}), ...(gradePresetUsed ? { gradePreset: gradePresetUsed } : {}) }),
     sections: manifest,
   }, null, 2));
   console.log(`sections: ${sections.length} (${sections.map((s) => `${s.start}-${s.end}`).join(", ")})`);

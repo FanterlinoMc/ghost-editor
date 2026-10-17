@@ -125,6 +125,26 @@ try {
   assert.deepEqual(et.sources, ["assets/talk.mp4", "assets/talk-1.mp4"]);
   check("two recordings: graded separately (own luma, own gamma, own file); edit_truth keeps the original names");
 
+  // ---- cast neutralising (sourceNeutral): per recording, only where the style sets it ----
+  assert.match(log, /cast assets\/talk\.mp4: mean chroma U [\d.]+ V [\d.]+ -> subtract/);
+  assert.equal(count(log, /cast assets\//g), 2, "each recording is measured on its own");
+  dir = project({ style: "hormozi" });
+  assert.ok(!/cast assets/.test(build(dir)), "hormozi (a sourceGrade style without sourceNeutral) is not neutralised");
+  check("sourceNeutral: a chroma measurement per recording; styles without it are untouched");
+
+  // ---- gm layout from the object's measured edges ----
+  const layoutOf = (beat) => { const d = project({ style: "gadzhi-motion", beats: [beat] }); build(d); const hh = html(d); return { objTop: +hh.match(/class="gm-objwrap" style="top:(\d+)px;width:(\d+)px/)[1], objW: +hh.match(/class="gm-objwrap" style="top:(\d+)px;width:(\d+)px/)[2], rows: [...hh.matchAll(/class="gm-row" style="top:(\d+)px/g)].map((m) => +m[1]) }; };
+  const tall = layoutOf({ type: "scene", kind: "gm-object", object: "rocket", text: "IG|*Outreach* Pro", textBelow: "^tool", objY: 520, objW: 740, textY: 300, at: 1.5, to: 4 });
+  assert.ok(tall.objTop >= tall.rows[1] + 190, `the object clears the second text row: object top ${tall.objTop}, rows ${tall.rows}`);
+  assert.ok(tall.objTop + tall.objW * (1100 / 817) <= 1601, "and still ends above the bottom limit (shrunk if needed)");
+  const low = layoutOf({ type: "scene", kind: "gm-object", object: "target", text: "return on", at: 1.5, to: 4 });
+  assert.equal(low.objTop, 560, "a layout that already clears the object is left as given");
+  const pillTop = (obj) => { const d = project({ style: "gadzhi-motion", beats: [{ type: "scene", kind: "gm-nodes", nodes: [{ n: 1, at: 2 }], object: obj, pill: { text: "value", at: 2.5 }, at: 1.5, to: 4 }] }); build(d); const hh = html(d); return { pill: +hh.match(/class="gm-pill" style="top:(\d+)px/)[1], objW: +hh.match(/class="gm-obj" style="top:(\d+)px;width:(\d+)px/)[2], objY: +hh.match(/class="gm-obj" style="top:(\d+)px;width:(\d+)px/)[1] }; };
+  const gp = pillTop("gears"), rp = pillTop("rocket");
+  assert.ok(gp.pill >= gp.objY + gp.objW * (881 / 1100), "the pill sits below the gears' bottom edge");
+  assert.ok(rp.pill >= rp.objY + rp.objW * (1100 / 817) && rp.pill + 100 <= 1741, "tall object: shrunk until object and pill fit, pill still below it");
+  check("gm-object text clears tall objects; the gm-nodes pill sits below the object's measured bottom edge");
+
   // ---- sections hash follows sourceGrade; a section build carries gm css and graded media ----
   dir = project({ style: "gadzhi-motion", beats: [SCENES[1]] });
   build(dir);

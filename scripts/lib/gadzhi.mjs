@@ -15,6 +15,12 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 
+// the object's real (alpha) bounding box as fractions of its image: library/gm-objects/bounds.json, written by scripts/gm_bounds.mjs;
+// a project path or an object not in the file is the whole image
+const objBounds = (o) => {
+  try { return JSON.parse(fs.readFileSync(path.join(OBJ_DIR, "bounds.json"), "utf8"))[o]; } catch { return null; }
+};
+const edgeOf = (o) => { const bb = (o.includes("/") ? null : objBounds(o)) ?? { top: 0, bottom: 1 }; return { top: bb.top, bottom: bb.bottom }; };
 const objAspect = (o) => { try { const f = o.includes("/") ? o : path.join(OBJ_DIR, `${o}.png`); const b = fs.readFileSync(f); return b.readUInt32BE(20) / b.readUInt32BE(16); } catch { return 1; } };
 // premium set: Nano Banana Pro 2k renders in graphite + chrome (neutral in every colour theme)
 const OBJ_DIR = process.env.PHANTASIC_GM_OBJECTS || path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "library", "gm-objects");
@@ -123,6 +129,17 @@ export function gmScene(b, id, t0, t1, ctx) {
     const big = cls !== "s";
     tl.push(`ft("${sel}", { autoAlpha: 0, y: ${big ? 40 : 18}, filter: "blur(${big ? 14 : 8}px)", scale: ${big ? 1.12 : 1} }, { autoAlpha: 1, y: 0, filter: "blur(0px)", scale: 1, duration: ${big ? 0.32 : 0.22}, ease: "power3.out" }, ${at});`);
   };
+  // the height typeRows() will occupy (same row heights and fit scale, no side effects)
+  const rowsHeight = (spec, big, gap) => {
+    let y = 0;
+    for (const row of rowsOf(spec, words, t0, t1)) {
+      const h = Math.max(...row.map((t) => (big ? { s: 125, m: 165, k: 245, b: 225 } : { s: 92, m: 128, k: 190, b: 172 })[t.cls]));
+      const em = { s: 0.5, m: 0.4, k: 0.4, b: 0.52 }, fs0 = big ? { s: 120, m: 160, k: 250, b: 230 } : { s: 84, m: 124, k: 196, b: 176 };
+      const estW = row.reduce((a, t) => a + (t.text.length * em[t.cls] + 0.32) * fs0[t.cls], 0), fit = estW > 980 ? r3(980 / estW) : 1;
+      y += Math.round(h * (fit < 1 ? fit : 1)) + (gap ?? 6);
+    }
+    return y;
+  };
   const typeRows = (spec, y0, gap, dark, big, tag = "w") => {
     const rows = rowsOf(spec, words, t0, t1);   // ctx.words are on the timeline clock
     let y = y0;
@@ -148,8 +165,19 @@ export function gmScene(b, id, t0, t1, ctx) {
   if (b.kind === "gm-object" || b.kind === "gm-kinetic") {
     cls = "gm-paper";
     const hasObj = b.kind === "gm-object";
-    const objY = b.objY ?? 560, objW = b.objW ?? 780;
+    let objY = b.objY ?? 560, objW = b.objW ?? 780;
     body += `<div class="gm-cloud"></div>`;
+    // layout from the object's MEASURED top and bottom edges (alpha bounds), so the words never sit on a tall object: the text
+    // block is measured, and if it would reach the object's top the object moves down - and shrinks if it then runs too low.
+    // A layout that already clears the object is left exactly as given.
+    let textY = b.textY ?? (hasObj ? 300 : 520);
+    if (hasObj) {
+      const e = edgeOf(b.object), asp = objAspect(b.object), textBottom = textY + rowsHeight(b.text ?? "", !hasObj || b.bigType, b.gap), clear = 18;
+      if (objY + e.top * objW * asp < textBottom + clear) objY = Math.round(textBottom + clear - e.top * objW * asp);
+      const limit = b.maxBottom ?? 1600, bottom = () => objY + e.bottom * objW * asp;
+      if (bottom() > limit) objW = Math.round(objW * Math.max(0.5, (limit - (objY + e.top * objW * asp)) / ((e.bottom - e.top) * objW * asp)));
+      if (objY !== (b.objY ?? 560) || objW !== (b.objW ?? 780)) objY = Math.round(textBottom + clear - e.top * objW * asp);
+    }
     if (hasObj) {
       const objH = Math.round(objW * objAspect(b.object)), cy = objY + objH / 2;
       body += `<div id="${id}-halo" class="gm-halo" style="top:${cy}px;width:${Math.round(objW * 1.5)}px;height:${Math.round(objW * 1.5)}px"></div>`;
@@ -163,8 +191,8 @@ export function gmScene(b, id, t0, t1, ctx) {
       tl.push(`tl.to("#${id}-floor", { scaleX: 0.86, autoAlpha: 0.7, duration: ${hold}, ease: "sine.inOut" }, ${r3(t0 + 0.55)});`);
       addSfx(t0, "whoosh-2", "gm object in", { db: -6 });
     }
-    body += typeRows(b.text ?? "", b.textY ?? (hasObj ? 300 : 520), b.gap, false, !hasObj || b.bigType);
-    if (b.textBelow) body += typeRows(b.textBelow, b.textBelowY ?? objY + objW * objAspect(b.object) - 70, b.gap, false, b.bigType, "u");
+    body += typeRows(b.text ?? "", textY, b.gap, false, !hasObj || b.bigType);
+    if (b.textBelow) body += typeRows(b.textBelow, b.textBelowY ?? Math.round(objY + objW * objAspect(b.object) * edgeOf(b.object).bottom - 70), b.gap, false, b.bigType, "u");
   }
 
   else if (b.kind === "gm-flow") {
@@ -206,7 +234,14 @@ export function gmScene(b, id, t0, t1, ctx) {
 
   else if (b.kind === "gm-nodes") {
     bg = `linear-gradient(180deg, #07060A 0%, ${T.deep[1]} 50%, ${T.pill} 100%)`;
-    const n = b.nodes ?? [], objY = b.objY ?? 1060, objW = b.objW ?? 520;
+    const n = b.nodes ?? [], objY = b.objY ?? 1060;
+    let objW = b.objW ?? 520;
+    // the pill sits BELOW the object's measured bottom edge; a tall object shrinks until object + pill fit above the bottom margin
+    const nodeEdge = b.object ? edgeOf(b.object) : { top: 0, bottom: 1 }, PILL_H = 100, PILL_GAP = 24, PILL_LIMIT = b.maxBottom ?? 1740;
+    if (b.object && b.pill && b.pill.y === undefined) {
+      const need = () => objY + nodeEdge.bottom * objW * objAspect(b.object) + PILL_GAP + PILL_H;
+      if (need() > PILL_LIMIT) objW = Math.round(objW * Math.max(0.5, (PILL_LIMIT - PILL_GAP - PILL_H - objY) / (nodeEdge.bottom * objW * objAspect(b.object))));
+    }
     const pos = [[300, 640], [540, 520], [780, 640], [200, 820], [880, 820]];
     let svg = `<svg style="position:absolute;inset:0" width="1080" height="1920" viewBox="0 0 1080 1920" fill="none">`;
     n.forEach((nd, i) => {
@@ -225,7 +260,7 @@ export function gmScene(b, id, t0, t1, ctx) {
     }
     if (b.pill) {
       const pa = r3(Math.max(t0 + 0.2, E(b.pill.at, "gm pill") - 0.04));
-      body += `<div id="${id}-pill" class="gm-pill" style="top:${b.pill.y ?? objY + objW * 0.42}px">${esc(b.pill.text)}</div>`;
+      body += `<div id="${id}-pill" class="gm-pill" style="top:${b.pill.y ?? (b.object ? Math.round(objY + objW * objAspect(b.object) * nodeEdge.bottom + PILL_GAP) : Math.round(objY + objW * 0.42))}px">${esc(b.pill.text)}</div>`;
       tl.push(`ft("#${id}-pill", { autoAlpha: 0, scale: 0.5 }, { autoAlpha: 1, scale: 1, duration: 0.3, ease: "back.out(2.4)" }, ${pa});`);
       addSfx(pa, "pop-2", "gm pill", { db: -4 });
     }
