@@ -807,7 +807,8 @@ if (spec.sourceGrade) {
         console.log(`exposure ${s}: face-zone luma ${y.toFixed(1)} -> gamma ${gamma.toFixed(3)}`);
       }
     }
-    const tag = createHash("md5").update(chain).digest("hex").slice(0, 8), g = `assets/${path.basename(s).replace(/\.[^.]+$/, "")}-graded-${tag}.mp4`;
+    // the hash covers the recording's size too: a replaced source file must not reuse a stale graded copy
+    const tag = createHash("md5").update(chain + "|" + fs.statSync(path.resolve(proj, s)).size).digest("hex").slice(0, 8), g = `assets/${path.basename(s).replace(/\.[^.]+$/, "")}-graded-${tag}.mp4`;
     if (!fs.existsSync(path.resolve(proj, g))) { console.log(`grading ${s} (sourceGrade)...`); execFileSync("ffmpeg", ["-v", "error", "-y", "-i", path.resolve(proj, s), "-vf", chain, "-c:v", "libx264", "-crf", "16", "-preset", "medium", "-pix_fmt", "yuv420p", "-c:a", "copy", path.resolve(proj, g)]); }
     mediaOf.set(s, g);
   }
