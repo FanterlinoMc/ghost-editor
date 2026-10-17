@@ -1,0 +1,15 @@
+{
+  "_about": "Podcast Glow in red",
+  "extends": "podcast-glow",
+  "brand": {
+    "accent": "#FF3B3B"
+  },
+  "captions": {
+    "color": "#FF3B3B"
+  },
+  "look": {
+    "tint": {
+      "color": "#ff2a2a"
+    }
+  }
+}

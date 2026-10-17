@@ -1,0 +1,15 @@
+{
+  "_about": "Podcast Glow in blue",
+  "extends": "podcast-glow",
+  "brand": {
+    "accent": "#3EA8FF"
+  },
+  "captions": {
+    "color": "#3EA8FF"
+  },
+  "look": {
+    "tint": {
+      "color": "#1a6bff"
+    }
+  }
+}

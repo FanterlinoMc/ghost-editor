@@ -141,6 +141,14 @@
       "status": "beta",
       "style": "premium-noir",
       "note": "Look ported from Ahmed's Noir (premium-noir, public BETA on his side). Needs no B-roll. The piano bed (silent-descent) is not shipped in this fork, so the reel builds without music (music.optional); chapter cards are optional endcard beats (variant caps, font serif). His noir_score.py sound pass is not part of the style. Colour variants premium-noir-ice / -jade / -red / -rose / -silver are styles only, as with the other colour themes."
+    },
+    {
+      "id": "podcast-glow",
+      "name": "Podcast Glow",
+      "tagline": "A boring podcast clip turned into a punchy reel: glow captions, huge headline words, sets behind the speaker",
+      "status": "beta",
+      "style": "podcast-glow",
+      "note": "Look ported from Ahmed's Podcast Glow. The cut-out sets (stage.windows) need the person-segmentation matte, which is slow on CPU; without stage the look is glow captions + headlines over the warm-graded footage. Headlines are written by scripts/glow_plan.py (not wired into the studio). The bed is optional (not shipped) and the premium sound pack is not shipped. Colour variants podcast-glow-blue / -green / -pink / -purple / -red / -white are styles only."
     }
   ],
   "customer_templates": [

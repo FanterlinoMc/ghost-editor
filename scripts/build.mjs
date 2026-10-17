@@ -21,6 +21,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard, isLightColor } from "./lib/motion.mjs";
@@ -102,6 +103,8 @@ if (kitId) {
   preset = deepMerge(preset, layer);
 }
 const spec = deepMerge(preset, rawSpec);
+// stage (premium, opt-in): the speaker is cut out (matte) and composited on a designed set; the plate is hidden
+if (spec.stage) spec.matte = true;
 
 const FPS = spec.fps ?? 30;
 // brand kit: one accent (60/30/10), ink for text on light scenes, caption size
@@ -476,9 +479,14 @@ for (const d of ["sfx", "memes", "icons", "fonts"]) fs.mkdirSync(path.join(A, d)
 // safe: anything here that isn't in templates/fonts right now is a leftover from an
 // older build, never something a project added itself.
 const templateFonts = fs.readdirSync(path.join(SKILL, "templates", "fonts"));
-const wantedFonts = new Set(templateFonts);
+// templates/fonts-extra: fonts only some beats need (Anton for the Podcast Glow headline). Not in templates/fonts, because
+// every file there becomes an @font-face in EVERY reel's page; here it is copied (and declared) only when a headline beat exists.
+const EXTRA_FONT_DIR = path.join(SKILL, "templates", "fonts-extra");
+const extraFonts = (spec.beats || []).some((b) => b.type === "headline") && fs.existsSync(EXTRA_FONT_DIR) ? fs.readdirSync(EXTRA_FONT_DIR).filter((f) => f.endsWith(".woff2")) : [];
+const wantedFonts = new Set([...templateFonts, ...extraFonts]);
 for (const f of fs.readdirSync(path.join(A, "fonts"))) if (!wantedFonts.has(f)) fs.unlinkSync(path.join(A, "fonts", f));
 for (const f of templateFonts) fs.copyFileSync(path.join(SKILL, "templates", "fonts", f), path.join(A, "fonts", f));
+for (const f of extraFonts) fs.copyFileSync(path.join(EXTRA_FONT_DIR, f), path.join(A, "fonts", f));
 
 const sfxManifest = JSON.parse(fs.readFileSync(path.join(LIB, "sfx", "manifest.json"), "utf8"));
 const memeLib = (id) => {
@@ -582,6 +590,17 @@ const missingSfx = new Map();
 const addSfx = (t, id, why, { db = 0, lead = 0 } = {}) => {
   if (!id || id === "none") return;
   if (SFX_PROFILE === "restrained" && RESTRAINED_DROP.test(why)) return;
+  // "pack:<name>" (Podcast Glow): a wav from the premium sound pack (PHANTASIC_SFX_PACK, default ~/reels/premium/sfx-pack), mixed as
+  // role "impact". The pack is not shipped: a missing pack or file warns and is skipped like any other missing sound.
+  if (id.startsWith("pack:")) {
+    const dir = process.env.PHANTASIC_SFX_PACK || path.join(os.homedir(), "reels", "premium", "sfx-pack");
+    const file = `${id.slice(5)}.wav`, src = path.join(dir, file);
+    if (!fs.existsSync(src)) { missingSfx.set(`${id} (sound pack: ${dir})`, (missingSfx.get(`${id} (sound pack: ${dir})`) ?? 0) + 1); return; }
+    fs.copyFileSync(src, path.join(A, "sfx", file));
+    const dur = +execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", src]).toString().trim();
+    sfxEvents.push({ t: r3(Math.max(0, t - lead)), id, role: "impact", vol: volFor("impact", db), dur, src: `assets/sfx/${file}`, why });
+    return;
+  }
   const real = pick(id);
   const m = sfxManifest[real];
   if (!m) { missingSfx.set(real, (missingSfx.get(real) ?? 0) + 1); return; }
@@ -833,23 +852,133 @@ let matteHtml = "";
 // FIRST recording's cut-out at that timestamp and show the wrong person, silently. Refusing is the
 // only honest option until there is a matte per source, which is MULTIANGLE Gap 6's territory
 // (per-source framing) and not in this change.
-if (spec.matte && SOURCES.length > 1) {
+// spec.stage (below) lifts the single-source rule: each take reads the matte of its own recording
+if (spec.matte && SOURCES.length > 1 && !spec.stage) {
   die(`spec.matte with ${SOURCES.length} sources is not supported: one matte is cut from ${SRC}, and every take indexes it by its own source time, so takes from the other recording(s) would show the wrong cut-out - drop spec.matte, or keep this reel single-source (MULTIANGLE Gap 6)`);
 }
+const matteRelOf = (s) => (s === SRC ? "assets/talk-matte.webm" : `assets/${path.basename(s).replace(/\.[^.]+$/, "")}-matte.webm`);
+// stage: a recording is cut out only when it has a face track (a screen recording or a photo has no person to cut out)
+const stageMatted = (s) => s === SRC || fs.existsSync(path.join(proj, facePathFor(s)));
 if (spec.matte) {
-  const mp = path.join(A, "talk-matte.webm");
-  if (!fs.existsSync(mp)) {
-    console.log("cutting the speaker out (hyperframes remove-background, ~4 fps; cached in assets/talk-matte.webm)...");
-    // npx is a .cmd shim on Windows and CreateProcess cannot launch it directly, so this
-    // threw ENOENT and took every `behind` beat with it (they die() without a matte).
-    const npx = process.platform === "win32" ? ["cmd", ["/c", "npx"]] : ["npx", []];
-    execFileSync(npx[0], [...npx[1], "hyperframes", "remove-background", path.resolve(proj, SRC), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 }); console.log("  matte done");
+  for (const s of spec.stage ? SOURCES.filter(stageMatted) : [SRC]) {
+    const mp = path.resolve(proj, matteRelOf(s));
+    if (!fs.existsSync(mp)) {
+      console.log(`cutting the speaker out of ${s} (hyperframes remove-background, ~4 fps; cached in ${matteRelOf(s)})...`);
+      // npx is a .cmd shim on Windows and CreateProcess cannot launch it directly, so this
+      // threw ENOENT and took every `behind` beat with it (they die() without a matte).
+      const npx = process.platform === "win32" ? ["cmd", ["/c", "npx"]] : ["npx", []];
+      execFileSync(npx[0], [...npx[1], "hyperframes", "remove-background", path.resolve(proj, s), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 }); console.log("  matte done");
+    }
   }
-  matteHtml = takes.map((k, i) => `
-      <video id="matte-${i}" class="matte" src="assets/talk-matte.webm" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="2" muted playsinline></video>`).join("");
+  matteHtml = takes.map((k, i) => (spec.stage && !stageMatted(k.src)) ? "" : `
+      <video id="matte-${i}" class="matte" src="${matteRelOf(k.src)}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="2" muted playsinline></video>`).join("");
   // the cut-out layer mirrors the plate's join transition so a `behind` beat never shows the
   // matte hard-cutting on top of a plate that is whipping or blurring underneath it.
-  for (const { i, kind, T, outDur, inDur } of takeJoins) pushJoinTransition(`#matte-${i - 1}`, `#matte-${i}`, kind, T, outDur, inDur);
+  for (const { i, kind, T, outDur, inDur } of takeJoins) if (!spec.stage || (stageMatted(takes[i - 1].src) && stageMatted(takes[i].src))) pushJoinTransition(`#matte-${i - 1}`, `#matte-${i}`, kind, T, outDur, inDur);
+}
+// stage (premium, opt-in; hand port of phantasic d5b11ea + Podcast Glow v0.2-v0.5): the speaker is cut out (matte, one per
+// recording) and composited on a designed set; the plate is hidden. Ahmed's version cuts ONE matte from spec.source and
+// indexes it by every take's own source time; here each take reads the matte of ITS OWN recording (assets/<name>-matte.webm,
+// cut on demand), a recording with no face track is left un-matted and plays as the plain plate, and the head-top track
+// (which sets the subject scale) is read per recording.
+// stage.windows [{at, to, set?}]: the set only on those moments; stage.sets {key: {...}}: a set per window.
+let stageBgHtml = "", stageCss = "", stageFgHtml = "", SUBJ = 1;
+const stageWins = [];
+if (spec.stage) {
+  if (FORMAT !== "9:16") warn.push(`stage is tuned for 9:16 (head-top track, subject scale and set sizes); ${FORMAT} may look off`);
+  const st = { bg: "neon", scale: 1, rim: true, safeTop: 210, room: 150, ...spec.stage };
+  const trackOf = new Map();
+  const headTrack = (src) => {
+    if (trackOf.has(src)) return trackOf.get(src);
+    const cache = path.join(proj, "build", src === SRC ? "headtop.json" : `headtop-${path.basename(src).replace(/\.[^.]+$/, "")}.json`);
+    let track = fs.existsSync(cache) ? JSON.parse(fs.readFileSync(cache, "utf8")) : null;
+    if (!track) {
+      const raw = execFileSync("ffmpeg", ["-v", "error", "-c:v", "libvpx-vp9", "-i", path.resolve(proj, matteRelOf(src)), "-vf", "fps=5,alphaextract,scale=108:192", "-f", "rawvideo", "-pix_fmt", "gray", "-"], { maxBuffer: 1 << 28 });
+      const N = 108 * 192; track = [];
+      for (let f = 0; f * N < raw.length; f++) {
+        let top = null;
+        for (let y = 0; y < 192 && top === null; y++) for (let x = 22; x < 86; x++) if (raw[f * N + y * 108 + x] > 128) { top = y * (H / 192); break; }
+        track.push([r3(f / 5), top]);
+      }
+      fs.mkdirSync(path.dirname(cache), { recursive: true });
+      fs.writeFileSync(cache, JSON.stringify(track));
+    }
+    trackOf.set(src, track);
+    return track;
+  };
+  const headTopAt = (src, o0, o1) => { const v = headTrack(src).filter(([t, y]) => y !== null && t >= o0 - 0.2 && t <= o1 + 0.2).map(([, y]) => y); return v.length ? Math.min(...v) : null; };
+  const mattedTakes = takes.map((k) => stageMatted(k.src));
+  if (!mattedTakes.some(Boolean)) warn.push("stage: no recording has a face track, so nothing is cut out (every take plays as the plain plate)");
+  // auto subject scale (anchored at the bottom): the highest head top in the used (matted) takes sits >= safeTop + room
+  const tops = takes.filter((k, i) => mattedTakes[i]).map((k) => headTopAt(k.src, k.a, k.b)).filter((y) => y !== null);
+  const ht = tops.length ? Math.min(...tops) : 300;
+  SUBJ = st.fixedScale ?? r3(Math.min(st.scale, (H - (st.safeTop + st.room)) / Math.max(1, H - ht)));   // stage.fixedScale: a framed shot that keeps its size
+  const inSec = (k) => !(SECTION_MODE && !k.inSection);
+  if (st.wrap !== false) matteHtml += takes.map((k, i) => !mattedTakes[i] || !inSec(k) ? "" : ["r", "b"].map((c) => `
+      <video id="matte-${c}${i}" class="matte-l matte-${c}" src="${matteRelOf(k.src)}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="${c === "r" ? 30 : 31}" muted playsinline></video>`).join("")).join("");
+  matteHtml = `<div id="stage-subj" style="position:absolute;inset:0;transform:translateY(${st.offsetY ?? 0}px) scale(${SUBJ});transform-origin:50% 100%">${matteHtml}</div>`;
+  console.log(`stage: subject head top ${ht}px -> subject scale ${SUBJ} (bottom-anchored), ${mattedTakes.filter(Boolean).length} of ${takes.length} takes cut out`);
+  const red = st.red ?? "#FF2A3A", blue = st.blue ?? "#4D6BFF";
+  // stage.plate: a photographic set (a graded, blurred room still) instead of the drawn gradient; stage.practicals
+  // false drops the drawn bar + lamp (the plate's own lights carry it)
+  const plateSrc = st.plate ? userAsset(st.plate) : null;
+  // a moving set (stage.video, or a window's set): looped to the reel length and graded once with ffmpeg
+  const setClip = (cfg, name) => {
+    const vOut = path.join(A, name);
+    if (!fs.existsSync(vOut)) execFileSync("ffmpeg", ["-v", "error", "-y", "-stream_loop", "-1", "-i", path.resolve(proj, cfg.video), "-t", String(TOTAL + 0.5), "-an", "-vf", `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},fps=${FPS},${cfg.videoGrade ?? "eq=brightness=-0.05:saturation=0.9"}`, "-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p", vOut]);
+  };
+  const gridOf = (c) => c.grid ? `<div style="position:absolute;inset:0;background-image:linear-gradient(${c.grid} ${c.gridLine ?? 1.5}px, transparent ${c.gridLine ?? 1.5}px),linear-gradient(90deg, ${c.grid} ${c.gridLine ?? 1.5}px, transparent ${c.gridLine ?? 1.5}px);background-size:${c.gridSize ?? 90}px ${c.gridSize ?? 90}px;background-position:center;-webkit-mask-image:radial-gradient(80% 60% at 50% 40%, #000 30%, transparent 85%);mask-image:radial-gradient(80% 60% at 50% 40%, #000 30%, transparent 85%)"></div>` : "";
+  const glowOf = (c) => c.glow ? `<div style="position:absolute;inset:0;background:radial-gradient(42% 30% at 50% ${c.glowY ?? 34}%, ${c.glow}, transparent 75%)"></div>` : "";
+  let setVideo = "";
+  if (st.video && !st.windows) {
+    setClip(st, "stage-set.mp4");
+    setVideo = `<video id="stage-set" class="fill" src="assets/stage-set.mp4" data-start="0" data-duration="${r3(SECTION_MODE ? SECTION_TOTAL : TOTAL)}" data-track-index="40" muted playsinline style="opacity:${st.videoOpacity ?? 1}"></video>`;
+  }
+  stageBgHtml = `<div id="stage-bg" style="position:absolute;inset:0;overflow:hidden;background:${plateSrc ? `#050507 url(${plateSrc}) center / cover no-repeat` : st.video ? "#060606" : `radial-gradient(120% 70% at 22% 18%, ${st.haze ?? "#16196a"} 0%, #0a0a1c 42%, #050507 75%)`}">`
+    + setVideo + glowOf(st) + gridOf(st)
+    + (st.video ? "" : `<div style="position:absolute;inset:0;background:radial-gradient(55% 45% at 92% 55%, rgba(255,30,50,.28), transparent 70%)"></div>`)
+    + (st.practicals === false ? "" : `<div style="position:absolute;left:${st.barX ?? 950}px;top:${st.barY ?? 420}px;width:18px;height:${st.barH ?? 980}px;border-radius:9px;background:${red};box-shadow:0 0 18px ${red},0 0 60px ${red},0 0 160px rgba(255,20,40,.65)${st.practicalBlur ? `;filter:blur(${st.practicalBlur}px)` : ""}"></div>`
+    + `<div style="position:absolute;left:${st.bulbX ?? 70}px;top:${st.bulbY ?? 560}px;width:56px;height:56px;border-radius:50%;background:#c9d4ff;box-shadow:0 0 24px ${blue},0 0 80px ${blue},0 0 200px rgba(77,107,255,.6)${st.practicalBlur ? `;filter:blur(${st.practicalBlur}px)` : ""}"></div>`)
+    + `<div style="position:absolute;left:0;right:0;bottom:0;height:520px;background:linear-gradient(180deg,transparent,rgba(0,0,0,.55))"></div></div>`;
+  // matte edge: alpha steepened (the soft fringe that carried the old white wall goes) + erode; sides of the source frame
+  // fade out (stage.sideFade, % of the width) so a shrunk subject never shows the crop's straight edges; coloured light
+  // wraps (tinted copies of the cut-out, masked to one side, screen-blended) put the set's red / blue on the face
+  stageBgHtml += `<svg width="0" height="0" style="position:absolute"><filter id="stage-choke" color-interpolation-filters="sRGB" x="-5%" y="-5%" width="110%" height="110%"><feComponentTransfer in="SourceAlpha" result="a0"><feFuncA type="linear" slope="2" intercept="-0.5"/></feComponentTransfer><feMorphology in="a0" operator="erode" radius="${st.erode ?? 3}" result="e"/><feGaussianBlur in="e" stdDeviation="${st.feather ?? 1.6}" result="eb"/><feComposite in="SourceGraphic" in2="eb" operator="in"/></filter></svg>`;
+  const sf = st.sideFade ?? 8;
+  const sideMask = `-webkit-mask-image: linear-gradient(to right, transparent 0%, #000 ${sf}%, #000 ${100 - sf}%, transparent 100%); mask-image: linear-gradient(to right, transparent 0%, #000 ${sf}%, #000 ${100 - sf}%, transparent 100%);`;
+  // the plates the stage covers: every take of a matted recording (an un-matted recording keeps its plate)
+  const PLATE = mattedTakes.every(Boolean) ? 'video[id^="take-"], img[id^="hold-"]' : takes.flatMap((k, i) => mattedTakes[i] ? [`#take-${i}`, `#hold-${i}`] : []).join(", ");
+  stageCss = `${st.windows || !PLATE ? "" : `${PLATE} { opacity: 0 !important; }`}
+  .matte { filter: url(#stage-choke) ${st.subjectGrade ?? "brightness(.94) contrast(1.1)"}; ${sideMask} }
+  .matte-l { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; mix-blend-mode: screen; pointer-events: none; }
+  .matte-r { filter: url(#stage-choke) brightness(.8) sepia(1) saturate(9) hue-rotate(-38deg); opacity: ${st.wrapR ?? 0.85}; -webkit-mask-image: linear-gradient(to left, #000 0%, rgba(0,0,0,.6) ${Math.round((st.wrapSpan ?? 48) * 0.46)}%, transparent ${st.wrapSpan ?? 48}%); mask-image: linear-gradient(to left, #000 0%, rgba(0,0,0,.6) ${Math.round((st.wrapSpan ?? 48) * 0.46)}%, transparent ${st.wrapSpan ?? 48}%); }
+  .matte-b { filter: url(#stage-choke) brightness(.75) sepia(1) saturate(9) hue-rotate(185deg); opacity: ${st.wrapB ?? 0.75}; -webkit-mask-image: linear-gradient(to right, #000 0%, rgba(0,0,0,.5) ${Math.round((st.wrapSpan ?? 45) * 0.44)}%, transparent ${st.wrapSpan ?? 45}%); mask-image: linear-gradient(to right, #000 0%, rgba(0,0,0,.5) ${Math.round((st.wrapSpan ?? 45) * 0.44)}%, transparent ${st.wrapSpan ?? 45}%); }
+  .stage-fg { position: absolute; pointer-events: none; z-index: 2; }`;
+  // stage.fg: foreground props (a cut-out PNG: mic, lamp) in front of the speaker AND the type, defocused
+  for (const [fi, f] of (st.fg || []).entries()) stageFgHtml += `<img id="stage-fg${fi}" class="stage-fg" src="${userAsset(f.src)}" style="left:${f.x ?? 0}px;top:${f.y ?? 1300}px;width:${f.w ?? 600}px;transform:rotate(${f.rot ?? 0}deg)${f.flip ? " scaleX(-1)" : ""};filter:blur(${f.blur ?? 3}px) brightness(${f.bright ?? 1}) drop-shadow(0 0 ${f.rim ?? 0}px ${f.rimColor ?? "rgba(255,40,60,.6)"})" />`;
+  if (st.windows) {
+    let winHtml = "";
+    for (const [i, w] of st.windows.entries()) {
+      const key = w.set ?? "main", cfg = { ...st, ...(st.sets?.[key] || {}) };
+      const a = E(w.at, "stage window"), b = E(w.to, "stage window");
+      let vid = "";
+      if (cfg.video) {
+        setClip(cfg, `stage-set-${key}.mp4`);
+        vid = `<video id="stage-wv${i}" class="fill" src="assets/stage-set-${key}.mp4" data-start="${r3(a)}" data-duration="${r3(b - a)}" data-media-start="${r3(a + (SECTION_MODE ? SECTION_START : 0))}" data-track-index="${41 + i}" muted playsinline></video>`;
+      }
+      winHtml += `<div id="stage-w${i}" style="position:absolute;inset:0;overflow:hidden;opacity:0;background:${cfg.bgColor ?? "#060606"}">${vid}${glowOf(cfg)}${gridOf(cfg)}</div>`;
+      stageWins.push([a, b, i]);
+    }
+    stageBgHtml += `<div id="stage-wins" style="position:absolute;inset:0">${winHtml}</div>`;
+    // between windows the real footage plays and the cut-out is hidden
+    if (stageWins.length) {
+      if (stageWins[0][0] > 0.05) tl.push(`tl.set(".matte", { autoAlpha: 0 }, 0);`);
+      for (const [a, b, i] of stageWins) {
+        tl.push(`tl.set('${PLATE}', { opacity: 0 }, ${r3(a)}); tl.set(".matte", { autoAlpha: 1 }, ${r3(a)}); tl.set("#stage-w${i}", { opacity: 1 }, ${r3(a)});`);
+        tl.push(`tl.set('${PLATE}', { opacity: 1 }, ${r3(b)}); tl.set(".matte", { autoAlpha: 0 }, ${r3(b)}); tl.set("#stage-w${i}", { opacity: 0 }, ${r3(b)});`);
+      }
+    }
+  }
 }
 // the outro is a real still of the last frame, frozen under the end card
 const last = takes.at(-1);
@@ -1336,6 +1465,66 @@ for (const b of beatsList) {
       beatSfx(b, t0, "whoosh", "endcard");
       break;
     }
+    case "headline": {
+      // Podcast Glow (hand port of phantasic d8bb43a + 866dc8f): a small white sans line over a HUGE condensed yellow word with a
+      // glow ("WE HAVE" / "NO IDEA"). The small words land on their spoken times (b.smallAt), the big word slams in on b.bigAt.
+      // pos "low" (lower half), "top" (hook question at the top), "left" (stacked top-left). behind: true puts it between the
+      // plate and the speaker cut-out (needs "matte": true, or a stage); with spec.legibility.behind it goes through the same
+      // gate as a `behind` word. arrow: "left" | "right" draws a hand-drawn yellow arrow to the word. Sizes and y constants are
+      // 9:16 pixels, scaled to the format.
+      const hk = H / 1920, wk = W / 1080;
+      const SMALL = String(b.small ?? "").toUpperCase().trim(), BIG = String(b.big ?? "").toUpperCase();
+      if (!BIG) die(`headline at ${b.at} has no \`big\` word`);
+      const pos = b.pos ?? "low", left = pos === "left";
+      const behindMatte = !!(b.behind && spec.matte);
+      const avail = (left || behindMatte ? 860 : 980) * wk;   // behind the head it rides the punch-ins, so it keeps a crop margin
+      const bigLen = BIG.replace(/\s+/g, "").length + (BIG.split(/\s+/).length - 1) * 0.3;
+      let bsz = Math.min(b.size ?? 330, Math.floor(avail / (Math.max(2.5, bigLen) * 0.58)));
+      const ssz = Math.min(b.smallSize ?? 78, Math.floor(avail / (Math.max(4, SMALL.length) * 0.64)));
+      let y = b.y;
+      let arrowOn = b.arrow;
+      if (y === undefined) {
+        if (pos === "top" || left) y = placer.safeTop + (b.dy ?? 0);
+        else {
+          const sp = placer.span(t0, t1);
+          const under = sp && sp.seen ? sp.bottom + 30 : 1050 * hk;
+          const room = placer.safeBottom + 40 - Math.max(under, 980 * hk);
+          const smallH = SMALL ? ssz * 1.05 : 0;
+          if (room >= smallH + bsz * 0.98) y = Math.round(Math.max(under, 980 * hk));
+          else if (room >= smallH + 170 * hk) { bsz = Math.floor((room - smallH) / 0.98); y = Math.round(Math.max(under, 980 * hk)); }
+          else { y = placer.safeTop + 40 * hk; arrowOn = undefined; }   // a close-up with no room under the chin: the headline goes to the top band (no arrow)
+        }
+      }
+      let front = false;
+      if (behindMatte && !spec.stage) {
+        // the legibility gate models the speaker unscaled; a stage rescales the subject, so it is skipped there
+        const by = y + (SMALL ? ssz * 1.05 : 0), g = gateBehind(BIG, bsz, by, t0, t1, 0.58, `headline "${BIG}" at ${b.at}`);
+        y += g.y - by; bsz = g.size; front = g.front;
+      }
+      const blockH = (SMALL ? ssz * 1.05 : 0) + bsz * 0.98;
+      const smallWords = SMALL ? SMALL.split(/\s+/) : [];
+      const tryEb = (t) => { try { return E(t); } catch { return null; } };
+      const smallAt = (b.smallAt || []).map((x) => tryEb(x));
+      const bigT = b.bigAt !== undefined ? Math.max(t0, tryEb(b.bigAt) ?? t0) : t0;
+      const align = left ? "left" : "center";
+      const hcol = b.color ?? "#FFD21E";
+      const arrow = arrowOn ? `<svg id="${id}-ar" class="hl-ar" viewBox="0 0 160 200" style="${arrowOn === "left" ? "left:70px" : "right:70px"};top:${Math.round(y + (SMALL ? ssz : 0) + bsz * 0.75)}px;${arrowOn === "left" ? "" : "transform:scaleX(-1)"}"><path id="${id}-arp" d="M120 190 C 40 170, 20 110, 60 30" fill="none" stroke="${hcol}" stroke-width="7" stroke-linecap="round" stroke-dasharray="260" stroke-dashoffset="260"/><path id="${id}-arh" d="M34 52 L60 26 L84 54" fill="none" stroke="${hcol}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0"/></svg>` : "";
+      const shade = (pos === "top" || left) && b.shade !== false ? `<div class="hl-sh" style="height:${Math.round(y + blockH + 220 * hk)}px"></div>` : "";
+      const body = shade + `<div id="${id}-in" class="hl" style="top:${Math.round(y)}px;text-align:${align};${left ? "left:64px;right:120px" : "left:40px;right:40px"}">${SMALL ? `<div class="hl-s" style="font-size:${ssz}px">${smallWords.map((w, k) => `<span id="${id}-s${k}">${esc(w)}</span>`).join(" ")}</div>` : ""}<div id="${id}-b" class="hl-b" style="font-size:${bsz}px;color:${hcol}">${esc(BIG)}</div></div>${arrow}`;
+      smallWords.forEach((_, k) => tl.push(`ft("#${id}-s${k}", { autoAlpha: 0, y: 14 }, { autoAlpha: 1, y: 0, duration: 0.09, ease: "power3.out" }, ${r3(Math.min(bigT, Math.max(t0, smallAt[k] ?? t0)))});`));
+      tl.push(`ft("#${id}-b", { autoAlpha: 0, scale: 1.45, filter: "blur(10px)" }, { autoAlpha: 1, scale: 1, filter: "blur(0px)", duration: 0.16, ease: "expo.out" }, ${r3(bigT)});`);
+      if (t1 - bigT > 0.4) tl.push(`tl.to("#${id}-b", { scale: 1.05, duration: ${r3(t1 - bigT - 0.18)}, ease: "none" }, ${r3(bigT + 0.18)});`);
+      if (arrowOn) { tl.push(`tl.to("#${id}-arp", { strokeDashoffset: 0, duration: 0.28, ease: "power2.out" }, ${r3(bigT + 0.12)});`); tl.push(`tl.to("#${id}-arh", { opacity: 1, duration: 0.05 }, ${r3(bigT + 0.36)});`); }
+      hiddenCaps.push([t0, t1]);
+      if (b.sfx === undefined) { addSfx(r3(bigT - 0.1), "whoosh-2", "headline whoosh", { db: -6 }); addSfx(bigT, "impact-1", "headline slam", { db: -3 }); if (arrowOn) addSfx(r3(bigT + 0.12), "pen-short", "headline arrow", { db: -8 }); }
+      else beatSfx(b, bigT, "impact-1", "headline");
+      if (behindMatte) {
+        (front ? frontHtml : behindHtml).push(`<div id="${id}" class="clip behind" data-start="${t0}" data-duration="${dur}" data-track-index="1">${body}</div>`);
+        continue;
+      }
+      inner = body;
+      break;
+    }
     case "behind": {
       // lives INSIDE the camera wrappers, between the plate and the matte, so it
       // zooms with the speaker and the person stays in front of the letters
@@ -1572,8 +1761,36 @@ const emphIndexOf = (g) => {
   if (i < 0 && cap.autoEmph !== false) { let best = 4; g.forEach((w, k) => { const L = bareEmph(w.word).length; if (L > best) { best = L; i = k; } }); }
   return i;
 };
+// glow (Podcast Glow, hand port of phantasic d8bb43a, studied from @kayzee.edits): ONE word at a time, heavy caps in yellow
+// with a soft yellow glow, at chest height (captions.fixedY, 9:16 pixels scaled to the format); a word under ~0.14 s rides
+// with the next one. Headline beats take over the band while they are up. Fixed height like noir, so it bypasses the
+// placer except for dodging the face, and each block is still logged for caption_layout.json / qa.py.
+const glowHtml = cap.style !== "glow" ? "" : (() => {
+  const gs = []; let cur = [];
+  words.forEach((w, i) => {
+    const prev = words[i - 1];
+    const short = prev && prev.end - prev.start < (cap.joinUnder ?? 0.14) && cur.length < 2 && (prev.word + w.word).length <= 13 && w.start - prev.end < 0.12;
+    if (cur.length && !short) { gs.push(cur); cur = []; }
+    cur.push(w);
+  });
+  if (cur.length) gs.push(cur);
+  const S = cap.size ?? 70, Y = Math.round((cap.fixedY ?? 1230) * H / 1920), C = cap.color ?? "#FFD21E";
+  return gs.map((g, gi) => {
+    const s = r3(Math.max(0, g[0].start - 0.03));
+    const nextS = gi + 1 < gs.length ? gs[gi + 1][0].start - 0.03 : SPEECH;
+    const e = r3(Math.min(Math.max(g.at(-1).end + 0.12, s + 0.2), nextS, SPEECH, takeEndAt(takes, FPS, g.at(-1).start, SPEECH)));
+    if (e - s < 0.05) return "";
+    const txt = g.map((w) => w.word.replace(/[,.;:!?"]+$/, "").replace(/^["]+/, "").toUpperCase()).join(" ");
+    const size = Math.min(S, Math.floor(960 * W / 1080 / (Math.max(4, txt.length) * 0.72)));
+    let y = Y;
+    if (cap.dodgeFace !== false) { const sp = placer.span(s, Math.max(s, e - 0.05)); if (sp.seen && y < sp.bottom + 10 && y + size > sp.top) y = Math.round(Math.min(placer.safeBottom - size, sp.bottom + 24)); }
+    placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y, h: size, mode: "glow", scale: 1, face: null });
+    tl.push(`ft("#gw${gi}", { scale: 0.82, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 0.07, ease: "back.out(2.2)" }, ${s});`);
+    return `<div id="gw${gi}" class="gw clip" style="top:${y}px;font-size:${size}px;color:${C}" data-start="${s}" data-duration="${r3(e - s)}" data-track-index="5">${esc(txt)}</div>`;
+  }).join("\n      ");
+})();
 const edit = cap.style === "editorial" ? buildEditorialCaptions(words, cap, motionCtx, cap.onlyInScenes ? complement(shownCaps) : hiddenCaps) : null;
-const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
+const capHtml = cap.style === "glow" ? glowHtml : cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
   const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.05 : SPEECH;
   const e = Math.min(g.at(-1).end + 0.3, nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99), takeEndAt(takes, FPS, g.at(-1).start, SPEECH));
@@ -1599,7 +1816,9 @@ const capHtml = cap.style === "none" || edit ? "" : groups.map((g, gi) => {
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
 const UI_FONT = brand.font || (cyr ? "Inter" : "Geist");
-const capCss = cap.style === "noir"
+const capCss = cap.style === "glow"
+  ? `.gw { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; text-align: center; font-family: ${cap.font ?? "Montserrat"}, Inter, sans-serif; font-weight: 800; letter-spacing: 0.01em; line-height: 1; text-shadow: 0 0 14px ${cap.glow ?? "rgba(255,200,0,.75)"}, 0 0 36px ${cap.glow2 ?? "rgba(255,170,0,.45)"}, 0 3px 10px rgba(0,0,0,.55); }`
+  : cap.style === "noir"
   ? `.cap-group { font-family: 'Instrument Serif', 'EB Garamond', Georgia, serif; font-size: ${cap.size ?? 54}px; font-weight: 400; color: #F2EFE8; letter-spacing: .01em; line-height: 1.12; max-width: 900px; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
      .cap-group .w { margin: 0 .12em; } .cap-group .w.emph { font-style: italic; color: ${cap.gold ?? "#E2BE6A"}; text-shadow: 0 0 14px rgba(226,190,106,.45), 0 1px 6px rgba(0,0,0,.8); }`
   : cap.style === "clean"
@@ -2095,6 +2314,14 @@ const fontFaces = fs.readdirSync(path.join(A, "fonts")).filter((f) => /-(latin-e
   if (["Geist", "Inter", "Montserrat"].includes(fam)) return "";
   return `@font-face { font-family: "${fam}"; src: url(assets/fonts/${f}) format("woff2"); font-weight: 100 900;${m[3] ? " font-style: italic;" : ""} unicode-range: ${RANGES[m[2]]}; }`;
 }).join("\n  ");
+// headline beat (Podcast Glow) css: written only into a reel that has one, so every other page is unchanged
+const HL_CSS = (spec.beats || []).some((b) => b.type === "headline") ? `
+  .hl { position: absolute; pointer-events: none; }
+  .hl-sh { position: absolute; left: 0; right: 0; top: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.45) 55%, rgba(0,0,0,0) 100%); }
+  .hl-s { font-family: Montserrat, Inter, sans-serif; font-weight: 800; color: #fff; line-height: 1.02; letter-spacing: 0.005em; white-space: nowrap; text-shadow: 0 0 22px rgba(255,255,255,.28), 0 4px 16px rgba(0,0,0,.65); }
+  .hl-s span { display: inline-block; }
+  .hl-b { font-family: Anton, Oswald, sans-serif; font-weight: 400; line-height: .92; letter-spacing: 0.005em; white-space: nowrap; transform-origin: 50% 60%; text-shadow: 0 0 26px rgba(255,196,0,.55), 0 0 70px rgba(255,160,0,.35), 0 8px 22px rgba(0,0,0,.55); }
+  .hl-ar { position: absolute; width: 170px; height: 215px; overflow: visible; filter: drop-shadow(0 0 10px rgba(255,200,0,.5)); }` : "";
 const look = spec.look || {};
 if (look.exposure && look.exposure !== 1) tl.push(`tl.set("#pip", { filter: "brightness(${look.exposure}) contrast(${look.contrast ?? 1.04})" }, 0);`);
 const grainHtml = look.grain ? `<div id="grain" class="look-grain" style="opacity:${look.grain}"></div>` : "";
@@ -2131,9 +2358,9 @@ const html = `<!doctype html>
   #roomfill { position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; background: ${resolveColor(ROOM_FILL, brand)}; }
   #room { position: absolute; left: var(--room-ix, 0px); right: var(--room-ix, 0px); top: 0; bottom: var(--room-ib, 0px); z-index: 1; overflow: hidden; border-radius: var(--room-r, 0px); will-change: transform; transform-origin: 50% 0; }
   #roomin { position: absolute; left: calc(var(--room-ix, 0px) * -1); top: 0; width: ${W}px; height: ${H}px; }` : ""}
-  .behind { position: absolute; inset: 0; pointer-events: none; }
+  .behind { position: absolute; inset: 0; pointer-events: none; }${HL_CSS}
   .behind-in { position: absolute; left: -40px; right: -40px; text-align: center; font-weight: 900; line-height: .86; letter-spacing: -6px; text-transform: uppercase; white-space: nowrap; font-family: ${brand.displayFont ? `"${brand.displayFont}", ` : ""}${UI_FONT}, sans-serif; }
-  .matte { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .matte { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }${stageCss ? `\n  ${stageCss}` : ""}
   .look-grain { position: absolute; inset: 0; z-index: 6; pointer-events: none; mix-blend-mode: overlay; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='400' height='400' filter='url(%23n)' opacity='0.9'/></svg>"); }
   .look-vignette { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
   .layer { z-index: 3; }
@@ -2202,8 +2429,8 @@ const html = `<!doctype html>
 </head>
 <body>
 <div id="root" class="${spec.layout?.compact ? "compact" : ""}" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${SECTION_MODE ? SECTION_TOTAL : TOTAL}" data-fps="${FPS}">
-  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip"><div id="base"><div id="snap"><div id="push">${TX ? `<div id="tx" style="position:absolute;inset:0;transform-origin:50% 45%">` : ""}${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}${TX ? "</div>" : ""}${frontHtml.join("")}
-  </div></div></div></div>${roomWins.length ? `</div></div>` : ""}
+  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip">${stageBgHtml}<div id="base"><div id="snap"><div id="push">${TX ? `<div id="tx" style="position:absolute;inset:0;transform-origin:50% 45%">` : ""}${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}${TX ? "</div>" : ""}${frontHtml.join("")}
+  </div></div></div>${stageFgHtml}</div>${roomWins.length ? `</div></div>` : ""}
   ${overlays.filter((o) => o.html).map((o) => o.html).join("\n  ")}
   ${layersUnderHtml}${grainHtml}${vignetteHtml}${letterboxHtml}
   <div id="caps">

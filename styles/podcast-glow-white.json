@@ -1,0 +1,15 @@
+{
+  "_about": "Podcast Glow in white",
+  "extends": "podcast-glow",
+  "brand": {
+    "accent": "#FFFFFF"
+  },
+  "captions": {
+    "color": "#FFFFFF"
+  },
+  "look": {
+    "tint": {
+      "color": "#8fa6bd"
+    }
+  }
+}

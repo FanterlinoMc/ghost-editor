@@ -1,0 +1,15 @@
+{
+  "_about": "Podcast Glow in pink",
+  "extends": "podcast-glow",
+  "brand": {
+    "accent": "#FF4FD8"
+  },
+  "captions": {
+    "color": "#FF4FD8"
+  },
+  "look": {
+    "tint": {
+      "color": "#ff2ab0"
+    }
+  }
+}

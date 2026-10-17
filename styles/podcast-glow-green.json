@@ -1,0 +1,15 @@
+{
+  "_about": "Podcast Glow in green",
+  "extends": "podcast-glow",
+  "brand": {
+    "accent": "#39FF88"
+  },
+  "captions": {
+    "color": "#39FF88"
+  },
+  "look": {
+    "tint": {
+      "color": "#14b866"
+    }
+  }
+}

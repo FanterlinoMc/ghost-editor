@@ -1,0 +1,15 @@
+{
+  "_about": "Podcast Glow in purple",
+  "extends": "podcast-glow",
+  "brand": {
+    "accent": "#B57BFF"
+  },
+  "captions": {
+    "color": "#B57BFF"
+  },
+  "look": {
+    "tint": {
+      "color": "#7a3cff"
+    }
+  }
+}
