@@ -1,0 +1,23 @@
+{
+  "_about": "Folio 2: Editorial Collage as Ahmed hardened it for Folio (phantasic mini2-folio, 9 Oct 2026). Extends the fork's `editorial-collage` and leaves it untouched. What changes: object pop-ups sit in the reaction slot beside the head of the recording on screen and are skipped when the face fills the frame (objectPops.faceAware), the picture dips to black over the last 0.8 s (endFade), a sound whose file is missing plays a stand-in or is skipped (sfxFallback), a missing opening-burn texture no longer fails the build (openFlash.clipOptional), and his -15 LUFS / -1.5 dB master recipe (build/master.json). NOT taken: his music change (fade-out 1.0 and the lo-fi-02 fallback) - the fork's editorial-collage deliberately ships no music bed (`music: null`); set one on the reel and add music.fallback if you want it. Colour variants (folio-gold ...) still extend editorial-collage; extend `folio-2` for the hardened look in another colour. Plan with scripts/folio_plan.py (unwired in the studio).",
+  "extends": "editorial-collage",
+  "objectPops": { "faceAware": true },
+  "openFlash": { "clipOptional": true },
+  "endFade": 0.8,
+  "sfxFallback": {
+    "burn-whoosh-fast": "whoosh-2",
+    "burn-whoosh-tunnel": "whoosh-2",
+    "pop-whoosh-light": "pop-1",
+    "paper-quick": "whoosh-cine",
+    "paper-page-turn": "whoosh-cine",
+    "paper-pages": "whoosh-cine",
+    "paper-crinkle": "whoosh-cine",
+    "pen-short": "tick-1",
+    "pen-letters": "tick-1",
+    "pen-scribble": "tick-1",
+    "pen-scribble-2": "tick-1",
+    "zoom-sweep-small": "none",
+    "zoom-sweep-short": "none"
+  },
+  "master": { "lufs": -15, "ratio": 2, "threshold": -18, "postLimit": -1.5 }
+}

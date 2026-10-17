@@ -1,0 +1,20 @@
+{
+  "_about": "The Explainer 2 (Ahmed's phantasic `explainer` as hardened on mini2-explainer, 9 Oct 2026; the fork has no base `explainer` id, so this is the whole style, not an extension). Calm, clear teaching: small white pill captions (captions.pillKit: size 50, light, radius 14) at ~72% down that come back only after a hard-cut page is gone (captions.reshowLate), a spaced-caps hook title with one boxed word ('THE / HALO / EFFECT', an `effect` beat; b.fit shrinks long words), and concept pages: a black-and-white painting or engraving on torn paper, or the clause's key word set big (scene kind `cutout`, b.word), over a textured ground (paper / chalk / maroon / slate) while the spoken words type into black typewriter bars that break by length (b.barChars, b.maxBars). Gentle punch-ins every ~2.4 s, few sound hits (the page entry is a whoosh, sound.cutout), a soft bed (lo-fi-02, optional: no track on disk -> no music, with a warning), Ahmed's -15 LUFS master recipe (build/master.json). Footage keeps its colour. Plan with scripts/explainer_plan.py (unwired in the studio).",
+  "brand": { "accent": "#C49A2C", "accentDark": "#9C7A1E", "ink": "#111111", "capSize": 58, "font": "Inter" },
+  "captions": { "style": "pill", "pillKit": true, "light": true, "size": 50, "radius": 14, "group": 4, "y": 1380, "pop": false, "reshowLate": true },
+  "cadence": { "every": 2.4, "minGap": 1.4, "scales": [1.0, 1.08], "emphasisScale": 1.1 },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "sfxProfile": "restrained",
+  "sound": { "lines": false, "nametag": false, "objects": false, "paperIn": false, "pen": false, "zoom": false, "complete": false, "cutout": "whoosh", "cutoutDb": -10 },
+  "music": { "id": "lo-fi-02", "optional": true, "db": -17, "fadeIn": 0.4, "fadeOut": 0.4, "drops": false, "reveal": false, "payoff": false },
+  "look": { "grade": "none", "vignette": 0, "grain": 0, "cleanScenes": true },
+  "zoom": { "origin": "50% 36%", "base": 1.04 },
+  "outro": 0.15,
+  "master": { "lufs": -15, "ratio": 2, "threshold": -22, "lra": 6 },
+  "designer": true,
+  "director": {
+    "plan": "scripts/explainer_plan.py <project>: hook title (effect beat) + cutout concept pages on clauses that name a concept in the art library.",
+    "rules": "Everything on screen is spoken. Paintings only where the clause names their concept."
+  }
+}

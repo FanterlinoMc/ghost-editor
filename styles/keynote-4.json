@@ -1,0 +1,19 @@
+{
+  "_about": "Keynote 4: Keynote 3 plus the rest of Ahmed's Keynote hardening round 1 (phantasic f88943d, 9 Oct 2026), all opt-in keys. Adds a face-fitted punch-in (cadence.faceAnchor.fit: the zoomed face box stays inside the frame and under 38% of the frame height, per recording), light leaks that fall on sentence ends in a one-take clip (leaks.sentenceFallback), masked off the face (leaks.faceSafe) and softer (peak 0.6), the editorial caption shadow on .ew (captions.editorialShadow), long caption lines that shrink to fit (captions.fitLine), keyword treatments on the director's occurrence only (captions.keywordAt, written by a planner), and Ahmed's master recipe (-15 LUFS, build/master.json). Leaves keynote and keynote-3 untouched. NOT ported: the face-aware 9:16 landscape crop is prep.sh FACE_CROP=1, not a style key; his director.selfFromKept needs planner support.",
+  "extends": "keynote-3",
+  "designer": true,
+  "captions": {
+    "editorialShadow": "strong",
+    "fitLine": true
+  },
+  "cadence": {
+    "faceAnchor": { "fit": true, "maxFaceH": 0.38 }
+  },
+  "leaks": {
+    "every": 9,
+    "sentenceFallback": true,
+    "faceSafe": true,
+    "peak": 0.6
+  },
+  "master": { "lufs": -15, "ratio": 2, "threshold": -18, "postLimit": -2.5 }
+}
