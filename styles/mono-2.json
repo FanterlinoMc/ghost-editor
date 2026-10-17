@@ -1,0 +1,15 @@
+{
+  "_about": "Mono 2: Mono as Ahmed hardened it (phantasic mini2-mono, Mono v5, 9 Oct 2026). Extends the fork's `mono` and leaves it untouched. What changes: the footage is grayscale and high contrast everywhere (brand.film and look.grade), slightly larger lead and tail lines, a dark scrim behind the words on footage pages (brand.footScrim), the icon pop sound pop-1, a music.fallback bed (lo-fi-02) when the licensed track is missing, a longer fade-out, and his -15 LUFS master recipe (written to build/master.json). The planner side (mono_plan.py, v5) emits the matching opt-in beat keys: punchOrigin (punch around the face), filmFace (frame the card / phone film on the face), fit (shrink a close-up over a blurred copy of itself), cardH / cardW (a portrait card for a close-up). Colour variants (mono-navy ...) still extend `mono`; extend `mono-2` for the hardened look in another colour.",
+  "extends": "mono",
+  "designer": true,
+  "brand": {
+    "leadSize": 62,
+    "tailSize": 52,
+    "film": "grayscale(1) contrast(1.12)",
+    "iconSfx": "pop-1",
+    "footScrim": 0.5
+  },
+  "music": { "fallback": "lo-fi-02", "fadeOut": 0.8 },
+  "look": { "grade": "grayscale(1) contrast(1.12)" },
+  "master": { "lufs": -15, "ratio": 2.5, "threshold": -22, "lra": 7 }
+}

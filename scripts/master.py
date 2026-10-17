@@ -5,6 +5,9 @@
 
 The pitch style masters to -14 LUFS with LRA ~2-3 (the reference edit's numbers); house templates stay at -16.
 
+--lra N and --post-limit DB (opt-in; Ahmed's f88943d / mini2): loudnorm's LRA target (default 5, as before) and a plain alimiter
+after loudnorm in the default path (a ceiling in dBTP; unset = nothing added). Not the same as --tp, which belongs to --limiter.
+
 --limiter (opt-in; the default path is unchanged): gain to the target, then a 4x-oversampled brickwall true-peak
 limiter a little under the ceiling instead of loudnorm, verified on the encoded file (up to 4 passes). Ported from
 phantasic engine/review-fixes a30d106. A different algorithm, so its output differs from the default path.
@@ -49,15 +52,16 @@ def limiter_master(a):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("src"); ap.add_argument("dst")
     ap.add_argument("--lufs", type=float, default=-14); ap.add_argument("--ratio", type=float, default=3); ap.add_argument("--threshold", type=float, default=-20)
+    ap.add_argument("--lra", type=float, default=5); ap.add_argument("--post-limit", type=float, default=None)
     ap.add_argument("--limiter", action="store_true"); ap.add_argument("--tp", type=float, default=-1.0)
     a = ap.parse_args()
     if a.limiter: return limiter_master(a)
     comp = f"acompressor=threshold={a.threshold}dB:ratio={a.ratio}:attack=5:release=80:makeup=1"
-    r = subprocess.run(["ffmpeg", "-nostdin", "-hide_banner", "-i", a.src, "-af", f"{comp},loudnorm=I={a.lufs}:TP=-1:LRA=5:print_format=json", "-f", "null", "-"], capture_output=True, text=True)
+    r = subprocess.run(["ffmpeg", "-nostdin", "-hide_banner", "-i", a.src, "-af", f"{comp},loudnorm=I={a.lufs}:TP=-1:LRA={a.lra}:print_format=json", "-f", "null", "-"], capture_output=True, text=True)
     m = json.loads(re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", r.stderr, re.S).group(0))
-    ln = (f"loudnorm=I={a.lufs}:TP=-1:LRA=5:measured_I={m['input_i']}:measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}"
+    ln = (f"loudnorm=I={a.lufs}:TP=-1:LRA={a.lra}:measured_I={m['input_i']}:measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}"
           f":measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true")
-    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", a.src, "-c:v", "copy", "-af", f"{comp},{ln}", "-ar", "48000", "-c:a", "aac", "-b:a", "192k", a.dst], check=True)
+    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", a.src, "-c:v", "copy", "-af", f"{comp},{ln}" + (f",alimiter=limit={10 ** (a.post_limit / 20):.3f}:level=disabled" if a.post_limit is not None else ""), "-ar", "48000", "-c:a", "aac", "-b:a", "192k", a.dst], check=True)
     out = subprocess.run(["ffmpeg", "-nostdin", "-hide_banner", "-i", a.dst, "-af", "ebur128", "-f", "null", "-"], capture_output=True, text=True).stderr
     print("mastered:", re.findall(r"^\s+I:\s+(-?[0-9.]+) LUFS", out, re.M)[-1], "LUFS, LRA", re.findall(r"^\s+LRA:\s+([0-9.]+) LU", out, re.M)[-1])
 

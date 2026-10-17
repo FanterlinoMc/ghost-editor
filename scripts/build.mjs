@@ -608,8 +608,12 @@ const addSfx = (t, id, why, { db = 0, lead = 0 } = {}) => {
     sfxEvents.push({ t: r3(Math.max(0, t - lead)), id, role: "impact", vol: volFor("impact", db), dur, src: `assets/sfx/${file}`, why });
     return;
   }
-  const real = pick(id);
-  const m = sfxManifest[real];
+  let real = pick(id);
+  let m = sfxManifest[real];
+  // ---- spec.sfxFallback (opt-in; Folio, mini2): { "<id>": "<other id>" | "none" } - a sound whose file is not on this machine plays
+  // the named stand-in instead (when that one is there), else it is skipped and reported below as before.
+  const sfxOk_ = (r) => sfxManifest[r] && fs.existsSync(path.join(LIB, "sfx", sfxManifest[r].file));
+  if (spec.sfxFallback && !sfxOk_(real)) { const alt = spec.sfxFallback[real]; if (alt && alt !== "none" && sfxOk_(alt)) { real = alt; m = sfxManifest[alt]; } }
   if (!m) { missingSfx.set(real, (missingSfx.get(real) ?? 0) + 1); return; }
   const srcFile = path.join(LIB, "sfx", m.file);
   if (!fs.existsSync(srcFile)) { missingSfx.set(`${real} (${m.file})`, (missingSfx.get(`${real} (${m.file})`) ?? 0) + 1); return; }
@@ -829,7 +833,7 @@ const takeHtml = takes.map((k, i) => {
   let h = `
       <video id="take-${i}" src="${mediaOf.get(k.src)}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="0" muted playsinline></video>`;
   if (k.holdFrames) {
-    execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(k.a + k.dur - 1 / FPS, k.src), "-i", path.resolve(proj, mediaOf.get(k.src)), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, `hold-${i}.jpg`)]);
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(k.a + k.dur - 1 / FPS, k.src), "-i", path.resolve(proj, mediaOf.get(k.src)), "-frames:v", "1", "-strict", "unofficial", "-q:v", "2", "-update", "1", path.join(A, `hold-${i}.jpg`)]);
     h += `
       <img id="hold-${i}" class="fill" src="assets/hold-${i}.jpg" data-start="${r3(k.holdStart)}" data-duration="${r3(k.holdFrames / FPS)}" data-track-index="0" />`;
   }
@@ -1016,7 +1020,7 @@ if (spec.stage) {
 }
 // the outro is a real still of the last frame, frozen under the end card
 const last = takes.at(-1);
-if (OUTRO > 0) execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(last.a + last.dur - 1 / FPS, last.src), "-i", path.resolve(proj, mediaOf.get(last.src)), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, "outro.jpg")]);
+if (OUTRO > 0) execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(last.a + last.dur - 1 / FPS, last.src), "-i", path.resolve(proj, mediaOf.get(last.src)), "-frames:v", "1", "-strict", "unofficial", "-q:v", "2", "-update", "1", path.join(A, "outro.jpg")]);
 const outroHtml = OUTRO > 0 ? `
       <img id="outro-still" class="fill" src="assets/outro.jpg" data-start="${r3(SPEECH)}" data-duration="${r3(OUTRO)}" data-track-index="0" />` : "";
 // outroFade (opt-in): the held last frame fades to black instead of freezing (Ahmed's The Monk 2)
@@ -1134,7 +1138,7 @@ if (FACE_ANCHOR) {
     const f = nearest(track.get(k.src) || [], o);
     if (!f) return null;
     const { scale: cs, offsetX: cox, offsetY: coy } = crops[k.src] || { scale: 1, offsetX: 0, offsetY: 0 };
-    return { top: f[1] * cs + coy, cx: ((f[3] + f[4]) / 2) * cs + cox };
+    return { top: f[1] * cs + coy, cx: ((f[3] + f[4]) / 2) * cs + cox, bot: f[2] * cs + coy, l: f[3] * cs + cox, r: f[4] * cs + cox };   // bot/l/r: faceAnchor.fit
   };
   for (const [i, sn] of snaps.entries()) {
     if (sn[1] <= 1.001) continue;
@@ -1145,6 +1149,17 @@ if (FACE_ANCHOR) {
     const top = Math.min(...fs0.map((f) => f.top));
     const cx = fs0.map((f) => f.cx).sort((a, b) => a - b)[Math.floor(fs0.length / 2)];
     sn[2] = [Math.round(Math.max(0, Math.min(W, cx))), Math.round(Math.max(0, Math.min(doy, top - pad)))];
+    // ---- faceAnchor.fit (opt-in; Ahmed's Keynote hardening f88943d, per source): shrink the punch-in until the whole zoomed
+    // face box (ears included) stays inside the frame with a margin, and the face stays under maxFaceH of the frame height
+    // (wide shots punch in fully, close-ups barely). Uses the same per-take face + crop plan as the anchor above.
+    if (cadence.faceAnchor.fit) {
+      const [ox] = sn[2], L = Math.min(...fs0.map((f) => f.l)), R = Math.max(...fs0.map((f) => f.r)), B = Math.max(...fs0.map((f) => f.bot));
+      const m = cadence.faceAnchor.margin ?? 36, fh = B - top, caps = [(cadence.faceAnchor.maxFaceH ?? 0.4) * H / Math.max(1, fh)];
+      if (R > ox + 1) caps.push((W - m - ox) / (R - ox));
+      if (L < ox - 1) caps.push((ox - m) / (ox - L));
+      const zc = Math.min(sn[1], ...caps);
+      sn[1] = zc < 1.06 ? 1 : +zc.toFixed(3);
+    }
   }
   console.log(`cadence faceAnchor: ${snaps.filter((x) => x[2]).length} punch-ins anchored on the face`);
   for (const p of snapPatches) tl[p.idx] = snapLines(p.sn, p.fromZ);
@@ -1606,6 +1621,22 @@ for (const b of beatsList) {
     }
     // --- ported from origin/main (Ahmedmkarrar/phantasic) bd7ae09, 1 Oct: the beat types the
     // mono / pitch / monologue templates need. Additive by decision - no existing case changed.
+    // ---- effect (opt-in beat; Explainer hook title, hand port of phantasic engine/core + mini2-explainer b.fit) ----
+    // small spaced caps / ONE boxed word / small spaced caps ("THE / HALO / EFFECT"), each line landing as it is spoken, top third
+    // over the footage. b.fit: the boxed word shrinks to fit 1080 px. CSS: EXPLAINER_CSS, written only when an effect beat exists.
+    case "effect": {
+      const ls = (b.lines || []).map((l, i) => {
+        const at = r3(Math.max(t0, l.at != null ? E(l.at, "effect line") : t0 + i * 0.2));
+        tl.push(`ft("#${id}-l${i}", { autoAlpha: 0, y: 14, filter: "blur(6px)" }, { autoAlpha: 1, y: 0, filter: "blur(0px)", duration: 0.16, ease: "power3.out" }, ${at});`);
+        if (l.box) tl.push(`ft("#${id}-b${i}", { scaleX: 0 }, { scaleX: 1, duration: 0.22, ease: "power3.out" }, ${at});`);
+        return l.box ? `<div id="${id}-l${i}" class="ef-box"><i id="${id}-b${i}" style="background:${b.color ?? brand.accent}"></i><span${b.fit ? ` style="font-size:${Math.min(128, Math.floor(900 / (0.9 * Math.max(1, l.text.length))))}px"` : ""}>${esc(l.text.toUpperCase())}</span></div>`
+          : `<div id="${id}-l${i}" class="ef-sm">${esc(l.text.toUpperCase())}</div>`;
+      }).join("");
+      inner = `<div id="${id}-in" class="ov ef" style="top:${b.y ?? 240}px">${ls}</div>`;
+      tl.push(`tl.to("#${id}-in", { autoAlpha: 0, duration: 0.15 }, ${r3(t1 - 0.15)});`);
+      beatSfx(b, t0, "whoosh", "effect title", { db: -8 });
+      break;
+    }
     case "titlebox": {
       // the hook title types on letter by letter in an accent box that slides in tilted from the top left
       // and settles centred near the top; the box grows with the letters
@@ -1807,7 +1838,7 @@ if (cap.style !== "editorial" && cap.style !== "none") {
   const speechL = SECTION_MODE ? SPEECH - SECTION_START : SPEECH, totalL = SECTION_MODE ? SECTION_TOTAL : TOTAL;
   for (const [a, b0] of [...wins].sort((x, y) => x[0] - y[0])) { const b = b0 >= speechL - 0.1 ? totalL + 1 : b0; if (merged.length && a <= merged.at(-1)[1] + 0.05) merged.at(-1)[1] = Math.max(merged.at(-1)[1], b); else merged.push([a, b]); }
   tl.push(`tl.set("#caps", { autoAlpha: 1 }, 0);`);
-  for (const [a, b] of merged) { tl.push(`tl.to("#caps", { autoAlpha: 0, duration: 0.08 }, ${r3(a)});`); tl.push(`tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, ${r3(b - 0.05)});`); }
+  for (const [a, b] of merged) { tl.push(`tl.to("#caps", { autoAlpha: 0, duration: 0.08 }, ${r3(a)});`); tl.push(`tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, ${r3(b - (cap.reshowLate ? -0.01 : 0.05))});`); }   // cap.reshowLate (opt-in; Explainer r2): back only after a hard-cut page is gone (no half-faded pill over its last frames)
 }
 if (cap.breakOnCut) cap.cutTimes = takes.slice(1).map((k) => k.start);  // edit seconds of the jump cuts, for motion.mjs's editorial blocks
 // One emphasis word per caption group (styles that mark a hero word: Noir today; the same hook serves Lux / Authority).
@@ -1853,6 +1884,12 @@ const glowHtml = cap.style !== "glow" ? "" : (() => {
     return `<div id="gw${gi}" class="gw clip" style="top:${y}px;font-size:${size}px;color:${C}" data-start="${s}" data-duration="${r3(e - s)}" data-track-index="5">${esc(txt)}</div>`;
   }).join("\n      ");
 })();
+// ---- captions.keywordAt (opt-in; Ahmed's f88943d): director plans give { word: [source seconds] } -> edit seconds, so a keyword
+// treatment fires on the occurrence the director picked, not on every repeat (motion.mjs reads cap.keywordTimes)
+if (cap.keywordAt) {
+  cap.keywordTimes = {};
+  for (const [wd, ts] of Object.entries(cap.keywordAt)) cap.keywordTimes[wd] = ts.map((t) => { try { return E(t, "keywordAt"); } catch { return -99; } });
+}
 const edit = cap.style === "editorial" ? buildEditorialCaptions(words, cap, motionCtx, cap.onlyInScenes ? complement(shownCaps) : hiddenCaps) : null;
 const capHtml = cap.style === "glow" ? glowHtml : cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
@@ -1896,7 +1933,11 @@ const capCss = cap.style === "hormozi"
   : cap.style === "clean"
   ? `.cap-group { font-family: ${UI_FONT}, "Noto Sans Arabic", system-ui, sans-serif; font-size: ${cap.size ?? brand.capSize}px; font-weight: 800; color: #fff; letter-spacing: -1px; text-shadow: 0 4px 18px rgba(0,0,0,.55), 0 1px 3px rgba(0,0,0,.6); }`
   : cap.style === "pill"
-  ? `.cap-group { font-family: ${UI_FONT}, "Noto Sans Arabic", system-ui, sans-serif; font-size: 66px; font-weight: 800; color: #fff; background: rgba(12,12,14,.88); border-radius: 22px; padding: 16px 32px; max-width: 900px; }`
+  ? (cap.pillKit
+    // captions.pillKit (opt-in; Explainer r1): size / light (white pill, dark ink) / radius, and words that inherit the pill's ink
+    ? `.cap-group { font-family: ${UI_FONT}, "Noto Sans Arabic", system-ui, sans-serif; font-size: ${cap.size ?? 66}px; font-weight: 800; color: ${cap.light ? "#111" : "#fff"}; background: ${cap.light ? "rgba(255,255,255,.96)" : "rgba(12,12,14,.88)"}; border-radius: ${cap.radius ?? 22}px; padding: ${cap.light ? "10px 26px 14px" : "16px 32px"}; max-width: 900px; letter-spacing: ${cap.light ? "-0.02em" : "normal"}; box-shadow: ${cap.light ? "0 6px 18px rgba(0,0,0,.25)" : "none"}; }
+  .cap-group .w { color: inherit !important; }`
+    : `.cap-group { font-family: ${UI_FONT}, "Noto Sans Arabic", system-ui, sans-serif; font-size: 66px; font-weight: 800; color: #fff; background: rgba(12,12,14,.88); border-radius: 22px; padding: 16px 32px; max-width: 900px; }`)
   : cap.style === "box"
   ? `.cap-group { font-family: ${brand.font || "Montserrat"}, "Noto Sans Arabic", system-ui, sans-serif; font-size: ${CAP_SIZES.box}px; font-weight: 900; line-height: 1.08; color: ${cap.ink ?? brand.ink ?? "#111"}; background: ${cap.boxColor ?? brand.accent}; border-radius: 12px; padding: 10px 24px 14px; max-width: 860px; text-align: center; box-shadow: 0 10px 28px rgba(0,0,0,.28); }
   .cap-group .w { margin: 0 0.14em; }`
@@ -2002,14 +2043,44 @@ if (spec.leaks) {
   if (!spec.leaks.at) {
     let last = -Infinity;
     for (const k of takes.slice(1)) if (k.start - last >= every && k.start > 2 && k.start < SPEECH - 2) { times.push(r3(k.start)); last = k.start; }
+    // ---- leaks.sentenceFallback (opt-in; Ahmed's Keynote hardening f88943d): a one-take clip has no joins, so put the flash
+    // on sentence ends (whisper word gaps are unreliable, so punctuation decides); with no punctuation, the biggest word gap
+    // inside each stretch. Works on the edit-time `words` list, so it is source-agnostic.
+    if (spec.leaks.sentenceFallback) {
+      const want = Math.floor((SPEECH - 4) / (every + 3));
+      for (let i = 0; i + 1 < words.length && times.length < want; i++) {
+        const gap = words[i + 1].start - words[i].end, t = words[i].end + gap / 2;
+        if (/[.?!]$/.test(words[i].word) && t > 3 && t < SPEECH - 3 && times.every((x) => Math.abs(x - t) >= every)) times.push(r3(t));
+      }
+      for (let c = 6; c < SPEECH - 4 && times.length < want; c += every + 3) {
+        if (times.some((x) => Math.abs(x - c) < every)) continue;
+        let best = null;
+        for (let i = 0; i + 1 < words.length; i++) { const t = (words[i].end + words[i + 1].start) / 2, gap = words[i + 1].start - words[i].end; if (Math.abs(t - c) <= 2 && (!best || gap > best.gap)) best = { t, gap }; }
+        if (best && times.every((x) => Math.abs(x - best.t) >= every)) times.push(r3(best.t));
+      }
+      times.sort((a, b) => a - b);
+    }
   }
+  // ---- leaks.faceSafe (opt-in): the flash is masked out over the speaker's face. Per source: the median face box of the
+  // recording that is on screen at time t (its own face track and crop plan); a source with no track gets no mask.
+  const leakMaskAt = (t) => {
+    if (!spec.leaks.faceSafe) return "";
+    const k = locateTake(takes, Math.min(t, TOTAL - 0.01), FPS), fs_ = ((faces[k.src] || {}).samples || []).filter((s) => s[1] != null);
+    if (!fs_.length) return "";
+    const { scale: cs, offsetX: cox, offsetY: coy } = crops[k.src] || { scale: 1, offsetX: 0, offsetY: 0 };
+    const med = (i) => fs_.map((s) => s[i]).sort((a, b) => a - b)[Math.floor(fs_.length / 2)];
+    const cx = ((med(3) + med(4)) / 2 * cs + cox) / W * 100, cy = ((med(1) + med(2)) / 2 * cs + coy) / H * 100, rx = (med(4) - med(3)) * cs / W * 100 * 1.5, ry = (med(2) - med(1)) * cs / H * 100 * 1.4;
+    const g = `radial-gradient(ellipse ${rx.toFixed(1)}% ${ry.toFixed(1)}% at ${cx.toFixed(1)}% ${cy.toFixed(1)}%, transparent 55%, #000 100%)`;
+    return `-webkit-mask-image:${g};mask-image:${g};`;
+  };
+  const leakPeak = spec.leaks.peak ?? 1;   // leaks.peak / x / y (opt-in): flash strength and where its glow sits
   times.forEach((t, i) => {
     const clip = packOf && packClip(packOf, "leaks");
     // Alif: a flash is never silent; the whoosh rides it
     if (spec.sound?.leaks) addSfx(t - 0.3, spec.sound.leakSfx ?? "whoosh-cine", "light leak", { db: spec.sound.leakDb ?? -12 });
     if (clip) { packOverlay(clip, t - 0.35, 1.3, { blend: "screen", z: 7, opacity: 1, media: spec.leaks.media ?? 1.2, fadeIn: 0.25, fadeOut: 0.5, filter: spec.leaks.boost ?? "brightness(1.9) saturate(1.25)" }); return; }
-    leakHtml += `<div id="leak${i}" class="clip" data-start="${r3(Math.max(0, t - 0.25))}" data-duration="0.9" data-track-index="10" style="position:absolute;inset:0;z-index:7;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(ellipse 120% 90% at 30% 40%, rgba(${color},0.95) 0%, rgba(${color},0.55) 35%, rgba(255,90,20,0.18) 70%, rgba(0,0,0,0) 100%)"></div>`;
-    tl.push(`ft("#leak${i}", { opacity: 0 }, { opacity: 1, duration: 0.22, ease: "power2.in" }, ${r3(Math.max(0, t - 0.22))});`);
+    leakHtml += `<div id="leak${i}" class="clip" data-start="${r3(Math.max(0, t - 0.25))}" data-duration="0.9" data-track-index="10" style="position:absolute;inset:0;z-index:7;pointer-events:none;mix-blend-mode:screen;opacity:0;${leakMaskAt(t)}background:radial-gradient(ellipse 120% 90% at ${spec.leaks.x ?? 30}% ${spec.leaks.y ?? 40}%, rgba(${color},0.95) 0%, rgba(${color},0.55) 35%, rgba(255,90,20,0.18) 70%, rgba(0,0,0,0) 100%)"></div>`;
+    tl.push(`ft("#leak${i}", { opacity: 0 }, { opacity: ${leakPeak}, duration: 0.22, ease: "power2.in" }, ${r3(Math.max(0, t - 0.22))});`);
     tl.push(`tl.to("#leak${i}", { opacity: 0, duration: 0.55, ease: "power2.out" }, ${r3(t + 0.05)});`);
   });
   if (times.length) console.log(`light leaks: ${times.length} at ${times.join(", ")}`);
@@ -2067,6 +2138,9 @@ if (spec.openFlash) {
   tl.push(`tl.to("#oflash", { opacity: 0, xPercent: -20, duration: ${r3(dur * 0.55)}, ease: "power2.in" }, ${r3(t + dur * 0.4)});`);
   const pickBurn = (name) => {
     const src = path.join(LIB, "packs", packOf, "burns", name);
+    // openFlash.clipOptional (opt-in; Folio, mini2): a licensed pack that is not restored here must not fail the build - the brand-colour
+    // flash still plays, only the burn texture on top of it is skipped
+    if (!fs.existsSync(src) && f.clipOptional) { console.log(`WARNING openFlash.clip '${name}' is not in packs/${packOf}/burns; flash without the burn texture`); return null; }
     if (!fs.existsSync(src)) die(`openFlash.clip '${name}' is not in packs/${packOf}/burns`);
     fs.mkdirSync(path.join(A, "pack"), { recursive: true });
     fs.copyFileSync(src, path.join(A, "pack", `${packOf}-burns-${name}`));
@@ -2078,6 +2152,14 @@ if (spec.openFlash) {
   if (clip) topOverlays[topOverlays.length - 1] = topOverlays.at(-1).replace("pointer-events:none", "pointer-events:none;-webkit-mask-image:linear-gradient(90deg,#000 0%,#000 18%,transparent 55%);mask-image:linear-gradient(90deg,#000 0%,#000 18%,transparent 55%)");
   addSfx(t, f.sfx ?? "cinematic-film-flash", "open flash", { db: f.db ?? -8 });
   console.log(`open flash at ${t}s (${dur}s)`);
+}
+
+// ---------- end fade (spec.endFade, opt-in: seconds; Folio, mini2) ----------
+// the picture dips to black over the last endFade seconds, so the reel never stops on a frozen frame
+if (spec.endFade) {
+  const fd = Math.min(spec.endFade, TOTAL - 0.1);
+  leakHtml += `<div id="endfade" class="clip" data-start="${r3(TOTAL - fd)}" data-duration="${r3(fd)}" data-track-index="16" style="position:absolute;inset:0;z-index:50;background:#000;opacity:0;pointer-events:none"></div>`;
+  tl.push(`ft("#endfade", { opacity: 0 }, { opacity: 1, duration: ${r3(fd)}, ease: "power1.in" }, ${r3(TOTAL - fd)});`);
 }
 
 // ---------- list marks (spec.listMarks) ----------
@@ -2205,13 +2287,23 @@ if (spec.objectPops) {
     const obj = hit[1], t = r3(Math.max(0, words[i].start - 0.05));
     if (!have(obj) || used.has(obj) || t < 1.5 || t > SPEECH - 2 || t - last < gap) continue;
     if (busy.some(([a, b]) => t + hold > a && t < b)) continue;
+    // objectPops.faceAware (opt-in; Folio, mini2): the card goes in the reaction slot beside the head of the recording on screen at t
+    // (placer.slot is per source) instead of the fixed top-right spot, and is skipped when the face fills the frame
+    let px = P.x ?? 720, py = P.y ?? 300, psc = 1;
+    if (P.faceAware) {
+      const sl = placer.slot(t, t + hold, w, Math.round(w * 1.25));
+      if (!sl) continue;
+      px = sl.x; py = sl.y; psc = sl.scale ?? 1;
+      if (psc < (P.minScale ?? 0.6)) continue;
+    }
+    const wq = psc === 1 ? w : Math.round(w * psc);
     const id = `op${k++}`, rot = k % 2 ? 4 : -5;
     // the label is what they said: "day-to-day", "time", "money" (a hyphenated phrase stays whole)
     const label = (words[i].word.toLowerCase().split(/\s+/).find((p) => p.replace(/[^a-z0-9]/g, "") === one) || one).replace(/[^a-z0-9'-]/g, "");
     const src = userAsset(path.join(LIB, "engravings", "png", `${obj}.png`));
-    leakHtml += `<div id="${id}" class="clip" data-start="${t}" data-duration="${r3(hold + 0.3)}" data-track-index="15" style="position:absolute;left:${P.x ?? 720}px;top:${P.y ?? 300}px;width:${w}px;z-index:9;pointer-events:none;transform:rotate(${rot}deg)">
-      <div style="background:#efece4;padding:${Math.round(w * 0.07)}px;border-radius:6px;box-shadow:0 16px 36px rgba(0,0,0,.32), 0 2px 0 rgba(255,255,255,.4) inset"><img src="${src}" style="display:block;width:100%"/></div>
-      <div id="${id}-lab" style="display:inline-block;position:relative;margin:-26px 0 0 ${Math.round(w * 0.12)}px;padding:2px 16px 8px 12px;background:${brand.accent};color:#f4efe6;font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:${P.labelSize ?? 58}px;letter-spacing:-0.04em;line-height:1;white-space:nowrap;transform:rotate(${-rot * 0.6}deg);box-shadow:0 10px 22px rgba(0,0,0,.25)">${esc(label)}</div></div>`;
+    leakHtml += `<div id="${id}" class="clip" data-start="${t}" data-duration="${r3(hold + 0.3)}" data-track-index="15" style="position:absolute;left:${px}px;top:${py}px;width:${wq}px;z-index:9;pointer-events:none;transform:rotate(${rot}deg)">
+      <div style="background:#efece4;padding:${Math.round(wq * 0.07)}px;border-radius:6px;box-shadow:0 16px 36px rgba(0,0,0,.32), 0 2px 0 rgba(255,255,255,.4) inset"><img src="${src}" style="display:block;width:100%"/></div>
+      <div id="${id}-lab" style="display:inline-block;position:relative;margin:${psc === 1 ? -26 : Math.round(-26 * psc)}px 0 0 ${Math.round(wq * 0.12)}px;padding:2px 16px 8px 12px;background:${brand.accent};color:#f4efe6;font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:${psc === 1 ? (P.labelSize ?? 58) : Math.round((P.labelSize ?? 58) * Math.max(psc, 0.8))}px;letter-spacing:-0.04em;line-height:1;white-space:nowrap;transform:rotate(${-rot * 0.6}deg);box-shadow:0 10px 22px rgba(0,0,0,.25)">${esc(label)}</div></div>`;
     tl.push(`ft("#${id}-lab", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 0.3, ease: "power2.out" }, ${r3(t + 0.18)});`);
     tl.push(`ft("#${id}", { autoAlpha: 0, scale: 0.55, y: 30 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.3, ease: "back.out(1.8)" }, ${t});`);
     tl.push(`tl.to("#${id}", { autoAlpha: 0, scale: 0.85, y: -10, duration: 0.22, ease: "power2.in" }, ${r3(t + hold)});`);
@@ -2304,6 +2396,18 @@ if (spec.music) {
     const pickId = Object.keys(man).find((k) => (man[k].styles || []).includes(spec.style)) || "deep-techno-ambience";
     spec.music = { ...spec.music, id: pickId };
   }
+  // ---- music.fallback (opt-in; Ahmed's a09781d): a bed that is not on disk (a licensed track not restored on this machine) falls
+  // back to music.fallback when that one is, else the reel builds without music (the music.optional path below). Nothing happens
+  // unless the style / reel sets `fallback`, so a missing bed with no fallback still fails loudly as before.
+  if (spec.music.fallback && spec.music.id && !spec.music.src) {
+    const man_ = JSON.parse(fs.readFileSync(path.join(LIB, "music", "manifest.json"), "utf8"));
+    const onDisk = (id) => !!man_[id] && fs.existsSync(path.join(LIB, "music", man_[id].file));
+    if (!onDisk(spec.music.id)) {
+      const fb = onDisk(spec.music.fallback) ? spec.music.fallback : null;
+      console.log(`WARNING music bed "${spec.music.id}" is not in library/music; ${fb ? `using fallback "${fb}"` : "rendering without music"}`);
+      spec.music = fb ? { ...spec.music, id: fb } : { ...spec.music, optional: true };
+    }
+  }
   const drops = spec.music.drops;
   if (drops) {
     const times = [];
@@ -2364,6 +2468,33 @@ if (spec.music) {
     console.log(`music: ${spec.music.id || spec.music.src} at ${m.I} LUFS -> volume ${m.vol} (${spec.music.db ?? -20} dB under the voice)`);
   }
 }
+
+// style.master ({ lufs, ratio, threshold, lra, postLimit }) is Ahmed's final-master recipe (opt-in; mini2): written to build/master.json
+// for a caller to hand to scripts/master.py (--lufs --ratio --threshold --lra --post-limit). Nothing in the fork reads it yet.
+if (spec.master) fs.writeFileSync(path.join(proj, "build", "master.json"), JSON.stringify(spec.master));
+
+// Explainer (opt-in beats / scenes; hand port of phantasic engine/core): the CSS of the `effect` hook title and the `cutout` concept page.
+// Written into index.html ONLY when such a beat / scene exists, so every other reel is byte-identical.
+const EXPLAINER_CSS = (spec_, beats_) => {
+  const hasEffect = beats_.some((b) => b.type === "effect"), hasCut = beats_.some((b) => b.type === "scene" && b.kind === "cutout");
+  return (hasEffect ? `
+  .ef { position: absolute; left: 0; right: 0; text-align: center; color: #fff; text-shadow: 0 3px 16px rgba(0,0,0,.55); }
+  .ef-sm { font-family: Inter, system-ui, sans-serif; font-weight: 600; font-size: 54px; letter-spacing: .35em; margin: 6px 0; padding-left: .35em; }
+  .ef-box { position: relative; display: inline-block; padding: 4px 30px 12px; margin: 4px 0; }
+  .ef-box i { position: absolute; inset: 0; transform-origin: 0 50%; }
+  .ef-box span { position: relative; font-family: "Playfair Display", Georgia, serif; font-weight: 800; font-size: 128px; letter-spacing: .04em; line-height: 1; color: #fff; text-shadow: none; }` : "")
+  + (hasCut ? `
+  .co-grain { position: absolute; inset: 0; }
+  .co-art { position: absolute; left: 140px; right: 140px; top: 330px; height: 860px; overflow: hidden; box-shadow: 0 30px 60px rgba(0,0,0,.35); }
+  .co-art img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) contrast(1.2) brightness(1.02); }
+  .co-art.eng { background: #F4EFE3; left: 170px; right: 170px; top: 360px; height: 800px; }
+  .co-art.eng img { object-fit: contain; padding: 70px; box-sizing: border-box; mix-blend-mode: multiply; filter: grayscale(1) contrast(1.15); }
+  .co-art.wd { display: flex; align-items: center; justify-content: center; }
+  .co-word { font-family: "Playfair Display", Georgia, serif; font-weight: 800; color: #111; line-height: 1.02; letter-spacing: .02em; text-align: center; padding: 0 40px; white-space: nowrap; }
+  .co-bars { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .co-bar { background: #0b0b0b; color: #fff; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 64px; letter-spacing: .02em; padding: 6px 20px 12px; white-space: nowrap; min-height: 1em; }
+  .co-bar:empty { display: none; }` : "");
+};
 
 // ---------- write ----------
 const FONT_NAMES = { "instrument-serif": "Instrument Serif", "caveat-brush": "Caveat Brush", "yellowtail": "Yellowtail", "eb-garamond": "EB Garamond", "playfair-display": "Playfair Display", "jetbrains-mono": "JetBrains Mono", "geist-mono": "GeistMono" };
@@ -2496,7 +2627,12 @@ const html = `<!doctype html>
   .compact .l-line { font-size: 36px; margin: 2px 0; }
   .compact .strike-x { font-size: 80px; top: 8px; }
   .w { display: inline-block; margin: 0 0.2em; transform-origin: 50% 80%; }
-  ${(spec.beats || []).some((b) => b.type === "scene" && String(b.kind).startsWith("gm-")) ? GM_CSS : ""}${(spec.beats || []).some((b) => String(b.type).startsWith("hz-")) ? `\n  :root { --hz-accent: ${brand.accent}; }\n  ${HZ_CSS}` : ""}${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}
+  ${(spec.beats || []).some((b) => b.type === "scene" && String(b.kind).startsWith("gm-")) ? GM_CSS : ""}${(spec.beats || []).some((b) => String(b.type).startsWith("hz-")) ? `\n  :root { --hz-accent: ${brand.accent}; }\n  ${HZ_CSS}` : ""}${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}${EXPLAINER_CSS(spec, beatsList)}${spec.captions?.editorialShadow === "strong" ? `
+  /* captions.editorialShadow "strong" (opt-in; Ahmed's f88943d): editorial captions legible on bright or busy footage */
+  .ew { text-shadow: 0 1px 2px rgba(0,0,0,.9), 0 3px 8px rgba(0,0,0,.7), 0 6px 26px rgba(0,0,0,.6); }
+  .ew.ebold { text-shadow: 0 2px 3px rgba(0,0,0,.85), 0 6px 24px rgba(0,0,0,.65); }
+  .ew.ealarm { text-shadow: 0 2px 3px rgba(0,0,0,.85), 0 4px 18px rgba(0,0,0,.65); }
+  .ew.eser { text-shadow: 0 0 20px ${brand.accent}88, 0 2px 3px rgba(0,0,0,.95), 0 4px 12px rgba(0,0,0,.75); }` : ""}
 </style>
 </head>
 <body>
