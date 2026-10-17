@@ -1,6 +1,6 @@
 {
   "_about": "Mono in Plum: the mono pages with a plum accent instead of forest green.",
-  "extends": "mono",
+  "extends": "mono-2",
   "brand": {
     "accent": "#4E2463",
     "accentDark": "#381948"

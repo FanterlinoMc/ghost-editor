@@ -1,6 +1,6 @@
 {
   "_about": "Mono in Charcoal: the mono pages with a charcoal accent instead of forest green.",
-  "extends": "mono",
+  "extends": "mono-2",
   "brand": {
     "accent": "#1E1E22",
     "accentDark": "#121215"

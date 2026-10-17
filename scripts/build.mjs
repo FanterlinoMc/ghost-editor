@@ -917,7 +917,7 @@ if (spec.matte) {
       // npx is a .cmd shim on Windows and CreateProcess cannot launch it directly, so this
       // threw ENOENT and took every `behind` beat with it (they die() without a matte).
       const npx = process.platform === "win32" ? ["cmd", ["/c", "npx"]] : ["npx", []];
-      execFileSync(npx[0], [...npx[1], "hyperframes", "remove-background", path.resolve(proj, s), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 }); console.log("  matte done");
+      execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 }); console.log("  matte done");
     }
   }
   matteHtml = takes.map((k, i) => (spec.stage && !stageMatted(k.src)) ? "" : `
