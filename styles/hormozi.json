@@ -1,0 +1,58 @@
+{
+  "_about": "Hormozi (studied from Alex Hormozi's own 2026 Shorts, 12 Oct 2026, ~/reels/focus-refs/hormozi): clean authority edit. Red rounded title box (white heavy caps) under the caption for the hook, a white lower-third name card with avatar and red edge, clean white sentence-case captions 2-4 words with the keyword in heavy weight, a split screen numbered list (black bottom half, red numbers) when he counts points, small grey parenthetical notes, hard wide/close punch cuts, natural grade, no music.",
+  "brand": {
+    "accent": "#E5121B",
+    "accentDark": "#A80C12",
+    "ink": "#0b0b0b",
+    "capSize": 60,
+    "font": "Montserrat"
+  },
+  "captions": {
+    "style": "hormozi",
+    "size": 60,
+    "group": 3,
+    "fixedY": 1150,
+    "listY": 720
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.4,
+    "scales": [
+      1.0,
+      1.2
+    ],
+    "emphasisScale": 1.2
+  },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "sfxProfile": "restrained",
+  "sound": {
+    "lines": false,
+    "nametag": false,
+    "objects": false,
+    "paperIn": false,
+    "pen": false,
+    "zoom": false,
+    "complete": true
+  },
+  "music": {
+    "id": "deep-techno-ambience",
+    "optional": true,
+    "db": -30,
+    "fadeIn": 0.4,
+    "fadeOut": 0.5,
+    "drops": false,
+    "reveal": false,
+    "payoff": false
+  },
+  "sourceGrade": "curves=all='0/0 0.3/0.29 0.6/0.58 0.85/0.74 1/0.82',eq=contrast=1.08:saturation=1.06,colorbalance=rm=0.02:bm=-0.03,vignette=angle=PI/4.5",
+  "look": {
+    "grade": "none",
+    "vignette": 0.15,
+    "grain": 0
+  },
+  "outro": 0.15,
+  "director": {
+    "rules": "hz-title on the hook (the video's promise in 3-6 words, caps), hz-name once early, hz-list whenever the speaker counts points (items = what he says), hz-note only for a short clarifying aside. Keep it clean: no B-roll unless essential, no stickers."
+  }
+}

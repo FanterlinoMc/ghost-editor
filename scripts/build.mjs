@@ -35,6 +35,7 @@ import { loadStyleChain, checkBrandName } from "./lib/style-path.mjs";
 import { takeEndAt } from "./lib/caption-span.mjs";
 import * as PK from "./lib/premium.mjs";
 import { GM_CSS } from "./lib/gadzhi.mjs";
+import { HZ_CSS, hzBeat } from "./lib/hormozi.mjs";
 import { createHash } from "node:crypto";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
@@ -111,6 +112,10 @@ if (spec.stage) spec.matte = true;
 const FPS = spec.fps ?? 30;
 // brand kit: one accent (60/30/10), ink for text on light scenes, caption size
 const brand = { accent: "#D13F34", accentDark: "#B93026", ink: "#262626", capSize: 58, font: null, ...(spec.brand || {}) };
+// "#RRGGBB" -> "rgba(r,g,b,a)", for glows that follow the accent (colour themes: hormozi, podcast-glow)
+const rgbaOf = (hex, a) => { const h = String(hex).replace("#", ""); return /^[0-9a-f]{6}$/i.test(h) ? `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})` : hex; };
+// a stage / set glow of "accent" takes the template's accent colour
+const glowOf = (g) => (g === "accent" ? rgbaOf(brand.accent, 0.3) : g);
 const warn = [...styleWarnings];
 const die = (m) => { console.error("ERROR: " + m); process.exit(1); };
 // premium kit (opt-in, lib/premium.mjs): SVG defs collected here are written inside #root next to the watermark.
@@ -956,14 +961,14 @@ if (spec.stage) {
     if (!fs.existsSync(vOut)) execFileSync("ffmpeg", ["-v", "error", "-y", "-stream_loop", "-1", "-i", path.resolve(proj, cfg.video), "-t", String(TOTAL + 0.5), "-an", "-vf", `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},fps=${FPS},${cfg.videoGrade ?? "eq=brightness=-0.05:saturation=0.9"}`, "-c:v", "libx264", "-crf", "20", "-pix_fmt", "yuv420p", vOut]);
   };
   const gridOf = (c) => c.grid ? `<div style="position:absolute;inset:0;background-image:linear-gradient(${c.grid} ${c.gridLine ?? 1.5}px, transparent ${c.gridLine ?? 1.5}px),linear-gradient(90deg, ${c.grid} ${c.gridLine ?? 1.5}px, transparent ${c.gridLine ?? 1.5}px);background-size:${c.gridSize ?? 90}px ${c.gridSize ?? 90}px;background-position:center;-webkit-mask-image:radial-gradient(80% 60% at 50% 40%, #000 30%, transparent 85%);mask-image:radial-gradient(80% 60% at 50% 40%, #000 30%, transparent 85%)"></div>` : "";
-  const glowOf = (c) => c.glow ? `<div style="position:absolute;inset:0;background:radial-gradient(42% 30% at 50% ${c.glowY ?? 34}%, ${c.glow}, transparent 75%)"></div>` : "";
+  const glowLayer = (c) => c.glow ? `<div style="position:absolute;inset:0;background:radial-gradient(42% 30% at 50% ${c.glowY ?? 34}%, ${glowOf(c.glow)}, transparent 75%)"></div>` : "";
   let setVideo = "";
   if (st.video && !st.windows) {
     setClip(st, "stage-set.mp4");
     setVideo = `<video id="stage-set" class="fill" src="assets/stage-set.mp4" data-start="0" data-duration="${r3(SECTION_MODE ? SECTION_TOTAL : TOTAL)}" data-track-index="40" muted playsinline style="opacity:${st.videoOpacity ?? 1}"></video>`;
   }
   stageBgHtml = `<div id="stage-bg" style="position:absolute;inset:0;overflow:hidden;background:${plateSrc ? `#050507 url(${plateSrc}) center / cover no-repeat` : st.video ? "#060606" : `radial-gradient(120% 70% at 22% 18%, ${st.haze ?? "#16196a"} 0%, #0a0a1c 42%, #050507 75%)`}">`
-    + setVideo + glowOf(st) + gridOf(st)
+    + setVideo + glowLayer(st) + gridOf(st)
     + (st.video ? "" : `<div style="position:absolute;inset:0;background:radial-gradient(55% 45% at 92% 55%, rgba(255,30,50,.28), transparent 70%)"></div>`)
     + (st.practicals === false ? "" : `<div style="position:absolute;left:${st.barX ?? 950}px;top:${st.barY ?? 420}px;width:18px;height:${st.barH ?? 980}px;border-radius:9px;background:${red};box-shadow:0 0 18px ${red},0 0 60px ${red},0 0 160px rgba(255,20,40,.65)${st.practicalBlur ? `;filter:blur(${st.practicalBlur}px)` : ""}"></div>`
     + `<div style="position:absolute;left:${st.bulbX ?? 70}px;top:${st.bulbY ?? 560}px;width:56px;height:56px;border-radius:50%;background:#c9d4ff;box-shadow:0 0 24px ${blue},0 0 80px ${blue},0 0 200px rgba(77,107,255,.6)${st.practicalBlur ? `;filter:blur(${st.practicalBlur}px)` : ""}"></div>`)
@@ -994,7 +999,7 @@ if (spec.stage) {
         setClip(cfg, `stage-set-${key}.mp4`);
         vid = `<video id="stage-wv${i}" class="fill" src="assets/stage-set-${key}.mp4" data-start="${r3(a)}" data-duration="${r3(b - a)}" data-media-start="${r3(a + (SECTION_MODE ? SECTION_START : 0))}" data-track-index="${41 + i}" muted playsinline></video>`;
       }
-      winHtml += `<div id="stage-w${i}" style="position:absolute;inset:0;overflow:hidden;opacity:0;background:${cfg.bgColor ?? "#060606"}">${vid}${glowOf(cfg)}${gridOf(cfg)}</div>`;
+      winHtml += `<div id="stage-w${i}" style="position:absolute;inset:0;overflow:hidden;opacity:0;background:${cfg.bgColor ?? "#060606"}">${vid}${glowLayer(cfg)}${gridOf(cfg)}</div>`;
       stageWins.push([a, b, i]);
     }
     stageBgHtml += `<div id="stage-wins" style="position:absolute;inset:0">${winHtml}</div>`;
@@ -1239,6 +1244,7 @@ if (spec.nametag && !hasSelfTag) {
   beatsList.unshift({ type: "nametag", name: spec.nametag.name, title: spec.nametag.title, subtitle: spec.nametag.subtitle, at: spec.nametag.at ?? 0.15, to: Math.max(1.2, until), sfx: false });
 }
 const HANDOVER = 0.45;
+const hzLists = [];   // Authority (hormozi): edit-time spans of the split-screen lists, where the captions move up (captions.listY)
 // I-25: the resolved [t0, t1] every beat actually occupies on the output timeline, captured as a
 // side effect of this loop (same pattern as sfxEvents/slotUsed below) rather than re-derived later
 // - the HANDOVER extension a few lines down is exactly the kind of resolution a second
@@ -1553,6 +1559,26 @@ for (const b of beatsList) {
       inner = body;
       break;
     }
+    // ---- Authority / Hormozi beats (lib/hormozi.mjs, hand port of phantasic b928b75 + 684837f): hz-title, hz-name, hz-list, hz-note ----
+    case "hz-title": case "hz-name": case "hz-list": case "hz-note": {
+      if (b.type === "hz-name" && b.avatar === undefined) {
+        // a face still of the speaker, cut from the recording the beat is on (b.src, else the primary one) with THAT recording's
+        // face track: samples [t, top, bottom, left, right, eyes, mouth]; centred on eyes/mouth, b.avatarCrop [x, y, side] overrides
+        const asrc = SOURCES.includes(b.src) ? b.src : PRIMARY_SRC, at = b.avatarAt ?? (takes.find((k) => k.src === asrc) ?? takes[0]).a + 1;
+        const smp = ((faces[asrc] || {}).samples || []).filter((x) => x[1] != null).sort((p, q) => Math.abs(p[0] - at) - Math.abs(q[0] - at))[0];
+        const em = smp && smp[6] > smp[5] ? smp[6] - smp[5] : 200;
+        const [cx, cy, sz] = b.avatarCrop ? [b.avatarCrop[0] + b.avatarCrop[2] / 2, b.avatarCrop[1] + b.avatarCrop[2] / 2, b.avatarCrop[2]] : smp ? [Math.min((smp[3] + smp[4]) / 2, smp[3] + em * 1.4), (smp[5] + smp[6]) / 2 - em * 0.2, Math.round(em * 3.2)] : [W / 2, faceY, 560];
+        // face coordinates are in the pixel space of the recording the track was made on; clamp the crop to that recording's real frame
+        const [sw, sh] = execFileSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0:s=x", path.resolve(proj, mediaOf.get(asrc))]).toString().trim().split("x").map(Number);
+        const side = Math.min(sw, sh, W, Math.max(200, sz)), x0 = Math.round(Math.max(0, Math.min(sw - side, cx - side / 2))), y0 = Math.round(Math.max(0, Math.min(sh - side, cy - side / 2)));
+        const aname = asrc === PRIMARY_SRC ? "hz-avatar.jpg" : `hz-avatar-${srcIndex.get(asrc)}.jpg`;
+        execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(at, asrc), "-i", path.resolve(proj, mediaOf.get(asrc)), "-frames:v", "1", "-vf", `crop=${side}:${side}:${x0}:${y0},scale=240:240`, "-q:v", "2", "-update", "1", path.join(A, aname)]);
+        b.avatar = `assets/${aname}`;
+      }
+      inner = hzBeat(b, id, t0, t1, { tl, r3, esc, E, addSfx });
+      if (b.type === "hz-list") hzLists.push([t0, t1]);
+      break;
+    }
     case "behind": {
       // lives INSIDE the camera wrappers, between the plate and the matte, so it
       // zooms with the speaker and the person stays in front of the letters
@@ -1721,6 +1747,7 @@ const CAP_SIZES = { lux: cap.size ?? 46, noir: cap.size ?? 54, pill: 66, box: ca
 // height, revealed word by word (captions.revealDur, default 0.12 s), ONE emphasis word per line bloomed 1.5x that lands in a single
 // frame (captions.emph words, else the longest word of 5+ letters; autoEmph false = only captions.emph)
 if (cap.style === "lux") { cap.pop ??= false; cap.reveal ??= "word"; cap.revealDur ??= 0.12; cap.upper ??= true; if (spec.captions?.group == null) cap.group = 4; }
+if (cap.style === "hormozi") { cap.pop ??= false; cap.reveal ??= "none"; }   // Authority: white sentence-case caps, the keyword in heavy weight (group 3 is the default)
 if (cap.style === "noir") { cap.pop ??= false; cap.reveal ??= "none"; if (spec.captions?.group == null) cap.group = 6; }
 if (cap.style === "sessions") { cap.pop ??= false; cap.reveal ??= "word"; }
 if (cap.style === "clipping") { cap.pop ??= false; cap.reveal ??= "none"; }  // R1b port (Broadsheet)
@@ -1784,8 +1811,11 @@ if (cap.style !== "editorial" && cap.style !== "none") {
 if (cap.breakOnCut) cap.cutTimes = takes.slice(1).map((k) => k.start);  // edit seconds of the jump cuts, for motion.mjs's editorial blocks
 // One emphasis word per caption group (styles that mark a hero word: Noir today; the same hook serves Lux / Authority).
 // -1 for every other style, which keeps their span markup exactly class="w".
-const EMPH_STYLES = new Set(["noir", "lux"]);
+const EMPH_STYLES = new Set(["noir", "lux", "hormozi"]);
 const FIXED_Y = { noir: 1690, lux: 1540 };   // fixed-height caption styles (9:16 pixels): they bypass the face-aware placer
+// the fixed y of a caption block in 9:16 pixels, or null for a style that is placed by the face-aware placer. hormozi has two:
+// captions.fixedY (1150) normally, captions.listY (720) while a split-screen list is up.
+const fixedYOf = (style, s, e) => style === "hormozi" ? (hzLists.some(([a, b]) => s < b && e > a) ? (cap.listY ?? 720) : (cap.fixedY ?? 1150)) : FIXED_Y[style] ? (cap.fixedY ?? FIXED_Y[style]) : null;
 const emphSet = new Set((cap.emph || []).map((x) => x.toLowerCase().replace(/[^a-z0-9']/g, "")));
 const bareEmph = (w) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
 const emphIndexOf = (g) => {
@@ -1839,8 +1869,9 @@ const capHtml = cap.style === "glow" ? glowHtml : cap.style === "none" || edit ?
   const capSize = CAP_SIZES[cap.style] ?? (cap.style === "clean" ? (cap.size ?? brand.capSize) : (cap.size ?? 56));
   // noir / lux sit at a fixed height in the lower letterbox bar (cap.fixedY is in 9:16 pixels, scaled to other formats);
   // the block is still logged so caption_layout.json / qa.py see it
-  const pl = FIXED_Y[cap.style] ? { y: Math.round((cap.fixedY ?? FIXED_Y[cap.style]) * H / 1920), mode: cap.style, scale: 1 } : placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
-  if (FIXED_Y[cap.style]) placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: pl.y, h: Math.round(capSize * 1.3), mode: cap.style, scale: 1, face: null });
+  const fy = fixedYOf(cap.style, s, e);
+  const pl = fy != null ? { y: Math.round(fy * H / 1920), mode: cap.style, scale: 1 } : placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
+  if (fy != null) placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: pl.y, h: Math.round(capSize * 1.3), mode: cap.style, scale: 1, face: null });
   // captions.backing false (opt-in): no grey box over the lower face, a heavy text shadow instead
   const backed = pl.mode === "lower-face" && cap.backing !== false && !["pill", "box", "sessions"].includes(cap.style);
   const shadowed = pl.mode === "lower-face" && cap.backing === false;
@@ -1850,11 +1881,14 @@ const capHtml = cap.style === "glow" ? glowHtml : cap.style === "none" || edit ?
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
 const UI_FONT = brand.font || (cyr ? "Inter" : "Geist");
-const capCss = cap.style === "lux"
+const capCss = cap.style === "hormozi"
+  ? `.cap-group { font-family: Montserrat, ${UI_FONT}, system-ui, sans-serif; font-size: ${cap.size ?? 60}px; font-weight: 500; color: #fff; letter-spacing: -.5px; line-height: 1.2; max-width: 900px; text-shadow: 0 2px 10px rgba(0,0,0,.7), 0 0 2px rgba(0,0,0,.6); }
+     .cap-group .w { margin: 0 .12em; } .cap-group .w.emph { font-weight: 800; }`
+  : cap.style === "lux"
   ? `.cap-group { font-family: Montserrat, ${UI_FONT}, system-ui, sans-serif; font-size: ${cap.size ?? 46}px; font-weight: 700; color: #fff; letter-spacing: .02em; line-height: 1.25; max-width: 860px; text-shadow: 0 0 10px rgba(255,255,255,.35), 0 2px 10px rgba(0,0,0,.65); }
      .cap-group .w { margin: 0 .14em; } .cap-group .w.emph { font-size: 1.5em; font-weight: 800; vertical-align: -.08em; text-shadow: 0 0 18px rgba(255,236,200,.65), 0 0 40px rgba(255,190,120,.35), 0 2px 12px rgba(0,0,0,.6); }`
   : cap.style === "glow"
-  ? `.gw { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; text-align: center; font-family: ${cap.font ?? "Montserrat"}, Inter, sans-serif; font-weight: 800; letter-spacing: 0.01em; line-height: 1; text-shadow: 0 0 14px ${cap.glow ?? "rgba(255,200,0,.75)"}, 0 0 36px ${cap.glow2 ?? "rgba(255,170,0,.45)"}, 0 3px 10px rgba(0,0,0,.55); }`
+  ? `.gw { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; text-align: center; font-family: ${cap.font ?? "Montserrat"}, Inter, sans-serif; font-weight: 800; letter-spacing: 0.01em; line-height: 1; text-shadow: 0 0 14px ${cap.glow ?? rgbaOf(cap.color ?? brand.accent, 0.75)}, 0 0 36px ${cap.glow2 ?? rgbaOf(cap.color ?? brand.accent, 0.45)}, 0 3px 10px rgba(0,0,0,.55); }`
   : cap.style === "noir"
   ? `.cap-group { font-family: 'Instrument Serif', 'EB Garamond', Georgia, serif; font-size: ${cap.size ?? 54}px; font-weight: 400; color: #F2EFE8; letter-spacing: .01em; line-height: 1.12; max-width: 900px; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
      .cap-group .w { margin: 0 .12em; } .cap-group .w.emph { font-style: italic; color: ${cap.gold ?? "#E2BE6A"}; text-shadow: 0 0 14px rgba(226,190,106,.45), 0 1px 6px rgba(0,0,0,.8); }`
@@ -2357,8 +2391,8 @@ const HL_CSS = (spec.beats || []).some((b) => b.type === "headline") ? `
   .hl-sh { position: absolute; left: 0; right: 0; top: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.45) 55%, rgba(0,0,0,0) 100%); }
   .hl-s { font-family: Montserrat, Inter, sans-serif; font-weight: 800; color: #fff; line-height: 1.02; letter-spacing: 0.005em; white-space: nowrap; text-shadow: 0 0 22px rgba(255,255,255,.28), 0 4px 16px rgba(0,0,0,.65); }
   .hl-s span { display: inline-block; }
-  .hl-b { font-family: Anton, Oswald, sans-serif; font-weight: 400; line-height: .92; letter-spacing: 0.005em; white-space: nowrap; transform-origin: 50% 60%; text-shadow: 0 0 26px rgba(255,196,0,.55), 0 0 70px rgba(255,160,0,.35), 0 8px 22px rgba(0,0,0,.55); }
-  .hl-ar { position: absolute; width: 170px; height: 215px; overflow: visible; filter: drop-shadow(0 0 10px rgba(255,200,0,.5)); }` : "";
+  .hl-b { font-family: Anton, Oswald, sans-serif; font-weight: 400; line-height: .92; letter-spacing: 0.005em; white-space: nowrap; transform-origin: 50% 60%; text-shadow: 0 0 26px ${rgbaOf(cap.color ?? brand.accent, 0.55)}, 0 0 70px ${rgbaOf(cap.color ?? brand.accent, 0.35)}, 0 8px 22px rgba(0,0,0,.55); }
+  .hl-ar { position: absolute; width: 170px; height: 215px; overflow: visible; filter: drop-shadow(0 0 10px ${rgbaOf(cap.color ?? brand.accent, 0.5)}); }` : "";
 const look = spec.look || {};
 if (look.exposure && look.exposure !== 1) tl.push(`tl.set("#pip", { filter: "brightness(${look.exposure}) contrast(${look.contrast ?? 1.04})" }, 0);`);
 const grainHtml = look.grain ? `<div id="grain" class="look-grain" style="opacity:${look.grain}"></div>` : "";
@@ -2461,7 +2495,7 @@ const html = `<!doctype html>
   .compact .l-line { font-size: 36px; margin: 2px 0; }
   .compact .strike-x { font-size: 80px; top: 8px; }
   .w { display: inline-block; margin: 0 0.2em; transform-origin: 50% 80%; }
-  ${(spec.beats || []).some((b) => b.type === "scene" && String(b.kind).startsWith("gm-")) ? GM_CSS : ""}${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}
+  ${(spec.beats || []).some((b) => b.type === "scene" && String(b.kind).startsWith("gm-")) ? GM_CSS : ""}${(spec.beats || []).some((b) => String(b.type).startsWith("hz-")) ? `\n  :root { --hz-accent: ${brand.accent}; }\n  ${HZ_CSS}` : ""}${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}
 </style>
 </head>
 <body>

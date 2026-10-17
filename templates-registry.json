@@ -157,6 +157,14 @@
       "status": "beta",
       "style": "gadzhi-motion",
       "note": "Look ported from Ahmed's Gadzhi / Chrome Motion. Needs a planner to place the gm-* scene beats (his director is not ported). The 3D objects are AI-generated (Higgsfield Nano Banana Pro) with no row in the asset ledger yet: confirm they may ship before this leaves beta. The bed is optional (not shipped). Colour themes gadzhi-blue / -green / -red / -yellow are styles only."
+    },
+    {
+      "id": "authority",
+      "name": "Authority",
+      "tagline": "A clean authority edit: red title box, name card, split-screen numbered list, heavy-keyword captions",
+      "status": "beta",
+      "style": "hormozi",
+      "note": "Look ported from Ahmed's Hormozi. The beats (hz-title / hz-name / hz-list / hz-note) are planned by scripts/focus_director.py (standalone, not wired into the studio; its optional AI review needs ANTHROPIC_API_KEY). The bed is optional (not shipped). Colour variants hormozi-blue / -green / -orange / -purple / -teal are styles only."
     }
   ],
   "customer_templates": [

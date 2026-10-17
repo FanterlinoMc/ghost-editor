@@ -1,0 +1,7 @@
+{
+  "_about": "hormozi in orange",
+  "extends": "hormozi",
+  "brand": {
+    "accent": "#EA580C"
+  }
+}

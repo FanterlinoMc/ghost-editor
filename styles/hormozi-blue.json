@@ -1,0 +1,7 @@
+{
+  "_about": "hormozi in blue",
+  "extends": "hormozi",
+  "brand": {
+    "accent": "#1D4ED8"
+  }
+}
