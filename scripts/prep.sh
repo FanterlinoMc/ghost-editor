@@ -144,6 +144,22 @@ sh=$(awk -v h="$h" -v s="$scale" 'BEGIN{printf "%d", h*s+0.5}')
 xoff=$(awk -v sw="$sw" -v tw="$tw" 'BEGIN{v=(sw-tw)/2; if(v<0)v=0; printf "%d", v}')
 yoff=$(awk -v sh="$sh" -v th="$th" 'BEGIN{v=(sh-th)/2; if(v<0)v=0; printf "%d", v}')  # centred default
 mode="centre"
+xexpr="(in_w-out_w)/2"
+# ---- FACE_CROP=1 (opt-in; Ahmed's f88943d face_crop.py): a landscape source going to 9:16 is cropped around the speaker instead of
+# the centre. Only face_crop.py's STATIC result is used: a panning crop or the letterboxed "fit" window cannot be written into the
+# crop plan below (one scale + one offset), so those fall back to the centred crop. Needs python + OpenCV; anything missing -> centred.
+if [ "${FACE_CROP:-0}" = "1" ] && [ "$kind" = video ] && [ "$fmt" = "9:16" ] && [ "$sw" -gt "$tw" ]; then
+  fc=$("${PYTHON:-python3}" "$(dirname "$0")/face_crop.py" "$src" "$proj/build/facecrop$sfx.cmd" 2>/dev/null | tail -1 | tr -d '[:cntrl:]' || true)
+  case "$fc" in
+    crop=*:*:*:0)
+      fcx=$(printf '%s' "$fc" | cut -d: -f3)
+      xoff=$(awk -v x="$fcx" -v s="$scale" -v sw="$sw" -v tw="$tw" 'BEGIN{v=x*s; if(v<0)v=0; if(v>sw-tw)v=sw-tw; printf "%d", v+0.5}')
+      xexpr="max(0\,min($xoff\,in_w-out_w))"
+      echo "crop: face-aware x=$xoff of ${sw}px scaled frame (FACE_CROP=1, $fc)" ;;
+    "") echo "crop: FACE_CROP=1 but face_crop.py gave no result (python/OpenCV missing?) -- centred" ;;
+    *) echo "crop: FACE_CROP=1, face_crop.py wants a pan or a letterbox ($fc), which the crop plan cannot express -- centred" ;;
+  esac
+fi
 # This source's OWN face track, never another recording's: face coordinates are in the pixel
 # space of the file face_track.py ran on, so consulting face.json while prepping source 1 would
 # offset the crop by a face that is not in this footage.
@@ -204,7 +220,7 @@ else
   # override y alone. y is clamped against the REAL runtime frame height (in_h), not just our own
   # estimate of it above, in case ffmpeg's internal scale-filter rounding differs from awk's by a
   # pixel or two -- cheap insurance against a crop filter rejecting an off-by-one y.
-  vf="scale=$tw:$th:force_original_aspect_ratio=increase,crop=$tw:$th:(in_w-out_w)/2:max(0\,min($yoff\,in_h-out_h)),fps=30"
+  vf="scale=$tw:$th:force_original_aspect_ratio=increase,crop=$tw:$th:$xexpr:max(0\,min($yoff\,in_h-out_h)),fps=30"
   planScale="$scale"
   planOffX=$(awk -v x="$xoff" 'BEGIN{printf "%d", -x}')
   planOffY=$(awk -v y="$yoff" 'BEGIN{printf "%d", -y}')

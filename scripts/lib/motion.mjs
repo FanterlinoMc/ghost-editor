@@ -855,7 +855,7 @@ export function buildScene(b, id, t0, t1, ctx) {
         iconHtml = `<div id="${id}-ic" class="mn-ic mn-eng" style="width:${size}px;height:${size}px;-webkit-mask:url(${src}) center/contain no-repeat;mask:url(${src}) center/contain no-repeat"></div>`;
       }
       tl.push(`ft("#${id}-icw", { autoAlpha: 0, scale: 0.4, y: 30 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.26, ease: "back.out(2.4)" }, ${ia});`);
-      if (beatSfxOn(b)) addSfx(ia, "pop-whoosh-light", "stack icon", { db: -4 }); // A21: was unconditional; b.sfx:false now silences it like it does "stack key" (:807)
+      if (beatSfxOn(b)) addSfx(ia, b.iconSfx ?? brand.iconSfx ?? "pop-whoosh-light", "stack icon", { db: -4 }); // brand.iconSfx / b.iconSfx (opt-in, Mono 2): the icon pop. A21: was unconditional; b.sfx:false now silences it like it does "stack key" (:807)
       iconHtml = `<div id="${id}-icw">${bgIsPhone ? `<div class="mn-tile">${iconHtml}</div>` : iconHtml}</div>`;
     }
     // the block's height, so tall stacks centre on pages and stay inside the safe area on footage
@@ -864,13 +864,35 @@ export function buildScene(b, id, t0, t1, ctx) {
     // never under the platform's top bar (status bar / app header)
     const column = (top0) => { const top = Math.max(ctx.safeTop ?? 0, top0); return `<div class="mn-col" style="top:${top}px">${iconHtml}${lead}${rest}</div>`; };
     const selfAt = b.self ?? b.at;
-    const film = (cls) => `<video class="${cls}" src="${ctx.source}" data-start="${t0}" data-duration="${r3(t1 - t0)}" data-media-start="${selfAt}" data-track-index="19" muted playsinline></video>`;
+    // b.filmFace [x, y] (opt-in, Mono 2; source 1080x1920 px): frame the card/phone film on the speaker's face instead of the
+    // frame centre (a centred cover crop of a close-up shows chin and chest in a short card). Explicit data on the beat, so it
+    // is already per-recording: the planner reads the face track of the recording the page is cut from.
+    const facePos = (W_, H_) => {
+      if (!b.filmFace) return "";
+      const s_ = Math.max(W_ / 1080, H_ / 1920), [fx, fy] = b.filmFace;
+      const ox = Math.min(0, Math.max(W_ - 1080 * s_, W_ / 2 - fx * s_)), oy = Math.min(0, Math.max(H_ - 1920 * s_, H_ * 0.55 - fy * s_));
+      return ` style="object-position:${Math.round(ox)}px ${Math.round(oy)}px"`;
+    };
+    const film = (cls, W_, H_) => `<video class="${cls}" src="${ctx.source}" data-start="${t0}" data-duration="${r3(t1 - t0)}" data-media-start="${selfAt}" data-track-index="19" muted playsinline${W_ ? facePos(W_, H_) : ""}></video>`;
     if (ground === "footage") {
-      body = column(b.y ?? Math.round(Math.max(760, Math.min(1080, 1460 - est))));
+      const footTop = b.y ?? Math.round(Math.max(760, Math.min(1080, 1460 - est)));
+      body = column(footTop);
+      // brand.footScrim (opt-in, 0-1; Mono 2): a soft dark gradient behind the words on footage pages, from just above the stack
+      // to the bottom, so white words stay readable over a busy or bright shirt / background
+      if (brand.footScrim) body = `<div class="mn-scrim" style="position:absolute;left:0;right:0;bottom:0;top:${Math.max(0, footTop - 220)}px;background:linear-gradient(rgba(0,0,0,0), rgba(0,0,0,${brand.footScrim}) 200px)"></div>` + body;
+      // b.fit (opt-in, 0.6-1; Mono 2): a close-up with no room under the chin is shown smaller from the top edge (scale fit,
+      // origin top centre) over a blurred, darkened full-bleed copy of itself, so the words get the bottom band
+      if (b.fit) {
+        const blurF = `${brand.film && brand.film !== "none" ? brand.film + " " : ""}blur(28px) brightness(0.5)`;
+        body = `<div class="mn-fitbg" style="position:absolute;inset:0;overflow:hidden">${film("mn-film").replace("muted playsinline>", `muted playsinline style="filter:${blurF};transform:scale(1.15)">`)}</div>`
+          + `<div id="${id}-fit" class="mn-fit" style="position:absolute;inset:0;transform-origin:50% 0%;transform:scale(${b.fit})">${film("mn-film")}</div>` + body;
+        tl.push(`ft("#${id}-fit", { scale: ${b.fit} }, { scale: ${r3(b.fit * 1.03)}, duration: ${r3(Math.max(0.2, t1 - t0))}, ease: "none" }, ${t0});`);
+      }
       if (b.punch) {
         // hook: the camera punches in on the key, then drifts (a full-bleed copy of the footage, matched to #base)
         const base = ctx.zoomBase ?? 1;
-        body = `<div id="${id}-fw" class="mn-full" style="position:absolute;inset:0">${film("mn-film")}</div>` + body;
+        // b.punchOrigin (opt-in; Mono 2): punch in around this point (the face) instead of the class default
+        body = `<div id="${id}-fw" class="mn-full" style="position:absolute;inset:0${b.punchOrigin ? `;transform-origin:${b.punchOrigin}` : ""}">${film("mn-film")}</div>` + body;
         tl.push(`tl.set("#${id}-fw", { scale: ${base} }, ${t0});`);
         tl.push(`tl.to("#${id}-fw", { scale: ${r3(base * (b.punch === true ? 1.22 : b.punch))}, rotation: ${b.tilt ?? 0}, duration: 0.14, ease: "power3.out" }, ${keyAt});`);
         tl.push(`tl.to("#${id}-fw", { scale: ${r3(base * (b.punch === true ? 1.28 : b.punch + 0.06))}, duration: ${r3(Math.max(0.2, t1 - keyAt - 0.14))}, ease: "none" }, ${r3(keyAt + 0.14)});`);
@@ -879,12 +901,13 @@ export function buildScene(b, id, t0, t1, ctx) {
     } else if (ground === "card") {
       // a tall stack shrinks the card so the last line still ends inside the safe area (~1500)
       const cardH = Math.round(Math.max(560, Math.min(900, 1500 - est - 280)));
-      body = `<div id="${id}-card" class="mn-card" style="height:${cardH}px">${film("mn-film")}</div>${column(b.y ?? 330 + cardH - 60)}`;
+      // b.cardH / b.cardW / b.cardRadius (opt-in; Mono 2): an explicit card size (a portrait card for a close-up face)
+      body = `<div id="${id}-card" class="mn-card" style="height:${b.cardH ?? cardH}px${b.cardW ? `;left:${Math.round((1080 - b.cardW) / 2)}px;right:auto;width:${b.cardW}px;border-radius:${b.cardRadius ?? 18}px` : ""}">${film("mn-film", b.cardW ?? 940, b.cardH ?? cardH)}</div>${column(b.y ?? 330 + cardH - 60)}`;
       tl.push(`ft("#${id}-card", { scale: 0.9, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 0.24, ease: "expo.out" }, ${t0});`);
       customBg = brand.accent;
     } else if (ground === "phone") {
       const ui = `<div class="mn-ui"><i class="mn-top">‹<b>Reels</b>◎</i><i class="mn-rail">♡<br>◯<br>➤<br>⋯</i><i class="mn-user"><s></s>${esc(b.handle ?? "yourname")} · Follow</i><i class="mn-nav">⌂ ⌕ ⊕ ▷ ◯</i></div>`;
-      body = `${lead ? `<div class="mn-col" style="top:${b.leadY ?? 230}px">${lead}</div>` : ""}<div id="${id}-ph" class="mn-phone">${film("mn-film")}${ui}${iconHtml ? `<div class="mn-phic">${iconHtml}</div>` : ""}</div><div class="mn-col" style="top:${b.y ?? 1480}px">${rest}</div>`;
+      body = `${lead ? `<div class="mn-col" style="top:${b.leadY ?? 230}px">${lead}</div>` : ""}<div id="${id}-ph" class="mn-phone">${film("mn-film", 560, 1060)}${ui}${iconHtml ? `<div class="mn-phic">${iconHtml}</div>` : ""}</div><div class="mn-col" style="top:${b.y ?? 1480}px">${rest}</div>`;
       tl.push(`ft("#${id}-ph", { y: 120, autoAlpha: 0, scale: 0.92 }, { y: 0, autoAlpha: 1, scale: 1, duration: 0.32, ease: "expo.out" }, ${t0});`);
       tl.push(`tl.to("#${id}-ph", { scale: 1.04, duration: ${r3(Math.max(0.2, t1 - t0 - 0.32))}, ease: "none" }, ${r3(t0 + 0.32)});`);
       customBg = brand.accent;
@@ -905,6 +928,53 @@ export function buildScene(b, id, t0, t1, ctx) {
         tl.push(`tl.set("#${id}-ink", { "--ink": "${inkOf(g)}" }, ${ft0});`);
       }
     }
+  }
+
+
+  // ---- Explainer cutout page (opt-in scene kind; hand port of phantasic engine/core + the mini2-explainer hardening: b.word, b.barChars,
+  // b.maxBars, sound.cutout). Its CSS is only written into index.html when a cutout scene exists (build.mjs EXPLAINER_CSS).
+  else if (b.kind === "cutout") {
+    // Explainer concept page: a textured ground (paper / chalk / maroon / slate), a black-and-white painting cut out on
+    // torn edges, slightly tilted, scaling in; the spoken words type into black typewriter bars beside it
+    const G = { paper: ["#E6DFCF", "rgba(60,40,20,.10)"], chalk: ["#1E2723", "rgba(255,255,255,.05)"], maroon: ["#5C1F2B", "rgba(0,0,0,.18)"], slate: ["#4D5B7C", "rgba(0,0,0,.14)"] }[b.ground ?? "paper"];
+    customBg = G[0];
+    const tilt = b.tilt ?? -3;
+    const torn = "polygon(2% 4%, 12% 0%, 26% 3%, 41% 0%, 57% 4%, 73% 1%, 88% 3%, 100% 0%, 97% 18%, 100% 34%, 96% 52%, 100% 70%, 97% 86%, 100% 100%, 84% 97%, 69% 100%, 52% 96%, 36% 100%, 21% 97%, 6% 100%, 0% 84%, 3% 66%, 0% 48%, 4% 31%, 0% 15%)";
+    // an engraving (transparent cut-out object) sits on a torn cream paper scrap; a painting fills the scrap
+    // b.word (opt-in): no picture, the spoken key word set big in black serif caps on the scrap (a cut-out headline)
+    const art = b.word ? null : b.engraving ? ctx.userAsset(path.join(ctx.LIB, "engravings", "png", `${b.engraving}.png`)) : ctx.artAsset(b.art);
+    const spoken = words.filter((w) => w.start >= t0 - 0.05 && w.start < t1);
+    const lineWords = []; let cur = [];
+    if (b.barChars) {
+      // b.barChars (opt-in): bars break by length (<= barChars characters) instead of every 3 words, so long words
+      // never push a bar past the frame edge; b.maxBars caps the stack (later words join the last bar)
+      let n = 0;
+      spoken.forEach((w) => {
+        const len = w.word.replace(/[,.]$/, "").length;
+        if (cur.length && n + 1 + len > b.barChars && lineWords.length + 1 < (b.maxBars ?? 9)) { lineWords.push(cur); cur = []; n = 0; }
+        cur.push(w); n += (n ? 1 : 0) + len;
+      });
+    } else spoken.forEach((w) => { cur.push(w); if (cur.length >= 3) { lineWords.push(cur); cur = []; } });
+    if (cur.length) lineWords.push(cur);
+    // the longest bar sets one font size for the stack (JetBrains Mono ~0.62 em per glyph), never wider than 1000 px
+    const longest = Math.max(1, ...lineWords.map((ln) => ln.map((w) => w.word.replace(/[,.]$/, "")).join(" ").length));
+    const barPx = b.barChars ? Math.min(64, Math.floor(960 / (longest * 0.62))) : null;
+    lineWords.forEach((ln, li) => tl.push(`ft("#${id}-bar${li}", { autoAlpha: 0, scaleX: 0.6 }, { autoAlpha: 1, scaleX: 1, duration: 0.1, ease: "power2.out" }, ${r3(Math.max(t0 + 0.15, ln[0].start - 0.04))});`));
+    const bars = lineWords.map((ln, li) => `<div id="${id}-bar${li}" class="co-bar"${barPx ? ` style="font-size:${barPx}px"` : ""}>${ln.map((w, k) => {
+      const at = r3(Math.max(t0 + 0.15, w.start - 0.02)), wid = `${id}-t${li}-${k}`;
+      tl.push(`tl.set("#${wid}", { display: "inline" }, ${at});`);
+      return `<span id="${wid}" style="display:none">${esc((/^[A-Z]{2,}[a-z]?$/.test(w.word.replace(/[,.]$/, "")) ? w.word : w.word.toLowerCase()).replace(/[,.]$/, ""))} </span>`;
+    }).join("")}</div>`).join("");
+    body = `<div class="co-grain" style="background:radial-gradient(circle at 30% 20%, ${G[1]}, transparent 60%), radial-gradient(circle at 80% 90%, ${G[1]}, transparent 55%)"></div>
+      <div id="${id}-art" class="co-art${b.engraving || b.word ? " eng" : ""}${b.word ? " wd" : ""}" style="clip-path:${torn};transform:rotate(${tilt}deg)${b.word ? `;left:${b.wordX ?? 100}px;right:${b.wordX ?? 100}px;height:${b.wordH ?? 520}px;top:${b.wordTop ?? 560}px` : ""}">${b.word
+        ? `<div class="co-word" style="font-size:${Math.min(b.wordSize ?? 150, Math.floor((1000 - 2 * (b.wordX ?? 100)) / (0.92 * Math.max(4, ...String(b.word).split(/\s+/).map((x) => x.length)))))}px">${esc(String(b.word).toUpperCase())}</div>`
+        : `<img src="${art}" />`}</div>
+      <div id="${id}-bars" class="co-bars" style="top:${b.barsY ?? 1260}px">${bars}</div>`;
+    tl.push(`ft("#${id}-art", { scale: 1.12, autoAlpha: 0, rotation: ${tilt - 6} }, { scale: 1, autoAlpha: 1, rotation: ${tilt}, duration: 0.3, ease: "back.out(1.6)" }, ${t0});`);
+    tl.push(`tl.to("#${id}-art", { scale: 1.05, duration: ${r3(Math.max(0.2, t1 - t0 - 0.3))}, ease: "none" }, ${r3(t0 + 0.3)});`);
+    // sound.cutout (opt-in): the page's entry sound id (false = none); default the paper page turn
+    const coSfx = soundOf(ctx).cutout ?? "paper-page-turn";
+    if (coSfx) addSfx(t0, coSfx, "cutout page", { db: soundOf(ctx).cutoutDb ?? -6 });
   }
 
   // Chrome Motion (gm-object / gm-kinetic / gm-flow / gm-counter / gm-nodes): see lib/gadzhi.mjs. Only reached for a gm-* kind.
@@ -1010,6 +1080,10 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
   const { tl, r3, esc, brand, rtl } = ctx;
   const tags = (cap.tags || []).map((p) => p.split(/\s+/).map(norm));
   const hl = new Set((cap.highlight || []).map(norm));
+  // captions.keywordTimes (opt-in, edit seconds per word, written by build.mjs from captions.keywordAt; Ahmed's f88943d): a treatment
+  // applies only to the occurrence the director picked, not to every repeat of the word ("scared" x4 flashed B&W four times)
+  const kt = cap.keywordTimes;
+  const isKey = (w) => !kt || (kt[norm(w.word)] || []).some((t) => Math.abs(t - w.start) < 0.45);
   const lines = [];
   let cur = null;
   const push = (l) => { if (l && l.words.length) lines.push(l); };
@@ -1051,14 +1125,19 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
         return `<span class="eline"><span id="${lid}" class="etag">${esc(ln.words.map((w) => w.word.replace(/[.,!?]$/, "")).join(" "))}</span></span>`;
       }
       if (li > 0 && !bl[li - 1].tag && bl[li - 1].words) tl.push(`tl.to("#eb${bi}l${li - 1} .ew:not(.eser):not(.ebold):not(.ealarm)", { fontWeight: ${cap.prevWeight ?? 300}, color: "rgba(255,255,255,${cap.prevAlpha ?? 0.86})", duration: 0.2, ease: "power2.out" }, ${r3(ln.words[0].start - 0.03)});`);
-      return `<span id="${lid}" class="eline">${ln.words.map((w, wi) => {
+      // captions.fitLine (opt-in; Ahmed's f88943d): a line wider than the safe width (long words, a big keyword) shrinks to fit
+      // instead of running off the frame
+      const estW = cap.fitLine ? ln.words.reduce((n, w) => { const kk = isKey(w) ? (cap.keywords || {})[norm(w.word)] : null; const em = kk === "bold" ? (brand.boldScale ?? 1.9) : kk === "script" ? (brand.serifScale ?? 1) * 0.85 : 1; return n + (w.word.length * 0.56 * em + 0.26) * brand.capSize; }, 0) : 0;
+      const fitPx = estW > 900 ? Math.max(40, Math.floor(brand.capSize * 900 / estW)) : 0;
+      return `<span id="${lid}" class="eline"${fitPx ? ` style="font-size:${fitPx}px"` : ""}>${ln.words.map((w, wi) => {
         const wid = `${lid}w${wi}`;
         tl.push(`ft("#${wid}", { autoAlpha: 0, y: 10, filter: "blur(10px)" }, { autoAlpha: 1, y: 0, filter: "blur(0px)", duration: 0.26, ease: "power3.out" }, ${r3(w.start - 0.03)});`);
         const txt = cap.upper ? w.word.toUpperCase() : cap.lowercase === false ? w.word : w.word.toLowerCase();
         // per-word treatments (captions.keywords): script = gold handwritten, bold = huge accent sans,
         // alarm = red while the frame drains to black and white
-        const kw = (cap.keywords || {})[norm(w.word)];
-        if (kw === "script" || (!kw && hl.has(norm(w.word)) && cap.keywordStyle === "serif")) {
+        const kw = isKey(w) ? (cap.keywords || {})[norm(w.word)] : undefined;
+        const hlw = hl.has(norm(w.word)) && isKey(w);
+        if (kw === "script" || (!kw && hlw && cap.keywordStyle === "serif")) {
           // handwriting: the script word writes itself on, in reading direction (left to right
           // normally; mirrored for rtl scripts so the reveal still tracks how the word is read)
           const clipFrom = rtl ? "inset(0% 0% 0% 100%)" : "inset(0% 100% 0% 0%)";
@@ -1079,7 +1158,7 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
           if (cap.keywordSfx !== false && ctx.addSfx) ctx.addSfx(w.start, "impact", "keyword alarm", { db: -4 });
           return `<span id="${wid}" class="ew ealarm">${esc(txt)}</span>`;
         }
-        if (hl.has(norm(w.word))) {
+        if (hlw) {
           tl.push(`ft("#${wid}b", { scaleX: 0 }, { scaleX: 1, duration: 0.28, ease: "power3.out" }, ${r3(w.start)});`);
           return `<span class="ehl"><i id="${wid}b"></i><span id="${wid}" class="ew">${esc(txt)}</span></span>`;
         }
