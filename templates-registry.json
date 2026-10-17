@@ -149,6 +149,14 @@
       "status": "beta",
       "style": "podcast-glow",
       "note": "Look ported from Ahmed's Podcast Glow. The cut-out sets (stage.windows) need the person-segmentation matte, which is slow on CPU; without stage the look is glow captions + headlines over the warm-graded footage. Headlines are written by scripts/glow_plan.py (not wired into the studio). The bed is optional (not shipped) and the premium sound pack is not shipped. Colour variants podcast-glow-blue / -green / -pink / -purple / -red / -white are styles only."
+    },
+    {
+      "id": "chrome-motion",
+      "name": "Chrome Motion",
+      "tagline": "Real footage with a cinematic grade, and a chrome 3D object or a clean motion graphic on the key beats",
+      "status": "beta",
+      "style": "gadzhi-motion",
+      "note": "Look ported from Ahmed's Gadzhi / Chrome Motion. Needs a planner to place the gm-* scene beats (his director is not ported). The 3D objects are AI-generated (Higgsfield Nano Banana Pro) with no row in the asset ledger yet: confirm they may ship before this leaves beta. The bed is optional (not shipped). Colour themes gadzhi-blue / -green / -red / -yellow are styles only."
     }
   ],
   "customer_templates": [

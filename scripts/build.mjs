@@ -34,6 +34,8 @@ import { computeSections, buildSectionManifest, globalHash } from "./lib/section
 import { loadStyleChain, checkBrandName } from "./lib/style-path.mjs";
 import { takeEndAt } from "./lib/caption-span.mjs";
 import * as PK from "./lib/premium.mjs";
+import { GM_CSS } from "./lib/gadzhi.mjs";
+import { createHash } from "node:crypto";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 
@@ -779,6 +781,32 @@ for (const s of SOURCES) {
   }
 }
 const srcDurOf = new Map(SOURCES.map((s) => [s, parseFloat(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path.resolve(proj, s)]).toString())]));
+// spec.sourceGrade "<ffmpeg -vf chain>" (opt-in; hand port of phantasic 0b5bd5a + 3910075): a real colour grade baked into each
+// recording once (curves highlight roll-off, balance, vignette), so a blown window drops back without any cut-out. Cached as
+// assets/<recording>-graded-<hash>.mp4. PER RECORDING: with sourceExposure (default 132, false = off) each recording's face zone
+// luma is measured on its own and a gamma lifts or lowers its mid-tones before the chain, so every recording lands on the same
+// look from its own exposure; the hash includes that recording's gamma. Take timing, words, faces and edit_truth keep the
+// ORIGINAL recording's name; only the media tags and the stills read the graded file (mediaOf).
+const mediaOf = new Map(SOURCES.map((s) => [s, s]));
+const gradeGamma = {};
+if (spec.sourceGrade) {
+  for (const s of SOURCES) {
+    let chain = spec.sourceGrade;
+    if (spec.sourceExposure !== false) {
+      const out = execFileSync("ffmpeg", ["-v", "error", "-i", path.resolve(proj, s), "-vf", "fps=1,crop=iw*0.5:ih*0.35:iw*0.25:ih*0.15,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-", "-f", "null", "-"], { maxBuffer: 1 << 26 }).toString();
+      const ys = [...out.matchAll(/YAVG=([\d.]+)/g)].map((m) => +m[1]);
+      if (ys.length) {
+        const y = ys.reduce((a, b) => a + b, 0) / ys.length, gamma = Math.min(1.35, Math.max(0.8, 1 + ((spec.sourceExposure ?? 132) - y) / 180));
+        gradeGamma[s] = r3(gamma);
+        if (Math.abs(gamma - 1) > 0.02) chain = `eq=gamma=${gamma.toFixed(3)},${chain}`;
+        console.log(`exposure ${s}: face-zone luma ${y.toFixed(1)} -> gamma ${gamma.toFixed(3)}`);
+      }
+    }
+    const tag = createHash("md5").update(chain).digest("hex").slice(0, 8), g = `assets/${path.basename(s).replace(/\.[^.]+$/, "")}-graded-${tag}.mp4`;
+    if (!fs.existsSync(path.resolve(proj, g))) { console.log(`grading ${s} (sourceGrade)...`); execFileSync("ffmpeg", ["-v", "error", "-y", "-i", path.resolve(proj, s), "-vf", chain, "-c:v", "libx264", "-crf", "16", "-preset", "medium", "-pix_fmt", "yuv420p", "-c:a", "copy", path.resolve(proj, g)]); }
+    mediaOf.set(s, g);
+  }
+}
 // Every take must fit inside its OWN recording. With one source this is the check that already
 // existed implicitly via srcDur; with several it is the only thing standing between a typo in
 // take.src and a take that silently plays black.
@@ -793,9 +821,9 @@ const fadeLane = (d) => JSON.stringify({ version: 1, lanes: [{ target: "volume",
 const takeHtml = takes.map((k, i) => {
   if (SECTION_MODE && !k.inSection) return "";  // I-25 prototype: this take isn't on screen in this section
   let h = `
-      <video id="take-${i}" src="${k.src}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="0" muted playsinline></video>`;
+      <video id="take-${i}" src="${mediaOf.get(k.src)}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="0" muted playsinline></video>`;
   if (k.holdFrames) {
-    execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(k.a + k.dur - 1 / FPS, k.src), "-i", path.resolve(proj, k.src), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, `hold-${i}.jpg`)]);
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(k.a + k.dur - 1 / FPS, k.src), "-i", path.resolve(proj, mediaOf.get(k.src)), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, `hold-${i}.jpg`)]);
     h += `
       <img id="hold-${i}" class="fill" src="assets/hold-${i}.jpg" data-start="${r3(k.holdStart)}" data-duration="${r3(k.holdFrames / FPS)}" data-track-index="0" />`;
   }
@@ -982,7 +1010,7 @@ if (spec.stage) {
 }
 // the outro is a real still of the last frame, frozen under the end card
 const last = takes.at(-1);
-if (OUTRO > 0) execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(last.a + last.dur - 1 / FPS, last.src), "-i", path.resolve(proj, last.src), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, "outro.jpg")]);
+if (OUTRO > 0) execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", stillAt(last.a + last.dur - 1 / FPS, last.src), "-i", path.resolve(proj, mediaOf.get(last.src)), "-frames:v", "1", "-q:v", "2", "-update", "1", path.join(A, "outro.jpg")]);
 const outroHtml = OUTRO > 0 ? `
       <img id="outro-still" class="fill" src="assets/outro.jpg" data-start="${r3(SPEECH)}" data-duration="${r3(OUTRO)}" data-track-index="0" />` : "";
 // outroFade (opt-in): the held last frame fades to black instead of freezing (Ahmed's The Monk 2)
@@ -1181,7 +1209,7 @@ const faceFile = path.join(proj, spec.face || "build/face.json");
 const faceY = medianFaceY(fs.existsSync(faceFile) ? JSON.parse(fs.readFileSync(faceFile, "utf8")) : null, 700);
 const faceYBySrc = new Map(SOURCES.map((s) => [s, medianFaceY(faces[s], SOURCES.length > 1 && s !== PRIMARY_SRC && !faces[s]?.samples?.length ? 700 : faceY)]));
 const faceYAt = (t) => faceYBySrc.get(locateTake(takes, t, FPS)?.src) ?? faceY;
-const motionCtx = { tl, E, r3, brollGrade, safeTop: placer.safeTop, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
+const motionCtx = { tl, E, r3, brollGrade, gmTheme: spec.gm?.theme, safeTop: placer.safeTop, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
 // a scene that hands over to an expand/wipe scene stays underneath until the
 // incoming panel has covered it
@@ -1685,10 +1713,14 @@ const cap = { style: "house", group: 3, highlight: null, ...(spec.captions || {}
 if (cap.style === "clean" && !cap.highlight) cap.highlight = brand.accent;
 // box: the Closer (whole phrase on a solid accent box); condensed: the Headline (tall 1-2 word caps);
 // serif: the Monk (small lowercase serif, no motion)
-const CAP_SIZES = { noir: cap.size ?? 54, pill: 66, box: cap.size ?? 60, condensed: cap.size ?? 104, serif: cap.size ?? 52, sessions: cap.size ?? 64 };
+const CAP_SIZES = { lux: cap.size ?? 46, noir: cap.size ?? 54, pill: 66, box: cap.size ?? 60, condensed: cap.size ?? 104, serif: cap.size ?? 52, sessions: cap.size ?? 64 };
 // noir (premium kit, hand port of phantasic dc92283): cinema subtitles - sentence-case serif, the whole line at once, sitting
 // in the lower letterbox bar at a fixed height (it does not go through the face-aware placer); ONE emphasis word per line
 // goes gold italic (captions.emph words, else the longest word of 5+ letters; captions.gold sets the colour)
+// lux (premium kit, hand port of phantasic 2771fee / a206d9e, used by Chrome Motion and Prestige): small sentence caps at a fixed
+// height, revealed word by word (captions.revealDur, default 0.12 s), ONE emphasis word per line bloomed 1.5x that lands in a single
+// frame (captions.emph words, else the longest word of 5+ letters; autoEmph false = only captions.emph)
+if (cap.style === "lux") { cap.pop ??= false; cap.reveal ??= "word"; cap.revealDur ??= 0.12; cap.upper ??= true; if (spec.captions?.group == null) cap.group = 4; }
 if (cap.style === "noir") { cap.pop ??= false; cap.reveal ??= "none"; if (spec.captions?.group == null) cap.group = 6; }
 if (cap.style === "sessions") { cap.pop ??= false; cap.reveal ??= "word"; }
 if (cap.style === "clipping") { cap.pop ??= false; cap.reveal ??= "none"; }  // R1b port (Broadsheet)
@@ -1752,7 +1784,8 @@ if (cap.style !== "editorial" && cap.style !== "none") {
 if (cap.breakOnCut) cap.cutTimes = takes.slice(1).map((k) => k.start);  // edit seconds of the jump cuts, for motion.mjs's editorial blocks
 // One emphasis word per caption group (styles that mark a hero word: Noir today; the same hook serves Lux / Authority).
 // -1 for every other style, which keeps their span markup exactly class="w".
-const EMPH_STYLES = new Set(["noir"]);
+const EMPH_STYLES = new Set(["noir", "lux"]);
+const FIXED_Y = { noir: 1690, lux: 1540 };   // fixed-height caption styles (9:16 pixels): they bypass the face-aware placer
 const emphSet = new Set((cap.emph || []).map((x) => x.toLowerCase().replace(/[^a-z0-9']/g, "")));
 const bareEmph = (w) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
 const emphIndexOf = (g) => {
@@ -1794,19 +1827,20 @@ const capHtml = cap.style === "glow" ? glowHtml : cap.style === "none" || edit ?
   const s = Math.max(0, g[0].start - 0.05);
   const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.05 : SPEECH;
   const e = Math.min(g.at(-1).end + 0.3, nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99), takeEndAt(takes, FPS, g.at(-1).start, SPEECH));
+  const emphI = emphIndexOf(g);
   g.forEach((w, wi) => {
     if (cap.pop !== false) tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: 1.08, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
     // reveal: word -> each word appears when it's spoken; the box is already sized for the whole phrase
     if (cap.style === "clipping" && wi === 0) tl.push(`ft("#cg${gi}", { scale: 0.9 }, { scale: 1, duration: 0.12, ease: "back.out(2.5)" }, ${r3(s)});`);  // R1b port (Broadsheet)
-    if (cap.reveal === "word" && wi > 0) tl.push(`ft("#cg${gi}w${wi}", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.05 }, ${r3(Math.max(s, w.start - 0.02))});`);
+    // the emphasis word (lux) lands at full strength in one frame: a fading hero word reads as a ghost
+    if (cap.reveal === "word" && wi > 0) tl.push(`ft("#cg${gi}w${wi}", { autoAlpha: 0 }, { autoAlpha: 1, duration: ${cap.style === "lux" && wi === emphI ? 0.01 : (cap.revealDur ?? 0.05)} }, ${r3(Math.max(s, w.start - 0.02))});`);
     if (cap.highlight) tl.push(`tl.set("#cg${gi}w${wi}", { color: "${cap.highlight}" }, ${r3(w.start)}); tl.set("#cg${gi}w${wi}", { color: "#fff" }, ${r3(Math.min(w.end + 0.02, e - 0.01))});`);
   });
   const capSize = CAP_SIZES[cap.style] ?? (cap.style === "clean" ? (cap.size ?? brand.capSize) : (cap.size ?? 56));
-  const emphI = emphIndexOf(g);
-  // noir sits at a fixed height in the lower letterbox bar (cap.fixedY is in 9:16 pixels, scaled to other formats);
+  // noir / lux sit at a fixed height in the lower letterbox bar (cap.fixedY is in 9:16 pixels, scaled to other formats);
   // the block is still logged so caption_layout.json / qa.py see it
-  const pl = cap.style === "noir" ? { y: Math.round((cap.fixedY ?? 1690) * H / 1920), mode: "noir", scale: 1 } : placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
-  if (cap.style === "noir") placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: pl.y, h: Math.round(capSize * 1.3), mode: "noir", scale: 1, face: null });
+  const pl = FIXED_Y[cap.style] ? { y: Math.round((cap.fixedY ?? FIXED_Y[cap.style]) * H / 1920), mode: cap.style, scale: 1 } : placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
+  if (FIXED_Y[cap.style]) placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: pl.y, h: Math.round(capSize * 1.3), mode: cap.style, scale: 1, face: null });
   // captions.backing false (opt-in): no grey box over the lower face, a heavy text shadow instead
   const backed = pl.mode === "lower-face" && cap.backing !== false && !["pill", "box", "sessions"].includes(cap.style);
   const shadowed = pl.mode === "lower-face" && cap.backing === false;
@@ -1816,7 +1850,10 @@ const capHtml = cap.style === "glow" ? glowHtml : cap.style === "none" || edit ?
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
 const UI_FONT = brand.font || (cyr ? "Inter" : "Geist");
-const capCss = cap.style === "glow"
+const capCss = cap.style === "lux"
+  ? `.cap-group { font-family: Montserrat, ${UI_FONT}, system-ui, sans-serif; font-size: ${cap.size ?? 46}px; font-weight: 700; color: #fff; letter-spacing: .02em; line-height: 1.25; max-width: 860px; text-shadow: 0 0 10px rgba(255,255,255,.35), 0 2px 10px rgba(0,0,0,.65); }
+     .cap-group .w { margin: 0 .14em; } .cap-group .w.emph { font-size: 1.5em; font-weight: 800; vertical-align: -.08em; text-shadow: 0 0 18px rgba(255,236,200,.65), 0 0 40px rgba(255,190,120,.35), 0 2px 12px rgba(0,0,0,.6); }`
+  : cap.style === "glow"
   ? `.gw { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; text-align: center; font-family: ${cap.font ?? "Montserrat"}, Inter, sans-serif; font-weight: 800; letter-spacing: 0.01em; line-height: 1; text-shadow: 0 0 14px ${cap.glow ?? "rgba(255,200,0,.75)"}, 0 0 36px ${cap.glow2 ?? "rgba(255,170,0,.45)"}, 0 3px 10px rgba(0,0,0,.55); }`
   : cap.style === "noir"
   ? `.cap-group { font-family: 'Instrument Serif', 'EB Garamond', Georgia, serif; font-size: ${cap.size ?? 54}px; font-weight: 400; color: #F2EFE8; letter-spacing: .01em; line-height: 1.12; max-width: 900px; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
@@ -2424,7 +2461,7 @@ const html = `<!doctype html>
   .compact .l-line { font-size: 36px; margin: 2px 0; }
   .compact .strike-x { font-size: 80px; top: 8px; }
   .w { display: inline-block; margin: 0 0.2em; transform-origin: 50% 80%; }
-  ${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}
+  ${(spec.beats || []).some((b) => b.type === "scene" && String(b.kind).startsWith("gm-")) ? GM_CSS : ""}${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}
 </style>
 </head>
 <body>
@@ -2549,7 +2586,7 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
     // Settings that invalidate every section at once, kept separate from each section's own hash
     // so a manifest diff can tell "one caption changed" apart from "the whole reel's look
     // changed" - see lib/sections.mjs's invalidation note.
-    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE, ...(gradePresetUsed ? { gradePreset: gradePresetUsed } : {}) }),
+    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE, ...(spec.sourceGrade ? { sourceGrade: spec.sourceGrade, sourceExposure: spec.sourceExposure ?? null, gradeGamma } : {}), ...(gradePresetUsed ? { gradePreset: gradePresetUsed } : {}) }),
     sections: manifest,
   }, null, 2));
   console.log(`sections: ${sections.length} (${sections.map((s) => `${s.start}-${s.end}`).join(", ")})`);

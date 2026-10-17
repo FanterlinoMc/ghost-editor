@@ -1,0 +1,64 @@
+{
+  "_about": "Gadzhi Motion, yellow theme. Gadzhi Motion (studied from @manoocreates and @brettfully Iman-Gadzhi-style edits, 12 Oct 2026, ~/reels/focus-refs/STUDY.md style A): the speaker cut out onto a dark purple studio, a small white sans caption of 1-3 words mid-frame, and every 2-4 s a full-screen motion graphic replaces him (gm-object 3D object + mixed type on grey paper, gm-kinetic type page, gm-flow glass icon tiles joined by drawn curves, gm-counter glass card with a counting number, gm-nodes numbered chips into an object on red). Real footage with a clean cinematic grade; graphics only on 3-4 key beats. Colour themes: gadzhi-motion (purple), gadzhi-blue, gadzhi-yellow, gadzhi-red, gadzhi-green.",
+  "brand": {
+    "accent": "#F2B705",
+    "accentDark": "#4A1F8F",
+    "ink": "#0b0b0b",
+    "capSize": 46,
+    "font": "Inter"
+  },
+  "captions": {
+    "style": "lux",
+    "size": 58,
+    "group": 3,
+    "upper": false,
+    "autoEmph": false,
+    "fixedY": 1100
+  },
+  "cadence": {
+    "every": 2.2,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.08,
+      1.03
+    ],
+    "emphasisScale": 1.08
+  },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "sfxProfile": "restrained",
+  "sound": {
+    "lines": false,
+    "nametag": false,
+    "objects": false,
+    "paperIn": false,
+    "pen": false,
+    "zoom": false,
+    "complete": false
+  },
+  "music": {
+    "id": "deep-techno-ambience",
+    "optional": true,
+    "db": -18,
+    "fadeIn": 0.4,
+    "fadeOut": 0.5,
+    "drops": false,
+    "reveal": false,
+    "payoff": false
+  },
+  "look": {
+    "grade": "none",
+    "vignette": 0.25,
+    "grain": 0
+  },
+  "matte": false,
+  "outro": 0.15,
+  "director": {
+    "rules": "Only 3-4 full-screen graphics per ~25 s, on the strongest beats (hook, a number, a list, the payoff); the rest is the speaker's real footage with small captions. Never two graphics back to back. All type on graphics is spoken. No real people, companies or logos."
+  },
+  "gm": {
+    "theme": "yellow"
+  },
+  "sourceGrade": "curves=all='0/0 0.3/0.28 0.6/0.56 0.85/0.70 1/0.77',eq=contrast=1.1:saturation=1.08,colorbalance=rm=0.03:bm=-0.04,vignette=angle=PI/3.6"
+}

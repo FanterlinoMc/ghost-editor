@@ -16,6 +16,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
+import { gmScene } from "./gadzhi.mjs";
 
 // Transitions in/out: blur (0.2 s dissolve through blur), expand (rounded
 // panel grows from the centre), wipe (left to right), cut.
@@ -310,7 +311,7 @@ export function buildScene(b, id, t0, t1, ctx) {
   let body = "";
   const bg = b.bg === "accent" ? `linear-gradient(135deg, ${brand.accentDark} 0%, ${brand.accent} 55%, ${brand.accentDark} 100%)` : (b.bg || "#fff");
   const inKind = b.in ?? ctx.sceneIn ?? "blur", outKind = b.out ?? ctx.sceneOut ?? "blur";
-  let customBg = null;
+  let customBg = null, gmCls = "";
 
   if (b.kind === "card") {
     const lines = (b.lines || []).map((l, i) => {
@@ -906,13 +907,21 @@ export function buildScene(b, id, t0, t1, ctx) {
     }
   }
 
+  // Chrome Motion (gm-object / gm-kinetic / gm-flow / gm-counter / gm-nodes): see lib/gadzhi.mjs. Only reached for a gm-* kind.
+  else if (b.kind.startsWith("gm-")) {
+    const g = gmScene(b, id, t0, t1, ctx);
+    if (!g) throw new Error(`unknown scene kind '${b.kind}'`);
+    body = g.body; gmCls = g.cls; if (g.bg) customBg = g.bg;
+  }
+
   else throw new Error(`unknown scene kind '${b.kind}'`);
 
   transIn(ctx, `#${sid}`, inKind, t0);
   if (soundOf(ctx).paperIn && (b.kind === "paper" || b.kind === "collage")) ctx.addSfx(Math.max(0, t0 - 0.06), PAPER_IN[paperN++ % PAPER_IN.length], "paper in (page arrives)", { db: soundOf(ctx).paperDb ?? -2 });
   if (inKind === "expand" || inKind === "wipe") addSfx(t0, "whoosh", `scene in (${inKind})`);
   transOut(ctx, `#${sid}`, outKind, t1);
-  return `<div id="${sid}" class="scene" style="background:${customBg ?? bg};background-size:220% 220%">${body}</div>`;
+  if (gmCls) return `<div id="${sid}" class="scene ${gmCls}">${body}</div>`;
+  return `<div id="${sid}" class="scene" style="background:${customBg ?? bg};background-size:${b.kind.startsWith("gm-") ? "auto" : "220% 220%"}">${body}</div>`;
 }
 
 // editorial captions ------------------------------------------------------------
