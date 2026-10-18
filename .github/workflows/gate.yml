@@ -1,0 +1,33 @@
+name: gate
+
+# The engine gate (scripts/gate.sh) on every PR and push, on Linux like the production render server.
+# It is the judge both machines trust: byte-identity on the golden reels, every test file, and the
+# fork-only feature counts. It never calls a paid API and never runs the person cut-out.
+on:
+  pull_request:
+  push:
+    branches: [main, "engine/**", "mac/**", "ops/**"]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: ffmpeg and the python libraries some tests use
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          pip install numpy opencv-python-headless
+
+      - name: gate
+        run: bash scripts/gate.sh
