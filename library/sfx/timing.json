@@ -1,0 +1,394 @@
+{
+ "burn-whoosh-fast": {
+  "dur": 1.1,
+  "peak_db": 1.6,
+  "peak_t": 0.44,
+  "onset_t": 0.04,
+  "tail_t": 1.09
+ },
+ "burn-whoosh-tunnel": {
+  "dur": 1.5,
+  "peak_db": 1.5,
+  "peak_t": 0.73,
+  "onset_t": 0.0,
+  "tail_t": 1.49
+ },
+ "buzzer-1": {
+  "dur": 1.2,
+  "peak_db": 2.0,
+  "peak_t": 0.01,
+  "onset_t": 0.0,
+  "tail_t": 1.2
+ },
+ "cinematic-cine-hit": {
+  "dur": 2.0,
+  "peak_db": 0.7,
+  "peak_t": 1.35,
+  "onset_t": 0.03,
+  "tail_t": 2.0
+ },
+ "cinematic-deep-boom": {
+  "dur": 2.5,
+  "peak_db": 1.9,
+  "peak_t": 0.01,
+  "onset_t": 0.0,
+  "tail_t": 2.48
+ },
+ "cinematic-drone-swell": {
+  "dur": 4.0,
+  "peak_db": 1.8,
+  "peak_t": 0.01,
+  "onset_t": 0.0,
+  "tail_t": 4.0
+ },
+ "cinematic-film-flash": {
+  "dur": 1.0,
+  "peak_db": 1.2,
+  "peak_t": 0.87,
+  "onset_t": 0.01,
+  "tail_t": 1.0
+ },
+ "cinematic-heartbeat": {
+  "dur": 0.455,
+  "peak_db": 2.0,
+  "peak_t": 0.02,
+  "onset_t": 0.0,
+  "tail_t": 0.4
+ },
+ "cinematic-rumble-riser": {
+  "dur": 3.0,
+  "peak_db": -1.8,
+  "peak_t": 2.02,
+  "onset_t": 0.0,
+  "tail_t": 3.0
+ },
+ "click-1": {
+  "dur": 0.25,
+  "peak_db": 1.9,
+  "peak_t": 0.05,
+  "onset_t": 0.0,
+  "tail_t": 0.25
+ },
+ "ding-1": {
+  "dur": 0.885,
+  "peak_db": 1.6,
+  "peak_t": 0.02,
+  "onset_t": 0.0,
+  "tail_t": 0.51
+ },
+ "impact-1": {
+  "dur": 1.6,
+  "peak_db": 1.8,
+  "peak_t": 0.92,
+  "onset_t": 0.03,
+  "tail_t": 1.6
+ },
+ "impact-2": {
+  "dur": 1.2,
+  "peak_db": -3.8,
+  "peak_t": 1.15,
+  "onset_t": 0.02,
+  "tail_t": 1.2
+ },
+ "kaching-1": {
+  "dur": 0.726,
+  "peak_db": 2.0,
+  "peak_t": 0.31,
+  "onset_t": 0.01,
+  "tail_t": 0.7
+ },
+ "paper-crinkle": {
+  "dur": 0.7,
+  "peak_db": -0.3,
+  "peak_t": 0.34,
+  "onset_t": 0.0,
+  "tail_t": 0.68
+ },
+ "paper-page-turn": {
+  "dur": 1.0,
+  "peak_db": 0.1,
+  "peak_t": 0.38,
+  "onset_t": 0.0,
+  "tail_t": 0.43
+ },
+ "paper-pages": {
+  "dur": 1.0,
+  "peak_db": 1.9,
+  "peak_t": 0.21,
+  "onset_t": 0.09,
+  "tail_t": 0.79
+ },
+ "paper-quick": {
+  "dur": 0.581,
+  "peak_db": 1.2,
+  "peak_t": 0.17,
+  "onset_t": 0.0,
+  "tail_t": 0.25
+ },
+ "pen-letters": {
+  "dur": 1.037,
+  "peak_db": 2.0,
+  "peak_t": 0.38,
+  "onset_t": 0.0,
+  "tail_t": 0.79
+ },
+ "pen-scribble": {
+  "dur": 0.32,
+  "peak_db": -1.2,
+  "peak_t": 0.07,
+  "onset_t": 0.0,
+  "tail_t": 0.25
+ },
+ "pen-scribble-2": {
+  "dur": 1.2,
+  "peak_db": 0.6,
+  "peak_t": 0.26,
+  "onset_t": 0.0,
+  "tail_t": 1.1
+ },
+ "pen-short": {
+  "dur": 0.6,
+  "peak_db": 2.1,
+  "peak_t": 0.08,
+  "onset_t": 0.0,
+  "tail_t": 0.58
+ },
+ "pop-1": {
+  "dur": 0.219,
+  "peak_db": 2.0,
+  "peak_t": 0.14,
+  "onset_t": 0.0,
+  "tail_t": 0.18
+ },
+ "pop-2": {
+  "dur": 0.049,
+  "peak_db": -0.6,
+  "peak_t": 0.01,
+  "onset_t": 0.0,
+  "tail_t": 0.03
+ },
+ "pop-3": {
+  "dur": 0.14,
+  "peak_db": 2.0,
+  "peak_t": 0.0,
+  "onset_t": 0.0,
+  "tail_t": 0.08
+ },
+ "pop-whoosh-light": {
+  "dur": 0.447,
+  "peak_db": 1.0,
+  "peak_t": 0.11,
+  "onset_t": 0.0,
+  "tail_t": 0.3
+ },
+ "reaction-applause-short": {
+  "dur": 3.0,
+  "peak_db": 2.0,
+  "peak_t": 0.2,
+  "onset_t": 0.0,
+  "tail_t": 2.99
+ },
+ "reaction-boing": {
+  "dur": 0.487,
+  "peak_db": 2.0,
+  "peak_t": 0.1,
+  "onset_t": 0.0,
+  "tail_t": 0.46
+ },
+ "reaction-cartoon-pop": {
+  "dur": 0.6,
+  "peak_db": 2.0,
+  "peak_t": 0.27,
+  "onset_t": 0.0,
+  "tail_t": 0.56
+ },
+ "reaction-crowd-boo": {
+  "dur": 2.5,
+  "peak_db": -1.8,
+  "peak_t": 2.29,
+  "onset_t": 0.0,
+  "tail_t": 2.5
+ },
+ "reaction-crowd-laugh": {
+  "dur": 3.0,
+  "peak_db": -0.7,
+  "peak_t": 0.98,
+  "onset_t": 0.0,
+  "tail_t": 3.0
+ },
+ "reaction-ding-ding": {
+  "dur": 0.875,
+  "peak_db": 1.7,
+  "peak_t": 0.01,
+  "onset_t": 0.0,
+  "tail_t": 0.86
+ },
+ "reaction-drum-roll": {
+  "dur": 3.0,
+  "peak_db": 2.0,
+  "peak_t": 0.03,
+  "onset_t": 0.0,
+  "tail_t": 3.0
+ },
+ "reaction-fail-trombone": {
+  "dur": 3.0,
+  "peak_db": -0.0,
+  "peak_t": 2.12,
+  "onset_t": 0.0,
+  "tail_t": 2.99
+ },
+ "reaction-gasp": {
+  "dur": 0.623,
+  "peak_db": 1.8,
+  "peak_t": 0.19,
+  "onset_t": 0.0,
+  "tail_t": 0.58
+ },
+ "reaction-rimshot": {
+  "dur": 1.841,
+  "peak_db": 2.0,
+  "peak_t": 0.63,
+  "onset_t": 0.0,
+  "tail_t": 1.59
+ },
+ "reaction-slide-whistle": {
+  "dur": 2.0,
+  "peak_db": 2.0,
+  "peak_t": 0.85,
+  "onset_t": 0.01,
+  "tail_t": 1.98
+ },
+ "reaction-tape-rewind": {
+  "dur": 1.5,
+  "peak_db": 1.6,
+  "peak_t": 1.26,
+  "onset_t": 0.03,
+  "tail_t": 1.5
+ },
+ "riser-1": {
+  "dur": 1.705,
+  "peak_db": 0.0,
+  "peak_t": 1.66,
+  "onset_t": 0.13,
+  "tail_t": 1.71
+ },
+ "shutter-1": {
+  "dur": 0.444,
+  "peak_db": -1.3,
+  "peak_t": 0.03,
+  "onset_t": 0.0,
+  "tail_t": 0.32
+ },
+ "tech-camera-flash": {
+  "dur": 0.347,
+  "peak_db": 2.0,
+  "peak_t": 0.3,
+  "onset_t": 0.0,
+  "tail_t": 0.33
+ },
+ "tech-digital-whoosh": {
+  "dur": 1.2,
+  "peak_db": 2.0,
+  "peak_t": 0.82,
+  "onset_t": 0.03,
+  "tail_t": 1.2
+ },
+ "tech-glitch-1": {
+  "dur": 0.688,
+  "peak_db": 1.3,
+  "peak_t": 0.27,
+  "onset_t": 0.0,
+  "tail_t": 0.67
+ },
+ "tech-glitch-2": {
+  "dur": 0.585,
+  "peak_db": 2.0,
+  "peak_t": 0.01,
+  "onset_t": 0.0,
+  "tail_t": 0.57
+ },
+ "tech-keyboard-burst": {
+  "dur": 2.0,
+  "peak_db": 2.0,
+  "peak_t": 0.52,
+  "onset_t": 0.0,
+  "tail_t": 1.99
+ },
+ "tech-notification-2": {
+  "dur": 0.405,
+  "peak_db": 0.8,
+  "peak_t": 0.16,
+  "onset_t": 0.0,
+  "tail_t": 0.38
+ },
+ "tech-ui-confirm": {
+  "dur": 1.0,
+  "peak_db": 2.0,
+  "peak_t": 0.25,
+  "onset_t": 0.0,
+  "tail_t": 0.69
+ },
+ "tech-ui-error": {
+  "dur": 0.358,
+  "peak_db": 2.0,
+  "peak_t": 0.01,
+  "onset_t": 0.0,
+  "tail_t": 0.3
+ },
+ "tick-1": {
+  "dur": 0.2,
+  "peak_db": 2.0,
+  "peak_t": 0.11,
+  "onset_t": 0.0,
+  "tail_t": 0.16
+ },
+ "typing-1": {
+  "dur": 2.5,
+  "peak_db": 2.0,
+  "peak_t": 0.19,
+  "onset_t": 0.0,
+  "tail_t": 2.5
+ },
+ "whoosh-1": {
+  "dur": 0.9,
+  "peak_db": 1.5,
+  "peak_t": 0.41,
+  "onset_t": 0.0,
+  "tail_t": 0.9
+ },
+ "whoosh-2": {
+  "dur": 0.9,
+  "peak_db": -0.4,
+  "peak_t": 0.87,
+  "onset_t": 0.02,
+  "tail_t": 0.9
+ },
+ "whoosh-3": {
+  "dur": 0.9,
+  "peak_db": 1.5,
+  "peak_t": 0.76,
+  "onset_t": 0.1,
+  "tail_t": 0.9
+ },
+ "whoosh-cine": {
+  "dur": 0.313,
+  "peak_db": 2.0,
+  "peak_t": 0.17,
+  "onset_t": 0.06,
+  "tail_t": 0.25
+ },
+ "zoom-sweep-short": {
+  "dur": 0.7,
+  "peak_db": 1.3,
+  "peak_t": 0.51,
+  "onset_t": 0.0,
+  "tail_t": 0.7
+ },
+ "zoom-sweep-small": {
+  "dur": 0.6,
+  "peak_db": 1.2,
+  "peak_t": 0.43,
+  "onset_t": 0.0,
+  "tail_t": 0.6
+ }
+}

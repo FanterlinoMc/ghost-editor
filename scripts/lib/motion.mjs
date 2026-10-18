@@ -388,11 +388,14 @@ export function buildScene(b, id, t0, t1, ctx) {
     // src can be a still or a video clip; { self: <source seconds> } uses the speaker's own footage.
     const [z0, z1] = b.zoom ?? [1.0, 1.12];
     const grade = b.grade ?? (b.kind === "window" ? "sepia(.18) contrast(1.06) saturate(.9)" : (ctx.brollGrade ?? ""));
-    const media = b.self !== undefined ? ctx.source : userAsset(b.src);
+    let media = b.self !== undefined ? ctx.source : userAsset(b.src);
     const isVideo = b.self !== undefined || /\.(mp4|mov|webm)$/i.test(media);
+    // b.ramp (premium kit, opt-in): the clip's picture is pre-rendered on an eased speed curve (lib/premium.mjs)
+    let mediaStart = b.self ?? b.media ?? 0;
+    if (b.ramp && isVideo && ctx.rampScene) { const rc = ctx.rampScene(media, mediaStart, t0, t1, b.ramp, id); media = rc.src; mediaStart = 0; }
     const tag = isVideo
-      ? `<video id="${id}-img" class="img-fill" src="${media}" data-start="${t0}" data-duration="${r3(t1 - t0)}" data-media-start="${b.self ?? b.media ?? 0}" data-track-index="19" muted playsinline style="${grade ? `filter:${grade};` : ""}"></video>`
-      : `<img id="${id}-img" class="img-fill" src="${media}" style="${grade ? `filter:${grade};` : ""}" />`;
+      ? `<video id="${id}-img" class="img-fill" src="${media}" data-start="${t0}" data-duration="${r3(t1 - t0)}" data-media-start="${mediaStart}" data-track-index="19" muted playsinline style="${grade ? `filter:${grade};` : ""}"></video>`
+      : `<img id="${id}-img" class="img-fill" src="${media}" style="${grade ? `filter:${grade};` : ""}${b.pos ? `object-position:${b.pos};` : ""}" />`;   // b.pos: CSS object-position for the crop (Signature)
     body = b.kind === "window" ? `<div class="win-frame" style="top:${b.y ?? 330}px">${tag}<div class="tv-scan" style="opacity:.35"></div></div>` : tag;
     if (b.kind === "window") customBg = "#000";
     tl.push(`ft("#${id}-img", { scale: ${z0} }, { scale: ${z1}, duration: ${r3(t1 - t0)}, ease: "none" }, ${t0});`);
@@ -748,6 +751,7 @@ export function buildScene(b, id, t0, t1, ctx) {
       if (k > 0) tl.push(`tl.set("#${id}-f${k}", { autoAlpha: 0 }, 0);`);
       tl.push(`tl.set("#${id}-f${k}", { autoAlpha: 1 }, ${at});`);
       if (k + 1 < n) tl.push(`tl.set("#${id}-f${k}", { autoAlpha: 0 }, ${r3(at + step)});`);
+      if (b.tickSfx && k > 0) addSfx(at, b.tickSfx, "type cycle", { db: b.tickDb ?? -8 });   // opt-in: a tick per typeface swap (Signature)
       return `<div id="${id}-f${k}" class="cc-word" style="font-family:'${fam}',serif;font-style:${st};font-weight:${wt};font-size:${b.size ?? 120}px">${esc(word)}</div>`;
     }).join("");
     const imgs = (b.engravings || []).map((eng, i, arr) => {
@@ -1036,10 +1040,13 @@ export function buildScene(b, id, t0, t1, ctx) {
 
   else throw new Error(`unknown scene kind '${b.kind}'`);
 
-  transIn(ctx, `#${sid}`, inKind, t0);
+  if (inKind === "whip" || inKind === "zoom") ctx.premium.sceneTransIn(ctx, `#${sid}`, sid, inKind, t0); else transIn(ctx, `#${sid}`, inKind, t0);   // whip / zoom: premium kit
   if (soundOf(ctx).paperIn && (b.kind === "paper" || b.kind === "collage")) ctx.addSfx(Math.max(0, t0 - 0.06), PAPER_IN[paperN++ % PAPER_IN.length], "paper in (page arrives)", { db: soundOf(ctx).paperDb ?? -2 });
-  if (inKind === "expand" || inKind === "wipe") addSfx(t0, "whoosh", `scene in (${inKind})`);
-  transOut(ctx, `#${sid}`, outKind, t1);
+  // b.inSfx (opt-in): a scene's own entry sound on any transition (cut pages had none, image/wordpage kinds have no default)
+  if (b.inSfx) addSfx(t0, b.inSfx, `scene in (${b.kind})`, { db: b.inSfxDb ?? -8 });
+  else if (inKind === "expand" || inKind === "wipe") addSfx(t0, "whoosh", `scene in (${inKind})`);
+  if (outKind === "whip" || outKind === "zoom") ctx.premium.sceneTransOut(ctx, `#${sid}`, sid, outKind, t1); else transOut(ctx, `#${sid}`, outKind, t1);
+  if ([inKind, outKind].includes("whip")) body += ctx.premium.sceneWhipSvg(sid);   // the per-scene blur filter
   if (gmCls) return `<div id="${sid}" class="scene ${gmCls}">${body}</div>`;
   return `<div id="${sid}" class="scene" style="background:${customBg ?? bg};background-size:${b.kind.startsWith("gm-") ? "auto" : "220% 220%"}">${body}</div>`;
 }
@@ -1273,6 +1280,14 @@ export function buildMusic(m, ctx, execFileSync, path, fs) {
     pts.push({ t: r3(d - len - 0.03), v: vol }, { t: r3(d - len), v: 0 }, { t: r3(d - 0.02), v: 0 }, { t: r3(d), v: vol });
   }
   pts.push({ t: r3(TOTAL - Math.max(0.02, fo)), v: vol }, { t: r3(TOTAL), v: fo > 0.02 ? 0 : vol });
+  // lifts (premium kit, opt-in): [{ a, b, db, ramp }] raise the bed between a and b (the drop: music takes over when
+  // the voice leaves). The lane is resampled at every breakpoint so fades and drops inside the window still apply.
+  if (m.lifts?.length) {
+    const at = (t) => { for (let i = 1; i < pts.length; i++) if (t <= pts[i].t) { const p0 = pts[i - 1], p1 = pts[i]; return p1.t > p0.t ? p0.v + (p1.v - p0.v) * (t - p0.t) / (p1.t - p0.t) : p1.v; } return pts.at(-1).v; };
+    const gain = (t) => m.lifts.reduce((g, L) => { const r = L.ramp ?? 0.05, k = t < L.a - r || t > L.b + r ? 0 : t < L.a ? (t - (L.a - r)) / r : t > L.b ? 1 - (t - L.b) / r : 1; return g * Math.pow(10, (L.db * k) / 20); }, 1);
+    const ts = [...new Set([...pts.map((p) => p.t), ...m.lifts.flatMap((L) => [L.a - (L.ramp ?? 0.05), L.a, L.b, L.b + (L.ramp ?? 0.05)]).filter((t) => t > 0 && t < TOTAL).map(r3)])].sort((a, b) => a - b);
+    pts.splice(0, pts.length, ...ts.map((t) => ({ t, v: r3(Math.min(3.98, at(t) * gain(t))) })));
+  }
   const lane = JSON.stringify({ version: 1, lanes: [{ target: "volume", points: pts }] });
   return { html: `<audio id="music-bed" src="${src}" data-start="0" data-duration="${TOTAL}" data-media-start="${m.start ?? 0}" data-track-index="20" data-automation='${lane}'></audio>`, vol, I };
 }
