@@ -217,8 +217,23 @@ if (!(spec.takes || []).length) {
 const takes = spec.takes.map((t, i) => {
   if (!(t.b > t.a)) die(`take ${i} has b <= a`);
   if (t.src != null && typeof t.src !== "string") die(`take ${i}: src must be a string path, got ${typeof t.src}`);
+  // take.ramp (premium kit): a NON-SPEECH action take plays on a speed curve; its length on the timeline is
+  // (b - a) / mean speed, and E() maps source seconds inside it through the warp
+  if (t.ramp) {
+    let R;
+    try { R = PK.resolveRamp(t.ramp); } catch (e) { die(`take ${i}: ${e.message}`); }
+    const frames = Math.round(((t.b - t.a) / PK.meanSpeed(R.curve)) * FPS);
+    return { ...t, src: t.src ?? spec.source, frames, warp: PK.warpFn(PK.rampKnots(R.curve, frames / FPS)) };
+  }
   return { ...t, src: t.src ?? spec.source, frames: Math.round((t.b - t.a) * FPS) };
 });
+takes.forEach((k, i) => {
+  if (!k.ramp) return;
+  if (k.hold || i === takes.length - 1) die(`take ${i}: a ramped take can't be the last take or carry a hold`);
+  if (spec.stage || spec.matte) die(`take ${i}: take.ramp is not supported with spec.stage / spec.matte (the cut-out layer cannot follow a speed curve)`);
+});
+// a position inside a take (source seconds -> edit seconds); a ramped take goes through its warp
+const inTake = (k, x) => k.start + (k.warp ? k.warp(x - k.a) : x - k.a);
 // Distinct sources in first-use order. SOURCES[0] stays spec.source for any reel that does not use
 // take.src, which is what keeps the single-source render path unchanged.
 const SOURCES = [...new Set(takes.map((t) => t.src))];
@@ -322,7 +337,7 @@ const E = (t, what = "", src) => {
   // `{src, t}` is the explicit form. Single-source reels never reach the ambiguity branch.
   if (typeof t === "object" && t !== null && t.src != null && typeof t.t === "number") {
     const k = takes.find((q) => q.src === t.src && t.t >= q.a - 1e-6 && t.t <= q.b + 1e-6);
-    if (k) return +(k.start + (t.t - k.a)).toFixed(3);
+    if (k) return +inTake(k, t.t).toFixed(3);
     // a removed gap (< 1.2 s) inside the named recording snaps to the next kept take, as for a bare time
     const bs = bySourceOf.get(t.src) || [];
     for (let i = 0; i + 1 < bs.length; i++) if (t.t > bs[i].b && t.t < bs[i + 1].a && bs[i + 1].a - bs[i].b < 1.2) return +bs[i + 1].start.toFixed(3);
@@ -337,10 +352,10 @@ const E = (t, what = "", src) => {
       // speech-anchored beat means) wins; if it does not cover the time, the first covering take in output order
       const first = hits.find((k) => k.src === PRIMARY_SRC) ?? hits[0], key = `${CUR_BEAT?.id ?? CUR_BEAT?.type ?? what}@${t}`;
       if (!ambiguousWarned.has(key)) { ambiguousWarned.add(key); warn.push(`${what || "time"} ${t}s is in ${srcs.length} sources (${srcs.join(", ")}): used ${first.src} (${first.src === PRIMARY_SRC ? "the primary source" : "the first take in output order that covers it"}) - add "src" to the beat to say which recording it means`); }
-      return +(first.start + (t - first.a)).toFixed(3);
+      return +inTake(first, t).toFixed(3);
     }
   }
-  for (const k of takes) if (t >= k.a - 1e-6 && t <= k.b + 1e-6) return +(k.start + (t - k.a)).toFixed(3);
+  for (const k of takes) if (t >= k.a - 1e-6 && t <= k.b + 1e-6) return +inTake(k, t).toFixed(3);
   // whisper word times are loose around pauses: a time inside a short removed
   // gap (< 1.2 s) snaps to the start of the next kept take.
   // Walk takes in SOURCE order, not array order: a reordered edit (the hook moved to the front)
@@ -436,6 +451,11 @@ for (const s of SOURCES) {
 for (const [ti, k] of takes.entries()) {
   if (SECTION_MODE && !k.inSection) continue;  // I-25 prototype: no captions for a take outside this section
   const ws = wordsByTake[ti];
+  if (k.ramp) {
+    const talk = ws.filter((w) => Math.min(w.end, k.b) - Math.max(w.start, k.a) > 0.08);
+    if (talk.length) die(`take ${ti} has a ramp but contains speech ("${talk.slice(0, 4).map((w) => w.word.trim()).join(" ")}"); ramps are for non-speech action takes only (voice is never ramped)`);
+    continue;
+  }
   if (!ws.length) { warn.push(`take ${k.a}-${k.b} owns no words (a breath or a tail); fine for autocut takes`); continue; }
   ws.forEach((w, i) => {
     let text = w.word;
@@ -730,8 +750,9 @@ const heldCadence = new Set();
 // snapping, optionally with a blur that follows the zoom speed (punch.blur > 0 puts the picture on a #tx wrapper). A snap
 // on a jump cut stays a hard snap (the cut hides it) unless punch.joins is true. Unset = the plain tl.set below, unchanged.
 const PUNCH = spec.punch ? { frames: 7, blur: 5, ease: "power3.out", joins: false, ...spec.punch } : null;
-const TX = !!(PUNCH && PUNCH.blur);
+const TX = !!(PUNCH && PUNCH.blur) || !!spec.transitions;   // #tx: the punch blur and the premium whip / zoom-through both ride on it
 const joinTimesPunch = PUNCH ? takes.slice(1).map((k) => r3(k.start)) : [];
+const punchTimes = [];
 const easedSnaps = new Set();
 const FACE_ANCHOR = !!cadence?.faceAnchor;
 const snapOriginDefault = zoom.origin || "50% 29%";
@@ -762,6 +783,7 @@ for (const sn of snaps) {
   if (cadenceSnaps.has(t) && inMotionHold(t)) { heldCadence.add(t); cadenceIndex++; continue; }
   if (FACE_ANCHOR) { snapPatches.push({ sn, idx: tl.length, fromZ: prevZ }); tl.push(""); }
   else tl.push(snapLines(sn, prevZ));
+  if (PUNCH && z > prevZ && Math.abs(z - prevZ) > 0.005 && (PUNCH.joins || !joinTimesPunch.some((j) => Math.abs(j - t) < 0.04))) punchTimes.push(t);   // for the sfx design pass
   prevZ = z;
   if (cadenceSnaps.has(t)) {
     const every = cadence.sfxEvery ?? 4;
@@ -793,6 +815,29 @@ for (const p of zoom.pushes || []) {
   if (p.sfx) addSfx(a, p.sfx, "push-in", { db: -4, lead: 0.05 });
   if (p.until !== "end") tl.push(down > 0 ? `tl.to("#push", { scale: 1, duration: ${down}, ease: "power2.inOut" }, ${b});` : `tl.set("#push", { scale: 1 }, ${b});`);
   lastPushEnd = b + down;
+}
+
+// transitions (premium kit, opt-in): whip / zoom-through on jump cuts between takes, on #tx. A join that carries its own
+// take.transition (I-17: blur / whip between two recordings) keeps that one and is skipped here; a join next to a punch-in
+// (within 0.3 s) is skipped too.
+const transitionsAt = [];
+if (spec.transitions) {
+  const T = { kind: "whip", every: 1, frames: 8, strength: 1, ...spec.transitions };
+  if (!["whip", "zoom", "mix"].includes(T.kind)) die(`transitions.kind must be whip, zoom or mix (got ${T.kind})`);
+  const kinds = T.kind === "mix" ? ["whip", "zoom"] : [T.kind];
+  let k = 0;
+  takes.slice(1).forEach((tk, i) => {
+    const t = r3(tk.start);
+    if ((i + 1) % T.every !== 0 && !takes[i].ramp && !takes[i + 1].ramp) return;   // ramp boundaries always get one
+    if (tk.transition || takes[i].holdFrames) return;
+    if (SECTION_MODE && !(takes[i].inSection && tk.inSection)) return;   // a join across a section boundary has no other side in this composition (as for take.transition)
+    if (punchTimes.some((p) => Math.abs(p - t) < 0.3)) return;
+    const kind = kinds[k % kinds.length];
+    PK.txTransition(tl, kind, t, { fps: FPS, frames: T.frames, dir: k % 2 ? -1 : 1, strength: T.strength });
+    transitionsAt.push({ t, kind }); k++;
+  });
+  if (transitionsAt.some((x) => x.kind === "whip")) premiumDefs.push(PK.WHIP_SVG);
+  console.log(`transitions: ${transitionsAt.map((x) => `${x.kind}@${x.t}`).join(", ") || "none"}`);
 }
 
 // ---------- the speaker ----------
@@ -858,8 +903,18 @@ for (const [i, k] of takes.entries()) {
 // source must not be limited by the first one's length)
 const stillAt = (t, src = SRC) => String(Math.max(0, Math.min(t, srcDurOf.get(src) - 0.12)));
 const fadeLane = (d) => JSON.stringify({ version: 1, lanes: [{ target: "volume", points: [{ t: 0, v: 0 }, { t: r3(2 / FPS), v: 1 }, { t: r3(d - 3 / FPS), v: 1 }, { t: r3(d), v: 0 }] }] });
+const rampsAt = [];   // {t0, peak, end, scene?} for the sfx design pass and the caption windows
 const takeHtml = takes.map((k, i) => {
   if (SECTION_MODE && !k.inSection) return "";  // I-25 prototype: this take isn't on screen in this section
+  if (k.ramp) {
+    // the picture is pre-rendered with ffmpeg on the speed curve (premium kit); muted, no captions
+    let rc;
+    try { rc = PK.rampClip({ src: path.resolve(proj, mediaOf.get(k.src)), mediaStart: k.a, D: k.dur, ramp: k.ramp, fps: FPS, outDir: A, tag: `take${i}`, srcDur: srcDurOf.get(k.src) }); } catch (e) { die(`take ${i}: ${e.message}`); }
+    rampsAt.push({ t0: r3(k.start), peak: r3(k.start + rc.peakAt), end: r3(k.start + k.dur) });
+    console.log(`ramp take ${i}: ${k.a}-${k.b} s source -> ${k.dur.toFixed(2)} s (${rc.minSpeed}x..${rc.maxSpeed}x), muted`);
+    return `
+      <video id="take-${i}" src="${rc.src}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="0" data-track-index="0" muted playsinline></video>`;
+  }
   let h = `
       <video id="take-${i}" src="${mediaOf.get(k.src)}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="0" muted playsinline></video>`;
   if (k.holdFrames) {
@@ -911,6 +966,7 @@ const pushJoinTransition = (outSel, inSel, kind, T, outDur, inDur) => {
 for (const { i, kind, T, outDur, inDur } of takeJoins) pushJoinTransition(`#take-${i - 1}`, `#take-${i}`, kind, T, outDur, inDur);
 const takeAudio = takes.map((k, i) => {
   if (SECTION_MODE && !k.inSection) return "";  // I-25 prototype: this take's audio isn't in this section
+  if (k.ramp) return "";                         // a ramped action take is muted (the voice is never ramped)
   return `
   <audio id="take-${i}-audio" src="${k.src}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="${10 + (i % 2)}" data-automation='${DUCK.length ? takeVolumeLane(k.dur, FPS, k.start, DUCK.map(([a, b]) => [a - (SECTION_MODE ? SECTION_START : 0), b - (SECTION_MODE ? SECTION_START : 0)])) : fadeLane(k.dur)}'></audio>`;
 }).join("");
@@ -1246,6 +1302,7 @@ const enter = (sel, t, kind = "pop") => kind === "slide"
 const exit = (sel, end) => `tl.to("${sel}", { autoAlpha: 0, scale: 0.9, duration: 0.18, ease: "power2.in" }, ${r3(end - 0.22)});`;
 const slotUsed = [];
 const hiddenCaps = [];
+for (const r of rampsAt) hiddenCaps.push([r.t0, r.end]);   // ramped action takes (premium kit) carry no captions
 const uiRects = [];   // uicard rectangles (UI Story Ad #10), so podcast captions sit above them
 // reel.layers[]: a motion or text layer with hideCaptions:true hides the captions while it is up, the way a
 // beat's hideCaptions does. Layer times are output seconds, so a section build (which rebases takes)
@@ -1292,7 +1349,14 @@ const UI_GLYPHS = {
   mask: `<path d="M3 8.5c3-1.5 6-2 9-2s6 .5 9 2v4c0 3.5-4 6.5-9 6.5s-9-3-9-6.5z" fill="#fff"/><path d="M7 11h10M7 14h10" stroke="#1FC24A" stroke-width="1.3" stroke-linecap="round"/>`,
   tree: `<path d="M12 2.5l6.5 9h-3.3l4.3 6H4.5l4.3-6H5.5z" fill="#fff"/><rect x="10.8" y="17" width="2.4" height="4.5" fill="#fff"/>`,
 };
-const motionCtx = { conceptCenter: spec.conceptCenter, tl, E, r3, brollGrade, gmTheme: spec.gm?.theme, safeTop: placer.safeTop, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
+const motionCtx = { premium: PK, rampScene: (media, ms, t0, t1, ramp, id) => {
+  // scene.ramp (premium kit): the B-roll clip's picture is pre-rendered on a speed curve; the scene keeps its at/to window
+  let rc;
+  try { rc = PK.rampClip({ src: path.resolve(proj, media), mediaStart: ms, D: r3(t1 - t0), ramp, fps: FPS, outDir: A, tag: id, srcDur: parseFloat(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path.resolve(proj, media)]).toString()) }); } catch (e) { die(`scene ${id}: ${e.message}`); }
+  rampsAt.push({ t0, peak: r3(t0 + rc.peakAt), end: t1, scene: true });
+  console.log(`ramp scene ${id}: ${ms}+${rc.S} s source -> ${r3(t1 - t0)} s (${rc.minSpeed}x..${rc.maxSpeed}x)`);
+  return rc;
+}, conceptCenter: spec.conceptCenter, tl, E, r3, brollGrade, gmTheme: spec.gm?.theme, safeTop: placer.safeTop, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
 // a scene that hands over to an expand/wipe scene stays underneath until the
 // incoming panel has covered it
@@ -1320,6 +1384,35 @@ if (spec.nametag && !hasSelfTag) {
   const firstPage = pagesByEdit.length ? pagesByEdit[0].at : undefined;
   const until = spec.nametag.until === "hook" && firstPage != null && firstPage < 4.5 ? firstPage - 0.05 : (spec.nametag.to ?? 2.4);
   beatsList.unshift({ type: "nametag", name: spec.nametag.name, title: spec.nametag.title, subtitle: spec.nametag.subtitle, at: spec.nametag.at ?? 0.15, to: Math.max(1.2, until), sfx: false });
+}
+// drop (premium kit, opt-in): talk -> riser -> ~3 f of silence -> boom -> a beat-locked cut ladder of B-roll shots
+// (Belmar / Iman DNA: 18 f x4, 12 f x6, 9 f x4), a 3 f white flash on every Nth cut, SFX lifted a few dB inside the drop.
+// drop.hold = i puts the ladder on take i's hold (frozen air after the take, voice gone); drop.at = a source second
+// inside one plain take otherwise. drop.shots = scene options per shot (src | self, media, ramp...), cycled.
+// A style may carry drop defaults (bpm, beats, overlap): the drop itself runs only when the reel places it (hold / at / shots).
+let dropWin = null, dropFlashHtml = "";
+const talkInGap = (a, b) => words.some((w) => w.start < b && w.end > a);
+if (spec.drop && (spec.drop.hold != null || spec.drop.at != null || spec.drop.shots)) {
+  const DR = { ladder: [18, 18, 18, 18, 12, 12, 12, 12, 12, 12, 9, 9, 9, 9], gap: 3, flashEvery: 3, flash: 0.6, lift: 3, riser: "cinematic-rumble-riser", boom: "cinematic-deep-boom", tail: "whoosh-cine", cutSfx: "tech-camera-flash", in: "cut", ...spec.drop };
+  if (!spec.beats) spec.beats = beatsList;   // the ladder scenes are beats: edit_truth.json lists them
+  if (!DR.shots?.length) die("drop needs shots: [{ self: <source s> } | { src: <clip> }, ...]");
+  if (DR.hold == null && DR.at == null) die("drop needs hold: <take index> or at: <source second>");
+  if (DR.hold != null && !takes[DR.hold]) die(`drop.hold ${DR.hold}: there is no take ${DR.hold}`);
+  // drop.bpm + drop.beats (opt-in): the ladder in beats of the music bed, rounded on the running total so the cuts
+  // stay on the beat grid (no drift from rounding each shot to whole frames)
+  if (DR.bpm && DR.beats?.length) { const spb = 60 / DR.bpm; let acc = 0, prevF = 0; DR.ladder = DR.beats.map((n) => { acc += n * spb; const f = Math.round(acc * FPS); const d = f - prevF; prevF = f; return d; }); }
+  // on a hold the silence is the hold's first DR.gap frames (the voice has just stopped), so the ladder starts after it
+  const at = (off) => DR.hold != null ? `hold:${DR.hold}+${r3(off + DR.gap / FPS)}` : r3(DR.at + off);
+  const T0 = E(at(0), "drop");
+  let off = 0;
+  DR.ladder.forEach((f, i) => {
+    const d = f / FPS, sh = DR.shots[i % DR.shots.length];
+    beatsList.push({ type: "scene", kind: "image", zoom: [1.0, 1.06], ...sh, at: at(off), to: at(off + d + (DR.overlap ?? 0) / FPS), in: i === 0 ? DR.in : "cut", out: "cut", sfx: false, _drop: true });
+    off += d;
+  });
+  dropWin = [T0, r3(T0 + off)];
+  console.log(`drop at ${T0}s: ${DR.ladder.length} cuts in ${off.toFixed(2)} s (ladder ${DR.ladder.join("/")} f)`);
+  motionCtx.dropPlan = DR;
 }
 const HANDOVER = 0.45;
 const hzLists = [];   // Authority (hormozi): edit-time spans of the split-screen lists, where the captions move up (captions.listY)
@@ -2067,7 +2160,70 @@ for (const w of roomWins) {
   hiddenCaps.push([w.tA, w.tB]);
 }
 
-for (const s of spec.sfx || []) addSfx(E(s.at, "sfx"), s.id, "manual", { db: s.db ?? 0, lead: s.lead ?? 0 });
+for (const s of Array.isArray(spec.sfx) ? spec.sfx : []) addSfx(E(s.at, "sfx"), s.id, "manual", { db: s.db ?? 0, lead: s.lead ?? 0 });
+
+// library/sfx/timing.json (from scripts/sfx_index.py): per sound its length and the time of its peak. Absent = every sound
+// peaks at its start, which only costs placement accuracy.
+const sfxTiming = (() => { try { return JSON.parse(fs.readFileSync(path.join(LIB, "sfx", "timing.json"), "utf8")); } catch { return {}; } })();
+if (dropWin) {
+  const DR = motionCtx.dropPlan, timing = sfxTiming;
+  const [T0, T1] = dropWin, gapS = DR.gap / FPS;
+  const n0 = sfxEvents.length;
+  if (DR.riser) {
+    const tm = timing[DR.riser] || { peak_t: 1 };
+    const s0 = r3(T0 - gapS - tm.peak_t);
+    const nr = sfxEvents.length;
+    if (s0 >= 0) { addSfx(s0, DR.riser, "drop riser (tops out before the gap)", { db: DR.riserDb ?? 2 }); if (sfxEvents.length > nr) { const e = sfxEvents.at(-1); e.dur = r3(T0 - gapS - s0); e.fade = 0.03; } }
+  }
+  addSfx(T0, DR.boom, "drop boom", { db: DR.boomDb ?? 0 });
+  if (DR.tail) addSfx(r3(T0 + 0.02), DR.tail, "drop tail", { db: DR.tailDb ?? -2 });
+  // the cut ladder: a flash + a quiet flash sound on every Nth cut
+  const cuts = beatsList.filter((b) => b._drop).map((b) => E(b.at)).slice(1);
+  let flashHtml = "";
+  cuts.forEach((t, i) => {
+    if (!DR.flashEvery || (i + 1) % DR.flashEvery) return;
+    flashHtml += `<div id="dropflash-${i}" class="clip" data-start="${t}" data-duration="${r3(3 / FPS)}" data-track-index="6" style="position:absolute;inset:0;z-index:7;background:#fff;opacity:0;pointer-events:none"></div>`;
+    tl.push(`tl.fromTo("#dropflash-${i}", { opacity: ${DR.flash} }, { opacity: 0, duration: ${r3(3 / FPS)}, ease: "power1.in", immediateRender: false }, ${t});`);
+    if (DR.cutSfx) addSfx(t, DR.cutSfx, "drop flash cut", { db: DR.cutDb ?? -2 });
+  });
+  // the gap: nothing plays in the last frames before the boom (voice included: the drop sits in a pause / hold)
+  for (const e of sfxEvents) if (e.t < T0 - gapS && e.t + e.dur > T0 - gapS && !e.fade) { e.dur = r3(T0 - gapS - e.t); e.fade = 0.03; }
+  // loudness lift: everything in the SFX bus inside the drop comes up DR.lift dB (master.py brings the whole mix back to target)
+  for (const e of sfxEvents.slice(n0)) if (e.t >= T0 - 0.01 && e.t < T1) e.vol = r3(Math.min(1, e.vol * Math.pow(10, DR.lift / 20)));
+  if (talkInGap(T0 - gapS, T0)) warn.push(`drop at ${T0}s: speech inside the ${DR.gap}-frame silence before the boom; move drop.at into a pause`);
+  dropFlashHtml = flashHtml;
+}
+
+// ---------- SFX design pass (premium kit, opt-in: sfxDesign {density}, or sfx: {density} as an object) ----------
+const SFX_DESIGN = spec.sfxDesign ?? (spec.sfx && !Array.isArray(spec.sfx) ? spec.sfx : null);
+if (SFX_DESIGN) {
+  if (!["low", "med", "high"].includes(SFX_DESIGN.density ?? "med")) die(`sfxDesign.density must be low, med or high (got ${SFX_DESIGN.density})`);
+  const tryT = (t) => { try { return E(t); } catch { return null; } };
+  const sceneBeats = beatsList.filter((b) => b.type === "scene");
+  // scene.cutSfx (opt-in): a burst member (rapid swap) gets its own small sound instead of the major-cut chain
+  const brollIn = sceneBeats.filter((b) => ["image", "window"].includes(b.kind) && !b._drop && !b.cutSfx).map((b) => tryT(b.at)).filter((t) => t != null);
+  for (const b of sceneBeats.filter((x) => x.cutSfx)) { const t = tryT(b.at); if (t != null) addSfx(Math.max(0, t - 0.01), b.cutSfx, "burst cut", { db: b.cutDb ?? -6 }); }
+  const majors = [...brollIn, ...rampsAt.filter((r) => !r.scene).map((r) => r.t0)];
+  const inDrop = (t) => dropWin && t >= dropWin[0] - 0.05 && t < dropWin[1];
+  const sceneTrans = sceneBeats.filter((b) => ["whip", "zoom"].includes(b.in ?? spec.sceneIn)).map((b) => ({ t: tryT(b.at), kind: b.in ?? spec.sceneIn })).filter((x) => x.t != null);
+  const textIns = [
+    ...beatsList.filter((b) => !["scene", "leak", "mood", "ground", "behind", "meme", "emoji", "logo", "icon", "nametag"].includes(b.type)).map((b) => ({ t: tryT(b.at), why: b.type })),
+    ...sceneBeats.filter((b) => !["image", "window"].includes(b.kind)).map((b) => ({ t: tryT(b.at), why: `${b.kind} page`, scene: true })),
+  ].filter((x) => x.t != null);
+  const hl = new Set([].concat(spec.captions?.highlight || []).filter((h) => typeof h === "string").map((h) => core(h).toLowerCase()));
+  // word pops, spaced by density (DNA: Belmar ~1 per caption block = 1.7 s, Iman ~1 per phrase, Monologue ~1 per word
+  // = 82/min); highlight words always pop. Nothing pops inside the drop (the ladder has its own sounds).
+  const popGap = SFX_DESIGN.popGap ?? { low: 1.7, med: 0.8, high: 0.3 }[SFX_DESIGN.density ?? "med"];
+  let lastPop = -9;
+  const pops = words.filter((w) => {
+    if (dropWin && w.start >= dropWin[0] - 0.3 && w.start < dropWin[1]) return false;
+    const hit = hl.has(core(w.word).toLowerCase()) || /!$/.test(w.word);
+    if (w.start - lastPop < (hit ? 0.25 : popGap)) return false;
+    lastPop = w.start; return true;
+  }).map((w) => r3(w.start));
+  PK.sfxDesign(SFX_DESIGN, { majors, transitions: [...transitionsAt, ...sceneTrans], joins: takes.slice(1).map((k) => r3(k.start)), textIns, punches: punchTimes, pops, ramps: rampsAt.filter((r) => !inDrop(r.t0)) },
+    { addSfx, sfxEvents, timing: sfxTiming, words, voiceP95, ROLE_DB, TOTAL, log: (m) => console.log(m) });
+}
 
 // ---------- SFX rules ----------
 sfxEvents.sort((a, b) => a.t - b.t);
@@ -2088,8 +2244,14 @@ for (const e of memeHits) {
   const talking = words.filter((w) => w.start < e.t + 0.5 && w.end > e.t + 0.05);
   if (talking.length) warn.push(`meme sound ${e.id} at ${e.t}s lands on speech ("${talking.map((w) => w.word).join(" ")}"); put it in a pause or on the last word's end`);
 }
-const sfxAudio = sfxEvents.filter((e) => !e.id.startsWith("meme:")).map((e, i) =>
-  `<audio id="sfx-${i}" src="${e.src}" data-start="${e.t}" data-duration="${r3(Math.min(e.dur, TOTAL - e.t))}" data-track-index="${14 + (i % 4)}" data-volume="${e.vol}"></audio>`);
+// An event with a .fade (a riser cut at the boom) gets a volume lane that ends on silence. NOTE: sounds added after this point
+// (type-card hits, list marks, zoom swishes, leaks, object pops, burns...) are dropped from the mix because the tags are built
+// here; sound.complete: true builds them at write time instead, so every planned hit plays. Off by default so every existing
+// style keeps the mix it was approved with.
+const sfxFade = (e) => { const d = r3(Math.min(e.dur, TOTAL - e.t)); return ` data-automation='${JSON.stringify({ version: 1, lanes: [{ target: "volume", points: [{ t: 0, v: 1 }, { t: r3(Math.max(0, d - e.fade)), v: 1 }, { t: d, v: 0 }] }] })}'`; };
+const sfxTag = (e, i) => `<audio id="sfx-${i}" src="${e.src}" data-start="${e.t}" data-duration="${r3(Math.min(e.dur, TOTAL - e.t))}" data-track-index="${14 + (i % 4)}" data-volume="${e.vol}"${e.fade ? sfxFade(e) : ""}></audio>`;
+const sfxAudio = sfxEvents.filter((e) => !e.id.startsWith("meme:")).map(sfxTag);
+const sfxAudioAll = () => sfxEvents.filter((e) => !e.id.startsWith("meme:")).sort((a, b) => a.t - b.t).map(sfxTag);
 
 motionCtx.placeCaption = (t0, t1, h) => placer.place(t0, t1, h);
 motionCtx.sidePad = placer.sidePad;
@@ -2538,7 +2700,10 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   const e = Math.min(g.at(-1).end + 0.3, nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99), takeEndAt(takes, FPS, g.at(-1).start, SPEECH));
   const emphI = emphIndexOf(g);
   g.forEach((w, wi) => {
-    if (cap.pop !== false) tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: 1.08, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
+    // captions.popSafe (opt-in): long words pop less, so the grown word never eats the space to its neighbours
+    // (the kit test's "NOBODYYEAH,": a 1.08 pop on a 6-letter word grows ~0.17 em per side into a 0.28 em gap)
+    const popS = cap.popSafe ? r3(1 + Math.min(0.08, 0.12 / Math.max(1, caseOf(w.word.trim()).length * 0.72))) : 1.08;
+    if (cap.pop !== false) tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: ${popS}, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
     // reveal: word -> each word appears when it's spoken; the box is already sized for the whole phrase
     if (cap.style === "clipping" && wi === 0) tl.push(`ft("#cg${gi}", { scale: 0.9 }, { scale: 1, duration: 0.12, ease: "back.out(2.5)" }, ${r3(s)});`);  // R1b port (Broadsheet)
     // the emphasis word (lux) lands at full strength in one frame: a fading hero word reads as a ghost
@@ -2619,7 +2784,7 @@ const capCss = cap.style === "type"
     : `.cap-group { font-family: ${UI_FONT}, "Noto Sans Arabic", system-ui, sans-serif; font-size: 66px; font-weight: 800; color: #fff; background: rgba(12,12,14,.88); border-radius: 22px; padding: 16px 32px; max-width: 900px; }`)
   : cap.style === "box"
   ? `.cap-group { font-family: ${brand.font || "Montserrat"}, "Noto Sans Arabic", system-ui, sans-serif; font-size: ${CAP_SIZES.box}px; font-weight: 900; line-height: 1.08; color: ${cap.ink ?? brand.ink ?? "#111"}; background: ${cap.boxColor ?? brand.accent}; border-radius: 12px; padding: 10px 24px 14px; max-width: 860px; text-align: center; box-shadow: 0 10px 28px rgba(0,0,0,.28); }
-  .cap-group .w { margin: 0 0.14em; }`
+  .cap-group .w { margin: 0 ${cap.wordGap ?? "0.14em"}; }`
   : cap.style === "condensed"
   ? `.cap-group { font-family: ${cap.font ?? "Oswald"}, "Noto Sans Arabic", sans-serif; font-size: ${CAP_SIZES.condensed}px; font-weight: 700; line-height: .95; letter-spacing: 1px; color: ${cap.color ?? "#fff"}; max-width: 920px; text-align: center; text-shadow: 0 6px 22px rgba(0,0,0,.6), 0 2px 4px rgba(0,0,0,.7); }`
   : cap.style === "clipping"
@@ -3175,6 +3340,13 @@ if (spec.music) {
     addSfx(r3(lastScene - len - 1.25), spec.music.riserSfx ?? "riser-1", "riser into the payoff", { db: spec.music.riserDb ?? -2 });
     addSfx(r3(lastScene), spec.music.hitSfx ?? "cinematic-cine-hit", "payoff hit", { db: spec.music.hitDb ?? -6 });
   }
+  // music.alignDrop (opt-in): the bed's own drop (a track second) lands on the drop's first cut; music.dropLift dB
+  // raises the bed from there to the end (the voice has left)
+  if (dropWin && spec.music.alignDrop != null) {
+    spec.music = { ...spec.music, start: r3(Math.max(0, spec.music.alignDrop - dropWin[0])) };
+    if (spec.music.dropLift) spec.music.lifts = [...(spec.music.lifts || []), { a: dropWin[0], b: TOTAL + 1, db: spec.music.dropLift, ramp: 0.03 }];
+    console.log(`music: track ${spec.music.alignDrop}s lands on the drop at ${dropWin[0]}s (start ${spec.music.start}), lift ${spec.music.dropLift ?? 0} dB`);
+  }
   // music.optional (opt-in, set by premium-noir): a bed whose audio is not shipped (library/music has the manifest, not the
   // mp3s - see buildMusic) is skipped with a warning instead of failing the build. Every other music spec still fails loudly.
   const musicMissing = spec.music.optional === true && spec.music.id && !spec.music.src && (() => {
@@ -3431,11 +3603,11 @@ ${FX_ON ? `  #fx { position: absolute; inset: 0; transform-origin: 540px ${faceY
   ${titleHtml}
   ${brandHtml}${layersOverHtml}
   ${leakHtml}
-  ${topOverlays.join("\n  ")}
+  ${topOverlays.join("\n  ")}${dropFlashHtml}
   ${edit ? edit.html : ""}
   ${takeAudio}${layerAudioHtml}
   ${overlays.filter((o) => o.audio).map((o) => o.audio).join("\n  ")}
-  ${sfxAudio.join("\n  ")}
+  ${(spec.sound?.complete ? sfxAudioAll() : sfxAudio).join("\n  ")}
   ${musicHtml}
 </div>
 <script>
@@ -3467,7 +3639,18 @@ if (SECTION_MODE) {
   console.log(`-> ${SECTION_OUT} (section [${SECTION_START}, ${SECTION_END}), local duration ${SECTION_TOTAL}s)`);
   process.exit(0);
 }
-fs.writeFileSync(path.join(proj, "index.html"), html);
+// PHANTASIC_PREVIEW_SCALE=0.5 (opt-in, iteration only): the same composition rendered at 540x960. An outer stage
+// carries the composition attributes at the small size and the 1080 root is scaled into it (all layout stays 1080-based).
+const PREVIEW = parseFloat(process.env.PHANTASIC_PREVIEW_SCALE || "1");
+const htmlOut = PREVIEW > 0 && PREVIEW < 1 ? (() => {
+  const w = Math.round(W * PREVIEW), h = Math.round(H * PREVIEW);
+  console.log(`preview: ${w}x${h} (PHANTASIC_PREVIEW_SCALE=${PREVIEW})`);
+  return html.replace(`<meta name="viewport" content="width=${W}, height=${H}" />`, `<meta name="viewport" content="width=${w}, height=${h}" />`)
+    .replace(/<div id="root" class="([^"]*)" data-composition-id="main" data-start="0" data-width="\d+" data-height="\d+" data-duration="([^"]+)" data-fps="(\d+)">/,
+      (m, cls, dur, fps) => `<div id="stage" data-composition-id="main" data-start="0" data-width="${w}" data-height="${h}" data-duration="${dur}" data-fps="${fps}" style="position:relative;width:${w}px;height:${h}px;overflow:hidden"><div id="root" class="${cls}" style="transform:scale(${PREVIEW});transform-origin:0 0;width:${W}px;height:${H}px">`)
+    .replace(/<\/div>\n<script>/, "</div></div>\n<script>");
+})() : html;
+fs.writeFileSync(path.join(proj, "index.html"), htmlOut);
 fs.mkdirSync(path.join(proj, "build"), { recursive: true });
 fs.writeFileSync(path.join(proj, "build", "sfx_events.json"), JSON.stringify({ total: TOTAL, speech: SPEECH, voiceP95: r3(voiceP95), roleDb: ROLE_DB, events: sfxEvents }, null, 2));
 fs.writeFileSync(path.join(proj, "build", "words.edit.json"), JSON.stringify(words));
@@ -3489,7 +3672,12 @@ fs.writeFileSync(path.join(proj, "build", "caption_layout.json"), JSON.stringify
 // string and still reach the oracle. Take 0 never joins from an earlier take, so it never gets a
 // transition in the render - only takes 1.. do, once JOIN_TRANSITIONS has checked them. Dropped by
 // index here rather than by truthiness, so a genuine take-1+ transition is untouched.
-const editTruthTakes = takes.map((t, i) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(SOURCES.length > 1 ? { src: t.src, srcIndex: srcIndex.get(t.src) } : {}), ...(i > 0 && t.transition ? { transition: t.transition } : {}), ...(i > 0 && t.transition && t.transitionDur !== undefined ? { transitionDur: t.transitionDur } : {}) }));
+// premium-kit keys that touch every section (the sfx pass, the join transitions, the drop, the music alignment): part of the
+// sections globalHash only when set, so a reel without them hashes as before
+const PREMIUM_HASH = (spec.sfxDesign || (spec.sfx && !Array.isArray(spec.sfx)) || spec.transitions || spec.drop || spec.music?.alignDrop != null || spec.music?.lifts)
+  ? { sfxDesign: spec.sfxDesign ?? (spec.sfx && !Array.isArray(spec.sfx) ? spec.sfx : null), transitions: spec.transitions ?? null, drop: spec.drop ?? null, music: spec.music ? { alignDrop: spec.music.alignDrop ?? null, dropLift: spec.music.dropLift ?? null, lifts: spec.music.lifts ?? null } : null }
+  : null;
+const editTruthTakes = takes.map((t, i) => ({ start: r3(t.start), dur: r3(t.dur), holdStart: r3(t.holdStart), holdFrames: t.holdFrames, ...(SOURCES.length > 1 ? { src: t.src, srcIndex: srcIndex.get(t.src) } : {}), ...(t.ramp ? { ramp: t.ramp } : {}), ...(i > 0 && t.transition ? { transition: t.transition } : {}), ...(i > 0 && t.transition && t.transitionDur !== undefined ? { transitionDur: t.transitionDur } : {}) }));
 const editTruthBeats = (spec.beats || []).map((b) => ({
   type: b.type, kind: b.kind ?? null,
   at: r3(EB(b, "at", `${b.type} at`)),
@@ -3518,6 +3706,9 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
   ...(roomWins.length ? { room: roomWins.map((w) => ({ start: r3(w.tA), end: r3(w.tB), scale: ROOM_SCALE })) } : {}),
   // reel.layers[]: where each layer actually landed on the output timeline (anchors resolved). Only when the reel has layers.
   ...(LAYERS.length ? { layers: layerTruth(LAYERS) } : {}),
+  // premium kit (opt-in): the whip / zoom-through that spec.transitions put on a take join (#tx), only when there are any.
+  // A join with its own take.transition (I-17) is NOT listed here - it is already a take field.
+  ...(transitionsAt.length ? { txTransitions: transitionsAt.map((x) => ({ t: x.t, kind: x.kind })) } : {}),
 }, null, 2));
 // I-25: section boundaries and per-section invalidation hashes (ISSUES D3). Additive and written
 // AFTER edit_truth.json, from the same already-resolved arrays that file dumps (editTruthTakes,
@@ -3541,7 +3732,7 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
     // Settings that invalidate every section at once, kept separate from each section's own hash
     // so a manifest diff can tell "one caption changed" apart from "the whole reel's look
     // changed" - see lib/sections.mjs's invalidation note.
-    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE, ...(spec.sourceGrade ? { sourceGrade: spec.sourceGrade, sourceExposure: spec.sourceExposure ?? null, gradeGamma, ...(spec.sourceNeutral ? { sourceNeutral: spec.sourceNeutral, gradeCast } : {}) } : {}), ...(gradePresetUsed ? { gradePreset: gradePresetUsed } : {}) }),
+    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE, ...(spec.sourceGrade ? { sourceGrade: spec.sourceGrade, sourceExposure: spec.sourceExposure ?? null, gradeGamma, ...(spec.sourceNeutral ? { sourceNeutral: spec.sourceNeutral, gradeCast } : {}) } : {}), ...(gradePresetUsed ? { gradePreset: gradePresetUsed } : {}), ...(PREMIUM_HASH ? { premium: PREMIUM_HASH } : {}) }),
     sections: manifest,
   }, null, 2));
   console.log(`sections: ${sections.length} (${sections.map((s) => `${s.start}-${s.end}`).join(", ")})`);
