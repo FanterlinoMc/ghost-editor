@@ -165,6 +165,249 @@
       "status": "beta",
       "style": "hormozi",
       "note": "Look ported from Ahmed's Hormozi. The beats (hz-title / hz-name / hz-list / hz-note) are planned by scripts/focus_director.py (standalone, not wired into the studio; its optional AI review needs ANTHROPIC_API_KEY). The bed is optional (not shipped). Colour variants hormozi-blue / -green / -orange / -purple / -teal are styles only."
+    },
+    {
+      "id": "breakdown",
+      "name": "Breakdown",
+      "tagline": "A fast numbered teaching reel: one word at a time, chapter cards with giant numerals, punch-ins every second or so",
+      "status": "beta",
+      "style": "breakdown",
+      "best_for": [
+        "teachers",
+        "coaches",
+        "how-to and listicle reels",
+        "anyone walking through steps"
+      ],
+      "needs": [
+        "one talking-head video (9:16 or 16:9)"
+      ],
+      "does": [
+        "one word on screen at a time under the face",
+        "a navy title card on the hook",
+        "full-screen chapter cards with a giant numeral that change colour per step",
+        "a typewriter label over the promise",
+        "the call-to-action keyword pinned in a gradient to the end",
+        "punch-ins every ~1.2 s, sound effects only on section changes",
+        "footage keeps its own colour; the music bed is optional"
+      ],
+      "note": "Colour versions (red, emerald, orange, purple, pink) exist as samples only; the engine has no styles for them yet."
+    },
+    {
+      "id": "podcast",
+      "name": "Podcast",
+      "tagline": "Moody podcast-clip look: heavy white caps, yellow key words, a question box on the hook, a Like button that gets clicked",
+      "status": "beta",
+      "style": "podcast",
+      "best_for": [
+        "podcast clips",
+        "interviews",
+        "talk shows",
+        "short-form conversations"
+      ],
+      "needs": [
+        "one talking-head video (9:16 or 16:9)",
+        "a show logo (optional, pinned top-left)"
+      ],
+      "does": [
+        "1-3 words at a time in heavy white caps on the lower third",
+        "key words in yellow, danger words in red",
+        "the hook question in a white box with an arrowed name label",
+        "a pull quote mid-video in the same box",
+        "an animated Like button and a pinned show logo",
+        "punch-ins every ~2 s, contrasty colour picture, low cinematic bed (optional)"
+      ],
+      "brand_kit_fields": [
+        "name",
+        "accent",
+        "watermark",
+        "person.name"
+      ],
+      "note": "Colour versions (cyan, green, pink, orange, purple) exist as samples only; the engine has no styles for them yet."
+    },
+    {
+      "id": "gold-ledger",
+      "name": "Gold Ledger",
+      "tagline": "Warm talking head with a small italic lead line, one big gold keyword, and white UI cards over the footage",
+      "status": "beta",
+      "style": "gold-ledger",
+      "best_for": [
+        "real estate",
+        "property and local business",
+        "ads and offers",
+        "checklist-style explainers"
+      ],
+      "needs": [
+        "one talking-head video (9:16 or 16:9)"
+      ],
+      "does": [
+        "opens on a white page with the line typed on over a map",
+        "a small italic lead line with one big heavy keyword in a gold gradient",
+        "white map card and a checklist of pills, one per spoken item",
+        "quick white wash between ideas",
+        "captions and pills kept off the face",
+        "-14 LUFS master"
+      ]
+    },
+    {
+      "id": "northstar",
+      "name": "Northstar",
+      "tagline": "Warm, tight podcast look: stacked mixed-size captions with one big cream word and cinematic stills cut in fast",
+      "status": "beta",
+      "style": "northstar",
+      "best_for": [
+        "motivational talks",
+        "podcast clips",
+        "personal-story reels"
+      ],
+      "needs": [
+        "one talking-head video (9:16 or 16:9)"
+      ],
+      "does": [
+        "stacked captions: tiny lead words, one big cream bold word, a serif word for the emotional beat",
+        "a handwriting phrase to close",
+        "cinematic stills (sky, lone figure, dark scenes) cut in with the captions kept over them",
+        "a light paper concept page where the key word cycles through typefaces",
+        "a picture change about every second in busy stretches",
+        "captions kept off the face; warm grade with teal shadows"
+      ],
+      "note": "The style sets matteWindows (a person cut-out), which is slow on our CPU. Check render time before keeping it as beta."
+    },
+    {
+      "id": "red-poster",
+      "name": "Red Poster",
+      "tagline": "Black-and-white speaker on a bold red card with one huge white word, and moody cutaways between",
+      "status": "beta",
+      "style": "red-poster",
+      "best_for": [
+        "motivational reels",
+        "work-life and mindset talks",
+        "strong one-liners"
+      ],
+      "needs": [
+        "one talking-head video (9:16 or 16:9)"
+      ],
+      "does": [
+        "the speaker in black and white on a wide red card on a white page, or on a full red page",
+        "a small red serif lead above and a huge bold white word",
+        "moody dark cutaways with small serif and bold sans captions",
+        "no header and no name tag",
+        "a keys bed under the voice, no sound effects"
+      ],
+      "note": "Extends magazine-spread (which sets matteWindows, a person cut-out). Check render time before keeping it as beta."
+    },
+    {
+      "id": "magazine-spread",
+      "name": "Magazine Spread",
+      "tagline": "A talking head laid out like a printed magazine: one brand colour, a heavy serif hero word, cream editorial pages",
+      "status": "beta",
+      "style": "magazine-spread",
+      "best_for": [
+        "founders",
+        "creators with a strong brand colour",
+        "editorial and lifestyle talks"
+      ],
+      "needs": [
+        "one talking-head video (9:16 or 16:9)",
+        "a brand kit (one brand colour)"
+      ],
+      "does": [
+        "one brand colour (maroon by default) owns the frame",
+        "a tiny spaced-caps header row and a solid name tag",
+        "a heavy serif hero word over a small sans lead-in",
+        "colour word pages and cream pages with a kicker, boxed key word and italic deck",
+        "the speaker framed as a photo on a coloured page",
+        "cool-graded cutaways, hard cuts only"
+      ],
+      "brand_kit_fields": [
+        "name",
+        "accent",
+        "watermark",
+        "person.name"
+      ],
+      "note": "The style sets matteWindows (a person cut-out), which is slow on our CPU. Check render time before keeping it as beta."
+    },
+    {
+      "id": "monochrome-cinema-stark",
+      "name": "Monochrome Cinema Stark",
+      "tagline": "The darkest, starkest cinema look: pure white type, one-word black cards, black-and-white cutaways",
+      "status": "beta",
+      "style": "monochrome-cinema-stark",
+      "best_for": [
+        "motivational speeches",
+        "serious or dramatic talks",
+        "short punchy statements"
+      ],
+      "needs": [
+        "one talking-head video (9:16 or 16:9)"
+      ],
+      "does": [
+        "pure white type with no colour accent",
+        "tight bold sans small words, bold-italic hero word",
+        "frequent black word cards, one word at a time",
+        "black-and-white metaphor cutaways and teal-tinted motion-blur crowds",
+        "a picture change about every second, heavy dark grade"
+      ]
+    },
+    {
+      "id": "name-reveal",
+      "name": "Name Reveal",
+      "tagline": "Black-and-white world with the speaker in colour, the name huge at head height, one glowing orange word",
+      "status": "beta",
+      "style": "name-reveal",
+      "best_for": [
+        "introductions",
+        "personal brands",
+        "authority and story openers"
+      ],
+      "needs": [
+        "one talking-head video (9:16 or 16:9)",
+        "a name for the reveal"
+      ],
+      "does": [
+        "everything behind the speaker in black and white, the speaker in colour",
+        "a light-leak open",
+        "the name huge in bold white sans, partly hidden by the head",
+        "small bold lead lines with one glowing orange serif-italic word",
+        "black word cards that blur out",
+        "no music bed; bright whooshes on the words and the cuts"
+      ]
+    },
+    {
+      "id": "empire",
+      "name": "Empire",
+      "tagline": "Black-and-white speaker in front of the words: typed cards behind the head, a drop with fast cuts, designed sound",
+      "status": "coming-soon",
+      "style": "premium-iman",
+      "best_for": [
+        "premium personal brands",
+        "founders",
+        "high-end ads"
+      ],
+      "note": "Ported from Ahmed's Empire (premium-iman). Needs the person cut-out, too slow on our CPU to offer yet; Ahmed also relit each video from a depth map (relight.py / empire_finish.py). Change status to beta when the cut-out is fast."
+    },
+    {
+      "id": "signature",
+      "name": "Signature",
+      "tagline": "Cinematic monologue: hero words that snap the camera in, cutaway scenes, light leaks and a scored mix",
+      "status": "coming-soon",
+      "style": "premium-signature",
+      "best_for": [
+        "premium personal brands",
+        "storytellers"
+      ],
+      "note": "Ported from Ahmed's Signature. His version used per-video generated art for the cutaways (signature_plan.py), which nothing here makes yet."
+    },
+    {
+      "id": "prestige",
+      "name": "Prestige",
+      "tagline": "Clean premium talking head with a timed sound design pass",
+      "status": "coming-soon",
+      "style": "premium-belmar",
+      "best_for": [
+        "premium personal brands",
+        "consultants"
+      ],
+      "note": "Ported from Ahmed's Prestige (premium-belmar). The sound pass (prestige_score.py + score.py) needs his sound packs, not shipped."
     }
   ],
   "customer_templates": [
