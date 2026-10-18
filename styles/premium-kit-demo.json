@@ -1,0 +1,64 @@
+{
+  "_about": "Premium kit demo (engine/premium-kit, BETA, not a product template): exercises every premium-kit feature at once so the kit can be eyeballed. Speed ramps (take.ramp / scene.ramp), the SFX design pass (riser > hit > tail on cuts, soft whoosh on text in, ticks on word pops, ducking), eased punch-ins with blur, whip / zoom-through transitions, a grade preset, and the drop (riser, silence, boom, cut ladder). See engine/docs/premium-kit.md. Not a product template. captions.chestFirst is dropped: the fork placer (safezone.mjs) has no chestFirst.",
+  "brand": {
+    "accent": "#E8B54A",
+    "accentDark": "#B88A2A",
+    "ink": "#111111",
+    "capSize": 56,
+    "font": "Montserrat"
+  },
+  "captions": {
+    "style": "box",
+    "group": 3,
+    "popSafe": true,
+    "y": 1150,
+    "balance": true
+  },
+  "sfxProfile": "restrained",
+  "music": null,
+  "look": {
+    "preset": "luxe-warm"
+  },
+  "cadence": {
+    "every": 2.6,
+    "minGap": 1,
+    "scales": [
+      1,
+      1.12
+    ],
+    "emphasisScale": 1.16,
+    "faceAnchor": {
+      "headroom": 24
+    }
+  },
+  "punch": {
+    "frames": 7,
+    "blur": 5,
+    "ease": "power3.out"
+  },
+  "transitions": {
+    "kind": "mix",
+    "every": 2,
+    "frames": 8
+  },
+  "sfxDesign": {
+    "density": "med"
+  },
+  "scenes": {
+    "image": {
+      "in": "whip",
+      "out": "zoom",
+      "captions": true
+    }
+  },
+  "sound": {
+    "complete": true
+  },
+  "outro": 0.15,
+  "master": {
+    "lufs": -14,
+    "ratio": 2,
+    "threshold": -20,
+    "lra": 5
+  }
+}

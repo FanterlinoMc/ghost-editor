@@ -1,0 +1,68 @@
+{
+  "_about": "Prestige (premium-belmar, Luke Belmar look, BETA): talk with small lower-third sentence caps and one bloomed emphasis word, teal-orange luxury grade, alternating punch-ins, then the DROP: riser, 3 f of silence, boom, a beat-locked ladder of luxury B-roll with white flash cuts, then a glowing tracked-caps card.",
+  "brand": {
+    "accent": "#FFC48A",
+    "accentDark": "#B8783A",
+    "ink": "#0B0F12",
+    "capSize": 46,
+    "font": "Montserrat"
+  },
+  "captions": {
+    "style": "lux",
+    "size": 76,
+    "fixedY": 1400,
+    "group": 4,
+    "revealDur": 0.12
+  },
+  "sfxProfile": "restrained",
+  "music": null,
+  "look": {
+    "preset": "belmar-teal"
+  },
+  "cadence": {
+    "every": 2.8,
+    "minGap": 1.2,
+    "scales": [
+      1,
+      1.12
+    ],
+    "emphasisScale": 1.16,
+    "faceAnchor": {
+      "headroom": 24
+    }
+  },
+  "punch": {
+    "frames": 11,
+    "blur": 4,
+    "ease": "power3.out"
+  },
+  "transitions": {
+    "kind": "whip",
+    "every": 2,
+    "frames": 8
+  },
+  "sfxDesign": {
+    "density": "low"
+  },
+  "drop": {
+    "ladder": [
+      15,
+      15,
+      12,
+      12,
+      12,
+      9,
+      12
+    ],
+    "gap": 3,
+    "flashEvery": 3,
+    "flash": 0.35
+  },
+  "outro": 0.15,
+  "master": {
+    "lufs": -14,
+    "ratio": 2,
+    "threshold": -20,
+    "lra": 5
+  }
+}
