@@ -1,0 +1,14 @@
+{
+  "_about": "Soft Luxe Serif variant for Top-100 ref #22 (r38, editor vanogre.edits): Real-estate talking head: small low-opacity sans words, gold serif-italic keyword, split drone b-roll with orange date tags.",
+  "extends": "library/soft-luxe-serif",
+  "brand": {
+    "accent": "#E9B949",
+    "accentDark": "#B88A2A"
+  },
+  "captions": {
+    "group": 2
+  },
+  "look": {
+    "grade": "contrast(1.02) saturate(0.96) brightness(1.06) sepia(0.05)"
+  }
+}

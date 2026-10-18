@@ -1,0 +1,25 @@
+{
+  "_about": "Soft Luxe Serif variant for Top-100 ref #50 (s7650732876970855687, editor tians028): Raw-vs-edited showcase: serif italic + bold sans glow captions, background swap, colour flash.",
+  "extends": "library/soft-luxe-serif",
+  "brand": {
+    "accent": "#5AA0FF",
+    "accentDark": "#2E64C2"
+  },
+  "cadence": {
+    "every": 2.2,
+    "scales": [
+      1.0,
+      1.16
+    ],
+    "emphasisScale": 1.16
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.0) brightness(0.9)",
+    "tint": {
+      "color": "#1b2a5a",
+      "blend": "soft-light",
+      "opacity": 0.12
+    },
+    "vignette": 0.4
+  }
+}

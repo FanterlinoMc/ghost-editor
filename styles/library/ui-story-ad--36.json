@@ -1,0 +1,39 @@
+{
+  "_about": "UI Story Ad variant from ref rank 36 (r2, editor afterpranav): small white + bold yellow keyword (mixed case); calendar/x pop-ups; white flash. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#E4FF5A",
+    "accentDark": "#B8D42F"
+  },
+  "captions": {
+    "style": "cluster",
+    "font": "Inter",
+    "smallSize": 54,
+    "heroSize": 112,
+    "x": 150,
+    "fixedY": 1060,
+    "hold": 0.35,
+    "maxWords": 4,
+    "lowercase": true,
+    "upper": false,
+    "heroItalic": false,
+    "smallSerif": false,
+    "heroSfx": "whoosh",
+    "heroSfxGap": 3.0,
+    "heroFallback": "none",
+    "heroColor": "#E4FF5A"
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.0) brightness(0.84)",
+    "tint": {
+      "color": "#14243a",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.38
+  },
+  "cadence": {
+    "every": 2.6,
+    "minGap": 1.4
+  }
+}

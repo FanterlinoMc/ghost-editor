@@ -1,0 +1,94 @@
+{
+  "_about": "Podcast Punch 9 (v9) (trained 5 Oct 2026 from 20 Top-100 refs; anchor r31 drive client edit (score 8); ~/reels/style-train/podcast-punch). A podcast / talking-head clip cut into a punchy short: colour speaker with a moody cinematic grade, stacked word-cluster captions (small bold white lead words, ONE bigger yellow key word), colour film b-roll as full-bleed cutaways AND as floating rounded cards on black with the caption still running, hard cuts, restrained sound. Variants change the accent, caption scale/case and how heavy the b-roll is. Score 70.0 vs the 9 clean refs under measure v2 (punch-ins counted; v7 re-scored 67.9). v9 adds one `ground` beat (cut-out speaker on a black page, a big yellow spoken number behind him; reel needs matte: true).",
+  "extends": "podcast",
+  "brand": {
+    "accent": "#FFD43B",
+    "accentDark": "#E0B500",
+    "ink": "#0b0b0b",
+    "capSize": 64,
+    "font": "Inter"
+  },
+  "captions": {
+    "style": "cluster",
+    "smallSize": 62,
+    "heroSize": 124,
+    "stairSize": 64,
+    "x": 140,
+    "fixedY": 1150,
+    "hold": 0.3,
+    "maxWords": 4,
+    "lowercase": true,
+    "heroItalic": false,
+    "heroColor": "#FFD43B",
+    "smallSerif": false,
+    "heroSfx": "whoosh",
+    "heroSfxGap": 3.0,
+    "heroFallback": "none"
+  },
+  "cadence": {
+    "every": 2.6,
+    "minGap": 1.4,
+    "scales": [
+      1.0,
+      1.14
+    ],
+    "emphasisScale": 1.16
+  },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "scenes": {
+    "image": {
+      "default_in": "cut"
+    },
+    "window": {
+      "default_in": "cut"
+    }
+  },
+  "sfxProfile": "restrained",
+  "sound": {
+    "heroDb": -14
+  },
+  "music": {
+    "id": "silent-descent",
+    "db": -18,
+    "fadeIn": 0.5,
+    "fadeOut": 0.4
+  },
+  "master": {
+    "lufs": -16.5,
+    "ratio": 1.2,
+    "threshold": -30
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.08) brightness(0.72)",
+    "tint": {
+      "color": "#2a2018",
+      "blend": "soft-light",
+      "opacity": 0.12
+    },
+    "vignette": 0.4,
+    "grain": 0.04,
+    "cleanScenes": true,
+    "target": {
+      "sat": 81.0,
+      "luma": 61.3,
+      "satGain": 1.33,
+      "satMin": 0.45
+    }
+  },
+  "podcastPunch": {
+    "cutawayGrade": "contrast(1.1) saturate(0.85) brightness(0.9) sepia(0.08)",
+    "cardGrade": "contrast(1.08) saturate(0.9) sepia(0.12)"
+  },
+  "director": {
+    "style": "Podcast Punch: a podcast or talking-head clip cut into a punchy short. The speaker stays in COLOUR with a moody film grade; the words do the punching (small white lead words, one bigger yellow key word per line); colour film b-roll illustrates the line, either full-bleed or as a floating rounded card on black.",
+    "captions": "captions.heroes: one key word per spoken line (the noun or verb that carries it, never filler like 'really', 'so', 'cause'); lines without a key word stay all small. Lowercase, 2-4 words per caption, stacked under the chin. captions.script: at most 1 word per 20 s in the yellow script (the emotional or brand word).",
+    "cutaways": "~3 b-roll beats per 20 s (v6: 3 measured closest, 24 changes/min; 4 ran busy at 30/min), 0.8-1.6 s each, captions: true, LITERAL-ish colour film footage of what is said (campus for 'university', servers for 'workflows'). Alternate kind 'image' (full-bleed, grade podcastPunch.cutawayGrade) and kind 'window' (floating rounded card on black, grade podcastPunch.cardGrade). Stills from stock_fetch.py (public domain / CC0), or { self: <source s> } for the speaker's own footage in a window. Once per reel, on a numbered point ('number one'), a `ground` beat (color #0b0b0b, text = the spoken number word, textColor the accent, textSize ~420, ~1.2 s; needs reel \"matte\": true): the cut-out speaker on black with the word behind him (refs #31, #78).",
+    "rhythm": "Picture changes every ~1.5-2.5 s (punch-ins every ~2.6 s on the speaker plus cutaways). Hard cuts only. Return to the speaker for at least 1 s between two cutaways. Hook: first change inside 1.5 s.",
+    "limits": {
+      "scenes_per_min": 16,
+      "hero_whoosh_min_gap_s": 3
+    },
+    "dont": "No podcast_plan.py boxes, Like button or show logo (that is the Diary-of-a-CEO preset, not this family). No black word cards (that is Monochrome Cinema)."
+  }
+}

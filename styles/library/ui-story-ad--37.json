@@ -1,0 +1,34 @@
+{
+  "_about": "UI Story Ad variant from ref rank 37 (r4, editor afterpranav): glowing yellow-green caps keyword; contact cards; red alert cards; website insert. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#C8FF3D",
+    "accentDark": "#9ED11B"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#C8FF3D",
+    "red": "#FF3B3B"
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.5) brightness(0.89) sepia(0.06)",
+    "tint": {
+      "color": "#7a4a1f",
+      "blend": "soft-light",
+      "opacity": 0.12
+    },
+    "vignette": 0.4,
+    "refocus": false
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.0
+    ]
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 78.8 / sat 81.2; punch-in cadence set for ref 11.5 changes/min; refocus off when ref blur < 0.05 (ref 0.028)",
+  "_tweak3": "tweak round 3 (6 Oct, measure v2): punch-ins off (cadence scales 1.0/1.0): ref 11.5 changes/min incl. punches, ours 33",
+  "_tweak4": "tweak round 4 (6 Oct): saturate 1.38 -> 1.5 (ref sat 81, ours 75)"
+}

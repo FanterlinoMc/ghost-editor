@@ -1,0 +1,32 @@
+{
+  "_about": "Neon Glow #21 (Top-100 rank 21, ref r37 by raw.to.reel, podcast creator). Dark studio, small mixed-case white sans lead words with ONE big bold keyword in a hot orange (refs vary orange/purple/yellow gradient glow), a neon app icon popping under the keyword. Cluster captions, no serif, no flashes.",
+  "extends": "library/neon-glow",
+  "brand": {
+    "accent": "#FF8A1F",
+    "accentDark": "#C25E08"
+  },
+  "captions": {
+    "style": "cluster",
+    "smallSize": 54,
+    "heroSize": 124,
+    "x": 150,
+    "fixedY": 1150,
+    "hold": 0.3,
+    "maxWords": 5,
+    "heroSfx": "whoosh",
+    "heroSfxGap": 2.5,
+    "heroColor": "#FF8A1F",
+    "heroItalic": false,
+    "heroFallback": "none",
+    "lowercase": false,
+    "heroGlow": "#FF8A1F"
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.05) brightness(0.84)",
+    "vignette": 0.36
+  },
+  "leaks": false,
+  "director": {
+    "captions": "cluster: captions.heroes = one keyword per phrase (the noun or product the line is about); mixed case; phrases without a hero stay small. Icon beats (ink #D94BFF purple or the accent) under the keyword on product/app nouns."
+  }
+}

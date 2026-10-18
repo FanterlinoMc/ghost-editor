@@ -1,0 +1,37 @@
+{
+  "_about": "UI Story Ad variant from ref rank 46 (r36, editor drive (client)): single-word heavy caps with shadow; phone UI + hand cursor on green grid. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#3CFF5A",
+    "accentDark": "#1FCB3A"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#3CFF5A",
+    "red": "#FF3B3B",
+    "size": 96,
+    "keySize": 120,
+    "maxWords": 1,
+    "fixedY": 1060
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(0.86) brightness(0.93)",
+    "vignette": 0.2,
+    "grain": 0,
+    "refocus": false
+  },
+  "cadence": {
+    "every": 1.7,
+    "minGap": 0.9,
+    "scales": [
+      1.0,
+      1.18
+    ]
+  },
+  "master": {
+    "lufs": -13.1,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 84.0 / sat 54.5; punch-in cadence set for ref 20.2 changes/min; refocus off when ref blur < 0.05 (ref 0.036)"
+}

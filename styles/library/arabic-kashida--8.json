@@ -1,0 +1,6 @@
+{
+  "_about": "Arabic Kashida variant for ref rank 8 (r40, editor 3lwan.1, Arabic finance podcast). Bright red (#D40F1F) object cards (vault / money hand) with kashida-stretched white Arabic words above, pink active word; speaker in a dark studio. Measured: picture change every 3.3 s (18/min), caption every 2.5 s at ~67% down, face 37% of frame height at 33% down, loud master (-11.6 LUFS).",
+  "extends": "library/arabic-kashida",
+  "captions": { "y": 1250, "size": 80, "highlight": "#FF6F91" },
+  "master": { "lufs": -11.5, "ratio": 2, "threshold": -20 }
+}

@@ -1,0 +1,38 @@
+{
+  "_about": "Studio Gloss 38: ref rank 38 (r6), afterpranav AI-business-advisor clip. Pure white cards with 3D cartoon figures and a blue swoosh, small dark / blue key text, AI-logo tiles; captions small white with a glowing yellow-lime key; a revenue UI pill pops over the speaker.",
+  "extends": "library/studio-gloss",
+  "captions": {
+    "smallSize": 44,
+    "heroSize": 104,
+    "heroItalic": false,
+    "heroColor": "#E9FF4F",
+    "x": 190,
+    "fixedY": 1100,
+    "heroGlow": "#E9FF4F"
+  },
+  "brand": {
+    "paper": "#FFFFFF",
+    "accent": "#111111",
+    "ink": "#111111",
+    "footKey": "#E9FF4F"
+  },
+  "look": {
+    "grade": "contrast(1.05) saturate(1.4) brightness(0.85)",
+    "vignette": 0.08,
+    "grain": 0,
+    "cleanScenes": true
+  },
+  "director": {
+    "cards": "stack bg paper (pure white), keyColor #1E6FE0, icon team/laptop/chart/robot, iconSize 440.",
+    "ui": "a small white UI pill over the speaker for a number (engine gap: use {type:big} or a ui scene)."
+  },
+  "_measured": "measured: changes 17.2/min, luma 124, sat 69",
+  "cadence": {
+    "every": 99,
+    "minGap": 99,
+    "scales": [
+      1.0
+    ],
+    "emphasisScale": 1.0
+  }
+}

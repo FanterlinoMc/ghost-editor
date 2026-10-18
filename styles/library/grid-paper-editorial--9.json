@@ -1,0 +1,81 @@
+{
+  "_about": "Grid Paper #9 (r43, garrikedits, score 9) v2, 8 Oct 2026, matched frame by frame: a dark, cool blue-purple talking head with small white sans lead words and ONE white serif-italic hero (one or two words glow cyan), cut with white GRID-PAPER pages where a grey shaded object (brain, handcuffs) sits under a mixed editorial stack (small sans lead, huge bold sans key, serif-italic tail), and lightly graded colour b-roll that carries the captions. Sound like the ref (demucs): a slow bed ~9.5 dB under the voice (head-bang, closest match 5.5), a soft 2-3 kHz whoosh on each page change.",
+  "extends": "library/grid-paper-editorial",
+  "brand": {
+    "accent": "#141414",
+    "accentDark": "#000000",
+    "paper": "#F6F6F4",
+    "ink": "#141414",
+    "keyFont": "Inter, system-ui, sans-serif",
+    "keyItalic": false,
+    "leadSerif": null,
+    "tailSize": 96,
+    "leadSize": 50,
+    "tailSerif": true,
+    "gridCell": 135,
+    "gridAlpha": 0.1,
+    "iconBelow": true,
+    "iconGap": 6
+  },
+  "captions": {
+    "style": "cluster",
+    "smallSerif": false,
+    "serifItalic": true,
+    "heroColor": "#FFFFFF",
+    "glowColor": "#3FE0D0",
+    "heroSize": 150,
+    "smallSize": 50,
+    "align": "center",
+    "avoidFace": true,
+    "maxWords": 4,
+    "heroFallback": "none",
+    "lowercase": false,
+    "heroSfx": false,
+    "fixedY": 1100,
+    "splitAtPages": true
+  },
+  "look": {
+    "grade": "contrast(1.14) saturate(0.95) brightness(0.88)",
+    "tint": {
+      "color": "#2a2a8a",
+      "blend": "soft-light",
+      "opacity": 0.2
+    },
+    "vignette": 0.4,
+    "grain": 0.03,
+    "refocus": {
+      "blur": 0,
+      "dur": 0.01
+    },
+    "cleanScenes": true
+  },
+  "cadence": {
+    "burst": null,
+    "targetPerMin": 34,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.1
+    ],
+    "emphasisScale": 1.12
+  },
+  "master": {
+    "lufs": -19.2,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_round3": "round 3 tweak tried (6 Oct, measure v2): punch cadence every 12 s scored 34.1 vs 36.7; reverted to every 4.5 / minGap 2.2",
+  "music": {
+    "id": "head-bang",
+    "db": -9.5,
+    "fadeOut": 0.6
+  },
+  "matte": false,
+  "director": {
+    "style": "Grid Paper #9: a cool, dark talking head and clean white grid-paper idea pages with a shaded object under bold editorial type. Calm, smart, premium.",
+    "pages": "2-4 stack scenes per 20 s: bg paper, grid true, iconImg true, icon = one engraving that fits the idea (brain, lightbulb, magnifier, gears, handshake, chess...), iconSize 520 (the picture sits BELOW the words, visible from the first frame), lines: lead (role s) the small words, key (role k) the ONE big word, tail (role t) the big serif-italic rest; all words spoken while the page is up. inSfx paper-quick. in cut, out cut.",
+    "cutaways": "1-2 image scenes in COLOUR (the ref's b-roll is warm/cool colour, lightly graded), captions true, grade contrast(1.1) saturate(0.85) brightness(0.86), in cut, inSfx whoosh-2.",
+    "captions": "captions.heroes: the idea word of each phrase (white serif italic); captions.glowWords: 1-2 payoff words (cyan glow). Mixed case.",
+    "sound": "music head-bang -9.5 dB; paper-quick on grid pages, whoosh-2 on cutaways; nothing on captions."
+  }
+}

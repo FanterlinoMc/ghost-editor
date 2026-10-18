@@ -85,3 +85,15 @@ test("a user style with broken JSON fails readably", () => {
   fs.mkdirSync(path.join(userDir, "broken")); fs.writeFileSync(path.join(userDir, "broken", "style.json"), "{nope");
   assert.throws(() => loadStyleChain("user:broken", opts), /not valid JSON/);
 });
+
+test("library/<id> resolves into styles/library and chains to a built-in", () => {
+  put(stylesDir, "library/lib-a.json", { extends: "mid", captions: { size: 70 } });
+  put(stylesDir, "library/lib-b.json", { extends: "library/lib-a", brand: { accent: "#0000ff" } });
+  assert.deepEqual(resolveStylePath("library/lib-a", { stylesDir }), { user: false, id: "lib-a", library: true, file: path.join(stylesDir, "library", "lib-a.json") });
+  const { style } = loadStyleChain("library/lib-b", opts);
+  assert.equal(style.captions.size, 70);
+  assert.equal(style.brand.accent, "#0000ff");
+  assert.equal(style.brand.ink, "#000000");
+  assert.throws(() => loadStyleChain("library/nope", opts), /unknown library style/);
+  for (const n of ["library/", "library/../x", "library/a/b", "user:library/x", "library//x", "Library/x", "library/Upper"]) assert.throws(() => parseStyleName(n), /bad style name/, n);
+});

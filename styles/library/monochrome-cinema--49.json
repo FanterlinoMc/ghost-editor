@@ -1,0 +1,57 @@
+{
+  "_about": "Monochrome Cinema variant from Top-100 rank 49 (daez.visuals, 37 s; a monitor-filmed showcase of a vertical edit: we template the EDIT on the monitor, not the monitor framing). Warm amber/yellow-lit room, speaker in colour; captions are compact, tightly-stacked mixed stacks: bold white sans words with a serif-italic or handwriting word laid over them ('you keep working hard on your craft', 'taking steps'), mixed case, sitting mid-frame on the chest (~45-55% down). Cutaways: moody colour lifestyle b-roll (hooded figure, desk at night, notebook) rather than B&W stock. Smaller heroes than the family: the stack reads as one block. Measure caveat: loop/measure.py sees the MONITOR shot, not the edit (1.6 changes/min, one 36 s calm, -7.7 LUFS room mic, face 10% of frame), so its numbers are not a target. Settings come from the frames: the inner edit cuts every ~3 s, captions sit mid-chest of the inner frame.",
+  "extends": "library/monochrome-cinema",
+  "brand": {
+    "accent": "#F2C14E",
+    "accentDark": "#B88A1E"
+  },
+  "captions": {
+    "smallSize": 60,
+    "heroSize": 128,
+    "x": 190,
+    "fixedY": 1060,
+    "hold": 0.4,
+    "maxWords": 5,
+    "lowercase": false,
+    "heroItalic": false,
+    "heroColor": "#FFFFFF",
+    "smallSerif": false,
+    "heroSfxGap": 3.0
+  },
+  "cadence": {
+    "every": 2.8,
+    "minGap": 1.4,
+    "scales": [
+      1.0,
+      1.12
+    ],
+    "emphasisScale": 1.16
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(0.9) brightness(0.78)",
+    "tint": {
+      "color": "#4a3510",
+      "blend": "soft-light",
+      "opacity": 0.14
+    },
+    "vignette": 0.44,
+    "grain": 0.05
+  },
+  "monochrome": {
+    "cutawayGrade": "saturate(0.8) contrast(1.15) brightness(0.78)",
+    "wordCard": {
+      "bg": "black",
+      "size": 110
+    }
+  },
+  "director": {
+    "style": "Monochrome Cinema (amber stack): warm amber room, compact white stacks mixing bold sans with a serif-italic or handwritten word. Do NOT recreate the monitor/Premiere framing of the reference; that was only how the creator filmed it.",
+    "captions": "captions.heroes: one hero per phrase. captions.serif: about a third of the heroes (the feeling words: 'happening', 'craft', 'headed'). captions.script: 1-2 words per reel in handwriting ('steps', 'hard'). Mixed case.",
+    "wordcards": "0-1 black wordpage per reel.",
+    "cutaways": "2-4 image scenes per 30 s, captions: true, 1.0-1.8 s, grade saturate(0.8) contrast(1.15) brightness(0.78): hooded figure, desk at night, notebook and pen, studio plant. Public domain / CC0 via stock_fetch.py.",
+    "rhythm": "Picture change every ~2.5 s. Hard cuts.",
+    "limits": {
+      "scenes_per_min": 14
+    }
+  }
+}

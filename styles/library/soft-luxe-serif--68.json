@@ -1,0 +1,21 @@
+{
+  "_about": "Soft Luxe Serif variant for Top-100 ref #68 (s7678246554733628680, editor gongkianist): Podcast on black: red serif italic keyword, yellow phrase highlight, chart/definition b-roll cards, stock b-roll. Round 3 (6 Oct): grade brightness 0.92 -> 0.52 (ref luma 49, ours 97).",
+  "extends": "library/soft-luxe-serif",
+  "brand": {
+    "accent": "#E0322B",
+    "accentDark": "#A81E19"
+  },
+  "captions": {
+    "group": 3
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.05) brightness(0.52)",
+    "tint": {
+      "opacity": 0.06
+    },
+    "vignette": 0.36
+  },
+  "director": {
+    "cutaways": "About 4 cutaways per 20 s, evenly spaced (every ~4 s); ref runs 25 picture changes/min with no calm stretch over 4.5 s."
+  }
+}

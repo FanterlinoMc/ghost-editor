@@ -1,0 +1,52 @@
+{
+  "_about": "Cyan Headline (Headline Hype variant, trained 5 Oct 2026 from Top-100 ref rank 45, r34, editor drive (client)): Huge cyan keyword over a small sub line, red X on the myth, outdoor b-roll.",
+  "extends": "library/headline-hype",
+  "brand": {
+    "accent": "#2FD3DE",
+    "accentDark": "#139AA3"
+  },
+  "captions": {
+    "keySize": 150,
+    "smallSize": 44,
+    "fixedY": 1085,
+    "key": "#3FE0E8",
+    "red": "#3FE0E8",
+    "maxWords": 1
+  },
+  "look": {
+    "grade": "contrast(1.08) saturate(0.9) brightness(1.06)",
+    "tint": {
+      "color": "#0e4a52",
+      "blend": "soft-light",
+      "opacity": 0.05
+    },
+    "vignette": 0.2
+  },
+  "cadence": {
+    "every": 2.55,
+    "minGap": 1.27
+  },
+  "train": {
+    "ref": "45:r34",
+    "family": "headline-hype",
+    "measured": {
+      "changes_per_min": 24.2,
+      "burstiness": 0.59,
+      "mean_luma": 112.8,
+      "sat_mean": 89.4,
+      "accent_share": 0.0,
+      "lufs": -12.4
+    },
+    "study": {
+      "words_per_caption": 1.0,
+      "case": "lower",
+      "text_height": 0.061,
+      "caption_y": 0.565
+    }
+  },
+  "master": {
+    "lufs": -12.4,
+    "ratio": 1,
+    "threshold": -20
+  }
+}

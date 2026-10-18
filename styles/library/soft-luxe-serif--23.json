@@ -1,0 +1,21 @@
+{
+  "_about": "Soft Luxe Serif variant for Top-100 ref #23 (r39, editor vanogre.edits): Creator on a dark slatted set: small white words, big blue glowing serif keyword, white word card, bullet list.",
+  "extends": "library/soft-luxe-serif",
+  "brand": {
+    "accent": "#4DA3FF",
+    "accentDark": "#2F6FC0",
+    "serifScale": 2.5
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(0.9) brightness(0.96)",
+    "tint": {
+      "color": "#24384f",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.28
+  },
+  "director": {
+    "cutaways": "No cutaways: stay on the speaker the whole reel (ref r39 is 7.9 picture changes/min with a 21 s calm stretch); let the blue serif keywords carry it."
+  }
+}

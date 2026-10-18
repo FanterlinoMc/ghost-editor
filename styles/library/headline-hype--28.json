@@ -1,0 +1,58 @@
+{
+  "_about": "Dark Key Light (Headline Hype variant, trained 5 Oct 2026 from Top-100 ref rank 28, s7667337270894103830, editor amrofilms): Moody teal room, small lead words, one huge red condensed key word, red word cards.",
+  "extends": "library/headline-hype",
+  "brand": {
+    "font": "Oswald"
+  },
+  "captions": {
+    "font": "Oswald",
+    "size": 52,
+    "smallSize": 36,
+    "keySize": 160,
+    "maxWords": 1,
+    "fixedY": 1244,
+    "red": "#D1121B"
+  },
+  "look": {
+    "grade": "contrast(1.16) saturate(0.82) brightness(0.72)",
+    "tint": {
+      "color": "#0f3a44",
+      "blend": "soft-light",
+      "opacity": 0.16
+    },
+    "vignette": 0.45
+  },
+  "cadence": {
+    "every": 1.0,
+    "minGap": 0.6,
+    "scales": [
+      1.0,
+      1.3,
+      1.12
+    ]
+  },
+  "train": {
+    "ref": "28:s7667337270894103830",
+    "family": "headline-hype",
+    "measured": {
+      "changes_per_min": 36.0,
+      "burstiness": 1.06,
+      "mean_luma": 63.2,
+      "sat_mean": 102.9,
+      "accent_share": 0.0,
+      "lufs": -21.7
+    },
+    "study": {
+      "words_per_caption": 1.0,
+      "case": "mixed",
+      "text_height": 0.04,
+      "caption_y": 0.648
+    }
+  },
+  "master": {
+    "lufs": -21.7,
+    "ratio": 1,
+    "threshold": -20
+  },
+  "_round3": "6 Oct measure-v2 tweak: cadence -> {'every': 1.0, 'minGap': 0.6, 'scales': [1.0, 1.3, 1.12]} (toward own ref picture-change rate / saturation)"
+}

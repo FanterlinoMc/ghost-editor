@@ -1,0 +1,22 @@
+{
+  "_about": "Podcast Punch / Framed Listing (v1, 5 Oct 2026). Ref rank 80 (s7555183076142353672), editor vince200103. Real-estate listing: a white frame inset over a blurred copy, giant extruded title words ('BEAUTIFUL HOME'), drone b-roll, small lowercase captions.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#FFFFFF",
+    "accentDark": "#DDDDDD"
+  },
+  "captions": {
+    "heroColor": "#FFFFFF",
+    "upper": false,
+    "smallSize": 52,
+    "heroSize": 150
+  },
+  "look": {
+    "grade": "contrast(1.04) saturate(1.05) brightness(0.72)",
+    "vignette": 0.15,
+    "grain": 0
+  },
+  "cadence": {
+    "every": 2.0
+  }
+}

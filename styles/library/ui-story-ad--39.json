@@ -1,0 +1,27 @@
+{
+  "_about": "UI Story Ad variant from ref rank 39 (r7, editor afterpranav): heavy condensed white caps + red stroked keyword; full-screen iPhone DM; notification pills. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#FF2D2D",
+    "accentDark": "#C81E1E"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#FF2D2D",
+    "red": "#FF2D2D",
+    "keySize": 124
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.12) brightness(0.86) sepia(0.06)",
+    "tint": {
+      "color": "#7a4a1f",
+      "blend": "soft-light",
+      "opacity": 0.12
+    },
+    "vignette": 0.4
+  },
+  "cadence": {
+    "every": 2.2,
+    "minGap": 1.2
+  }
+}

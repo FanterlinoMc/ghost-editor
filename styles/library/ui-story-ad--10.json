@@ -1,0 +1,85 @@
+{
+  "_about": "UI Story Ad #10 v2 'Gold Ledger' (afterpranav, Top-100 rank 10), 8 Oct 2026, matched frame by frame to his real-estate ad. Opens on a WHITE page: the spoken line types on at the top in small dark sans, over a map in a soft green glow with a red pin, and round portrait avatars with blue star badges pop in around it. Then a warm, saturated talking head: a small white italic sans lead line, with ONE big heavy italic CAPS keyword in a gold gradient under it at chest height. White UI pops over the footage: a rounded white map card with yellow pins, and a checklist of white pills with green slanted tabs and white glyphs, one per spoken item, which blurs out. A quick white wash between ideas. A white photo page: a grey tilted frame with a dark label pill, over a blue disc that pulses on each swap. The ref file is a silent portfolio export, so the sound is chosen for the genre, not matched.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#F2C14E",
+    "accentDark": "#C9962A"
+  },
+  "captions": {
+    "style": "podcast",
+    "font": "Montserrat",
+    "smallStyle": "italic",
+    "smallFont": "Inter",
+    "keyFont": "Montserrat Italic",
+    "keyItalic": true,
+    "keyGradient": [
+      "#FFF8CF 0%",
+      "#F9DC6B 45%",
+      "#E2A62A 100%"
+    ],
+    "keyGlow": 18,
+    "keyGlowColor": "rgba(246,200,80,.55)",
+    "key": "#F2C14E",
+    "size": 44,
+    "smallSize": 44,
+    "keySize": 104,
+    "fixedY": 960,
+    "maxWords": 4,
+    "dodgeFace": true,
+    "splitAtPages": true
+  },
+  "pills": {
+    "w": 672,
+    "h": 104,
+    "gap": 62,
+    "tab": 150,
+    "color": "#1FC24A",
+    "size": 38,
+    "y": 880,
+    "sfx": "pop",
+    "sfxDb": -6
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.02) brightness(0.96) sepia(0.04)",
+    "tint": {
+      "color": "#7a4a1f",
+      "blend": "soft-light",
+      "opacity": 0.09
+    },
+    "vignette": 0.42,
+    "grain": 0.02,
+    "cleanScenes": true,
+    "refocus": {
+      "blur": 12,
+      "dur": 0.3
+    }
+  },
+  "cadence": {
+    "every": 2.6,
+    "minGap": 1.4,
+    "scales": [
+      1.0,
+      1.1
+    ]
+  },
+  "music": {
+    "id": "alif-match-a",
+    "db": -20,
+    "fadeIn": 0,
+    "fadeOut": 0.3,
+    "drops": false,
+    "reveal": false,
+    "payoff": false
+  },
+  "director": {
+    "style": "UI Story Ad #10 'Gold Ledger': a premium talking-head ad told with white UI. Warm and confident.",
+    "open": "headpage at 0 for 3-5 s: the first spoken line types on top; src = a map (or object) of what the line is about, pin true; avatars (3-6 round portraits) pop on the words about people.",
+    "captions": "captions.keys: ONE key word per phrase (the payoff noun or adjective): gold italic caps under a small italic lead line.",
+    "ui": "uicard (white map/screen card, pins) on a place or a scope ('around the world'); pills when the speaker lists 3-4 things (one pill per item, at its word; glyphs: check doc report chart people globe image book archive museum home shield heart clock star bolt mask tree); photostack page (2-3 photos with short labels) near the end; whiteflash on a change of idea or speaker.",
+    "sound": "alif-match-a bed at -20 dB; pop per pill and avatar; pop-whoosh on cards; whoosh on the white wash."
+  },
+  "zoom": {
+    "origin": "50% 14%",
+    "base": 1.04
+  }
+}

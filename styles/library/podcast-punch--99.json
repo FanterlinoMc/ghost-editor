@@ -1,0 +1,26 @@
+{
+  "_about": "Podcast Punch / Warm Room (v3, 6 Oct 2026: cadence 3.0->5.0). Ref rank 99 (s7673892372723387670), editor amrofilms. Cinematic talking head in a warm practical-lit room: tiny single white words mid frame, handheld reframes, no b-roll.",
+  "extends": "library/podcast-punch",
+  "captions": {
+    "style": "duo",
+    "calmSize": 38,
+    "energySize": 38,
+    "fixedY": 1000,
+    "hold": 0.35,
+    "lowercase": false
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(0.95) brightness(0.57)",
+    "tint": {
+      "color": "#5a3414",
+      "blend": "soft-light",
+      "opacity": 0.14
+    }
+  },
+  "cadence": {
+    "every": 5.0
+  },
+  "music": {
+    "db": -22
+  }
+}

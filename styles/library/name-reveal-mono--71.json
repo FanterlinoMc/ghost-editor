@@ -1,0 +1,63 @@
+{
+  "_about": "Name Reveal Mono variant from Top-100 rank 71 (r28, snippco, 16:9 source, score 7): mixed captions where small white sans lead words sit over ONE huge serif-italic quote word in quotes ('\"Nanti\"', 'financial'), a line on a deep blue highlight box, a dark money b-roll moment and candid colour inserts. Natural colour, slightly moody. Vertical render of a landscape style: keep the plate centred.",
+  "extends": "library/name-reveal-mono",
+  "matte": false,
+  "brand": {
+    "accent": "#1B2F8F",
+    "accentDark": "#101E63"
+  },
+  "captions": {
+    "lowercase": false,
+    "smallSize": 62,
+    "heroSize": 150,
+    "fixedY": 1250,
+    "heroColor": "#FFFFFF"
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(0.95) brightness(0.86)",
+    "tint": {
+      "color": "#1f2a3a",
+      "blend": "soft-light",
+      "opacity": 0.08
+    },
+    "vignette": 0.35,
+    "grain": 0.04,
+    "refocus": {
+      "blur": 14,
+      "dur": 0.3
+    },
+    "cleanScenes": true
+  },
+  "monochrome": {
+    "cutawayGrade": "saturate(0.7) contrast(1.2) brightness(0.7)",
+    "wordCard": {
+      "bg": "black",
+      "size": 96
+    }
+  },
+  "director": {
+    "opening": "Open on a short black beat (0.3 s wordpage black) then the hook.",
+    "captions": "captions.heroes: the quoted or money word; captions.serif: all heroes (serif italic). Mixed case.",
+    "highlight": "One label beat (color #1B2F8F) on the line that explains the hero, 1-1.5 s.",
+    "cutaways": "1 dark colour b-roll (money, desk, city at night) with captions: true and the serif hero over it."
+  },
+  "master": {
+    "lufs": -12.1,
+    "ratio": 1.0,
+    "threshold": -20
+  },
+  "cadence": {
+    "every": 1.0,
+    "minGap": 1.1,
+    "scales": [
+      1.0,
+      1.4
+    ],
+    "emphasisScale": 1.4,
+    "burst": {
+      "count": 5,
+      "gap": 0.25,
+      "hold": 2.0
+    }
+  }
+}

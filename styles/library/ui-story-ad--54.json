@@ -1,0 +1,36 @@
+{
+  "_about": "UI Story Ad variant from ref rank 54 (s7676713001592130836, editor bigeditor.60fps): keyword-highlight green/red caps; small UI chips; the ref is posted inside a '$5 vs $80' comparison frame on a green board; only the inner $80 edit is the style. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#8CFF4A",
+    "accentDark": "#5FD126"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#8CFF4A",
+    "red": "#FF4040",
+    "size": 58,
+    "keySize": 96
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(1.70) brightness(0.92)",
+    "vignette": 0.2,
+    "grain": 0,
+    "refocus": false
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.0
+    ]
+  },
+  "master": {
+    "lufs": -21.2,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 82.7 / sat 140.3; punch-in cadence set for ref 11.3 changes/min; refocus off when ref blur < 0.05 (ref 0.0)",
+  "_tweak4": "tweak round 4 (6 Oct): punch-ins off (cadence scales 1.0/1.0), ref 0 punches/min, ours 30 changes/min"
+}

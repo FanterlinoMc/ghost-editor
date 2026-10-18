@@ -1,0 +1,32 @@
+{
+  "_about": "UI Story Ad variant from ref rank 100 (s7688270574069583125, editor jim.malingin): white caps + red/yellow keywords; view-count cards; payment notification; grey flash. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#FFE03A",
+    "accentDark": "#D4B712"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#FFE03A",
+    "red": "#FF2B2B",
+    "keySize": 110
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.26) brightness(0.60)",
+    "vignette": 0.36
+  },
+  "cadence": {
+    "every": 1.7,
+    "minGap": 0.9,
+    "scales": [
+      1.0,
+      1.18
+    ]
+  },
+  "master": {
+    "lufs": -20.2,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 49.6 / sat 88.7; punch-in cadence set for ref 22.2 changes/min; refocus off when ref blur < 0.05 (ref 0.084)"
+}

@@ -1,0 +1,61 @@
+{
+  "_about": "Name Reveal Mono variant from Top-100 rank 18 (r27, snippco, Indonesian talking head, score 8): minimal and confident. Bright natural daylight plate (warm wood, plants), small mixed-case sans captions ABOVE the head that build word by word, a big serif-italic word on the key idea ('kerja keras', 'gamau?'), blank WHITE word cards with one tiny word in sans or serif italic, a hand-drawn underline swoosh, and one line on a deep blue highlight bar.",
+  "extends": "library/name-reveal-mono",
+  "matte": false,
+  "brand": {
+    "accent": "#111111",
+    "accentDark": "#000000",
+    "paper": "#FFFFFF"
+  },
+  "captions": {
+    "lowercase": false,
+    "smallSize": 56,
+    "heroSize": 130,
+    "fixedY": 700,
+    "heroColor": "#FFFFFF",
+    "heroSfxGap": 3.5
+  },
+  "cadence": {
+    "every": 2.7,
+    "minGap": 1.1,
+    "scales": [
+      1.0,
+      1.35
+    ],
+    "emphasisScale": 1.35,
+    "burst": null
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(0.95) brightness(0.95)",
+    "tint": {
+      "color": "#3a2a18",
+      "blend": "soft-light",
+      "opacity": 0.06
+    },
+    "vignette": 0.25,
+    "grain": 0.03,
+    "refocus": {
+      "blur": 16,
+      "dur": 0.3
+    },
+    "cleanScenes": true
+  },
+  "monochrome": {
+    "cutawayGrade": "saturate(0.95) contrast(1.08)",
+    "wordCard": {
+      "bg": "paper",
+      "size": 72
+    }
+  },
+  "director": {
+    "opening": "No mood, no behind beat; plain bright plate.",
+    "captions": "captions.heroes: 1 hero per sentence in the serif (captions.serif = same words). Mixed case. Captions sit above the head (fixedY 700).",
+    "wordcards": "2-3 wordpage scenes with bg paper and paper #FFFFFF (black words via accent #111), size 72: one tiny word on a white page; serif the question word.",
+    "highlight": "One label beat (color #1A2E8C, white serif italic) on a key phrase, 1-1.5 s. Hand-drawn underline swoosh: engine gap."
+  },
+  "master": {
+    "lufs": -12.4,
+    "ratio": 1.0,
+    "threshold": -20
+  }
+}

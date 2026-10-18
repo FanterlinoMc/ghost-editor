@@ -1,0 +1,50 @@
+{
+  "_about": "UI Story Ad variant from ref rank 26 (s7634674907049250055, editor ciggmedia): serif-italic hero words, cream/black word cards, phone UI b-roll, cinematic grade. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#F3EBD3",
+    "accentDark": "#CDBF98"
+  },
+  "captions": {
+    "style": "cluster",
+    "font": "Inter",
+    "smallSize": 54,
+    "heroSize": 128,
+    "x": 150,
+    "fixedY": 1100,
+    "hold": 0.35,
+    "maxWords": 4,
+    "lowercase": true,
+    "upper": false,
+    "heroItalic": false,
+    "smallSerif": false,
+    "heroSfx": "whoosh",
+    "heroSfxGap": 3.0,
+    "heroFallback": "none",
+    "heroColor": "#FFFFFF"
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.79) brightness(0.74) sepia(0.06)",
+    "tint": {
+      "color": "#7a4a1f",
+      "blend": "soft-light",
+      "opacity": 0.12
+    },
+    "vignette": 0.4
+  },
+  "cadence": {
+    "every": 1.7,
+    "minGap": 0.9,
+    "scales": [
+      1.0,
+      1.18
+    ]
+  },
+  "sfxProfile": "restrained",
+  "master": {
+    "lufs": -13.7,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 65.3 / sat 105.9; punch-in cadence set for ref 25.8 changes/min; refocus off when ref blur < 0.05 (ref 0.125)"
+}

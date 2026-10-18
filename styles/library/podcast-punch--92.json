@@ -1,0 +1,23 @@
+{
+  "_about": "Podcast Punch / Glow Caps (v3, 6 Oct 2026: heroGlow + grade brightness .82->.66). Ref rank 92 (s7666660931723676935), editor tians028. Client edit shown on a monitor: glowing caps key words in orange / red / green ('OBSESSED', 'TRY THIS INSTEAD'), 3D app icons popping, warm low-key room.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#FF9A1F",
+    "accentDark": "#C96F00"
+  },
+  "captions": {
+    "upper": true,
+    "lowercase": false,
+    "heroColor": "#FF9A1F",
+    "heroSize": 112,
+    "smallSize": 54,
+    "heroGlow": "#FF9A1F"
+  },
+  "look": {
+    "grade": "contrast(1.14) saturate(1.05) brightness(0.66)"
+  },
+  "cadence": {
+    "every": 2.0
+  },
+  "sfxProfile": "standard"
+}

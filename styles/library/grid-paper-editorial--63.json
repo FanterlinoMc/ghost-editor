@@ -1,0 +1,25 @@
+{
+  "_about": "Grid Paper Editorial variant: ref rank 63 (ciggmedia): natural-colour speaker, red serif + sans title card, white list pages with a hand-drawn red circle on the current item, small cut-out speaker, yellow serif-italic keywords.",
+  "extends": "library/grid-paper-editorial",
+  "captions": {
+    "heroColor": "#F6F07A",
+    "heroSize": 120,
+    "lowercase": true
+  },
+  "pagePaper": "plain",
+  "look": {
+    "grade": "contrast(1.05) saturate(1.05) brightness(1.02)",
+    "vignette": 0.12,
+    "grain": 0.02
+  },
+  "cadence": {
+    "every": 9.0,
+    "minGap": 4.0
+  },
+  "master": {
+    "lufs": -22.4,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_round3": "tweak (6 Oct, measure v2): punch-in cadence {'every': 6.5, 'minGap': 3.0} -> {'every': 9.0, 'minGap': 4.0}"
+}

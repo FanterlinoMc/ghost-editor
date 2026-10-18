@@ -1,0 +1,119 @@
+{
+  "_about": "UI Story Ad v1 (trained 5 Oct 2026 from 26 Top-100 refs: afterpranav x8, jim.malingin x7, bigeditor.60fps x6, ciggmedia x5... see ~/reels/style-train/ui-story-ad). A talking-head ad told with app UI: the speaker stays in colour on a dark, warm set; captions are a small white caps line over ONE big keyword in a hot accent (yellow-green by default), centred at chest height; on every concrete noun a white or dark UI element pops beside the speaker (notification, checklist pill, chat, search bar, calendar, chart) while the camera softly defocuses; numbered steps get #1 #2 #3 bubbles; 1-2 full-screen UI inserts (phone chat, app window). Hard cuts, punch-ins, pop/notification sounds, low bed.",
+  "extends": "pitch",
+  "brand": {
+    "accent": "#E4FF3A",
+    "accentDark": "#B9D400",
+    "ink": "#0E0E10",
+    "capSize": 64,
+    "font": "Montserrat"
+  },
+  "captions": {
+    "style": "podcast",
+    "font": "Montserrat",
+    "size": 70,
+    "keySize": 118,
+    "smallSize": 50,
+    "fixedY": 990,
+    "maxWords": 4,
+    "key": "#E4FF3A",
+    "red": "#FF3B3B"
+  },
+  "cadence": {
+    "every": 4.5,
+    "minGap": 1.8,
+    "scales": [
+      1.0,
+      1.12
+    ],
+    "emphasisScale": 1.16
+  },
+  "scenes": {
+    "default_in": "cut"
+  },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "popcard": {
+    "w": 640,
+    "h": 560,
+    "y": 330
+  },
+  "listMarks": {
+    "style": "bubbles",
+    "size": 112,
+    "gap": 150,
+    "y": 240,
+    "hold": 2.4
+  },
+  "toolLogos": {
+    "size": 220,
+    "hold": 1.4
+  },
+  "sfxProfile": "standard",
+  "sound": {
+    "lines": false,
+    "nametag": false,
+    "objects": false,
+    "paperIn": false,
+    "pen": false,
+    "zoom": false,
+    "popDb": -4,
+    "complete": false
+  },
+  "music": {
+    "id": "alif-match-a",
+    "db": -20,
+    "fadeIn": 0,
+    "fadeOut": 0.3,
+    "drops": false,
+    "reveal": false,
+    "payoff": false
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.3) brightness(0.9)",
+    "tint": {
+      "color": "#3a2a14",
+      "blend": "soft-light",
+      "opacity": 0.08
+    },
+    "vignette": 0.34,
+    "grain": 0.03,
+    "cleanScenes": true,
+    "refocus": {
+      "blur": 14,
+      "dur": 0.3
+    },
+    "target": {
+      "sat": 96.9,
+      "satMin": 0.45,
+      "satGain": 1.23
+    }
+  },
+  "zoom": {
+    "origin": "50% 36%",
+    "base": 1.04
+  },
+  "master": {
+    "lufs": -20,
+    "ratio": 1.2,
+    "threshold": -20,
+    "lra": 7
+  },
+  "outro": 0.15,
+  "director": {
+    "style": "UI Story Ad: a talking-head AD told through app UI. The speaker carries the voice in colour; the story is drawn as UI the viewer already knows (notifications, checklists, chats, search bars, calendars, charts, profiles). Every UI element shows what the speaker is saying at that moment. Premium and clean, never cluttered: one UI element on screen at a time.",
+    "context": "Read the whole transcript first and write build/context.json (topic, audience, offer, glossary). Each UI element is chosen from the MEANING in this video: 'clients' in an agency ad = a new-lead notification, not a handshake photo.",
+    "captions": "captions.keys: ONE key word per 2-4 word line (the noun or verb that sells the line: the product, the result, the number). captions.reds: 1-3 danger words (problem, never, wrong, lose). Never a filler word as a key ('cause, really, just). Everything else is the small white caps line.",
+    "ui": "Every 2.5-4 s in talking stretches, ON the concrete noun: popcard with ui (tokens | calendar | stopwatch | bars | loop | target) for a literal idea, 0.9-1.6 s, label = the spoken word; list (white pill rows, 2-4 lines, each line on its spoken word) when the speaker lists benefits or steps; chips for named items; logo for a named tool or company (toolLogos does known AI tools automatically).",
+    "inserts": "1-2 full-screen inserts per 20 s: scene kind device (phone chat: the DM, the question, the client reply) or scene kind ui (app window: the search, the prompt, the result lines). 1.2-2.4 s, in: cut. If the user uploaded a screen recording or screenshot, use it as device src instead.",
+    "steps": "'number one / step two' get #1 #2 #3 bubbles automatically (listMarks). Put the step's key word in captions.keys.",
+    "rhythm": "Picture changes every ~2-3 s (punch-ins, UI pops, inserts). Never two UI elements at once, never a UI element over the mouth. Leave 0.6-1 s of clean speaker after each insert. The last line (CTA) gets a clean card with a cursor click (scene kind card with pill + cursor) only if the speaker gives a CTA.",
+    "limits": {
+      "scenes_per_min": 8,
+      "ui_per_min": 18
+    }
+  },
+  "layout": {
+    "cardY": 1190
+  }
+}

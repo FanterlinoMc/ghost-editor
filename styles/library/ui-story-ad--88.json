@@ -1,0 +1,54 @@
+{
+  "_about": "UI Story Ad variant from ref rank 88 (s7641459821950143765, editor bigeditor.60fps): small gold words; white search/review cards; booking CTA; the ref is posted inside a '$5 vs $80' comparison frame on a green board; only the inner $80 edit is the style. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#E8C27A",
+    "accentDark": "#C29A4E"
+  },
+  "captions": {
+    "style": "cluster",
+    "font": "Inter",
+    "smallSize": 48,
+    "heroSize": 100,
+    "x": 150,
+    "fixedY": 1120,
+    "hold": 0.35,
+    "maxWords": 4,
+    "lowercase": true,
+    "upper": false,
+    "heroItalic": false,
+    "smallSerif": false,
+    "heroSfx": "whoosh",
+    "heroSfxGap": 3.0,
+    "heroFallback": "none",
+    "heroColor": "#E8C27A"
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(1.12) brightness(1.02)",
+    "vignette": 0.18,
+    "grain": 0
+  },
+  "cadence": {
+    "every": 2.6,
+    "minGap": 1.4,
+    "scales": [
+      1.0,
+      1.0
+    ]
+  },
+  "sfxProfile": "restrained",
+  "master": {
+    "lufs": -16.1,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "scenes": {
+    "default_in": "cut",
+    "bg": "#FFFFFF"
+  },
+  "ui": {
+    "theme": "light"
+  },
+  "_tweak3": "tweak round 3 (6 Oct): white app screens (scenes.bg #FFF + ui.theme light): ref luma 187, bright share 0.34",
+  "_tweak4": "tweak round 4 (6 Oct): punch-ins off (cadence scales 1.0/1.0), ref 0 punches/min; re-rendered with the light-UI dark-text fix"
+}

@@ -1,0 +1,90 @@
+{
+  "_about": "Monochrome Cinema v1 (trained 5 Oct 2026 from 20 refs: snippco r21, symz r14, refinedambition_ x13, snipp.co x3, ciggmedia B&W x2, rehmaneditor999; ~/reels/style-train/monochrome-cinema). Speaker in colour with a moody grade, word-cluster captions (small lead, one huge bold-italic key in a soft accent, small tail), black word cards (wordpage bg black), B&W metaphor cutaways, calm bed. Measured medians: picture change 1.9 s, caption every 0.9 s, 1.5 words per caption change, lowercase, captions ~49% down, face on screen 56%.",
+  "extends": "monologue",
+  "brand": {
+    "accent": "#9DB8FF",
+    "accentDark": "#6F86C9",
+    "ink": "#111111",
+    "capSize": 56,
+    "font": "Inter"
+  },
+  "captions": {
+    "style": "cluster",
+    "smallSize": 66,
+    "heroSize": 160,
+    "stairSize": 68,
+    "x": 140,
+    "fixedY": 1120,
+    "hold": 0.35,
+    "maxWords": 6,
+    "heroSfx": "whoosh",
+    "lowercase": true,
+    "heroItalic": true,
+    "heroColor": "#B9CCFF",
+    "smallSerif": true,
+    "heroSfxGap": 2.5,
+    "heroFallback": "none"
+  },
+  "cadence": {
+    "every": 3.2,
+    "minGap": 1.6,
+    "scales": [
+      1.0,
+      1.18
+    ],
+    "emphasisScale": 1.18,
+    "targetPerMin": null
+  },
+  "sound": {
+    "heroDb": -14
+  },
+  "music": {
+    "db": -14,
+    "fadeOut": 0.4
+  },
+  "look": {
+    "grade": "contrast(1.14) saturate(0.74) brightness(0.74)",
+    "tint": {
+      "color": "#1f3a4a",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.42,
+    "grain": 0.06,
+    "refocus": {
+      "blur": 10,
+      "dur": 0.25
+    },
+    "cleanScenes": true,
+    "target": {
+      "sat": 60.2,
+      "luma": 59.7,
+      "satGain": 1.12,
+      "satMin": 0.45,
+      "lumaMin": null,
+      "lumaMax": null,
+      "satMax": null
+    }
+  },
+  "monochrome": {
+    "cutawayGrade": "grayscale(1) contrast(1.22) brightness(0.96)",
+    "wordCard": {
+      "bg": "black",
+      "size": 120
+    }
+  },
+  "director": {
+    "style": "Monochrome Cinema: a cinematic quote edit. The speaker (in colour, moody) carries it; the reel keeps cutting between the speaker, black word cards and black-and-white METAPHOR cutaways. Typography is the hero.",
+    "captions": "captions.heroes: one hero per phrase (the word that carries the line). captions.serif: 1-2 emotional words in the serif. Lowercase.",
+    "wordcards": "2-3 wordpage scenes per 20 s with bg black on short punch lines (2-4 words, e.g. 'why not you'): one spoken word at a time; big: the payoff word; serif: the emotional word. 0.4-1.2 s.",
+    "cutaways": "3-4 image scenes per 20 s, grade grayscale(1) contrast(1.22) brightness(0.96), captions: true, 0.8-1.8 s, METAPHORS from stock_fetch.py (public domain / CC0): mind->brain/MRI, discipline->statue, scale->galaxy/city, the masses->crowd, time->clock, learning->old library.",
+    "rhythm": "Picture changes every ~1.9 s (cuts, punches, cards, cutaways). Never two cutaways back to back without returning to the speaker or a word card. Leave 0.5-1 s on the speaker after the payoff.",
+    "limits": {
+      "scenes_per_min": 20
+    }
+  },
+  "master": {
+    "lra": 5
+  },
+  "_inherit_note": "Pinned 7 Oct by lead: block settings inherited from Monologue 2 (targetPerMin, look.target luma/clamps, master.lra) so this family keeps its own trained behaviour."
+}

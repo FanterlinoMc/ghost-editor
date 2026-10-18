@@ -1,6 +1,7 @@
 // Style-name resolver. The ONE place a style or brand-kit name becomes a path.
 //
 //   "keynote-3"      -> <stylesDir>/keynote-3.json                 (built-in, shipped in the fork)
+//   "library/podcast-punch--19" -> <stylesDir>/library/podcast-punch--19.json  (Ahmed's trained library, a sub-folder of styles/)
 //   "user:my-look"   -> $USER_STYLES_DIR/my-look/style.json        (a saved user template)
 //
 // Ids must match ^[a-z0-9][a-z0-9-]{0,63}$ (optionally prefixed "user:"). Anything else is refused with
@@ -13,16 +14,19 @@ import path from "node:path";
 export const STYLE_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 export const BRAND_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 export const USER_PREFIX = "user:";
+export const LIBRARY_PREFIX = "library/";
 
 const bad = (name, why) => new Error(`bad style name ${JSON.stringify(name)}: ${why}`);
 
-// -> { user: boolean, id: string }; throws "bad style name" on anything unsafe
+// -> { user: boolean, id: string, library?: true }; throws "bad style name" on anything unsafe.
+// "library/<id>" is the ONLY name with a separator: the literal prefix, then an id that passes the same check.
 export function parseStyleName(name) {
   if (typeof name !== "string") throw bad(name, "must be a string");
   const user = name.startsWith(USER_PREFIX);
-  const id = user ? name.slice(USER_PREFIX.length) : name;
-  if (!STYLE_ID_RE.test(id)) throw bad(name, `id must match ${STYLE_ID_RE} (optionally prefixed "user:")`);
-  return { user, id };
+  const library = !user && name.startsWith(LIBRARY_PREFIX);
+  const id = user ? name.slice(USER_PREFIX.length) : library ? name.slice(LIBRARY_PREFIX.length) : name;
+  if (!STYLE_ID_RE.test(id)) throw bad(name, `id must match ${STYLE_ID_RE} (optionally prefixed "user:" or "library/")`);
+  return library ? { user, id, library } : { user, id };
 }
 
 export function checkBrandName(id) {
@@ -32,7 +36,8 @@ export function checkBrandName(id) {
 
 // -> { user, id, file }. Does not touch the disk. A "user:" name with no userStylesDir throws.
 export function resolveStylePath(name, { stylesDir, userStylesDir = process.env.USER_STYLES_DIR } = {}) {
-  const { user, id } = parseStyleName(name);
+  const { user, id, library } = parseStyleName(name);
+  if (library) return { user, id, library, file: path.join(stylesDir, "library", `${id}.json`) };
   if (!user) return { user, id, file: path.join(stylesDir, `${id}.json`) };
   if (!userStylesDir) throw new Error(`style ${JSON.stringify(name)} is a user style but USER_STYLES_DIR is not set`);
   return { user, id, file: path.join(userStylesDir, id, "style.json") };
@@ -41,8 +46,9 @@ export function resolveStylePath(name, { stylesDir, userStylesDir = process.env.
 // Loads a style with its `extends` chain. A built-in may extend a built-in; a user style may extend a built-in only.
 // -> { style, warnings }. Throws Error with a readable message (callers die()).
 export function loadStyleChain(name, { stylesDir, userStylesDir = process.env.USER_STYLES_DIR, deepMerge }, seen = [], warnings = []) {
-  const { user, id, file } = resolveStylePath(name, { stylesDir, userStylesDir });
+  const { user, id, library, file } = resolveStylePath(name, { stylesDir, userStylesDir });
   if (!fs.existsSync(file)) {
+    if (library) throw new Error(`unknown library style '${name}'; have ${fs.readdirSync(path.join(stylesDir, "library")).length} under styles/library/`);
     if (user) throw new Error(`unknown user style '${name}'`);
     throw new Error(`unknown style '${name}'; have: ${fs.readdirSync(stylesDir).filter((f) => f.endsWith(".json")).map((f) => f.replace(".json", "")).join(", ")}`);
   }

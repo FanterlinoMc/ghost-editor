@@ -1,0 +1,46 @@
+{
+  "_about": "Neon Glow #83 (Top-100 rank 83, ref by marvin.media, 'raw vs final cut'). The ref shows a before/after pair on a gold field with a timeline strip; the 'after' edit uses small white captions with a bold YELLOW keyword. Template keeps the after-edit look (yellow keyword cluster captions); the before/after layout is an engine gap.",
+  "extends": "library/neon-glow",
+  "brand": {
+    "accent": "#FFD23F",
+    "accentDark": "#D1A600"
+  },
+  "captions": {
+    "style": "cluster",
+    "smallSize": 50,
+    "heroSize": 104,
+    "x": 150,
+    "fixedY": 1160,
+    "hold": 0.3,
+    "maxWords": 4,
+    "heroSfx": "whoosh",
+    "heroSfxGap": 3,
+    "heroColor": "#FFD23F",
+    "heroItalic": false,
+    "heroFallback": "none",
+    "lowercase": true,
+    "heroGlow": "#FFD23F"
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(0.95) brightness(0.86)",
+    "vignette": 0.38
+  },
+  "leaks": false,
+  "director": {
+    "captions": "cluster: captions.heroes = one yellow keyword per phrase (the persuasive verb or noun); everything else small white lowercase."
+  },
+  "cadence": {
+    "every": 99,
+    "minGap": 99,
+    "scales": [
+      1.0,
+      1.0
+    ],
+    "emphasisScale": 1.0
+  },
+  "master": {
+    "lufs": -13,
+    "ratio": 3,
+    "threshold": -20
+  }
+}

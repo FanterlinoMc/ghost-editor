@@ -1,0 +1,35 @@
+{
+  "_about": "Grid Paper Editorial variant: ref rank 33 (gongkianist): letterboxed podcast speaker, sans lead + serif-italic words, pale lime key words, beige collage cutaways with an orange label box, statue/money metaphors.",
+  "extends": "library/grid-paper-editorial",
+  "brand": {
+    "accent": "#E07A2E",
+    "accentDark": "#A8561C",
+    "paper": "#ECE7DA"
+  },
+  "pagePaper": "plain",
+  "captions": {
+    "heroColor": "#EAF07A",
+    "heroSize": 128,
+    "smallSize": 46
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(0.62) brightness(0.72)",
+    "tint": {
+      "color": "#2a2a2a",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.35,
+    "grain": 0.04
+  },
+  "cadence": {
+    "every": 12.0,
+    "minGap": 6.0
+  },
+  "master": {
+    "lufs": -14.3,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_round3": "tweak (6 Oct, measure v2): punch-in cadence {'every': 2.6} -> every 12 s (round 3 tweak: the paper pages already supply the picture changes; measure v2 counts punch-ins too)"
+}

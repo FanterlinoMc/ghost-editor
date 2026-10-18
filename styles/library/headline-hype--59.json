@@ -1,0 +1,48 @@
+{
+  "_about": "Night Desk Gold (Headline Hype variant, trained 5 Oct 2026 from Top-100 ref rank 59, s7686076199663144210, editor jim.malingin): City-night desk set, 2-3 word white caps, yellow outcome words, pros and cons.",
+  "extends": "library/headline-hype",
+  "captions": {
+    "size": 64,
+    "keySize": 104,
+    "maxWords": 2,
+    "fixedY": 1027,
+    "key": "#FFE14D",
+    "red": "#3BE36B"
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.0) brightness(0.62)",
+    "tint": {
+      "color": "#2a1a06",
+      "blend": "soft-light",
+      "opacity": 0.1
+    }
+  },
+  "cadence": {
+    "every": 30,
+    "minGap": 15
+  },
+  "train": {
+    "ref": "59:s7686076199663144210",
+    "family": "headline-hype",
+    "measured": {
+      "changes_per_min": 14.7,
+      "burstiness": 0.42,
+      "mean_luma": 47.0,
+      "sat_mean": 94.4,
+      "accent_share": 0.0,
+      "lufs": -20.0
+    },
+    "study": {
+      "words_per_caption": 2.5,
+      "case": "mixed",
+      "text_height": 0.029,
+      "caption_y": 0.535
+    }
+  },
+  "master": {
+    "lufs": -20.0,
+    "ratio": 1,
+    "threshold": -20
+  },
+  "_round3": "6 Oct measure-v2 tweak: cadence -> {'every': 30, 'minGap': 15} (toward own ref picture-change rate / saturation)"
+}

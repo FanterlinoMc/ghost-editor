@@ -1,0 +1,111 @@
+{
+  "_about": "UI Story Ad #10 v2 'Gold Ledger' (afterpranav, Top-100 rank 10), 8 Oct 2026, matched frame by frame to his real-estate ad. Opens on a WHITE page: the spoken line types on at the top in small dark sans, over a map in a soft green glow with a red pin, and round portrait avatars with blue star badges pop in around it. Then a warm, saturated talking head: a small white italic sans lead line, with ONE big heavy italic CAPS keyword in a gold gradient under it at chest height. White UI pops over the footage: a rounded white map card with yellow pins, and a checklist of white pills with green slanted tabs and white glyphs, one per spoken item, which blurs out. A quick white wash between ideas. A white photo page: a grey tilted frame with a dark label pill, over a blue disc that pulses on each swap. The ref file is a silent portfolio export, so the sound is chosen for the genre, not matched. Gold Ledger 3 (hardened, 9 Oct 2026): captions and checklist pills never sit on the face (close-ups shrink onto a blurred backdrop, text goes under the chin), lead line 30% bigger with a shadow, the dark lower band is a designed gold-edged ledger tray, avatars are gold monogram discs (no real faces), -14 LUFS master.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#F2C14E",
+    "accentDark": "#C9962A"
+  },
+  "captions": {
+    "style": "podcast",
+    "font": "Montserrat",
+    "smallStyle": "italic",
+    "smallFont": "Inter",
+    "keyFont": "Montserrat Italic",
+    "keyItalic": true,
+    "keyGradient": [
+      "#FFF8CF 0%",
+      "#F9DC6B 45%",
+      "#E2A62A 100%"
+    ],
+    "keyGlow": 18,
+    "keyGlowColor": "rgba(246,200,80,.55)",
+    "key": "#F2C14E",
+    "size": 58,
+    "smallSize": 58,
+    "keySize": 112,
+    "fixedY": 960,
+    "maxWords": 4,
+    "dodgeFace": true,
+    "splitAtPages": true,
+    "underChin": true,
+    "floor": 1480,
+    "hardFloor": true,
+    "keepUnderUi": true,
+    "uiRoom": 120
+  },
+  "pills": {
+    "w": 620,
+    "h": 92,
+    "gap": 26,
+    "tab": 150,
+    "color": "#1FC24A",
+    "size": 36,
+    "y": 880,
+    "sfx": "pop",
+    "sfxDb": -6,
+    "floor": 1480,
+    "textWith": true
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.02) brightness(0.96) sepia(0.04)",
+    "tint": {
+      "color": "#7a4a1f",
+      "blend": "soft-light",
+      "opacity": 0.09
+    },
+    "vignette": 0.42,
+    "grain": 0.02,
+    "cleanScenes": true,
+    "refocus": {
+      "blur": 12,
+      "dur": 0.3
+    }
+  },
+  "cadence": {
+    "every": 2.6,
+    "minGap": 1.4,
+    "scales": [
+      1.0,
+      1.1
+    ]
+  },
+  "music": {
+    "id": "alif-match-a",
+    "db": -20,
+    "fadeIn": 0,
+    "fadeOut": 0.3,
+    "drops": false,
+    "reveal": false,
+    "payoff": false
+  },
+  "director": {
+    "style": "UI Story Ad #10 'Gold Ledger': a premium talking-head ad told with white UI. Warm and confident.",
+    "open": "headpage at 0 for 2.5-4 s: the first spoken line types on top; src = a CC0 map crop centred on the place (pin true); avatars = 3-5 gold monogram discs (glyph or initial), never photos of people.",
+    "captions": "captions.keys: ONE key word per phrase (the payoff noun or adjective): gold italic caps under a small italic lead line.",
+    "ui": "uicard (white map/screen card, pins) on a place or a scope ('around the world'); pills when the speaker lists 3-4 things (one pill per item, at its word; glyphs: check doc report chart people globe image book archive museum home shield heart clock star bolt mask tree); photostack page (2-3 photos with short labels) near the end; whiteflash on a change of idea or speaker. A ledger band (cover with ledger: true, y0 1500) rises under the checklist. Photostack <= 2 s, every item has a full, short label (2-3 words), PD/CC0 stills of places or objects.",
+    "sound": "alif-match-a bed at -20 dB; pop per pill and avatar; pop-whoosh on cards; whoosh on the white wash."
+  },
+  "zoom": {
+    "origin": "50% 14%",
+    "base": null,
+    "fit": {
+      "capRoom": 380,
+      "top": 200,
+      "minBase": 0.7,
+      "punch": 1.08,
+      "dim": -0.3,
+      "sat": 0.8,
+      "blur": 26,
+      "radius": 56,
+      "always": true,
+      "maxBase": 0.86
+    }
+  },
+  "safeTopMin": 270,
+  "master": {
+    "lufs": -14,
+    "ratio": 1.2,
+    "threshold": -20,
+    "lra": 7
+  }
+}

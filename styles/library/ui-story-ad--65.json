@@ -1,0 +1,38 @@
+{
+  "_about": "UI Story Ad variant from ref rank 65 (s7678325289734278420, editor jim.malingin): white caps + yellow/red keywords; stacked role tags; payment + profile UI. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#FFE14A",
+    "accentDark": "#D9B813"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#FFE14A",
+    "red": "#FF2A3D",
+    "keySize": 108
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.60) brightness(0.65)",
+    "tint": {
+      "color": "#14243a",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.38,
+    "refocus": false
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.1
+    ]
+  },
+  "master": {
+    "lufs": -21.3,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 57.3 / sat 117.9; punch-in cadence set for ref 13.2 changes/min; refocus off when ref blur < 0.05 (ref 0.027)"
+}

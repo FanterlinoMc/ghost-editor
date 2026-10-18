@@ -1,0 +1,97 @@
+{
+  "_about": "Headline Hype v4 (trained 5 Oct 2026 from 10 Top-100 refs: drive client r35 + r34, troy_media r42, amrofilms, Vincent r13, kael_media r44, maxmill_ae, jim.malingin x2, tians028; ~/reels/style-train/headline-hype). Bold ad/YouTube-hype energy: the speaker stays in colour with a contrasty warm-red grade; 1-2 word captions in heavy wide ALL CAPS at chest height, white, with ONE keyword per line in red (or a second key colour), a key word stacks big under small lead words; red full-screen word cards, a headline title box in the hook, animated stat cards (bars/counters), logo pops on named platforms, a red X over the myth. Measured: ~17 hard cuts/min (one every ~3.5 s), punch-ins every ~3.6 s between them.",
+  "extends": "podcast",
+  "brand": {
+    "accent": "#E8202A",
+    "accentDark": "#B5121B",
+    "ink": "#0b0b0b",
+    "capSize": 72,
+    "font": "Montserrat"
+  },
+  "captions": {
+    "style": "podcast",
+    "font": "Montserrat",
+    "size": 74,
+    "keySize": 132,
+    "smallSize": 48,
+    "fixedY": 1110,
+    "maxWords": 2,
+    "red": "#F0333A",
+    "key": "#FFD43B"
+  },
+  "cadence": {
+    "every": 3.6,
+    "minGap": 1.8,
+    "scales": [
+      1.0,
+      1.14,
+      1.06
+    ],
+    "emphasisScale": 1.2
+  },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "sfxProfile": "standard",
+  "sound": {
+    "lines": false,
+    "nametag": false,
+    "objects": false,
+    "paperIn": false,
+    "pen": false,
+    "zoom": false,
+    "complete": true,
+    "popDb": -6
+  },
+  "music": {
+    "id": "brainiac",
+    "db": -20,
+    "fadeIn": 0,
+    "fadeOut": 0.4,
+    "drops": false,
+    "reveal": false,
+    "payoff": false
+  },
+  "look": {
+    "grade": "contrast(1.16) saturate(1.0) brightness(0.85)",
+    "tint": {
+      "color": "#5a1410",
+      "blend": "soft-light",
+      "opacity": 0.12
+    },
+    "vignette": 0.36,
+    "grain": 0.03,
+    "cleanScenes": true,
+    "target": {
+      "sat": 91.9,
+      "luma": 76.2,
+      "satGain": 1.21,
+      "satMin": 0.45,
+      "lumaMax": 1.6
+    }
+  },
+  "zoom": {
+    "origin": "50% 34%",
+    "base": 1.06
+  },
+  "outro": 0.15,
+  "director": {
+    "style": "Headline Hype: a loud, ad-grade talking head. Every line is a headline: 1-2 heavy caps words at chest height, one keyword per line in red. Between the talking, hard-cut graphic beats land on the spoken words: a red word card, a stat that counts up, a platform logo, a red X over the myth. Speaker in colour, contrasty and warm.",
+    "captions": "captions.reds = the 1 word per sentence that carries the claim or the pain (numbers, money, results, 'never', 'reality'). captions.keys = at most 1 positive outcome word per 10 s in yellow. Never mark filler ('cause', 'so', 'like', 'actually') as a key. Uppercase.",
+    "titlebox": "One per video at 0.1-0.3 s: the hook in 2-5 words in the red accent box, held ~3 s (the 'headline box').",
+    "wordcards": "At most 1 wordpage scene per 20 s on bg accent (red field, white words) for the punchiest 2-4 word line; big: the payoff word. 0.5-1.2 s, hard cut in and out.",
+    "stats": "Any number, count or money the speaker says: a big beat with count (counts up) or a popcard ui 'bars' / 'calendar' / 'stopwatch' card. 1-1.6 s.",
+    "logos": "A named platform, tool or company: a logo beat (simple-icons slug) in the slot beside the head, 0.8-1.2 s, pop sound.",
+    "strike": "A myth or 'not X': a strike beat (red cross).",
+    "cutaways": "Optional 1-2 image scenes per 20 s (stock_fetch.py, public domain / CC0) for a concrete place or object; keep colour, contrast up. Never two graphic beats back to back without 0.5 s of speaker.",
+    "rhythm": "Hard cuts (takes + full-screen scenes) about 17/min, never more than ~6 per 20 s; punch-ins every ~3.6 s; overlays (logos, title box, stat cards) don't cut the picture, so prefer them over full-screen scenes. Sound: whoosh on cards, pop on logos, impact on the title and the payoff. Upbeat bed ~20 dB under the voice.",
+    "limits": {
+      "scenes_per_min": 6,
+      "graphics_per_min": 16
+    }
+  },
+  "master": {
+    "lufs": -14.6,
+    "ratio": 1,
+    "threshold": -20
+  }
+}

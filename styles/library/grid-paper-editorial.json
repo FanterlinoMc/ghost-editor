@@ -1,0 +1,109 @@
+{
+  "_about": "Grid Paper Editorial v4 (trained 5 Oct 2026 from 9 Top-100 refs: snippco r26, garrikedits r43, snipp.co r18, builtbyjaymark, gongkianist, rabinn.fx x2, ciggmedia, mirvogue; ~/reels/style-train/grid-paper-editorial). The speaker stays in natural colour with a clean grade; the ideas cut away to light paper pages (grid paper, clean, no CRT screen) that carry a mixed-type stack (small sans or serif lead, ONE big serif or condensed key, tiny caps connector) plus one black-and-white cut-out object, and a red accent: a hand-drawn circle around the key word, a red box word. Captions over the speaker are small white sans with the key word bigger. Hard cuts, no flashes or leaks. Measured medians: picture change every ~2.6 s (23/min), ~40% of frames are bright paper, mean luma ~120-160.",
+  "extends": "editorial-collage",
+  "brand": {
+    "accent": "#D62828",
+    "accentDark": "#9C1B1B",
+    "ink": "#141414",
+    "paper": "#F4F2EC",
+    "capSize": 52,
+    "font": "Inter",
+    "leadSize": 58,
+    "tailSize": 48
+  },
+  "captions": {
+    "style": "cluster",
+    "smallSize": 50,
+    "heroSize": 124,
+    "stairSize": 60,
+    "x": 150,
+    "fixedY": 1140,
+    "hold": 0.35,
+    "maxWords": 6,
+    "heroSfx": "whoosh",
+    "heroSfxGap": 3,
+    "heroFallback": "none",
+    "lowercase": false,
+    "avoidFace": true
+  },
+  "cadence": {
+    "every": 5.5,
+    "minGap": 2.5,
+    "scales": [
+      1.0,
+      1.14
+    ],
+    "emphasisScale": 1.16
+  },
+  "pagePaper": "grid",
+  "pageScreen": false,
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "scenes": {
+    "default_in": "cut"
+  },
+  "sceneFlash": {
+    "count": 0
+  },
+  "openFlash": false,
+  "leaks": false,
+  "burns": {
+    "onScenes": false
+  },
+  "sfxProfile": "restrained",
+  "sound": {
+    "paperIn": true,
+    "paperDb": -4,
+    "pen": true,
+    "penDb": -6,
+    "zoom": false,
+    "heroDb": -14
+  },
+  "music": {
+    "id": "alif-match-a",
+    "db": -14,
+    "fadeOut": 0.4,
+    "drops": false
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(1.02) brightness(1.0)",
+    "tint": {
+      "color": "#ffffff",
+      "blend": "soft-light",
+      "opacity": 0
+    },
+    "vignette": 0.16,
+    "grain": 0.035,
+    "cleanScenes": true,
+    "target": {
+      "sat": 57.9,
+      "satMin": 0.45,
+      "satGain": 1.47
+    }
+  },
+  "zoom": {
+    "origin": "50% 40%",
+    "base": 1.04
+  },
+  "director": {
+    "style": "Grid Paper Editorial: a clean magazine-collage talking head. The speaker (natural colour, clean grade) carries the voice; the reel keeps cutting to LIGHT PAPER PAGES that set the key phrase as an editorial type stack with one black-and-white cut-out object, and a red accent (hand-drawn circle or red box) on the one word that matters. Light, airy, premium; never busy.",
+    "captions": "captions.heroes: one hero per phrase (the noun or verb that carries the line), never a filler word. captions.serif: 1-3 heroes drawn in the display serif (emotional or abstract words). Natural case.",
+    "pages": "Use ground beats (\"matte\": true in reel.json): the speaker CUT OUT on grid paper (paper grid) with ONE big key word behind/above the head (text, textColor ink #141414 or accent, textY ~250, textSize 170-300), 1.3-2.5 s each. Plus collage pages (paper grid, screen false): a small serif or caps lead, ONE big key (italic, serif, dark or box) and ONE engraving image (robot, brain, gears, laptop, team, chart, magnifier...). 3-4 pages in a 20 s reel (mostly ground cut-outs, at most 1-2 collages; about 30-40% of runtime on paper; hold each ground page through its whole phrase and start it on a take join so the page-in rides the jump cut), hard cuts, always back to the room footage between pages. Fewer pages beat more pages: every page adds two picture changes.",
+    "page_lines": "Every word on a page is spoken WHILE the page is on screen and lands on its own spoken time. The first item is on the page from frame 1 (never blank paper).",
+    "lists": "'number one / two / three' items: a stack page per item with the numeral as the key (ring on the first and last only), or one collage page listing the items.",
+    "accent": "Red is the only colour accent (circle, box, key word). The rest is ink black on off-white.",
+    "rhythm": "Picture changes every ~2.6 s overall (punch-ins + pages). Never two pages back to back without the speaker. Leave the payoff on paper for ~1.5 s.",
+    "limits": {
+      "scenes_per_min": 14,
+      "rings_per_reel": 2
+    }
+  },
+  "master": {
+    "lufs": -14.3,
+    "ratio": 2,
+    "threshold": -20,
+    "lra": 2.8
+  },
+  "matteWindows": true,
+  "objectPops": false
+}

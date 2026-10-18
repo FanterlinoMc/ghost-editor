@@ -1,0 +1,61 @@
+{
+  "_about": "Monochrome Cinema variant from Top-100 rank 70 (r22, snippco, Indonesian business doc, 16:9 source, 14 s; templated for vertical). The SERIF member of the family: most hero words are a soft glowing serif italic in white ('bisnis lo nggak grow', 'ROAS vs Volume'), small sans for connective lines, one line at a time near the centre of frame. Grade swings between desaturated near-B&W (seminar, office) and deep red-tinted shots (eye close-up, red studio). A struck-through word ('Achievement') for a dismissed idea. Measured: 59 picture changes/min (every ~2.4 s with zooms), caption every 0.89 s, captions 50% down, luma 80, sat 75, -12.2 LUFS, ~51 sound hits/min (busy whoosh/impact layer). Serif is a tall condensed italic with a soft glow; heroes build word by word into a multi-word serif line ('ROAS vs Volume'), mixed case.",
+  "extends": "library/monochrome-cinema",
+  "brand": {
+    "accent": "#C8323A",
+    "accentDark": "#8E1F25"
+  },
+  "captions": {
+    "smallSize": 54,
+    "heroSize": 140,
+    "x": 160,
+    "fixedY": 1000,
+    "hold": 0.45,
+    "heroItalic": false,
+    "heroColor": "#FFFFFF",
+    "smallSerif": false,
+    "heroSfxGap": 3.0,
+    "lowercase": false,
+    "heroGlow": "rgba(255,255,255,0.45)"
+  },
+  "cadence": {
+    "every": 2.2,
+    "minGap": 1.1,
+    "scales": [
+      1.0,
+      1.12
+    ],
+    "emphasisScale": 1.15
+  },
+  "look": {
+    "grade": "contrast(1.16) saturate(0.95) brightness(0.92)",
+    "tint": {
+      "color": "#2a2a2a",
+      "blend": "soft-light",
+      "opacity": 0.08
+    },
+    "vignette": 0.46,
+    "grain": 0.08
+  },
+  "monochrome": {
+    "cutawayGrade": "grayscale(1) contrast(1.2) brightness(0.86)",
+    "redGrade": "grayscale(1) sepia(1) hue-rotate(-40deg) saturate(3) contrast(1.15) brightness(0.65)",
+    "wordCard": {
+      "bg": "black",
+      "size": 110
+    }
+  },
+  "director": {
+    "style": "Monochrome Cinema (serif doc): a near-B&W business documentary. The serif italic is the hero voice; one red-tinted shot per reel is the alarm.",
+    "captions": "captions.heroes: one hero per phrase, and list EVERY hero in captions.serif too (serif-led). Keep case as spoken (acronyms, product names). Numbers stay ('ROAS 10x').",
+    "wordcards": "0-1 black wordpage per reel.",
+    "cutaways": "3-4 image scenes per 20 s, captions: true, 1.0-1.8 s: seminar rooms, screens with charts, an eye close-up. grayscale(1) contrast(1.2) brightness(0.86), and one in monochrome.redGrade. Use a strike beat when the speaker dismisses a word. Public domain / CC0 via stock_fetch.py.",
+    "rhythm": "Picture change every ~2 s. Hard cuts, captions blur in.",
+    "limits": {
+      "scenes_per_min": 18
+    }
+  },
+  "sound": {
+    "heroDb": -11
+  }
+}

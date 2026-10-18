@@ -1,0 +1,18 @@
+{
+  "_about": "Podcast Punch / Purple Poster (v3, 6 Oct 2026: cadence 1.6->2.6). Ref rank 25 (s7384386789634510086), editor maxmill_ae. Raw-vs-edit showcase; the EDITED panel: purple poster/collage cutaways, money b-roll card, yellow caps keyword, fast cuts. The showcase frame (RAW|EDITED split + timeline) is NOT part of the style.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#7B3FE4",
+    "accentDark": "#5A2BB0"
+  },
+  "captions": {
+    "lowercase": false,
+    "upper": true,
+    "heroColor": "#FFD43B",
+    "heroSize": 132
+  },
+  "cadence": {
+    "every": 2.6
+  },
+  "sfxProfile": "standard"
+}

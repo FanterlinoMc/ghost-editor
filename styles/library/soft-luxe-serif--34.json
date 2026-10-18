@@ -1,0 +1,24 @@
+{
+  "_about": "Soft Luxe Serif variant for Top-100 ref #34 (s7650330641497689345, editor tians028): Podcast on dark navy: bold sans + glowing serif italic mix, blue silhouette graphic, orange colour flash, film burn. Round 3 (6 Oct): grade brightness 0.9 -> 0.6 (ref luma 56, ours 92).",
+  "extends": "library/soft-luxe-serif",
+  "brand": {
+    "accent": "#3E8BFF",
+    "accentDark": "#2357B8"
+  },
+  "cadence": {
+    "every": 2.4
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.0) brightness(0.6)",
+    "tint": {
+      "color": "#1b2a5a",
+      "blend": "soft-light",
+      "opacity": 0.14
+    },
+    "vignette": 0.4,
+    "grain": 0.05
+  },
+  "director": {
+    "cutaways": "About 4 warm colour cutaways per 20 s, evenly spaced (every ~4 s), 1.2 s each; ref runs 31 picture changes/min."
+  }
+}

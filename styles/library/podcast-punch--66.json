@@ -1,0 +1,26 @@
+{
+  "_about": "Podcast Punch / Studio Whisper (v1, 5 Oct 2026). Ref rank 66 (s7670779930401099015), editor bluumediahouse. Dark softbox interview: one small white word at a time at mid frame, two camera angles, moody desaturated grade, no b-roll.",
+  "extends": "library/podcast-punch",
+  "captions": {
+    "style": "duo",
+    "calmSize": 44,
+    "energySize": 44,
+    "fixedY": 1060,
+    "hold": 0.35,
+    "lowercase": false
+  },
+  "look": {
+    "grade": "contrast(1.14) saturate(1.0) brightness(0.42)",
+    "vignette": 0.5
+  },
+  "cadence": {
+    "every": 3.4,
+    "scales": [
+      1.0,
+      1.22
+    ]
+  },
+  "music": {
+    "db": -22
+  }
+}

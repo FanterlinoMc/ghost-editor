@@ -1,0 +1,44 @@
+{
+  "_about": "Neon Glow #44 (Top-100 rank 44, ref r33 'drive' client edit, creator talk on a dark set). Very dark grade, bold white lowercase words one or two at a time, the keyword in a soft green bold sans, 3D-style red neon ? / ! icons beside the head, a laptop icon on the hook, one white light leak.",
+  "extends": "library/neon-glow",
+  "brand": {
+    "accent": "#62C74F",
+    "accentDark": "#3E8F30"
+  },
+  "captions": {
+    "style": "cluster",
+    "smallSize": 66,
+    "heroSize": 112,
+    "x": 150,
+    "fixedY": 1120,
+    "hold": 0.25,
+    "maxWords": 3,
+    "heroSfx": "whoosh",
+    "heroSfxGap": 3,
+    "heroColor": "#62C74F",
+    "heroItalic": false,
+    "heroFallback": "none",
+    "lowercase": true,
+    "heroGlow": "#62C74F"
+  },
+  "look": {
+    "grade": "contrast(1.14) saturate(0.95) brightness(0.5)",
+    "vignette": 0.4
+  },
+  "leaks": {
+    "every": 12,
+    "color": "255,255,255"
+  },
+  "director": {
+    "captions": "cluster, max 3 words: captions.heroes = the keyword (green); everything else small bold white lowercase. Icon beats with ink #FF3B5C (circle-help on questions, triangle-alert on mistakes, laptop on 'online')."
+  },
+  "cadence": {
+    "every": 1.2,
+    "minGap": 0.8,
+    "scales": [
+      1.0,
+      1.3
+    ],
+    "emphasisScale": 1.3
+  }
+}

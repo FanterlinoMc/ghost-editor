@@ -1,0 +1,52 @@
+{
+  "_about": "Name Reveal Mono variant from Top-100 rank 16 (r24, snippco, editor talking head, score 8): the warm one. No black-and-white: a warm amber, moody room (practical lamps, deep shadows), small sans lead words with ONE big bold white sans keyword ('business', 'the weirdest'), words resolving out of blur, frequent cuts between angles of the same room. No name reveal; open straight on the hook.",
+  "extends": "library/name-reveal-mono",
+  "matte": false,
+  "captions": {
+    "heroSize": 150,
+    "smallSize": 54,
+    "fixedY": 1020,
+    "heroColor": "#FFFFFF",
+    "heroSfxGap": 2.5
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 2.2,
+    "scales": [
+      1.0,
+      1.18
+    ],
+    "emphasisScale": 1.18,
+    "burst": {
+      "count": 2,
+      "gap": 0.4,
+      "hold": 7.0
+    }
+  },
+  "look": {
+    "grade": "contrast(1.14) saturate(1.05) brightness(0.82) sepia(0.12)",
+    "tint": {
+      "color": "#8a5a1c",
+      "blend": "soft-light",
+      "opacity": 0.16
+    },
+    "vignette": 0.45,
+    "grain": 0.05,
+    "refocus": {
+      "blur": 22,
+      "dur": 1.0
+    },
+    "cleanScenes": true
+  },
+  "director": {
+    "opening": "No leak, no mood, no behind beat: open on the hook with a big bold hero.",
+    "captions": "captions.heroes: one hero per phrase, bold white sans (never serif). Lowercase.",
+    "wordcards": "0-1 black wordpage card.",
+    "cutaways": "0-1; prefer punch-ins (cadence 2.4 s)."
+  },
+  "master": {
+    "lufs": -14.7,
+    "ratio": 1.0,
+    "threshold": -20
+  }
+}

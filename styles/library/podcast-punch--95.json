@@ -1,0 +1,20 @@
+{
+  "_about": "Podcast Punch / Price Tag (v3, 6 Oct 2026: heroGlow + cadence 1.8->2.6). Ref rank 95 (s7666501368189848839), editor tians028. $10 vs $100 showcase; the $100 panel: heavy red/yellow glowing caps lines, Instagram-style icon pops, search-bar UI pop, '1M VIEWS' gold caps.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#3BD16F",
+    "accentDark": "#22A04E"
+  },
+  "captions": {
+    "upper": true,
+    "lowercase": false,
+    "heroColor": "#FFC531",
+    "heroSize": 110,
+    "smallSize": 54,
+    "heroGlow": "#FF3B2F"
+  },
+  "cadence": {
+    "every": 2.6
+  },
+  "sfxProfile": "standard"
+}

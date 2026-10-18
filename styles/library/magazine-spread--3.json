@@ -1,0 +1,8 @@
+{
+  "_about": "Magazine Spread variant for ref rank 3 (r16, editor Nikhil, Hindi podcast). Maroon page + cream heavy serif hero over a small sans lead-in, solid name tag, header row, teal cinematic cutaways against the maroon. Measured: picture change every 2.0 s (44.6/min), caption every 0.77 s at ~65% down, face 20% of frame height at 47% down, mixed case.",
+  "extends": "library/magazine-spread",
+  "brand": { "accent": "#7A1426", "accentDark": "#4E0B17", "paper": "#EFE6D2" },
+  "captions": { "fixedY": 1240, "heroColor": "#F1E6CC", "heroSize": 184, "smallSize": 50 },
+  "cadence": { "every": 2.2, "minGap": 1.2 },
+  "look": { "grade": "contrast(1.1) saturate(1.08) brightness(0.78)", "tint": { "color": "#7A1426", "blend": "soft-light", "opacity": 0.18 } }
+}

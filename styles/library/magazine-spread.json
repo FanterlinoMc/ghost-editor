@@ -1,0 +1,121 @@
+{
+  "_about": "Magazine Spread v1 (trained 5 Oct 2026 from 2 Top-100 refs: r16 Nikhil (rank 3, Hindi podcast) and r30 snippco (rank 7, work-life motivational); ~/reels/style-train/magazine-spread). The talking head laid out like a printed magazine: one brand colour (maroon by default) owns the frame, a tiny spaced-caps header row, a heavy serif hero word over a small sans lead-in, a solid name tag, colour word pages, the speaker framed as a photo on a coloured page, cream editorial pages with a kicker + boxed key word + italic deck, cut-out pictures on a coloured ground, and cool-graded cinematic cutaways. Hard cuts only.",
+  "extends": "monologue",
+  "brand": {
+    "accent": "#7A1426",
+    "accentDark": "#4E0B17",
+    "ink": "#111111",
+    "paper": "#EFE6D2",
+    "capSize": 56,
+    "font": "Inter",
+    "keyFont": "'Playfair Display', Georgia, serif",
+    "keyItalic": true
+  },
+  "captions": {
+    "style": "cluster",
+    "smallSize": 54,
+    "heroSize": 230,
+    "stairSize": 64,
+    "x": 120,
+    "fixedY": 1160,
+    "hold": 0.35,
+    "maxWords": 3,
+    "heroSfx": false,
+    "lowercase": false,
+    "heroItalic": true,
+    "heroColor": "#F1E6CC",
+    "smallSerif": false,
+    "serifFont": "Playfair Display",
+    "heroSfxGap": 2.5,
+    "heroFallback": "none",
+    "serifItalic": true,
+    "avoidFace": true
+  },
+  "cadence": {
+    "every": 1.1,
+    "minGap": 0.8,
+    "scales": [
+      1.0,
+      1.07
+    ],
+    "emphasisScale": 1.08,
+    "burst": {
+      "count": 2,
+      "gap": 0.5,
+      "hold": 2.5
+    },
+    "targetPerMin": null
+  },
+  "scenes": {
+    "default_in": "cut"
+  },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "watermark": {
+    "font": "Inter",
+    "size": 34,
+    "opacity": 0.92,
+    "y": 70,
+    "x": 50,
+    "spread": true
+  },
+  "sound": {
+    "heroDb": -14
+  },
+  "music": {
+    "db": -16,
+    "fadeOut": 0.4,
+    "id": "deep-techno-ambience"
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.04) brightness(0.84)",
+    "tint": {
+      "color": "#7A1426",
+      "blend": "soft-light",
+      "opacity": 0.05
+    },
+    "vignette": 0.3,
+    "grain": 0.04,
+    "refocus": {
+      "blur": 10,
+      "dur": 0.25
+    },
+    "cleanScenes": true,
+    "target": {
+      "sat": 108.25,
+      "satMin": 0.45,
+      "satGain": 1.43,
+      "lumaMin": null,
+      "lumaMax": null,
+      "satMax": null,
+      "luma": null
+    }
+  },
+  "director": {
+    "style": "Magazine Spread: every frame reads like a page of a printed magazine. ONE brand colour (maroon / deep red) owns the reel: name tag box, word pages, page grounds, boxed key words. The speaker carries the reel; the pages are short and frequent. Typography contrast is the hero: a small plain sans lead-in, then ONE heavy serif word.",
+    "header": "watermark.text: a 3-word header row in spaced caps built from the video's own idea, e.g. 'DREAM\u00a0\u00a0\u00a0\u00a0\u00a0SACRIFICE\u00a0\u00a0\u00a0\u00a0\u00a0ACHIEVE' or 'LEARN\u00a0\u00a0\u00a0\u00a0\u00a0BUILD\u00a0\u00a0\u00a0\u00a0\u00a0SCALE' (non-breaking spaces between the words). It stays on for the whole reel. Write it as three words with periods, e.g. 'DREAM. SACRIFICE. ACHIEVE.' (watermark.spread lays them across the top).",
+    "nametag": "A nametag beat from the first frame to ~2.5 s: NAME in caps, title = what they do (one line).",
+    "captions": "captions.heroes: one hero per phrase (never filler). captions.serif: EVERY hero is listed here too, so heroes draw in the italic cream serif (serifItalic). Phrases without a hero stay small. Mixed case.",
+    "pages": "Per 20 s plan 4-5 pages, 0.9-1.8 s each, never two back to back without the speaker: (1) a wordpage on the accent (bg accent) for a short punch line, big: the payoff word; (2) a stack scene bg card (the speaker framed like a photo on the colour page; lead/key/tail = the words said while it is up); (3) a collage scene paper plain, screen false: kicker (2 words, caps), box (THE key word), deck (the rest of the line, italic) + one engraving; (4) a cutout scene ground maroon with one engraving; (5) a slam on the most charged word near the end. (6) 2-3 ground beats per 20 s (needs \"matte\": true): the speaker CUT OUT on the accent page (omit color = brand accent) or paper \"cream\", one big spoken word as text behind them (textColor cream on accent, accent on cream), 0.9-1.3 s, in a stretch where the speaker would otherwise sit 3 s+. Stack scenes: bg card with cutout: true and textAbove: true (the speaker cut out on a cream card, the lead + italic serif key above it), keyColor #F1E6CC. Cutaways: colour stills graded teal (saturate(0.8) contrast(1.15) brightness(0.8) sepia(0.3) hue-rotate(150deg)), hard cuts. Card size like the reference: cardW 780, cardH 790, cardTop 630, cutoutScale 0.92.",
+    "cutaways": "2 image scenes per 20 s, captions: true, 0.9-1.5 s, cool cinematic grade 'sepia(.35) hue-rotate(150deg) saturate(.8) contrast(1.12) brightness(.85)' (the teal look against the maroon). Public domain / CC0 only from stock_fetch.py; pick by meaning (place, people, scale).",
+    "rhythm": "Picture changes about every 2 s (punches, pages, cutaways), hard cuts only. Leave 0.5-1 s on the speaker after the payoff.",
+    "limits": {
+      "scenes_per_min": 18
+    },
+    "ground": "THE SIGNATURE: the speaker is CUT OUT over the maroon page for nearly the whole reel. Cover every speaker stretch between pages with ground beats (color = brand accent #7A1426, no text), back to back with the pages, so the real room is never seen. Once or twice add one big spoken word as text behind them (textColor #F1E6CC, textSize 320-380). The plate is drawn at 97% from the bottom edge (zoom.base 0.97, originY 100) and punch-ins stay small (1.07) so the whole head stays in frame with room above it.",
+    "sound": "Sound like the reference (r16, demucs + onset analysis 7 Oct): a dark 129 bpm low-end bed (music deep-techno-ambience, closest library match, distance 6.8) about 16 dB under the voice, and ONE soft mid whoosh (1-2 kHz) on each page change, never on captions: whoosh-3 on word pages and ground text, paper-quick on card pages, whoosh-cine on cutaways (image and wordpage scenes take the sound as inSfx; stack and ground as sfx). Speaker ground beats get sfx none."
+  },
+  "master": {
+    "lufs": -14.4,
+    "ratio": 3,
+    "threshold": -20,
+    "lra": 5
+  },
+  "_inherit_note": "Pinned 7 Oct by lead: block settings inherited from Monologue 2 (targetPerMin, look.target luma/clamps, master.lra) so this family keeps its own trained behaviour.",
+  "matte": true,
+  "matteWindows": true,
+  "zoom": {
+    "base": 1.02,
+    "originY": 100
+  }
+}

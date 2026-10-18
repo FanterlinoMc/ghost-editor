@@ -1,0 +1,37 @@
+{
+  "_about": "The Breakdown (studied from 'Phantasic AI training #2', see engine/templates/breakdown.md): a fast numbered teaching reel. One word on screen at a time (sans, ~1 in 4 in serif italic) under the face, a navy title card on the hook, full-screen chapter cards with a giant low-contrast serif numeral that switch colour per step (navy -> paper -> electric blue), a typewriter label over the promise, the CTA keyword pinned in a red-purple-blue gradient to the end, punch-ins every ~1.2 s, SFX only on section changes, an ~88 BPM bed at -13 dB. Footage keeps its own colour.",
+  "brand": {
+    "accent": "#2124E7",
+    "accentDark": "#1518B8",
+    "navy": "#0A182C",
+    "paper": "#F1F1F1",
+    "cream": "#EEE2C0",
+    "ink": "#0A182C",
+    "capSize": 60,
+    "font": "Inter"
+  },
+  "captions": {
+    "style": "duo",
+    "calmSize": 100,
+    "energySize": 100,
+    "hold": 0.25,
+    "fixedY": 1080,
+    "energyY": 1080,
+    "dodgeMouth": 90
+  },
+  "cadence": { "every": 1.2, "minGap": 0.9, "scales": [1.0, 1.12, 1.05], "emphasisScale": 1.14, "faceAnchor": { "fit": true, "maxFaceH": 0.55 } },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "sfxProfile": "restrained",
+  "sound": { "lines": false, "nametag": false, "objects": false, "paperIn": false, "pen": false, "zoom": false, "complete": false },
+  "music": { "id": "alif-match-b", "fallback": "lo-fi-02", "db": -13, "fadeIn": 0, "fadeOut": 1.2, "drops": false, "reveal": false, "payoff": false },
+  "look": { "grade": "none", "vignette": 0, "grain": 0, "cleanScenes": true },
+  "zoom": { "origin": "50% 38%", "base": 1.06 },
+  "outro": 0.15,
+  "master": { "lufs": -15, "ratio": 3, "threshold": -20, "lra": 6 },
+  "director": {
+    "plan": "core/scripts/breakdown_plan.py <project> writes every beat: title card, label, chapter cards, CTA pin, serif words.",
+    "chapters": "{type:scene, kind:chapter, num, tone: navy|paper|blue|cream, serif:[words]} from the spoken 'number one/two/three', 'first/second/third', 'step one...' to the end of that clause (1.2-2.4 s).",
+    "rules": "Everything on screen is spoken. SFX only on the title, chapters and the CTA. Footage keeps its own colour."
+  }
+}

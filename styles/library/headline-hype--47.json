@@ -1,0 +1,53 @@
+{
+  "_about": "Local Ad Blue (Headline Hype variant, trained 5 Oct 2026 from Top-100 ref rank 47, r44, editor kael_media): Blue-tinted service ad, red cost numbers, green keyword caps, CTA pills.",
+  "extends": "library/headline-hype",
+  "brand": {
+    "accent": "#1E6FD9",
+    "accentDark": "#124FA3"
+  },
+  "captions": {
+    "size": 60,
+    "keySize": 100,
+    "fixedY": 943,
+    "key": "#5BFF5B",
+    "red": "#F0333A",
+    "maxWords": 3
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(0.8) brightness(1.15)",
+    "tint": {
+      "color": "#123a6b",
+      "blend": "soft-light",
+      "opacity": 0.12
+    },
+    "vignette": 0.22
+  },
+  "cadence": {
+    "every": 1.0,
+    "minGap": 0.6
+  },
+  "train": {
+    "ref": "47:r44",
+    "family": "headline-hype",
+    "measured": {
+      "changes_per_min": 42.3,
+      "burstiness": 0.97,
+      "mean_luma": 121.2,
+      "sat_mean": 77.5,
+      "accent_share": 0.0,
+      "lufs": -13.5
+    },
+    "study": {
+      "words_per_caption": 3.0,
+      "case": "mixed",
+      "text_height": 0.046,
+      "caption_y": 0.491
+    }
+  },
+  "master": {
+    "lufs": -13.5,
+    "ratio": 1,
+    "threshold": -20
+  },
+  "_round3": "6 Oct measure-v2 tweak: cadence -> {'every': 1.0, 'minGap': 0.6} (toward own ref picture-change rate / saturation)"
+}

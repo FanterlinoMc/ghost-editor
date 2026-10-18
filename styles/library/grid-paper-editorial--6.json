@@ -1,0 +1,69 @@
+{
+  "_about": "Grid Paper Editorial #6 (r26, snippco 'Iman Gadzhi story', score 9) v2, 7 Oct 2026, matched frame by frame: the speaker CUT OUT on clean white paper, smaller and low in frame; tiny serif lead + bold sans key captions at the TOP; a red hand-drawn circle around the key word; a grey article page with one yellow-highlighted name; a deep green page with small serif words and one gold word; a single small question on white. Sound like the ref (demucs): a light keys bed ~9 dB under the voice (alif-match-c, distance 4.8), paper sounds on page changes only.",
+  "extends": "library/grid-paper-editorial",
+  "pagePaper": "plain",
+  "captions": {
+    "smallSerif": true,
+    "heroSize": 118,
+    "smallSize": 52,
+    "fixedY": 230,
+    "avoidFace": false,
+    "align": "center",
+    "heroColor": "#141414",
+    "lowercase": false,
+    "heroSfx": false,
+    "maxWords": 4
+  },
+  "brand": {
+    "paper": "#FAFAF8",
+    "accent": "#D62828",
+    "keyFont": "Inter, system-ui, sans-serif"
+  },
+  "cadence": {
+    "every": 2.6,
+    "targetPerMin": 30,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.08
+    ],
+    "emphasisScale": 1.1
+  },
+  "master": {
+    "lufs": -15.1,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "matte": true,
+  "matteWindows": true,
+  "zoom": {
+    "base": 0.8,
+    "originY": 100
+  },
+  "music": {
+    "id": "alif-match-c",
+    "db": -9,
+    "fadeOut": 0.5
+  },
+  "director": {
+    "style": "Grid Paper #6: an editorial story on clean white paper. The speaker cut out, small and low; typography at the top; red circles, yellow marker highlights, one deep green page. Smart, clean, premium.",
+    "ground": "Cover every speaker stretch with ground beats paper 'white', grain false, sfx none (no vignette edge, so the page reads as one clean sheet); captions turn dark automatically.",
+    "captions": "cluster at the top (fixedY 330): tiny serif lead words + ONE bold sans key in ink #141414; mixed case. Heroes = names and key nouns.",
+    "pages": "Per 20 s: 1-2 stack scenes bg footage with ring: true on the key (the red hand-drawn circle), keyColor #D62828, y 230; 1-2 highlight pages (paper #F2F1EC, ink #8A8A8A, the key line box: true with boxColor #F2E14C, boxInk #141414); ONE green word page (wordpage bg paper, paper #0B4F1F, ink #F4F2EC, size 70, serif, gold: [the payoff word]); 0-1 small question wordpage on white (paper #FAFAF8, ink #141414, size 64, serif).",
+    "sound": "music alif-match-c -9 dB; paper sounds on page changes (sound.paperIn); no caption whooshes.",
+    "sticker": "Open like the ref: a STICKER PHOTO of the speaker (make_sticker.py <project> <orig time> <name>: their own cut-out frame with a thick white outline and a dark torn edge) as a popcard on the white page when they say their name or the hook, then the orange duotone copy for ~0.5 s (sticker-<name>-orange.png), defocus false, label = the name."
+  },
+  "look": {
+    "rootBg": "#FFFFFF"
+  },
+  "popcard": {
+    "object": true,
+    "objectFilter": "brightness(1)",
+    "glow": "rgba(0,0,0,0)",
+    "stage": "#FFFFFF",
+    "w": 1000,
+    "h": 1500,
+    "y": 360,
+    "dim": 1
+  }
+}

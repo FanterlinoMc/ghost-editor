@@ -1,0 +1,37 @@
+{
+  "_about": "UI Story Ad variant from ref rank 40 (r8, editor afterpranav): heavy italic white + blue caps; profile UI mockups; step icon rows. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#4DA3FF",
+    "accentDark": "#2D7FD8"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#7CC0FF",
+    "red": "#FF3B3B",
+    "keySize": 116
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(0.98) brightness(0.61)",
+    "tint": {
+      "color": "#14243a",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.38,
+    "refocus": false
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.1
+    ]
+  },
+  "listMarks": {
+    "style": "bubbles",
+    "color": "#4DA3FF"
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 52.9 / sat 67.0; punch-in cadence set for ref 10.2 changes/min; refocus off when ref blur < 0.05 (ref 0.028)"
+}

@@ -1,0 +1,38 @@
+{
+  "_about": "UI Story Ad variant from ref rank 61 (s7667049890840644882, editor tians028): yellow/red condensed caps; app icons with x; search-bar UI; b&w flips. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#FFC93C",
+    "accentDark": "#D9A010"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#FFC93C",
+    "red": "#FF3B3B",
+    "keySize": 110
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.60) brightness(0.60)",
+    "tint": {
+      "color": "#14243a",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.38,
+    "refocus": false
+  },
+  "cadence": {
+    "every": 1.7,
+    "minGap": 0.9,
+    "scales": [
+      1.0,
+      1.18
+    ]
+  },
+  "master": {
+    "lufs": -15.0,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 52.3 / sat 148.0; punch-in cadence set for ref 22.5 changes/min; refocus off when ref blur < 0.05 (ref 0.019)"
+}

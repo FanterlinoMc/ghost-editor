@@ -1,0 +1,21 @@
+{
+  "_about": "Soft Luxe Serif variant for Top-100 ref #75 (s7687959922306256136, editor rabinn.fx): Typographic contrast explainer: minimal white ground, red serif italic + sans, thin red guide lines.",
+  "extends": "library/soft-luxe-serif",
+  "brand": {
+    "accent": "#D6121F",
+    "accentDark": "#A00D17",
+    "ink": "#D6121F"
+  },
+  "look": {
+    "grade": "contrast(1.02) saturate(0.96) brightness(1.04)",
+    "tint": {
+      "opacity": 0.0
+    },
+    "vignette": 0.08,
+    "grain": 0.0
+  },
+  "director": {
+    "wordcards": "3-5 wordpage scenes per 20 s on the paper ground: one spoken word at a time in red; big: the payoff word; serif: the contrast word. This ref is pure type on white, so lean on word pages more than b-roll.",
+    "cutaways": "No stock cutaways. Put the speaker on a white page: one ground beat {paper:'white'} over the whole reel (needs matte: true). The ref is pure type on a white page."
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "_about": "Podcast Punch / Red Script (v1, 5 Oct 2026). Ref rank 69 (r20), editor snippco. Landscape podcast: tiny white sans lead words with ONE red script/italic key word ('give up', 'wanted'), warm film b-roll of the guest.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#E0202A",
+    "accentDark": "#A8151C"
+  },
+  "captions": {
+    "heroColor": "#E0202A",
+    "heroItalic": true,
+    "smallSize": 48,
+    "heroSize": 132
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.0) brightness(0.62)"
+  }
+}

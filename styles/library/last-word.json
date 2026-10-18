@@ -1,0 +1,71 @@
+{
+  "_about": "Pen Challenge (The Closer): trained 2026-10-04 from corpus ref YVcgERxQtgI (study.py --ocr). Picture change every 4.0s, 4.0 words/caption, 20 caption changes, 9 sound hits.",
+  "extends": "closer",
+  "brand": {
+    "accent": "#FFE11A"
+  },
+  "captions": {
+    "style": "box",
+    "group": 4,
+    "y": 766
+  },
+  "cadence": {
+    "every": 4.0,
+    "minGap": 2.0
+  },
+  "look": {
+    "grade": "sepia(0.12) saturate(1.12) brightness(1.02)"
+  },
+  "train": {
+    "ref": "YVcgERxQtgI",
+    "family": "closer",
+    "measured": {
+      "picture_change_s": 22.45,
+      "cuts": 0,
+      "punches": 0,
+      "transitions": 0,
+      "zooms": 0,
+      "text_pops": 0,
+      "sound_hits_per_min": 24.0,
+      "caption": {
+        "words_per_caption": 4.0,
+        "case": "lower",
+        "text_height": 0.05,
+        "caption_y": 0.399
+      },
+      "framing": {
+        "face_centre_y": 0.232,
+        "face_height": 0.18,
+        "face_found_share": 1.0
+      }
+    },
+    "look": {
+      "caption_case": "sentence",
+      "caption_weight": "bold",
+      "caption_colors": [
+        "#FFFFFF",
+        "#FFE11A"
+      ],
+      "caption_position": "middle",
+      "words_per_caption": "4-6",
+      "cut_interval_s": 4.0,
+      "layout": "full-face",
+      "palette": [
+        "#7A4A35",
+        "#C8A27A",
+        "#1A1A1A",
+        "#FFE11A"
+      ],
+      "graphics": [
+        "none"
+      ],
+      "grade": "warm"
+    },
+    "cues": [
+      "POV challenger: off-screen hand enters frame with the prop",
+      "sentence-case white captions, yellow keyword words",
+      "one continuous handheld take, captions do the pacing",
+      "punchline price as the final caption"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "_about": "UI Story Ad variant from ref rank 41 (r9, editor afterpranav): glowing yellow caps; numbered icon steps; checklist cards; split call screen. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#F4FF3A",
+    "accentDark": "#C8D21A"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#F4FF3A",
+    "red": "#FF3B3B",
+    "keySize": 120
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(0.76) brightness(1.29)",
+    "vignette": 0.2,
+    "grain": 0,
+    "refocus": false
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.1
+    ]
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 116.6 / sat 48.1; punch-in cadence set for ref 12.8 changes/min; refocus off when ref blur < 0.05 (ref 0.029)"
+}

@@ -1,0 +1,19 @@
+{
+  "_about": "Soft Luxe Serif variant for Top-100 ref #51 (s7678537806490127636, editor bigeditor.60fps): UGC store ad: neon serif italic title, product b-roll inserts, green branded frame.",
+  "extends": "library/soft-luxe-serif",
+  "brand": {
+    "accent": "#5CFF9A",
+    "accentDark": "#1E8F55"
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(1.05) brightness(0.98)",
+    "tint": {
+      "color": "#1f5a3e",
+      "blend": "soft-light",
+      "opacity": 0.1
+    }
+  },
+  "director": {
+    "cutaways": "One cutaway per 20 s at most (ref 12.5 picture changes/min)."
+  }
+}

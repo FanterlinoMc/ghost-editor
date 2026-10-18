@@ -1,0 +1,32 @@
+{
+  "_about": "UI Story Ad variant from ref rank 96 (s7670525299435654401, editor jim.malingin): yellow caps; DM chat UI; numbered question cards; video-call split. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#F3FF3A",
+    "accentDark": "#C7D21A"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#F3FF3A",
+    "red": "#FF3B3B",
+    "keySize": 112
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.0) brightness(0.84)",
+    "tint": {
+      "color": "#14243a",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.38
+  },
+  "cadence": {
+    "every": 2.6,
+    "minGap": 1.4
+  },
+  "master": {
+    "lufs": -20.4,
+    "ratio": 2,
+    "threshold": -20
+  }
+}

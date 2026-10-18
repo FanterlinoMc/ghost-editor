@@ -1,0 +1,12 @@
+{
+  "_about": "Podcast Punch / Owner Stack (v1, 5 Oct 2026). Ref rank 89 (s7633303175566560532), editor bigeditor.60fps. Raw-vs-'big edit' showcase: talking head with 'Owning a / BUSINESS / in your 20s' (small white over big yellow caps), white UI cards, B&W cutaway, app-icon card. Showcase frame not copied.",
+  "extends": "library/podcast-punch",
+  "captions": {
+    "heroColor": "#FFC531",
+    "heroSize": 120,
+    "smallSize": 50
+  },
+  "cadence": {
+    "every": 2.0
+  }
+}

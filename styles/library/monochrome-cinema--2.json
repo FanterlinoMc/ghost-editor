@@ -1,0 +1,59 @@
+{
+  "_about": "Monochrome Cinema variant from Top-100 rank 2 (r14, symz.mov, podcast/motivational, score 9). Same cluster grammar as the family, but WARM and in colour: cream upright bold sans hero (not italic), small sans lead words, serif for the emotional word, handwriting script for one closing phrase, diagonal word stairs on short asides. Cutaways are colour cinematic stills (galaxy, debris, lone figure) graded dark, plus light paper cards with ink sketch illustrations instead of black cards. Measured: picture change ~1.0 s, caption every 0.70 s, captions ~57% down, face 45% down / 44% of frame (tight podcast crop), sat 109, luma 68, -14.1 LUFS.",
+  "extends": "library/monochrome-cinema",
+  "brand": {
+    "accent": "#1B1B1D",
+    "accentDark": "#000000",
+    "paper": "#EDEDEA"
+  },
+  "captions": {
+    "smallSize": 60,
+    "heroSize": 170,
+    "fixedY": 1110,
+    "hold": 0.3,
+    "heroItalic": false,
+    "heroColor": "#F3E9DA",
+    "smallSerif": false,
+    "heroSfxGap": 2.0
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.14
+    ],
+    "emphasisScale": 1.2
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.3) brightness(0.72)",
+    "tint": {
+      "color": "#3a2616",
+      "blend": "soft-light",
+      "opacity": 0.12
+    },
+    "vignette": 0.38,
+    "grain": 0.05,
+    "refocus": {
+      "blur": 12,
+      "dur": 0.28
+    }
+  },
+  "monochrome": {
+    "cutawayGrade": "saturate(0.85) contrast(1.16) brightness(0.82)",
+    "wordCard": {
+      "bg": "paper",
+      "size": 120
+    }
+  },
+  "director": {
+    "style": "Monochrome Cinema (warm podcast cut): a tight warm colour podcast plate, cream cluster captions, colour cinematic b-roll and light paper sketch cards. Faster than the family: the picture changes about every second in the busiest stretches.",
+    "captions": "captions.heroes: one hero per phrase, upright bold cream. captions.serif: 1-2 emotional heroes in the serif ('second', 'right'). captions.script: one closing phrase in handwriting per reel. captions.stairs: 1 short aside (3 words, e.g. 'so you know') as a diagonal staircase. Lowercase.",
+    "wordcards": "0-1 black wordpage per reel. Instead 1-2 short wordpage scenes with bg paper (light ground, ink words) on the key concept word, 0.5-0.8 s; pair with an ink sketch still if one exists (stock_fetch.py engraving/anatomy plates).",
+    "cutaways": "3-4 image scenes per 20 s, grade saturate(0.85) contrast(1.16) brightness(0.82) (colour, not grayscale), captions: true, 0.7-1.4 s: galaxy, floating debris, lone figure in a vast space, crowds. Public domain / CC0 via stock_fetch.py.",
+    "rhythm": "Picture change every ~1.0-1.5 s in the hook, ~2 s after. Hard cuts; captions blur in.",
+    "limits": {
+      "scenes_per_min": 22
+    }
+  }
+}

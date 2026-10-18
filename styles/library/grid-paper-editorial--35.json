@@ -1,0 +1,27 @@
+{
+  "_about": "Grid Paper Editorial variant: ref rank 35 (rabinn.fx): white canvas, red serif-italic + bold sans words, archival B&W cut-outs on red discs, mostly graphic pages (paper > speaker).",
+  "extends": "library/grid-paper-editorial",
+  "pagePaper": "plain",
+  "brand": {
+    "accent": "#E30613",
+    "accentDark": "#A3040E",
+    "paper": "#FFFFFF"
+  },
+  "captions": {
+    "heroColor": "#FF3B3B",
+    "smallSerif": true
+  },
+  "cadence": {
+    "every": 12.0,
+    "minGap": 6.0
+  },
+  "director": {
+    "pages": "Paper-heavy: the speaker stays CUT OUT on a white page (ground beat, paper white) for almost the whole reel; few picture changes (~9/min). Use one long ground beat and at most one collage page. Trained: this plan scored 54.3 vs 31.3 for the base page plan."
+  },
+  "master": {
+    "lufs": -12.0,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_round3": "tweak (6 Oct, measure v2): punch-in cadence {'every': 3.4, 'minGap': 1.6} -> {'every': 12.0, 'minGap': 6.0}"
+}

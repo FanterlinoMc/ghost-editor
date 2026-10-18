@@ -1,0 +1,69 @@
+{
+  "_about": "Sky Script v1 (7 Oct 2026), trained from Top-100 #1 (r11, Mohmd.Visuals, podcast clip, score 9). A clean podcast talking head with stacked mixed-size ITALIC captions (tiny white italic lead words, one huge bold italic hero word in cyan), cut with light sky-blue gradient pages: a 3D object with a small italic label, photo cards with an orange pill tag (one card per spoken item, swapped on the word), and a bold italic word card in navy. Fast but airy: a picture change every ~1.7 s. Natural colour, no heavy grade.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#0E2A47",
+    "accentDark": "#081A2E",
+    "orange": "#FF7A1A"
+  },
+  "captions": {
+    "style": "cluster",
+    "lowercase": true,
+    "upper": false,
+    "smallItalic": true,
+    "heroItalic": true,
+    "heroColor": "#2EC8F0",
+    "smallSize": 58,
+    "heroSize": 150,
+    "align": "center",
+    "avoidFace": true,
+    "maxWords": 3,
+    "heroFallback": "none"
+  },
+  "cadence": {
+    "targetPerMin": 36,
+    "minGap": 1.1,
+    "scales": [
+      1.0,
+      1.15
+    ],
+    "emphasisScale": 1.18
+  },
+  "look": {
+    "grade": "contrast(1.05) saturate(1.05) brightness(1.0)",
+    "tint": {
+      "color": "#ffffff",
+      "blend": "soft-light",
+      "opacity": 0.0
+    },
+    "vignette": 0.15,
+    "grain": 0.0,
+    "cleanScenes": true
+  },
+  "popcard": {
+    "w": 760,
+    "h": 700,
+    "y": 470,
+    "object": true,
+    "objectFilter": "grayscale(0.2) contrast(1.1)",
+    "glow": "rgba(0,0,0,0)",
+    "stage": "linear-gradient(160deg, #FFFFFF 0%, #DDF6FE 40%, #2BD3FA 100%)",
+    "dim": 1.0
+  },
+  "master": {
+    "lufs": -14,
+    "ratio": 1.5,
+    "threshold": -20
+  },
+  "director": {
+    "style": "Sky Script: a clean podcast clip with stacked italic captions (tiny white lead words, ONE huge bold italic cyan hero) and light sky-blue gradient pages that explain the idea. Airy, smart, premium; natural colour.",
+    "captions": "captions.heroes: list a content word for nearly EVERY phrase (the idea words: nouns, verbs, numbers), never filler ('here', 'number', 'having', 'really'); phrases without a listed hero stay small. Lowercase, italic, centred under the chin.",
+    "pages": "Every page uses the sky gradient: popcard stage linear-gradient(160deg, #FFFFFF 0%, #DDF6FE 40%, #2BD3FA 100%); scene pages (cardpage, wordpage) paper linear-gradient(160deg, #FFFFFF 0%, #DDF6FE 22%, #2BD3FA 50%) (scene backgrounds are drawn at 220% size). Three kinds: (1) popcard object (a cut-out object PNG) with a 1-4 word lowercase italic label, 1.0-1.8 s; (2) cardpage with tags: true, tagColor #FF7A1A, ratio 0.72, w 760, one photo per spoken item (items [{src, tag, at}]), swapped on the word; (3) wordpage bg paper with paper = the gradient, the payoff word in navy, size 120, 0.5-0.9 s.",
+    "rhythm": "A page every ~3-4 s, hard cut in and out; punch-ins (cadence target 36/min) fill the rest. Spread evenly, no stretch over 3 s without a change.",
+    "stock": "Photos must be on-topic and people-friendly (no soldiers, disasters, paintings); look at every still before using it.",
+    "limits": {
+      "scenes_per_min": 18
+    },
+    "dont": "No dark grade, no neon, no glow, no red text."
+  }
+}

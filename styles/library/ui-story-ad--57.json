@@ -1,0 +1,45 @@
+{
+  "_about": "UI Story Ad variant from ref rank 57 (s7687850081407536391, editor ciggmedia): bold white sans words with glow; desktop app screens on wallpaper; b-roll. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#FF5A3C",
+    "accentDark": "#D23B20"
+  },
+  "captions": {
+    "style": "cluster",
+    "font": "Inter",
+    "smallSize": 60,
+    "heroSize": 140,
+    "x": 150,
+    "fixedY": 1060,
+    "hold": 0.35,
+    "maxWords": 4,
+    "lowercase": true,
+    "upper": false,
+    "heroItalic": false,
+    "smallSerif": false,
+    "heroSfx": "whoosh",
+    "heroSfxGap": 3.0,
+    "heroFallback": "none",
+    "heroColor": "#FFFFFF"
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.12) brightness(0.86) sepia(0.06)",
+    "tint": {
+      "color": "#7a4a1f",
+      "blend": "soft-light",
+      "opacity": 0.12
+    },
+    "vignette": 0.4
+  },
+  "cadence": {
+    "every": 3.2,
+    "minGap": 1.8
+  },
+  "sfxProfile": "restrained",
+  "master": {
+    "lufs": -13.1,
+    "ratio": 2,
+    "threshold": -20
+  }
+}

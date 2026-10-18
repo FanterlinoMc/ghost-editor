@@ -1,0 +1,20 @@
+{
+  "_about": "Soft Luxe Serif variant for Top-100 ref #76 (s7628232408353131796, editor rabinn.fx): Minimal editorial: white ground, small red serif-italic captions, phone mockups, follow end card.",
+  "extends": "library/soft-luxe-serif",
+  "brand": {
+    "accent": "#D6121F",
+    "accentDark": "#A00D17",
+    "ink": "#D6121F"
+  },
+  "look": {
+    "grade": "contrast(1.02) saturate(0.96) brightness(1.04)",
+    "tint": {
+      "opacity": 0.0
+    },
+    "vignette": 0.08,
+    "grain": 0.0
+  },
+  "director": {
+    "cutaways": "Speaker on a white page (ground beat paper:'white', matte: true) for the whole reel, with 2 cutaways or device scenes on top."
+  }
+}

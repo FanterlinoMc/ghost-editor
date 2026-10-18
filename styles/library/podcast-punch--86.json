@@ -1,0 +1,27 @@
+{
+  "_about": "Podcast Punch / Red Caps Diary (v3, 6 Oct 2026: cadence 2.8->4.5). Ref rank 86 (s7664617540601122070), editor amrofilms. Cinematic dark talking head: single small white words mid frame, red condensed caps titles ('MEMORABLE', '2. WHY A CAMERA?'), profile/post UI cards, pixel transitions.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#E5322D",
+    "accentDark": "#B02020"
+  },
+  "captions": {
+    "style": "duo",
+    "calmSize": 44,
+    "energySize": 44,
+    "fixedY": 1060,
+    "hold": 0.35,
+    "lowercase": false
+  },
+  "look": {
+    "grade": "contrast(1.16) saturate(0.95) brightness(0.6)",
+    "tint": {
+      "color": "#0e3a44",
+      "blend": "soft-light",
+      "opacity": 0.16
+    }
+  },
+  "cadence": {
+    "every": 4.5
+  }
+}

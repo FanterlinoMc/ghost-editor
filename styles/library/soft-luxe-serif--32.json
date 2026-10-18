@@ -1,0 +1,17 @@
+{
+  "_about": "Soft Luxe Serif variant for Top-100 ref #32 (s7685300486098095368, editor dina_visuals): Podcast with warm brown moody grade, serif italic + sans mix ('THE BEST returning ASSET CLASS'), money icon, framed panels on rust cards.",
+  "extends": "library/soft-luxe-serif",
+  "brand": {
+    "accent": "#EADBB0",
+    "accentDark": "#8A4B2A"
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.35) brightness(0.6) sepia(0.16)",
+    "tint": {
+      "color": "#5a3420",
+      "blend": "soft-light",
+      "opacity": 0.14
+    },
+    "vignette": 0.34
+  }
+}

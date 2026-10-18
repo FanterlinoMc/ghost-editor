@@ -1,0 +1,32 @@
+{
+  "_about": "Studio Gloss 42: ref rank 42 (r10), afterpranav health/bloating clip (silent file). White pages with a blush corner glow, small black lead + bold red key line, illustrated/3D props (brain, clock, gear), a 3D DNA on black, pink light-leak flashes; one-or-two-word captions on a grey box at chest height.",
+  "extends": "library/studio-gloss",
+  "captions": {
+    "style": "box",
+    "group": 2,
+    "y": 1250,
+    "boxColor": "rgba(96,96,96,.78)",
+    "ink": "#FFFFFF"
+  },
+  "brand": {
+    "paper": "linear-gradient(135deg, #FFE1E7 0%, #FFFFFF 14%, #FFFFFF 34%, #FFE4EA 46%)",
+    "accent": "#111111",
+    "ink": "#111111",
+    "footKey": "#FFFFFF"
+  },
+  "leaks": {
+    "every": 12,
+    "color": "255,140,210"
+  },
+  "look": {
+    "grade": "contrast(1.03) saturate(1.25) brightness(1.02)",
+    "vignette": 0,
+    "grain": 0,
+    "cleanScenes": true
+  },
+  "director": {
+    "cards": "stack bg paper, keyColor #C8102E, icon brain/watch/gears/hourglass, iconSize 420; 40-50% of runtime (this edit is card-heavy).",
+    "flash": "pink light leaks on section changes (style leaks every 12 s)."
+  },
+  "_measured": "measured: changes 20.8/min, luma 158, sat 77 (silent file)"
+}

@@ -1,0 +1,25 @@
+{
+  "_about": "Raw To Edited (Headline Hype variant, trained 5 Oct 2026 from Top-100 ref rank 79, s7669073897798618376, editor tians028): Hook showcase: red and yellow heavy caps keyword lines on a moody plate.",
+  "extends": "library/headline-hype",
+  "captions": {
+    "size": 58,
+    "keySize": 96,
+    "smallSize": 40,
+    "fixedY": 1120,
+    "key": "#FFD21A",
+    "red": "#F0333A"
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(0.6) brightness(1.0)",
+    "tint": {
+      "color": "#3a2410",
+      "blend": "soft-light",
+      "opacity": 0.12
+    }
+  },
+  "master": {
+    "lufs": -16.3,
+    "ratio": 1,
+    "threshold": -20
+  }
+}

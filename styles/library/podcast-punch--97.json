@@ -1,0 +1,24 @@
+{
+  "_about": "Podcast Punch / Tech Caps (v3, 6 Oct 2026: master -21 LUFS). Ref rank 97 (s7668687431972998420), editor jim.malingin. Talking head at a desk: wide techno caps white captions mid frame, lime-bracket label pills, one B&W cutaway, money-stack opener.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#C6FF3D",
+    "accentDark": "#93C21C"
+  },
+  "captions": {
+    "upper": true,
+    "lowercase": false,
+    "heroColor": "#FFFFFF",
+    "heroSize": 72,
+    "smallSize": 56,
+    "fixedY": 900
+  },
+  "cadence": {
+    "every": 3.0
+  },
+  "master": {
+    "lufs": -21,
+    "ratio": 1.2,
+    "threshold": -30
+  }
+}

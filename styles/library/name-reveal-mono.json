@@ -1,0 +1,99 @@
+{
+  "_about": "Name Reveal Mono 20 (v20) (trained 5 Oct 2026 from Top-100 ranks 4, 16, 17, 18, 71, all snippco; ~/reels/style-train/name-reveal-mono). A personal-brand talking head that opens on a light leak and a selective-colour hook (B&W room, speaker in colour) where the speaker's NAME (or the one word they are known for) lands huge behind them, then settles into a quiet colour plate with small sans captions that build word by word and ONE hero per line (bold sans, or a serif italic for the emotional word), blur refocus transitions and short word cards (one spoken word on black or white). Few cutaways; the typography and the speaker carry it. Measured family medians (5 refs): picture change 32/min, burstiness 0.39, luma 80, saturation 79, blur share 0.19, -12.6 LUFS, LRA 3.1; captions ~0.85 s per change, ~54% down. Captions centred (align center). Loudness: style 'master' (-12.5 LUFS, ratio 1) is applied by scripts/render.sh. Rhythm (v20): cadence.burst {count 2, gap 0.5, hold 7} with minGap 2.2, so punch-ins come in pairs right after jump cuts and cards, then rest (burstiness .72 vs refs .76).",
+  "extends": "library/monochrome-cinema",
+  "brand": {
+    "accent": "#111111",
+    "accentDark": "#000000",
+    "ink": "#111111",
+    "capSize": 50,
+    "font": "Inter"
+  },
+  "matte": true,
+  "captions": {
+    "style": "cluster",
+    "smallSize": 62,
+    "heroSize": 150,
+    "x": 150,
+    "fixedY": 1060,
+    "hold": 0.3,
+    "maxWords": 3,
+    "heroSfx": "whoosh",
+    "lowercase": true,
+    "heroItalic": false,
+    "heroColor": "#FFFFFF",
+    "smallSerif": false,
+    "heroSfxGap": 3.0,
+    "heroFallback": "none",
+    "align": "center",
+    "avoidFace": true
+  },
+  "cadence": {
+    "every": 2.7,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.26
+    ],
+    "emphasisScale": 1.26,
+    "targetPerMin": 33
+  },
+  "scenes": {
+    "default_in": "blur"
+  },
+  "sceneIn": "blur",
+  "sceneOut": "blur",
+  "sound": {
+    "heroDb": -14
+  },
+  "music": {
+    "db": -15,
+    "fadeOut": 0.4
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.0) brightness(0.9)",
+    "tint": {
+      "color": "#2a2420",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.4,
+    "grain": 0.05,
+    "refocus": {
+      "blur": 22,
+      "dur": 0.6
+    },
+    "cleanScenes": true,
+    "target": {
+      "sat": 79.2,
+      "luma": 79.6,
+      "satGain": 1.36,
+      "satMin": 0.45
+    }
+  },
+  "monochrome": {
+    "cutawayGrade": "grayscale(1) contrast(1.2) brightness(0.92)",
+    "wordCard": {
+      "bg": "black",
+      "size": 96
+    }
+  },
+  "director": {
+    "style": "Name Reveal Mono: a personal-brand intro edit. Open on a light leak into a black-and-white hook where the name (or the one identity word) lands HUGE behind the speaker; then a quiet, moody colour plate where small captions build word by word and one word per line becomes the hero. Calm, confident, minimal.",
+    "opening": "beats: a leak beat at 0.0-0.4 s; a ground beat with backdrop 'grayscale(1) contrast(1.1)' over the whole first sentence (B&W room, speaker stays in colour; needs matte); ONE behind beat (bold sans, white, the name or identity word, e.g. 'AI', 'Ryan') from the word it is spoken to the end of the sentence. Keep that word OUT of captions.heroes so it is not shown twice. LITTLE HEADROOM (face wider than ~55% of the frame, OR the top of the head less than ~350 px from the frame top, which is most selfies and webcams): NO behind beat (the word would be cut off by the frame and hidden by the head); put the name or identity word on a black wordpage card (0.5-0.8 s) right where it is spoken instead. A behind beat must set \"color\": \"#FFFFFF\" (the accent is black).",
+    "captions": "captions.heroes: one hero per phrase, only real content words (never 'cause', 'so', 'really'). captions.serif: 1-3 emotional or abstract heroes ('feeling', 'knowledge', 'scale') in the serif italic. Lowercase. Phrases without a listed hero stay small.",
+    "wordcards": "2-3 wordpage scenes per 20 s (plus the name card on close-ups) on the short punch words (counts, questions, 'not', 'yet?'): bg black (white words), size 96, one spoken word at a time, 0.4-1.0 s; serif: the question or payoff word. Use in: cut, out: cut. A card's 'at' must sit just before its first word starts (whisper start minus ~0.03 s) and 'to' just before the next word you do NOT want shown: the card shows every word spoken inside it. If the payoff word is very short, split the take right after it and add a 0.4-0.5 s 'hold' under the card ('to': 'hold:<take>+0.45'). ONE card per reel may be a WHITE page (bg: paper, paper: #FFFFFF) with black words (brand.accent is #111 for this): the bright flash snippco uses (refs: 2-3% of frames are white pages).",
+    "cutaways": "2-4 image scenes per 20 s, grade grayscale(1) contrast(1.2) brightness(0.92), captions: true, in: cut, out: cut (a hard cut lands; a blur-in reads as soft and the pace counter misses it), 0.6-1.3 s, on concrete nouns only. A spoken list can become a fast montage (0.6 s each).",
+    "transitions": "Blur refocus between sections (scenes in/out blur). Hard cuts inside a section. No glitch, no wipes.",
+    "rhythm": "Picture changes ~33/min, BUNCHED: a jump cut or word card is followed by a quick second punch-in (0.5 s), then a calm stretch (cadence.burst, punches at 1.26x). Leave 0.5 s on the speaker after each word card.",
+    "limits": {
+      "scenes_per_min": 18
+    },
+    "density": "5-6 visual moves per 20 s, about one every 3.5 s (the held-out test showed 3 moves per 20 s reads as 'just captions'): the name reveal (behind word, a dark ground page with the NAME as text behind the cut-out speaker, or a black card on close-ups), 2-3 black word cards on counts, questions and key nouns, ONE white paper ground page (paper: white, the key concept as dark text behind the speaker, captions turn dark) ONLY when there is headroom (head top more than ~350 px below the frame top); on close-ups the text is hidden by the head, so use a cutaway instead, and 2-4 black-and-white cutaways on concrete nouns (places, objects, lists: e.g. 'galleries, libraries, archives' = a quick card + 3 stills). Look at every stock still before using it; reject paintings, etchings and off-topic picks. Spread the moves evenly: no stretch longer than ~3 s without a card, a cutaway or a punch-in, and a word card ends before the next word it would show. Pace check: every card or cutaway is two picture changes (in and out); the refs total ~33 changes a minute including punch-ins, so more than 6 scenes per 20 s is too busy."
+  },
+  "master": {
+    "lufs": -12.5,
+    "ratio": 1.0,
+    "threshold": -20
+  },
+  "matteWindows": true
+}

@@ -1,0 +1,47 @@
+{
+  "_about": "Night Desk Red (Headline Hype variant, trained 5 Oct 2026 from Top-100 ref rank 53, s7680816806667226375, editor jim.malingin): City-night desk set, white caps with red and yellow key words, icon badges.",
+  "extends": "library/headline-hype",
+  "captions": {
+    "size": 64,
+    "keySize": 112,
+    "smallSize": 44,
+    "fixedY": 1127,
+    "maxWords": 2
+  },
+  "look": {
+    "grade": "contrast(1.14) saturate(1.05) brightness(0.9)",
+    "tint": {
+      "color": "#0b1a33",
+      "blend": "soft-light",
+      "opacity": 0.12
+    }
+  },
+  "cadence": {
+    "every": 30,
+    "minGap": 15
+  },
+  "train": {
+    "ref": "53:s7680816806667226375",
+    "family": "headline-hype",
+    "measured": {
+      "changes_per_min": 17.1,
+      "burstiness": 0.81,
+      "mean_luma": 36.0,
+      "sat_mean": 97.8,
+      "accent_share": 0.0,
+      "lufs": -15.1
+    },
+    "study": {
+      "words_per_caption": 2.0,
+      "case": "mixed",
+      "text_height": 0.038,
+      "caption_y": 0.587
+    }
+  },
+  "master": {
+    "lufs": -15.1,
+    "ratio": 1,
+    "threshold": -20
+  },
+  "_round3": "6 Oct measure-v2 tweak: cadence -> {'every': 30, 'minGap': 15} (toward own ref picture-change rate / saturation)"
+}

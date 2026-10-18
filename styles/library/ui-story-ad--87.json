@@ -1,0 +1,38 @@
+{
+  "_about": "UI Story Ad variant from ref rank 87 (s7672696919122087185, editor jim.malingin): yellow/white caps; red problem tags; price card; drive UI; cursor click. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#F5FF3A",
+    "accentDark": "#C8D21A"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#F5FF3A",
+    "red": "#FF3B3B",
+    "keySize": 110
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.49) brightness(0.59)",
+    "tint": {
+      "color": "#14243a",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.38,
+    "refocus": false
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.1
+    ]
+  },
+  "master": {
+    "lufs": -20.0,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 47.9 / sat 101.5; punch-in cadence set for ref 16.3 changes/min; refocus off when ref blur < 0.05 (ref 0.048)"
+}

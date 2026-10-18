@@ -1,0 +1,25 @@
+{
+  "_about": "Podcast Punch / Red Title Film (v3, 6 Oct 2026: cadence 2.8->1.6). Ref rank 31 (s7627580928411454742), editor amrofilms. Cinematic creator diary: heavy white mixed-size cluster ('Or just trynna / BUILD / something on the side'), red caps title cards, location card, text behind subject, teal-orange night grade.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#E5322D",
+    "accentDark": "#B02020"
+  },
+  "captions": {
+    "heroColor": "#FFFFFF",
+    "heroSize": 150,
+    "smallSize": 58
+  },
+  "look": {
+    "grade": "contrast(1.18) saturate(1.05) brightness(0.68)",
+    "tint": {
+      "color": "#0e3a44",
+      "blend": "soft-light",
+      "opacity": 0.2
+    }
+  },
+  "matte": true,
+  "cadence": {
+    "every": 1.6
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "_about": "Podcast Punch / Retro Reel (v3, 6 Oct 2026: grade brightness .72->.90). Ref rank 77 (r32), editor drive (client). Plain white sans with shadow at mid frame, movie b-roll full-bleed and in rounded cards, retro TV montage. Clean, calm.",
+  "extends": "library/podcast-punch",
+  "captions": {
+    "heroColor": "#FFFFFF",
+    "heroSize": 84,
+    "smallSize": 62,
+    "fixedY": 900
+  },
+  "cadence": {
+    "every": 3.2
+  },
+  "master": {
+    "lufs": -11,
+    "ratio": 1.2,
+    "threshold": -30
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.08) brightness(0.9)"
+  }
+}

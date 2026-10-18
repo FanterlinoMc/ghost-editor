@@ -1,0 +1,52 @@
+{
+  "_about": "Bright Billboard (Headline Hype variant, trained 5 Oct 2026 from Top-100 ref rank 43, r13, editor Vincent (vincent.motion1)): Bright outdoor ad, white cards, blue and yellow keyword caps.",
+  "extends": "library/headline-hype",
+  "brand": {
+    "accent": "#1E9BFF",
+    "accentDark": "#0B6FC4"
+  },
+  "captions": {
+    "size": 62,
+    "keySize": 104,
+    "fixedY": 981,
+    "red": "#1E9BFF",
+    "key": "#FFE14D",
+    "maxWords": 2
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(0.7) brightness(1.14)",
+    "tint": {
+      "color": "#ffffff",
+      "blend": "soft-light",
+      "opacity": 0.04
+    },
+    "vignette": 0.12
+  },
+  "cadence": {
+    "every": 2.85,
+    "minGap": 1.43
+  },
+  "train": {
+    "ref": "43:r13",
+    "family": "headline-hype",
+    "measured": {
+      "changes_per_min": 21.7,
+      "burstiness": 0.48,
+      "mean_luma": 162.5,
+      "sat_mean": 42.8,
+      "accent_share": 0.0,
+      "lufs": -14.1
+    },
+    "study": {
+      "words_per_caption": 2.0,
+      "case": "mixed",
+      "text_height": 0.044,
+      "caption_y": 0.511
+    }
+  },
+  "master": {
+    "lufs": -14.1,
+    "ratio": 1,
+    "threshold": -20
+  }
+}

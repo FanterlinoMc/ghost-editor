@@ -1,0 +1,26 @@
+{
+  "_about": "Soft Luxe Serif variant for Top-100 ref #81 (s7673780090127322386, editor vince200103): Real-estate walkthrough: airy bright interiors, small white word captions, serif italic 'rare' title. Round 3 (6 Oct): no cadence punch-ins: ref holds 30 s (3.8 changes/min).",
+  "extends": "library/soft-luxe-serif",
+  "brand": {
+    "accent": "#F3E6C8",
+    "accentDark": "#8C6A3A"
+  },
+  "captions": {
+    "group": 1
+  },
+  "look": {
+    "grade": "contrast(0.98) saturate(1.06) brightness(1.08)",
+    "tint": {
+      "color": "#f0d9b5",
+      "opacity": 0.06
+    },
+    "vignette": 0.1
+  },
+  "director": {
+    "cutaways": "No cutaways: one continuous shot (ref 3.8 picture changes/min, 30 s calm)."
+  },
+  "cadence": {
+    "every": 60,
+    "minGap": 60
+  }
+}

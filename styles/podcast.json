@@ -1,0 +1,82 @@
+{
+  "_about": "The Podcast (studied from 5 Diary of a CEO shorts, ~/reels/references/TheDiaryOfACEO): moody, contrasty colour picture; 1-3 words at a time in heavy white caps at the lower third, key words in yellow (danger words in red), a group with a key word stacks small-over-big; the hook question in a white box with black caps and an arrowed name label; a pull quote in quotes in the same box mid-video; a Like button that gets clicked; a pinned show logo top-left; punch-ins every ~2 s; a low cinematic bed.",
+  "brand": {
+    "accent": "#FFD43B",
+    "accentDark": "#E0B500",
+    "ink": "#0b0b0b",
+    "capSize": 78,
+    "font": "Inter"
+  },
+  "captions": {
+    "style": "podcast",
+    "size": 78,
+    "keySize": 124,
+    "smallSize": 50,
+    "fixedY": 1250,
+    "maxWords": 3,
+    "dodgeFace": true
+  },
+  "cadence": {
+    "every": 2.0,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.16,
+      1.06
+    ],
+    "emphasisScale": 1.18,
+    "faceAnchor": {
+      "fit": true,
+      "maxFaceH": 0.42
+    }
+  },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "sfxProfile": "restrained",
+  "sound": {
+    "lines": false,
+    "nametag": false,
+    "objects": false,
+    "paperIn": false,
+    "pen": false,
+    "zoom": false,
+    "complete": false
+  },
+  "music": {
+    "id": "silent-descent",
+    "db": -18,
+    "fadeIn": 0.5,
+    "fadeOut": 0.4,
+    "drops": false,
+    "reveal": false,
+    "payoff": false
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(0.95) brightness(0.92)",
+    "vignette": 0.38,
+    "grain": 0
+  },
+  "zoom": {
+    "origin": "50% 36%",
+    "base": 1.08
+  },
+  "outro": 0.15,
+  "director": {
+    "plan": "core/scripts/podcast_plan.py <project> writes captions.keys/reds, the hook box (+ name label), a pull quote, the Like click and the show logo.",
+    "rules": "Everything on screen is spoken, except the show logo and the name label (brand kit data). Footage stays in colour.",
+    "prep": "Landscape two-shots: prep with SPEAKER_CROP=1 (scripts/speaker_crop.py) so the crop frames the person talking, not the nearest face."
+  },
+  "boxline": {
+    "dodgeFace": true,
+    "fitLabel": true
+  },
+  "master": {
+    "lufs": -15,
+    "ratio": 1.5,
+    "threshold": -24,
+    "lra": 7
+  },
+  "prep": {
+    "speakerCrop": true
+  }
+}

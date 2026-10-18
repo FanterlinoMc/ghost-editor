@@ -1,0 +1,16 @@
+{
+  "_about": "Podcast Punch / Pill Labels (v3, 6 Oct 2026: grade brightness .92->.72). Ref rank 64 (s7683444244912344338), editor dina_visuals. Raw-vs-edit showcase of a podcast edit: floating rounded inset cards top-right, olive label pills, cinematic b-roll swaps, small caps captions. Showcase pills are not copied.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#8A9A5B",
+    "accentDark": "#5E6B3A"
+  },
+  "captions": {
+    "heroColor": "#E9F0D2",
+    "smallSerif": true,
+    "heroSize": 104
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(0.95) brightness(0.72)"
+  }
+}

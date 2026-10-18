@@ -1,0 +1,33 @@
+{
+  "_about": "Grid Paper Editorial variant: ref rank 74 (rabinn.fx, 'ma'): minimal white landscape canvas, small red serif/sans lines, very few objects, long calm holds (the space is the point).",
+  "extends": "library/grid-paper-editorial",
+  "pagePaper": "plain",
+  "brand": {
+    "accent": "#E30613",
+    "accentDark": "#A3040E",
+    "paper": "#FFFFFF"
+  },
+  "captions": {
+    "heroColor": "#FF4A4A",
+    "heroSize": 104,
+    "smallSize": 44,
+    "smallSerif": true
+  },
+  "cadence": {
+    "every": 12.0,
+    "minGap": 6.0
+  },
+  "music": {
+    "db": -16
+  },
+  "director": {
+    "rhythm": "Slow: picture changes every ~4-6 s; long calm holds on white pages; one object per page at most.",
+    "pages": "Paper-heavy and slow: the speaker stays CUT OUT on a white page (ground beat, paper white) for almost the whole reel, ~6 picture changes/min; one long ground beat, at most one quiet collage page. Trained: this plan scored 32.0 vs 20.3 for the base page plan."
+  },
+  "master": {
+    "lufs": -11.9,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_round3": "tweak (6 Oct, measure v2): punch-in cadence {'every': 4.0, 'minGap': 2.0} -> every 12 s (round 3 tweak: the paper pages already supply the picture changes; measure v2 counts punch-ins too)"
+}

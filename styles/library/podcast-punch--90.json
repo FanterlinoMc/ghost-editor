@@ -1,0 +1,13 @@
+{
+  "_about": "Podcast Punch / Quote Tail (v3, 6 Oct 2026: cadence 2.2->2.8). Ref rank 90 (s7686643903621156104), editor mudahberkembang_. Indonesian edu (before/after showcase): white bold line with a yellow italic quoted tail, screenshot and document cards, black word bar cards.",
+  "extends": "library/podcast-punch",
+  "captions": {
+    "heroColor": "#FFD43B",
+    "heroItalic": true,
+    "lowercase": false,
+    "heroSize": 116
+  },
+  "cadence": {
+    "every": 2.8
+  }
+}

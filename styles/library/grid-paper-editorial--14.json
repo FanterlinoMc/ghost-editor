@@ -1,0 +1,28 @@
+{
+  "_about": "Grid Paper Editorial variant: ref rank 14 (r18, snipp.co): warm dark studio speaker, white paper cards with soft shadow, blurred big number, red circle behind a cut-out portrait, serif + sans 'minimal' type, vintage grain.",
+  "extends": "library/grid-paper-editorial",
+  "pagePaper": "plain",
+  "captions": {
+    "smallSize": 44,
+    "heroSize": 110
+  },
+  "look": {
+    "grade": "contrast(1.08) saturate(1.05) brightness(0.95) sepia(0.06)",
+    "tint": {
+      "color": "#7a4a1f",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.3,
+    "grain": 0.06
+  },
+  "cadence": {
+    "every": 2.0,
+    "minGap": 1.0
+  },
+  "master": {
+    "lufs": -12.9,
+    "ratio": 2,
+    "threshold": -20
+  }
+}

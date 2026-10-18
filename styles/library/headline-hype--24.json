@@ -1,0 +1,50 @@
+{
+  "_about": "Red Card Rush (Headline Hype variant, trained 5 Oct 2026 from Top-100 ref rank 24, r42, editor troy_media): Red title cards, platform logo pops, yellow keyword caps low on the chest.",
+  "extends": "library/headline-hype",
+  "brand": {
+    "accent": "#E3161E"
+  },
+  "captions": {
+    "size": 62,
+    "keySize": 112,
+    "fixedY": 1380,
+    "key": "#FFE11A",
+    "maxWords": 1
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.15) brightness(0.96)",
+    "tint": {
+      "color": "#5a1410",
+      "blend": "soft-light",
+      "opacity": 0.06
+    }
+  },
+  "cadence": {
+    "every": 30,
+    "minGap": 15
+  },
+  "train": {
+    "ref": "24:r42",
+    "family": "headline-hype",
+    "measured": {
+      "changes_per_min": 8.2,
+      "burstiness": 1.3,
+      "mean_luma": 77.3,
+      "sat_mean": 144.2,
+      "accent_share": 0.0,
+      "lufs": -11.1
+    },
+    "study": {
+      "words_per_caption": 1.0,
+      "case": "upper",
+      "text_height": 0.044,
+      "caption_y": 0.755
+    }
+  },
+  "master": {
+    "lufs": -11.1,
+    "ratio": 1,
+    "threshold": -20
+  },
+  "_round3": "6 Oct measure-v2 tweak: cadence -> {'every': 30, 'minGap': 15} (toward own ref picture-change rate / saturation)"
+}

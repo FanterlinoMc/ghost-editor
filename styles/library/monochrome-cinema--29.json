@@ -1,0 +1,49 @@
+{
+  "_about": "Monochrome Cinema variant from Top-100 rank 29 (ciggmedia, 'this isn't a skill problem, it's an environment problem', 41 s). The warm, golden-hour member of the family: speaker plate lit by orange window light, kept in colour and warm; captions are small white bold sans phrases sitting LOW (~65-75% down, under the chest), and the one money/action word per line goes big bold sans in YELLOW ('$500', 'LINK'). Cutaways are the creator's own warm workspace b-roll (hands on keyboard, desk, monitor) in colour, not B&W stock; no black word cards. Measured: picture change 1.37 s (19 punch-ins + 10 cuts in 41 s), caption every 0.49 s, captions 65% down, face 46% down / 26% of frame, luma 89, sat 104 (brightest, most saturated variant), -17.6 LUFS, ~34 sound hits/min.",
+  "extends": "library/monochrome-cinema",
+  "captions": {
+    "smallSize": 64,
+    "heroSize": 150,
+    "x": 170,
+    "fixedY": 1300,
+    "hold": 0.25,
+    "heroItalic": false,
+    "heroColor": "#FFE14A",
+    "smallSerif": false,
+    "heroSfxGap": 3.5,
+    "maxWords": 4
+  },
+  "cadence": {
+    "every": 2.2,
+    "minGap": 1.1,
+    "scales": [
+      1.0,
+      1.15
+    ],
+    "emphasisScale": 1.18
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(1.05) brightness(0.92)",
+    "tint": {
+      "color": "#5a3210",
+      "blend": "soft-light",
+      "opacity": 0.14
+    },
+    "vignette": 0.3,
+    "grain": 0.05
+  },
+  "monochrome": {
+    "cutawayGrade": "sepia(0.15) saturate(1.0) contrast(1.08) brightness(0.92)",
+    "wordCard": null
+  },
+  "director": {
+    "style": "Monochrome Cinema (golden desk): a warm creator-economy talking head. Captions low and quiet; one yellow money/action word per line. B-roll of the work itself, in warm colour.",
+    "captions": "captions.heroes: only numbers, money and action words ('$500', 'skill', 'link', 'improved'); most phrases stay small (heroFallback none). captions.serif: none. Lowercase except numbers and the CTA word.",
+    "wordcards": "No black word cards in this variant.",
+    "cutaways": "3-5 image scenes per 30 s, captions: true, 1.0-2.0 s, grade sepia(0.18) saturate(0.95) contrast(1.1) brightness(0.84): desk, keyboard, hands typing, monitor glow, window light. If the user uploads screen/b-roll footage, use it here first. Public domain / CC0 via stock_fetch.py otherwise.",
+    "rhythm": "Picture change every ~2-3 s; cut to b-roll on the 'work' sentences, return to the speaker on the claim.",
+    "limits": {
+      "scenes_per_min": 14
+    }
+  }
+}

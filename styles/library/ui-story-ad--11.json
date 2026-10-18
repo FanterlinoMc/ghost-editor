@@ -1,0 +1,31 @@
+{
+  "_about": "UI Story Ad variant from ref rank 11 (r3, editor afterpranav): bold italic condensed caps with yellow-green glow; notification stacks; red flash. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#DFFF4F",
+    "accentDark": "#B2D12A"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#DFFF4F",
+    "red": "#FF3B3B",
+    "keySize": 124,
+    "maxWords": 3
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(0.93) brightness(1.51)",
+    "vignette": 0.18,
+    "grain": 0,
+    "refocus": false
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.0
+    ]
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 137.3 / sat 58.8; punch-in cadence set for ref 10.4 changes/min; refocus off when ref blur < 0.05 (ref 0.029)",
+  "_tweak3": "tweak round 3 (6 Oct, measure v2): punch-ins off (cadence scales 1.0/1.0): ref 15.6 changes/min incl. punches, ours 33"
+}

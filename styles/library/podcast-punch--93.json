@@ -1,0 +1,12 @@
+{
+  "_about": "Podcast Punch / Doc Cards (v3, 6 Oct 2026: cadence 2.4->2.8). Ref rank 93 (s7683648710194007303), editor mudahberkembang_. Indonesian edu (before/after showcase): screenshot/document cards over the speaker, black caption bars with white caps, yellow italic sub-lines.",
+  "extends": "library/podcast-punch",
+  "captions": {
+    "heroColor": "#FFD43B",
+    "heroItalic": true,
+    "heroSize": 108
+  },
+  "cadence": {
+    "every": 2.8
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "_about": "Fire Headline (Headline Hype variant, trained 5 Oct 2026 from Top-100 ref rank 20, r35, editor drive (client)): Warm fire grade, one huge caps word, red keyword, red headline box.",
+  "extends": "library/headline-hype",
+  "captions": {
+    "maxWords": 1,
+    "keySize": 140,
+    "fixedY": 941
+  },
+  "cadence": {
+    "every": 1.2,
+    "minGap": 0.7
+  },
+  "zoom": {
+    "base": 1.12
+  },
+  "look": {
+    "grade": "contrast(1.2) saturate(1.25) brightness(0.88)",
+    "tint": {
+      "color": "#7a1a05",
+      "blend": "soft-light",
+      "opacity": 0.2
+    }
+  },
+  "train": {
+    "ref": "20:r35",
+    "family": "headline-hype",
+    "measured": {
+      "changes_per_min": 17.2,
+      "burstiness": 0.6,
+      "mean_luma": 75.1,
+      "sat_mean": 111.1,
+      "accent_share": 0.0,
+      "lufs": -18.9
+    },
+    "study": {
+      "words_per_caption": 1.0,
+      "case": "mixed",
+      "text_height": 0.058,
+      "caption_y": 0.49
+    }
+  },
+  "master": {
+    "lufs": -18.9,
+    "ratio": 1,
+    "threshold": -20
+  },
+  "_round3": "6 Oct measure-v2 tweak: cadence -> {'every': 1.2, 'minGap': 0.7} (toward own ref picture-change rate / saturation)"
+}

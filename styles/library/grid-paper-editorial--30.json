@@ -1,0 +1,33 @@
+{
+  "_about": "Grid Paper Editorial variant: ref rank 30 (builtbyjaymark): beige paper ground, speaker in a framed card, serif-italic captions on black label boxes, anatomy-style cut-out collage, red highlight.",
+  "extends": "library/grid-paper-editorial",
+  "pagePaper": "plain",
+  "brand": {
+    "paper": "#E8D7B6"
+  },
+  "captions": {
+    "smallSerif": true,
+    "heroSize": 104,
+    "smallSize": 48
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(0.95) brightness(1.0) sepia(0.12)",
+    "tint": {
+      "color": "#b08850",
+      "blend": "soft-light",
+      "opacity": 0.12
+    },
+    "vignette": 0.2,
+    "grain": 0.04
+  },
+  "cadence": {
+    "every": 12.0,
+    "minGap": 6.0
+  },
+  "master": {
+    "lufs": -11.0,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_round3": "tweak (6 Oct, measure v2): punch-in cadence {'every': 1.9, 'minGap': 1.0} -> every 12 s (round 3 tweak: the paper pages already supply the picture changes; measure v2 counts punch-ins too)"
+}

@@ -1,0 +1,81 @@
+{
+  "_about": "Neon Glow v1 (trained 5 Oct 2026 from 5 Top-100 refs: #15 snippco r23, #21 raw.to.reel r37, #44 drive r33, #52 jim.malingin, #83 marvin.media; ~/reels/style-train/neon-glow). Punchy UGC talking head in natural colour on a dark or neutral set: bold white sans captions at chest height, ONE keyword per line in a glowing neon colour (green by default; serif italic with a soft glow), neon icon/emoji pops beside the head, red strike-through on dismissed claims, a red-X list for 'not this', and a short white light-leak flash over a take join. Busy picture (a change every ~1.5-2 s), light upbeat electronic bed. | 6 Oct lead: layout.cardY 230 kept for readability (fixes caption/list collision; scored 56.4 vs 60.5, readability wins).",
+  "extends": "cinematic",
+  "brand": {
+    "accent": "#4DFF6A",
+    "accentDark": "#22B83A",
+    "ink": "#111111",
+    "capSize": 64,
+    "font": "Inter",
+    "serif": "Playfair Display",
+    "serifScale": 1.3,
+    "boldScale": 1.7
+  },
+  "captions": {
+    "style": "editorial",
+    "group": 3,
+    "y": 1180,
+    "keywordStyle": "serif",
+    "maxHold": 0.35,
+    "backing": false
+  },
+  "cadence": {
+    "every": 2.0,
+    "minGap": 1.0,
+    "scales": [
+      1.0,
+      1.3
+    ],
+    "emphasisScale": 1.3
+  },
+  "scenes": {
+    "image": {
+      "grade": "contrast(1.08) saturate(1.1) brightness(0.92)"
+    },
+    "sentence": {
+      "bg": "#0b0b0d"
+    },
+    "default_in": "cut"
+  },
+  "leaks": {
+    "every": 8,
+    "color": "255,244,226"
+  },
+  "sfxProfile": "standard",
+  "music": {
+    "id": "cyberpunk-city",
+    "db": -20,
+    "fadeOut": 0.4
+  },
+  "look": {
+    "grade": "contrast(1.08) saturate(1.04) brightness(0.92)",
+    "grain": 0.02,
+    "vignette": 0.3,
+    "target": {
+      "sat": 66.1,
+      "luma": 54.1,
+      "satGain": 1.48,
+      "satMin": 0.45
+    }
+  },
+  "director": {
+    "style": "Neon Glow: a punchy UGC talking head. The speaker stays in natural colour (no B&W, no film look); the energy comes from captions where one word per line glows in a neon colour, small neon icons that pop beside the head on the nouns, and fast punch-ins.",
+    "captions": "captions.highlight: ONE keyword per 3-word line at most, and only content words (the noun, number or verb that carries the claim; never 'the', 'so', 'cause', 'really'). About one glowing keyword every 2-3 s. Lowercase white bold for everything else.",
+    "icons": "emoji or logo beats (neon-looking: money, question mark, warning, check, cross, the product's simple-icons slug) on the 2-4 most concrete nouns, 1.0-1.6 s each, never two at once. Brand names -> logo; feelings/ideas -> emoji.",
+    "cards": "strike beat on a claim the speaker dismisses ('not X', a myth). list beat ONLY for 'not this' lists with stampAt (red-X look): without a stamp the engine still draws strike lines, so a positive enumeration should use icon beats or captions.highlight instead. At most one big beat (count) for a number or a price.",
+    "transitions": "Hard cuts. One white light-leak flash (leaks) over a take join every ~8 s; no glitch, no wipes.",
+    "rhythm": "Picture changes every ~1.5-2 s (punch-ins via cadence, icon pops, cards). Leave the first 0.5 s clean on the speaker's face.",
+    "limits": {
+      "scenes_per_min": 6,
+      "icons_per_min": 10
+    }
+  },
+  "master": {
+    "lufs": -15,
+    "ratio": 3,
+    "threshold": -20
+  },
+  "layout": {
+    "cardY": 230
+  }
+}

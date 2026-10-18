@@ -1,0 +1,49 @@
+{
+  "_about": "UI Story Ad variant from ref rank 82 (s7685345535636655382, editor amrofilms): small plain white words; app UI walkthroughs; template cards; waveform b-roll. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#3FD0FF",
+    "accentDark": "#1FA6D6"
+  },
+  "captions": {
+    "style": "cluster",
+    "font": "Inter",
+    "smallSize": 50,
+    "heroSize": 128,
+    "x": 150,
+    "fixedY": 1120,
+    "hold": 0.35,
+    "maxWords": 4,
+    "lowercase": false,
+    "upper": false,
+    "heroItalic": false,
+    "smallSerif": false,
+    "heroSfx": "whoosh",
+    "heroSfxGap": 3.0,
+    "heroFallback": "none"
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.33) brightness(0.59)",
+    "tint": {
+      "color": "#14243a",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.38
+  },
+  "cadence": {
+    "every": 1.1,
+    "minGap": 0.7,
+    "scales": [
+      1.0,
+      1.2
+    ]
+  },
+  "sfxProfile": "restrained",
+  "master": {
+    "lufs": -14.4,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_tweak": "tweak round 2 (5 Oct): grade brightness/saturate scaled to ref luma 44.0 / sat 92.2; punch-in cadence set for ref 38.6 changes/min; refocus off when ref blur < 0.05 (ref 0.059)"
+}

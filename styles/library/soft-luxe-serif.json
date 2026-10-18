@@ -1,0 +1,73 @@
+{
+  "_about": "Soft Luxe Serif v9 (trained 5 Oct 2026 from 11 Top-100 refs: vanogre.edits r38/r39, dina_visuals, tians028 x2, bigeditor.60fps, bluumediahouse, gongkianist, rabinn.fx x2, vince200103; ~/reels/style-train/soft-luxe-serif). Speaker in natural soft colour (no heavy grade), tiny low-key sans captions of 1-3 words, and ONE keyword per line set big in a glowing serif italic in a warm accent (gold by default; blue / red variants). Warm COLOUR b-roll (aerials, architecture, interiors) with captions kept on, sparse quiet sound, calm bed.",
+  "extends": "cinematic",
+  "brand": {
+    "accent": "#E9B949",
+    "accentDark": "#B88A2A",
+    "ink": "#1A1612",
+    "capSize": 44,
+    "font": "Inter",
+    "serif": "Playfair Display",
+    "serifScale": 2.3
+  },
+  "captions": {
+    "style": "editorial",
+    "group": 2,
+    "keywordStyle": "serif",
+    "maxHold": 0.4,
+    "keywordSfx": false,
+    "backing": false
+  },
+  "cadence": {
+    "every": 3.4,
+    "minGap": 3.5,
+    "scales": [
+      1.0,
+      1.12
+    ],
+    "emphasisScale": 1.12
+  },
+  "scenes": {
+    "default_in": "cut",
+    "image": {
+      "grade": "contrast(1.04) saturate(1.08) brightness(1.0) sepia(0.12)"
+    }
+  },
+  "sfxProfile": "restrained",
+  "music": {
+    "id": "auto",
+    "db": -18,
+    "fadeOut": 0.4
+  },
+  "look": {
+    "grade": "contrast(1.05) saturate(0.98) brightness(0.78) sepia(0.06)",
+    "tint": {
+      "color": "#c79a5b",
+      "blend": "soft-light",
+      "opacity": 0.08
+    },
+    "vignette": 0.18,
+    "grain": 0.03,
+    "cleanScenes": true,
+    "target": {
+      "sat": 72.7,
+      "luma": 87.4,
+      "satGain": 1.36,
+      "satMin": 0.45
+    }
+  },
+  "director": {
+    "style": "Soft Luxe Serif: a quiet, premium talking-head edit. The speaker stays natural, a touch moody (plate pulled down to ~luma 89, brightness 0.78); typography whispers (tiny sans words) and then lands ONE elegant word per line in a big glowing serif italic. Warm colour b-roll gives the luxury feel. Restraint is the brand.",
+    "captions": "captions.highlight: 4-7 keywords per 20 s (nouns or numbers that carry the line: 'potential', 'patterns', '2032', 'knowledge'); never filler ('really', 'cause', 'things'). They render as the big serif italic accent. Everything else stays tiny lowercase sans, 2 words per line.",
+    "cutaways": "About 2 image scenes per 20 s (v3: 4 measured too busy), captions: true, 1.0-2.0 s, warm COLOUR stills (not B&W): aerial city at golden hour, architecture, marble/wood interiors, campus or property exteriors. Public domain / CC0 only via stock_fetch.py. Slow push (zoom 1.02 -> 1.12).",
+    "rhythm": "Calm: a picture change every ~3 s (measure v2 counts punch-ins too, so cadence.minGap 3.5 keeps them sparse) plus cutaways. No flashes, no glitch, hard cuts or a soft blur into b-roll. One light whoosh at most per cutaway; no hit on every keyword.",
+    "limits": {
+      "scenes_per_min": 12
+    }
+  },
+  "master": {
+    "lufs": -14,
+    "ratio": 2,
+    "threshold": -20
+  }
+}

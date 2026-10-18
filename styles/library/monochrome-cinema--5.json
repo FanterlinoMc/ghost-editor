@@ -1,0 +1,68 @@
+{
+  "_about": "Monochrome Cinema variant from Top-100 rank 5 (r21, snippco, Jim Rohn motivational, score 9). The darkest, starkest member of the family: pure WHITE type (no colour accent), tight bold sans small words on one line, bold-italic sans or serif-italic hero, frequent black word cards one word at a time ('why... not... you?'), B&W metaphor cutaways (MRI brain, running silhouette) and teal-tinted motion-blur crowds. Measured: picture change 1.06 s (56 changes/min), caption every 0.85 s, captions ~50% down, face 28% down / 25% of frame (wide stage shot), luma 41.6, sat 86, -16.8 LUFS, LRA 2.3.",
+  "extends": "library/monochrome-cinema",
+  "captions": {
+    "smallSize": 58,
+    "heroSize": 150,
+    "fixedY": 1040,
+    "hold": 0.3,
+    "heroItalic": true,
+    "heroColor": "#FFFFFF",
+    "smallSerif": false,
+    "heroSfxGap": 3.0,
+    "align": "center",
+    "avoidFace": true,
+    "maxWords": 4,
+    "heroSfx": false,
+    "heroFallback": "none"
+  },
+  "cadence": {
+    "burst": null,
+    "targetPerMin": 56,
+    "minGap": 0.9,
+    "scales": [
+      1.0,
+      1.12
+    ],
+    "emphasisScale": 1.14
+  },
+  "music": {
+    "id": "alif-match-d",
+    "db": -6,
+    "fadeOut": 0.6
+  },
+  "look": {
+    "grade": "contrast(1.2) saturate(0.7) brightness(0.62)",
+    "tint": {
+      "color": "#123c44",
+      "blend": "soft-light",
+      "opacity": 0.16
+    },
+    "vignette": 0.5,
+    "grain": 0.07,
+    "refocus": {
+      "blur": 0,
+      "dur": 0.01
+    }
+  },
+  "monochrome": {
+    "cutawayGrade": "grayscale(1) contrast(1.3) brightness(0.88)",
+    "tealGrade": "grayscale(0.6) sepia(0.3) hue-rotate(140deg) saturate(1.4) contrast(1.15) brightness(0.7)",
+    "wordCard": {
+      "bg": "black",
+      "size": 120
+    }
+  },
+  "director": {
+    "style": "Monochrome Cinema (stark white): darker, starker and faster than the family. All type white, no colour accent. Word cards carry the questions.",
+    "captions": "captions.heroes: one hero per phrase; most phrases have no hero (heroFallback none) and run as one small white line. captions.serif: the 1-2 'plan/decision' words in serif italic. Lowercase.",
+    "wordcards": "4-5 black wordpage scenes per 20 s, especially on questions and 2-4 word punch lines: one word at a time, 0.4-0.9 s per word, the last word big.",
+    "cutaways": "3-4 image scenes per 20 s, captions: true, 0.8-1.6 s. Alternate grayscale(1) contrast(1.3) brightness(0.88) (MRI brain, statue, running figure) with one teal-tinted crowd (monochrome.tealGrade). Public domain / CC0 via stock_fetch.py.",
+    "rhythm": "Picture changes every ~1.1 s (cards and cutaways count). Return to the speaker between cutaways. Hard cuts only.",
+    "limits": {
+      "scenes_per_min": 26
+    },
+    "structure": "v2 (7 Oct, matched to r21 frame by frame): the SPEAKER is on screen only for the opening line (~2 s) and once more at most; the rest of the reel is cinematic cutaways that carry the captions (image scenes, captions: true, in blur, out blur so every change is smooth, 0.8-2.0 s each, back to back), alternating B&W (monochrome.cutawayGrade) and teal (monochrome.tealGrade), plus black word cards for questions and punch words (one word at a time). A picture change about every second. Scenes butt against each other with no gaps (no blurred speaker frames in between); teal grade only on warm or neutral stills (blue skies and screens turn red under the hue rotation: grade those B&W).",
+    "sound": "Like the ref (demucs 7 Oct): an emotional keys bed LOUD, only ~6 dB under the voice (music alif-match-d, closest match 5.9), and a few soft 1-1.5 kHz whooshes only on the word cards (inSfx whoosh-3 / whoosh-cine); no caption whooshes."
+  }
+}

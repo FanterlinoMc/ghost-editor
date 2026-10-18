@@ -1,0 +1,47 @@
+{
+  "_about": "Neon Violet (Headline Hype variant, trained 5 Oct 2026 from Top-100 ref rank 48, s7365474033388768517, editor maxmill_ae): Dark purple stage, condensed caps, neon violet key words.",
+  "extends": "library/headline-hype",
+  "brand": {
+    "accent": "#8A3CFF",
+    "accentDark": "#5E1FC4",
+    "font": "Oswald"
+  },
+  "captions": {
+    "font": "Oswald",
+    "keySize": 150,
+    "fixedY": 900,
+    "key": "#C08BFF",
+    "red": "#A35CFF"
+  },
+  "look": {
+    "grade": "contrast(1.2) saturate(0.9) brightness(0.7)",
+    "tint": {
+      "color": "#3a1070",
+      "blend": "soft-light",
+      "opacity": 0.22
+    },
+    "vignette": 0.5
+  },
+  "cadence": {
+    "every": 30,
+    "minGap": 15
+  },
+  "train": {
+    "ref": "48:s7365474033388768517",
+    "family": "headline-hype",
+    "measured": {
+      "changes_per_min": 13.7,
+      "burstiness": 0.83,
+      "mean_luma": 46.9,
+      "sat_mean": 84.3,
+      "accent_share": 0.0,
+      "lufs": -6.9
+    }
+  },
+  "master": {
+    "lufs": -8.0,
+    "ratio": 1,
+    "threshold": -20
+  },
+  "_round3": "6 Oct measure-v2 tweak: cadence -> {'every': 30, 'minGap': 15} (toward own ref picture-change rate / saturation)"
+}

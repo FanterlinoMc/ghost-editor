@@ -1,0 +1,32 @@
+{
+  "_about": "Studio Gloss 12: ref rank 12 (r5), afterpranav mortgage-refinance explainer. Opens on a card. Soft white-to-grey-blue cards with cutout props (cash hand, house), grey small / bold slate big titles; two-line captions, white small + bold teal key (not italic); a black card with a rounded video window; purple button + cursor click.",
+  "extends": "library/studio-gloss",
+  "captions": {
+    "smallSize": 48,
+    "heroSize": 96,
+    "heroItalic": false,
+    "heroColor": "#6FE6DF",
+    "x": 200,
+    "fixedY": 1120,
+    "maxWords": 5,
+    "heroGlow": false
+  },
+  "brand": {
+    "paper": "linear-gradient(165deg, #FFFFFF 0%, #EEF2F6 22%, #C7D1DC 46%)",
+    "accent": "#4E5D6E",
+    "accentDark": "#323D4A",
+    "ink": "#4E5D6E",
+    "footKey": "#6FE6DF"
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(1.0) brightness(0.88)",
+    "vignette": 0.12,
+    "grain": 0,
+    "cleanScenes": true
+  },
+  "director": {
+    "cards": "stack bg paper, keyColor #5B6B7D (slate, not accent-bright), icon moneybag/coins/hand, iconSize 440. Open on a card with the hook word.",
+    "window": "one {type:scene, kind:window} (rounded frame on black) for a literal moment, 1.2-1.8 s."
+  },
+  "_measured": "measured: changes 20/min, luma 105, sat 57"
+}

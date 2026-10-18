@@ -1,0 +1,17 @@
+{
+  "_about": "Podcast Punch / Black Canvas (v3, 6 Oct 2026: grade sat .2 brightness .40 (round-2 tweak render re-adopted)). Ref rank 78 (s7621422898548329735), editor nale_bans. Black canvas: the speaker and b-roll sit in floating cards on black with tiny white words around them; serif title card; clean minimal motion.",
+  "extends": "library/podcast-punch",
+  "captions": {
+    "heroColor": "#FFFFFF",
+    "smallSize": 44,
+    "heroSize": 96,
+    "fixedY": 1300
+  },
+  "look": {
+    "grade": "contrast(1.08) saturate(0.2) brightness(0.4)",
+    "vignette": 0.2
+  },
+  "cadence": {
+    "every": 3.0
+  }
+}

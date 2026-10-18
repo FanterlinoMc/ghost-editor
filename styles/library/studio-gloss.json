@@ -1,0 +1,101 @@
+{
+  "_about": "Studio Gloss v14 (trained 5 Oct 2026 from 5 Top-100 refs: Mohmd.Visuals r11 (Ahmed's #1), afterpranav r5/r6/r10, EDIT_MADNESS r12; ~/reels/style-train/studio-gloss). A premium explainer look: the speaker in natural, slightly bright colour, small mixed-size captions with one bold italic key word in a cool accent, and bright full-screen 'studio' cards (white to soft cyan gradient) that carry a small dark lead line, a big accent key word and one central prop object. Photo cards with a label tag pop over the speaker; occasional light-leak flash. Clean, airy, high-key: the opposite of a moody grade.",
+  "extends": "mono",
+  "brand": {
+    "accent": "#1B2230",
+    "accentDark": "#0E131C",
+    "paper": "linear-gradient(140deg, #FFFFFF 0%, #E6FAFF 14%, #8FE8FA 30%, #22D0F2 46%)",
+    "ink": "#1B2230",
+    "capSize": 56,
+    "font": "Inter",
+    "leadSize": 50,
+    "tailSize": 44,
+    "footKey": "#3FD8F5",
+    "_paperNote": "scene grounds render at background-size 220%, so only the first ~46% of a gradient is visible: put every stop inside 0-46%"
+  },
+  "captions": {
+    "style": "cluster",
+    "smallSize": 58,
+    "heroSize": 132,
+    "stairSize": 60,
+    "x": 170,
+    "fixedY": 1130,
+    "hold": 0.3,
+    "maxWords": 5,
+    "heroSfx": "whoosh",
+    "heroItalic": true,
+    "heroColor": "#3FD8F5",
+    "smallSerif": false,
+    "heroSfxGap": 3.0,
+    "heroFallback": "none",
+    "heroGlow": "#3FD8F5"
+  },
+  "cadence": {
+    "every": 3.8,
+    "minGap": 2.0,
+    "scales": [
+      1.0,
+      1.14
+    ],
+    "emphasisScale": 1.16
+  },
+  "sceneIn": "cut",
+  "sceneOut": "cut",
+  "sfxProfile": "restrained",
+  "sound": {
+    "lines": false,
+    "nametag": false,
+    "objects": false,
+    "paperIn": false,
+    "pen": false,
+    "zoom": false,
+    "complete": true,
+    "heroDb": -14
+  },
+  "music": {
+    "id": "alif-match-a",
+    "db": -16,
+    "fadeIn": 0,
+    "fadeOut": 0.4,
+    "drops": false,
+    "reveal": false,
+    "payoff": false
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(1.28) brightness(0.93)",
+    "vignette": 0,
+    "grain": 0,
+    "cleanScenes": true,
+    "target": {
+      "sat": 73.9,
+      "satMin": 0.45,
+      "satGain": 1.42
+    }
+  },
+  "zoom": {
+    "origin": "50% 36%",
+    "base": 1.06
+  },
+  "outro": 0,
+  "director": {
+    "style": "Studio Gloss: a premium, airy explainer. The speaker (natural colour, bright) carries it; every 2-4 s the reel cuts to a bright STUDIO CARD (white to soft cyan gradient) that turns the line into a tiny poster: small dark lead words at the top third, ONE big key word in the accent, and one prop object in the middle. Typography stays small and tidy; the key word is the only loud thing.",
+    "captions": "captions.heroes: one hero per phrase (the word that carries the line, never a filler like 'actually', 'really', 'so'). Small words are sans, the hero is bold italic in the accent. Mixed case as spoken.",
+    "cards": "{type:scene, kind:stack, bg:'paper', at, to, lead: small words spoken before the key, key: ONE word (or two short) spoken as the punch, keyColor: '#14181F' (dark ink, like r11's card type; variants set their own accent), tail: optional small words after, icon: engraving prop (brain, coins, hourglass, lightbulb, chart, laptop, rocket, target, trophy, moneybag, phone, robot, gears, team...), iconSize: 380-460}. 0.9-2.2 s, 30-45% of the runtime, never two cards back to back without the speaker between. Every word on a card must be spoken while it is up.",
+    "photocards": "{type:popcard, src: assets/stock/<pick>.jpg, label: ONE spoken word (the emotion / the thing), at, to} over the speaker for concrete nouns (a person, a feeling, a place). 0.8-1.6 s. Use stock_fetch.py (public domain / CC0) for the photo.",
+    "flash": "{type:leak} 0.35-0.45 s at most once per 15 s, on a section change.",
+    "rhythm": "Measured: picture changes every ~3 s (20/min; r11 alone every 1.7 s). Use 3-4 cards + 1 photo card per 20 s, punches are fine between. Open on the speaker or on a card with the hook word. Leave 0.6-1 s on the speaker after each card. Avoid clumped cuts: start a card ON a take cut (so the jump cut and the card-in are one change), and if the last line gets a card let it run to the very end (no outro, no 1-frame return to the speaker).",
+    "limits": {
+      "scenes_per_min": 16
+    },
+    "master": "Style master {lufs -14, ratio 1.5, threshold -20, lra 9} is applied by scripts/render.sh (ratio 3 squeezed LRA to 1.1, ratio 2 gave 1.3; refs sit at 2.1)."
+  },
+  "packs": {
+    "editorsinventory": true
+  },
+  "master": {
+    "lufs": -14,
+    "ratio": 1.5,
+    "threshold": -20,
+    "lra": 9
+  }
+}

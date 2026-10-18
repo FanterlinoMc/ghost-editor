@@ -1,0 +1,33 @@
+{
+  "_about": "UI Story Ad variant from ref rank 60 (s7679981727653088532, editor bigeditor.60fps): gold caps keyword; chart card; listing UI; the ref is posted inside a '$5 vs $80' comparison frame on a green board; only the inner $80 edit is the style. Trained 5 Oct 2026.",
+  "extends": "library/ui-story-ad",
+  "brand": {
+    "accent": "#F2C14E",
+    "accentDark": "#C9962A"
+  },
+  "captions": {
+    "style": "podcast",
+    "key": "#F2C14E",
+    "red": "#FF3B3B",
+    "size": 58,
+    "keySize": 96
+  },
+  "look": {
+    "grade": "contrast(1.12) saturate(1.12) brightness(0.86) sepia(0.06)",
+    "tint": {
+      "color": "#7a4a1f",
+      "blend": "soft-light",
+      "opacity": 0.12
+    },
+    "vignette": 0.4
+  },
+  "cadence": {
+    "every": 2.4,
+    "minGap": 1.3
+  },
+  "master": {
+    "lufs": -18.1,
+    "ratio": 2,
+    "threshold": -20
+  }
+}

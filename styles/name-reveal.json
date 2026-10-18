@@ -1,0 +1,58 @@
+{
+  "_about": "Name Reveal (Top-100 #4, r19 snippco, score 9), v2 7 Oct 2026, matched frame by frame: a BLACK-AND-WHITE world with the speaker in COLOUR the whole reel (ground backdrop grayscale over every speaker stretch, the cut-out on top), a light-leak open, the NAME huge in bold white sans at head height partly hidden by the head, small bold white sans lead lines with ONE glowing orange serif-italic word, black word cards with a small sans word then a serif-italic word that blurs out. Sound like the ref (demucs 7 Oct): no music bed, bright 3-5 kHz whooshes on the words and the cuts (~90 hits/min in the ref).",
+  "extends": "library/name-reveal-mono",
+  "legibility": {
+    "behind": 0.6
+  },
+  "captions": {
+    "heroColor": "#FFFFFF",
+    "serifItalic": true,
+    "heroSize": 160,
+    "smallSize": 56,
+    "heroSfx": "whoosh-1",
+    "heroSfxGap": 0.4,
+    "glowColor": "#FF6A3D",
+    "chestBand": 1700,
+    "splitAtPages": true
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.08) brightness(0.95)",
+    "tint": {
+      "color": "#1c1c1c",
+      "blend": "soft-light",
+      "opacity": 0.0
+    },
+    "vignette": 0.35,
+    "grain": 0.04,
+    "refocus": {
+      "blur": 10,
+      "dur": 0.22
+    },
+    "cleanScenes": true
+  },
+  "director": {
+    "style": "Name Reveal: a black-and-white world with the speaker in colour, a light-leak open, the name huge behind the head, small bold sans lines with one glowing orange serif-italic word, black serif word cards. Cinematic, personal, premium.",
+    "ground": "Cover EVERY speaker stretch with ground beats backdrop 'grayscale(1) contrast(1.35) brightness(0.62)' and sfx none (hardened: the darker, harder B&W room makes the colour speaker obvious).",
+    "opening": "leak 0-0.7 s, clip leak-23.mp4 from media 0.45 (the brightest warm burn; leak-01 is near black); then the NAME on a black name card: wordpage stack:true with big:[the name words], the lead ('my name is') in small serif italic and the name huge in bold sans under it, each word as it is spoken (hardened 9 Oct: on a close-up there is no headroom, so a name behind the head reads 'I  IM'). On a WIDE shot with headroom (head top > 450 px) a behind beat at head height is still allowed; legibility.behind 0.6 moves or fronts it if the head hides it.",
+    "captions": "captions.heroes: one content word per phrase; captions.serif: ALL heroes (white serif italic). captions.glowWords: the ONE or TWO payoff words of the reel (the product, the result) that glow orange, like 'Shopee'. Small lead words lowercase bold sans.",
+    "wordcards": "1-2 black wordpage cards on a question or contrast word: serif: [the word], inSfx whoosh-2, in cut, out blur.",
+    "sound": "No music (music false). Bright whooshes: captions heroSfx whoosh-1 every >= 0.6 s, whoosh-2 on cards; nothing on the ground beats."
+  },
+  "master": {
+    "lufs": -14.0,
+    "ratio": 1.0,
+    "threshold": -20,
+    "_note": "hardened 9 Oct: the engine masters every reel to -14 LUFS / -1 dBTP (was -11, +0.7 dBTP in v5)"
+  },
+  "cadence": {
+    "burst": null,
+    "minGap": 1.1,
+    "scales": [
+      1.0,
+      1.1
+    ],
+    "emphasisScale": 1.12,
+    "targetPerMin": 33
+  },
+  "music": false
+}

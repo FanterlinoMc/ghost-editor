@@ -1,0 +1,29 @@
+{
+  "_about": "Soft Luxe Serif variant for Top-100 ref #67 (s7670408963615116565, editor bluumediahouse): Real estate / development: host walk-talk in daylight, small white single-word captions, white display title, serif italic number ('8 YEARS'), drone b-roll. Round 3 (6 Oct): master -14 -> -18 LUFS (ref -17.9).",
+  "extends": "library/soft-luxe-serif",
+  "brand": {
+    "accent": "#F7F3EA",
+    "accentDark": "#2B2B2B"
+  },
+  "captions": {
+    "group": 1
+  },
+  "cadence": {
+    "every": 2.6
+  },
+  "look": {
+    "grade": "contrast(1.04) saturate(1.06) brightness(1.05)",
+    "tint": {
+      "opacity": 0.04
+    },
+    "vignette": 0.12
+  },
+  "director": {
+    "cutaways": "About 4 warm colour cutaways per 20 s, evenly spaced (every ~4 s); ref runs 20.5 picture changes/min."
+  },
+  "master": {
+    "lufs": -18,
+    "ratio": 2,
+    "threshold": -20
+  }
+}

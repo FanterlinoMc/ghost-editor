@@ -1,0 +1,16 @@
+{
+  "_about": "Podcast Punch / Portfolio Grid (v1, 5 Oct 2026). Ref rank 85 (s7670083756727864584), editor dina_visuals. Portfolio montage: a quoted question in thin white serif, then a 3x3 grid of short edit clips with their own captions.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#F2E6C9",
+    "accentDark": "#C9B98F"
+  },
+  "captions": {
+    "smallSerif": true,
+    "heroColor": "#F2E6C9",
+    "heroItalic": true
+  },
+  "cadence": {
+    "every": 2.0
+  }
+}

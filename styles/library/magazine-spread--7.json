@@ -1,0 +1,77 @@
+{
+  "_about": "Red Poster (Top-100 #7, r30 snippco, work-life motivational, score 9) v2, 8 Oct 2026, matched frame by frame: the speaker in BLACK AND WHITE, cut out inside a wide red card on a white page (small red serif lead above, a huge bold white word over the card, a red serif tail below), or cut out on a full red page with one huge bold white word at the top; between them, moody dark cinematic cutaways carrying small serif + bold white sans captions. No header, no name tag. Sound like the ref (demucs): a keys bed ~13 dB under the voice (alif-match-a, distance 4.9), no sound effects.",
+  "extends": "library/magazine-spread",
+  "brand": {
+    "accent": "#C8102E",
+    "accentDark": "#8E0A1F",
+    "paper": "#FFFFFF",
+    "film": "grayscale(1) contrast(1.12)",
+    "leadSerif": "Instrument Serif",
+    "leadColor": "#C8102E",
+    "keyItalic": false,
+    "keyFont": "Inter, system-ui, sans-serif",
+    "leadSize": 56,
+    "tailSize": 50
+  },
+  "captions": {
+    "serifItalic": false,
+    "smallSerif": true,
+    "serifFont": "Instrument Serif",
+    "heroColor": "#FFFFFF",
+    "lowercase": true,
+    "heroItalic": false,
+    "smallSize": 56,
+    "heroSize": 150,
+    "align": "center",
+    "avoidFace": true,
+    "maxWords": 4,
+    "heroSfx": false,
+    "fixedY": 1000
+  },
+  "cadence": {
+    "burst": null,
+    "targetPerMin": 40,
+    "minGap": 1.0,
+    "scales": [
+      1.0,
+      1.06
+    ],
+    "emphasisScale": 1.08
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(0.9) brightness(0.9)",
+    "tint": {
+      "color": "#000000",
+      "blend": "soft-light",
+      "opacity": 0.0
+    },
+    "vignette": 0,
+    "grain": 0.03,
+    "refocus": {
+      "blur": 0,
+      "dur": 0.01
+    },
+    "cleanScenes": true,
+    "rootBg": "#FFFFFF"
+  },
+  "director": {
+    "style": "Red Poster: a red-and-white motivational poster cut. The speaker is never shown raw: always black-and-white and cut out, in a wide red card on a white page or on a full red page; between, moody dark cinematic cutaways carry the words.",
+    "speaker": "Every speaker stretch is EITHER a stack scene (bg card, cutout true, pageBg #FFFFFF, cardBg #C8102E, cardW 980, cardH 560, cardTop 660, cutoutSrc assets/card-cut.webm (run make_card_cut.sh <project> 980 560 <scale> <top> bw first: head and shoulders baked in, B&W; also makes the full matte B&W), cutoutScale 1.0, textAbove true, y 300 (the words sit fully above the card): lead = the small red serif words, key = ONE huge bold RED word (keyColor #C8102E) just above the card (white is invisible on the white page), tail = the rest in red serif, keyMax 210 (auto-fits long words), cardIn cut) OR a ground beat color #C8102E with text = ONE word in caps (textColor #FFFFFF, textSize 300, textY 150) with sfx none.",
+    "cutaways": "Between them, image scenes (captions: true, in cut, out cut, 1.3-2.0 s, grade contrast(1.1) brightness(0.7) saturate(0.85)): dark, moody, cinematic (people at screens at night, a runner, a city at night, a laptop desk, a window at dusk). Alternate card, cutaway, card, cutaway; a red full page 1-2 times.",
+    "captions": "Over cutaways: small serif lead words + ONE bold white sans hero per phrase (captions.heroes, never filler). Lowercase.",
+    "sound": "music alif-match-a -13 dB; no sound effects (sfx none on grounds, no inSfx)."
+  },
+  "matteFilter": "grayscale(1) contrast(1.12)",
+  "watermark": {
+    "text": ""
+  },
+  "zoom": {
+    "base": 1.0,
+    "originY": 100
+  },
+  "music": {
+    "id": "alif-match-a",
+    "db": -13,
+    "fadeOut": 0.5
+  }
+}

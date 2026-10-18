@@ -1,0 +1,28 @@
+{
+  "_about": "Studio Gloss 1: ref rank 1 (r11), Mohmd.Visuals podcast clip, Ahmed's #1 edit. Stacked mixed-size italic captions (tiny lead, huge bold italic cyan key), white-to-cyan gradient cards with one central prop + small dark label, photo cards with a label tag, film b-roll with captions on top. Speaker warm and natural.",
+  "extends": "library/studio-gloss",
+  "captions": {
+    "smallSize": 46,
+    "heroSize": 140,
+    "heroColor": "#3FD8F5",
+    "heroItalic": true,
+    "x": 160,
+    "fixedY": 1110,
+    "heroGlow": false
+  },
+  "brand": {
+    "paper": "linear-gradient(140deg, #FFFFFF 0%, #E6FAFF 14%, #8FE8FA 30%, #22D0F2 46%)",
+    "footKey": "#3FD8F5"
+  },
+  "look": {
+    "grade": "contrast(1.06) saturate(1.38) brightness(0.98)",
+    "vignette": 0,
+    "grain": 0,
+    "cleanScenes": true
+  },
+  "director": {
+    "cards": "stack bg paper, keyColor #22C3E6, icon one prop (brain for mind/emotion), iconSize 420; label words small and dark. 35-45% of runtime.",
+    "broll": "1-2 image scenes (film-still metaphors, stock_fetch.py) with captions: true, 1-1.6 s."
+  },
+  "_measured": "measured: changes 30/min, luma 135, sat 107, bright share .48"
+}

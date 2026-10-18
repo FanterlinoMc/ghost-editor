@@ -1,0 +1,39 @@
+{
+  "_about": "Studio Gloss 13: ref rank 13 (r12), EDIT_MADNESS Indian-finance clip. White bold sans captions with a cyan key (upright), big teal 3D coin on a grey grid card with shadow play, serif-italic lead 'I had to' over a 3D calculator, brand-logo circles and food stickers popping beside the speaker.",
+  "extends": "library/studio-gloss",
+  "captions": {
+    "smallSize": 52,
+    "heroSize": 124,
+    "heroItalic": false,
+    "heroColor": "#7BE3F2",
+    "x": 150,
+    "fixedY": 1080,
+    "heroGlow": false
+  },
+  "brand": {
+    "paper": "radial-gradient(circle at 20% 12%, #FFFFFF 0%, #EDEDED 24%, #CDCDCD 46%)",
+    "accent": "#2A2A2A",
+    "ink": "#2A2A2A",
+    "footKey": "#7BE3F2",
+    "keyFont": "Inter, system-ui, sans-serif"
+  },
+  "look": {
+    "grade": "contrast(1.04) saturate(1.3) brightness(0.76)",
+    "vignette": 0.1,
+    "grain": 0,
+    "cleanScenes": true
+  },
+  "director": {
+    "cards": "stack bg paper, keyColor #2FB8C8, icon coins/moneybag/calculator-like (chart), iconSize 460.",
+    "logos": "{type:logo, icon:<simple-icons slug>} beside the head when a brand/app is named (one at a time)."
+  },
+  "_measured": "measured: changes 18.6/min, luma 102, sat 74, -14.2 LUFS",
+  "cadence": {
+    "every": 99,
+    "minGap": 99,
+    "scales": [
+      1.0
+    ],
+    "emphasisScale": 1.0
+  }
+}

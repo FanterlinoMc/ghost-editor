@@ -1,0 +1,31 @@
+{
+  "_about": "Neon Glow #52 (Top-100 rank 52, ref by jim.malingin, editing-business talk on a night-skyline set). White UPPERCASE heavy sans captions at chest height, the key phrase big in YELLOW, red glowing alarm words while the frame flips to black and white for a beat, neon-green revenue/UI cards, red boxed PROBLEM list and red-X 'not this' list. Podcast caps captions (keys yellow, reds red).",
+  "extends": "library/neon-glow",
+  "brand": {
+    "accent": "#FFD43B",
+    "accentDark": "#C9A200"
+  },
+  "captions": {
+    "style": "podcast",
+    "size": 58,
+    "keySize": 96,
+    "smallSize": 46,
+    "fixedY": 1180,
+    "maxWords": 3,
+    "key": "#FFD43B",
+    "red": "#FF3B3B"
+  },
+  "look": {
+    "grade": "contrast(1.1) saturate(1.45) brightness(0.62)",
+    "vignette": 0.3
+  },
+  "leaks": false,
+  "director": {
+    "captions": "podcast caps: captions.keys = the money/claim word per line (yellow), captions.reds = the alarm/problem words (red; the ref flips the frame to B&W under them, which podcast captions cannot do: see engine gaps). big beat with count for a price or number. list beat with stampAt for 'not this' lists."
+  },
+  "master": {
+    "lufs": -19,
+    "ratio": 3,
+    "threshold": -20
+  }
+}

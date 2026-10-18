@@ -1,0 +1,66 @@
+{
+  "_about": "Neon Book (Iman Gadzhi shorts look), v4 7 Oct 2026. Ref rank 84 (s7361744177543122182, maxmill_ae 'Day 1 Editing like Iman Gadzhi'): a dark studio speaker under neon blue/red light, bold white caps with ONE glowing blue word, the explainer moments told with glowing 3D objects on a black stage (a book that splits into a page stack, '15 pages of gold' vs '300 pages of fluff', a price tag), and a white four-point star burst that floods the frame into a blue brand card. The ref is a side-by-side showcase (Iman's edit above, the recreation below); only the edit inside the frames is copied, never the split or the labels.",
+  "extends": "library/podcast-punch",
+  "brand": {
+    "accent": "#2F4BFF",
+    "accentDark": "#1E32B8"
+  },
+  "captions": {
+    "upper": true,
+    "lowercase": false,
+    "heroColor": "#7C8DFF",
+    "heroSize": 128,
+    "smallSize": 60,
+    "heroGlow": "#4F66FF",
+    "align": "center",
+    "avoidFace": true,
+    "maxWords": 3
+  },
+  "cadence": {
+    "targetPerMin": 34,
+    "minGap": 1.2,
+    "scales": [
+      1.0,
+      1.18
+    ],
+    "emphasisScale": 1.22
+  },
+  "look": {
+    "grade": "contrast(1.2) saturate(1.15) brightness(0.8)",
+    "tint": {
+      "color": "#1b2bff",
+      "blend": "soft-light",
+      "opacity": 0.14
+    },
+    "vignette": 0.55,
+    "grain": 0.03,
+    "cleanScenes": true
+  },
+  "popcard": {
+    "w": 820,
+    "h": 760,
+    "y": 340,
+    "object": true,
+    "objectFilter": "grayscale(1) sepia(1) hue-rotate(185deg) saturate(3.2) brightness(1.15)",
+    "glow": "#4F66FF",
+    "dim": 0.22
+  },
+  "master": {
+    "lufs": -14,
+    "ratio": 1.5,
+    "threshold": -20
+  },
+  "sfxProfile": "standard",
+  "director": {
+    "style": "Neon Book: the Iman Gadzhi shorts look. A dark, neon-lit talking head (blue and red light), bold white caps captions with ONE glowing blue word per line, and the explainer moments shown as glowing objects on a black stage. Confident, premium, fast but clean.",
+    "captions": "captions.heroes: the number or the money word of each line (never filler). Caps, centred, under the chin.",
+    "objects": "2-3 popcard beats per 30 s: an object PNG with a transparent background (assets/*.png: laptop, hourglass, calendar, book, phone) in object mode (no frame, tinted blue, glowing) on the dimmed, defocused camera, with a short white label (a price, a number, 2-4 words: '$11.99', '2 HOURS / WEEK'). 1.2-2.0 s each, on the noun as it is spoken. Objects only (tools, things, symbols); never an illustration of people.",
+    "numbers": "Spoken numbers become stats badges (bg accent, 1-2 badges, a short label) or a big count-up: '500 employees', '1,000 hours'. One per 15 s at most.",
+    "transitions": "ONE starflash per reel at the turn (problem -> answer), 0.6-0.8 s, no field. End on a starflash with field ['#0B1C8F', '#1E7BFF'] and the brand or CTA as text (1.4-2 s), when the reel has an outro.",
+    "rhythm": "cadence.targetPerMin fills the gaps between scenes with punch-ins; keep scenes evenly spread, no more than one every 3 s.",
+    "limits": {
+      "scenes_per_min": 14
+    },
+    "dont": "No side-by-side split, no 'IMAN GADZHI' or editor labels, no other creator's name or logo. No red text."
+  }
+}

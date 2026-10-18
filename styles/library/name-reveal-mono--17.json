@@ -1,0 +1,65 @@
+{
+  "_about": "Name Reveal Mono variant from Top-100 rank 17 (r25, snippco, Indonesian talking head, score 8): dark moody close-up, captions in a white SERIF (sentence case) with ONE bold-italic keyword glowing red (sometimes green), blur refocus on hand gestures, and one bright paper cut-in where the speaker sits in a retro TV on a white page with a red question word ('BELUM?'). Contrast of moods: dark plate vs one white page.",
+  "extends": "library/name-reveal-mono",
+  "matte": false,
+  "brand": {
+    "accent": "#E3262E",
+    "accentDark": "#A8141A"
+  },
+  "captions": {
+    "smallSerif": true,
+    "heroItalic": true,
+    "heroColor": "#FF3B3B",
+    "lowercase": false,
+    "smallSize": 62,
+    "heroSize": 120,
+    "fixedY": 1250,
+    "heroGlow": "#FF3B3B"
+  },
+  "look": {
+    "grade": "contrast(1.16) saturate(0.85) brightness(0.74)",
+    "tint": {
+      "color": "#2a1a14",
+      "blend": "soft-light",
+      "opacity": 0.1
+    },
+    "vignette": 0.46,
+    "grain": 0.05,
+    "refocus": {
+      "blur": 18,
+      "dur": 0.32
+    },
+    "cleanScenes": true
+  },
+  "monochrome": {
+    "cutawayGrade": "saturate(0.9) contrast(1.15) brightness(0.85)",
+    "wordCard": {
+      "bg": "paper",
+      "size": 120
+    }
+  },
+  "director": {
+    "opening": "No behind beat; open on the hook with a red bold-italic hero.",
+    "captions": "captions.heroes: one hero per sentence, bold italic red (heroColor). Lead words small white serif, sentence case.",
+    "wordcards": "ONE wordpage with bg paper (white page, red words via brand.accent) on the question word, 0.6-1.0 s, uppercase in captions.fixes if needed. Retro TV frame: engine gap (use device scene only if it fits)."
+  },
+  "master": {
+    "lufs": -11.3,
+    "ratio": 1.0,
+    "threshold": -20
+  },
+  "cadence": {
+    "every": 1.9,
+    "minGap": 2.2,
+    "scales": [
+      1.0,
+      1.4
+    ],
+    "emphasisScale": 1.4,
+    "burst": {
+      "count": 5,
+      "gap": 0.25,
+      "hold": 2.0
+    }
+  }
+}

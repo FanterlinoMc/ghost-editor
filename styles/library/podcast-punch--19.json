@@ -1,0 +1,16 @@
+{
+  "_about": "Podcast Punch / Yellow Stack (v1, 5 Oct 2026). Ref rank 19 (r31), editor drive (client). Anchor. Bold lowercase white lead words stacked over one yellow key word; one yellow script word; red gradient flash on section joins; film b-roll in floating rounded cards with the caption on the card.",
+  "extends": "library/podcast-punch",
+  "leaks": {
+    "every": 6,
+    "color": "235,40,40"
+  },
+  "cadence": {
+    "every": 2.2
+  },
+  "master": {
+    "lufs": -14,
+    "ratio": 1.2,
+    "threshold": -30
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "_about": "Grid Paper Editorial variant: ref rank 73 (mirvogue): motion-design magazine collage, colour blocks (magenta/orange), heavy grain, glitch transitions; more graphic than talking head.",
+  "extends": "library/grid-paper-editorial",
+  "brand": {
+    "accent": "#E0337A",
+    "accentDark": "#A11F57"
+  },
+  "pageScreen": true,
+  "sceneIn": "glitch",
+  "scenes": {
+    "default_in": "glitch"
+  },
+  "look": {
+    "grade": "contrast(1.14) saturate(1.15) brightness(0.92)",
+    "tint": {
+      "color": "#3a1a4a",
+      "blend": "soft-light",
+      "opacity": 0.14
+    },
+    "vignette": 0.3,
+    "grain": 0.09
+  },
+  "cadence": {
+    "every": 0.9,
+    "minGap": 0.6
+  },
+  "master": {
+    "lufs": -17.1,
+    "ratio": 2,
+    "threshold": -20
+  },
+  "_round3": "tweak (6 Oct, measure v2): punch-in cadence {'every': 1.9, 'minGap': 0.9} -> {'every': 0.9, 'minGap': 0.6}"
+}
