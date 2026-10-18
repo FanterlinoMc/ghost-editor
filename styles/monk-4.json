@@ -1,0 +1,5 @@
+{
+  "_about": "The Monk 4: Monk 3 plus Ahmed's Monk 3.1 master recipe (phantasic ff71824, 9 Oct 2026), opt-in keys only: -15 LUFS, ratio 2, threshold -18, true-peak ceiling -3.5 as postLimit (the fork's name for his `tp`). Apply with `master.py --from-json build/master.json`. His Monk has no audio fade, so none is set here (master.fadeOut is available to a reel that wants one). Leaves monk and monk-3 untouched.",
+  "extends": "monk-3",
+  "master": { "lufs": -15, "ratio": 2, "threshold": -18, "postLimit": -3.5 }
+}

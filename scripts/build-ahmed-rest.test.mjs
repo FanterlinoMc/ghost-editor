@@ -154,6 +154,52 @@ print("pillar ok")
     check("prep.sh: STABILIZE=1 runs vidstab (smoothing and tripod options), the normalised talk.mp4 still comes out");
   }
 
+  // ================= master.fadeOut / fadeEnd -> build/master.json, master.py --fadeout / --fadeend / --from-json =================
+  const masterOf = (d) => JSON.parse(fs.readFileSync(path.join(d, "build", "master.json"), "utf8"));
+  dir = project({ style: "headline-3" });
+  build(dir);
+  let mj = masterOf(dir);
+  assert.equal(mj.fadeOut, 0.35); assert.equal(mj.postLimit, -3); assert.equal(mj.lufs, -15);
+  const tail = JSON.parse(fs.readFileSync(path.join(dir, "build", "tail.json"), "utf8"));
+  assert.ok(Math.abs(mj.fadeEnd - (tail.speech + 0.06)) < 0.002, `fadeEnd is speech end + 0.06 (${mj.fadeEnd} vs ${tail.speech})`);
+  check("headline-3: master.fadeOut writes fadeEnd = speech end + 0.06 into build/master.json");
+  dir = project({ style: "monk-4" });
+  build(dir);
+  assert.deepEqual(masterOf(dir), { lufs: -15, ratio: 2, threshold: -18, postLimit: -3.5 }, "no fadeOut: the style's master, as is");
+  dir = project({ style: "headline-2" });
+  build(dir);
+  assert.ok(!fs.existsSync(path.join(dir, "build", "master.json")), "headline-2 sets no master");
+  check("monk-4: master without fadeOut is written as is; headline-2 writes no master.json");
+
+  const anyPython = ["py", "python3", "python"].find((c) => spawnSync(c, ["-c", "1"], { stdio: "ignore" }).status === 0);
+  if (!anyPython) console.log("skip  master.py: no python");
+  else {
+    const MASTER = path.join(HERE, "master.py");
+    ff("-f", "lavfi", "-i", "testsrc2=size=108x192:rate=30:duration=4", "-f", "lavfi", "-i", "sine=frequency=300:duration=4", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", path.join(root, "m.mp4"));
+    const rms = (file, a, b) => {
+      const raw = execFileSync("ffmpeg", ["-v", "error", "-i", file, "-ss", String(a), "-t", String(b - a), "-ac", "1", "-ar", "16000", "-f", "f32le", "-"], { maxBuffer: 1 << 26 });
+      const f = new Float32Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.length - (raw.length % 4)));
+      return Math.sqrt(f.reduce((s, x) => s + x * x, 0) / Math.max(1, f.length));
+    };
+    const mast = (out, ...args) => { const r = spawnSync(anyPython, [MASTER, path.join(root, "m.mp4"), path.join(root, out), ...args], { encoding: "utf8" }); assert.equal(r.status, 0, r.stderr + r.stdout); };
+    const at = (f, a, b) => rms(path.join(root, f), a, b);
+    mast("m-plain.mp4");
+    mast("m-fade.mp4", "--fadeout", "0.6", "--fadeend", "3");
+    const plainEnd = at("m-plain.mp4", 3.3, 3.9), plainMid = at("m-plain.mp4", 1, 1.5);
+    assert.ok(plainEnd > 0.5 * plainMid, `no flag: no fade (${plainEnd} vs ${plainMid})`);
+    const fMid = at("m-fade.mp4", 1, 1.5), fFade = at("m-fade.mp4", 2.7, 3), fAfter = at("m-fade.mp4", 3.2, 3.9);
+    assert.ok(fMid > 0.05, "audio before the fade is intact");
+    assert.ok(fFade < 0.75 * fMid, `the fade is under way before fadeend (${fFade} vs ${fMid})`);
+    assert.ok(fAfter < 0.02 * fMid, `silence after fadeend (${fAfter})`);
+    check("master.py: --fadeout/--fadeend fade the audio to silence at fadeend; no flag, no fade");
+    fs.writeFileSync(path.join(root, "master.json"), JSON.stringify({ lufs: -15, ratio: 2, threshold: -18, postLimit: -3, fadeOut: 0.6, fadeEnd: 3 }));
+    mast("m-json.mp4", "--from-json", path.join(root, "master.json"));
+    assert.ok(at("m-json.mp4", 3.2, 3.9) < 0.02 * fMid, "--from-json applies fadeOut / fadeEnd");
+    mast("m-json2.mp4", "--from-json", path.join(root, "master.json"), "--fadeout", "0");
+    assert.ok(at("m-json2.mp4", 3.3, 3.9) > 0.5 * plainMid, "an explicit flag beats the file");
+    check("master.py: --from-json reads build/master.json, explicit flags win");
+  }
+
   console.log("\nall build-ahmed-rest checks passed");
 } catch (e) {
   console.error(e);

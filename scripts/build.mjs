@@ -2502,8 +2502,10 @@ if (spec.music) {
 }
 
 // style.master ({ lufs, ratio, threshold, lra, postLimit }) is Ahmed's final-master recipe (opt-in; mini2): written to build/master.json
-// for a caller to hand to scripts/master.py (--lufs --ratio --threshold --lra --post-limit). Nothing in the fork reads it yet.
-if (spec.master) fs.writeFileSync(path.join(proj, "build", "master.json"), JSON.stringify(spec.master));
+// for a caller to hand to scripts/master.py (--lufs --ratio --threshold --lra --post-limit), or `master.py --from-json build/master.json`.
+// master.fadeOut (opt-in; Ahmed's Monk 3 / Headline fix, phantasic 2023064): master.py fades the VOICE out, so the fade must END where
+// speech ends (fadeEnd), not over the silent outro tail; without fadeOut the file is exactly what it was.
+if (spec.master) fs.writeFileSync(path.join(proj, "build", "master.json"), JSON.stringify(spec.master.fadeOut ? { ...spec.master, fadeEnd: Math.round((SPEECH + 0.06) * 1000) / 1000 } : spec.master));
 
 // Explainer (opt-in beats / scenes; hand port of phantasic engine/core): the CSS of the `effect` hook title and the `cutout` concept page.
 // Written into index.html ONLY when such a beat / scene exists, so every other reel is byte-identical.

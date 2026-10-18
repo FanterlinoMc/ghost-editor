@@ -1,0 +1,5 @@
+{
+  "_about": "The Headline 3: Headline 2 plus the mastering half of Ahmed's Headline 2.1 / Monk 3 fix (phantasic 2023064, 9 Oct 2026), opt-in keys only. Adds his master recipe (-15 LUFS, ratio 2, threshold -18, true-peak ceiling -3.0 as postLimit, the fork's name for his `tp`) and master.fadeOut 0.35: build/master.json then carries fadeOut and fadeEnd (= where speech ends), and `master.py --from-json build/master.json` fades the voice out to that point instead of cutting it. Leaves headline and headline-2 untouched. The caption dedupe of that commit is already in headline-2.",
+  "extends": "headline-2",
+  "master": { "lufs": -15, "ratio": 2, "threshold": -18, "postLimit": -3.0, "fadeOut": 0.35 }
+}
