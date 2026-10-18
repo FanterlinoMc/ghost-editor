@@ -34,7 +34,7 @@
     }
   },
   "sfxProfile": "restrained",
-  "music": {
+  "music": { "optional": true,
     "id": "auto",
     "db": -18,
     "fadeOut": 0.4

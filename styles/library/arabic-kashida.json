@@ -33,7 +33,7 @@
   "sceneIn": "cut",
   "sceneOut": "cut",
   "sfxProfile": "restrained",
-  "music": {
+  "music": { "optional": true,
     "id": "silent-descent",
     "db": -16,
     "fadeOut": 0.4

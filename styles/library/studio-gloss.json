@@ -52,7 +52,7 @@
     "complete": true,
     "heroDb": -14
   },
-  "music": {
+  "music": { "optional": true,
     "id": "alif-match-a",
     "db": -16,
     "fadeIn": 0,

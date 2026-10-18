@@ -59,7 +59,7 @@
     "zoom": false,
     "heroDb": -14
   },
-  "music": {
+  "music": { "optional": true,
     "id": "alif-match-a",
     "db": -14,
     "fadeOut": 0.4,

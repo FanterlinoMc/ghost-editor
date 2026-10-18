@@ -1,4 +1,5 @@
 {
+  "music": { "optional": true },
   "_about": "Sky Script v1 (7 Oct 2026), trained from Top-100 #1 (r11, Mohmd.Visuals, podcast clip, score 9). A clean podcast talking head with stacked mixed-size ITALIC captions (tiny white italic lead words, one huge bold italic hero word in cyan), cut with light sky-blue gradient pages: a 3D object with a small italic label, photo cards with an orange pill tag (one card per spoken item, swapped on the word), and a bold italic word card in navy. Fast but airy: a picture change every ~1.7 s. Natural colour, no heavy grade.",
   "extends": "library/podcast-punch",
   "brand": {

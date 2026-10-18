@@ -48,7 +48,7 @@
   "sound": {
     "heroDb": -14
   },
-  "music": {
+  "music": { "optional": true,
     "id": "silent-descent",
     "db": -18,
     "fadeIn": 0.5,

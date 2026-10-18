@@ -45,7 +45,7 @@
   "sound": {
     "heroDb": -14
   },
-  "music": {
+  "music": { "optional": true,
     "db": -15,
     "fadeOut": 0.4
   },

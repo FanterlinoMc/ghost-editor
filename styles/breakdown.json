@@ -24,7 +24,7 @@
   "sceneOut": "cut",
   "sfxProfile": "restrained",
   "sound": { "lines": false, "nametag": false, "objects": false, "paperIn": false, "pen": false, "zoom": false, "complete": false },
-  "music": { "id": "alif-match-b", "fallback": "lo-fi-02", "db": -13, "fadeIn": 0, "fadeOut": 1.2, "drops": false, "reveal": false, "payoff": false },
+  "music": { "optional": true, "id": "alif-match-b", "fallback": "lo-fi-02", "db": -13, "fadeIn": 0, "fadeOut": 1.2, "drops": false, "reveal": false, "payoff": false },
   "look": { "grade": "none", "vignette": 0, "grain": 0, "cleanScenes": true },
   "zoom": { "origin": "50% 38%", "base": 1.06 },
   "outro": 0.15,

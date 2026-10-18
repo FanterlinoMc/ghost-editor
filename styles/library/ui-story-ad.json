@@ -60,7 +60,7 @@
     "popDb": -4,
     "complete": false
   },
-  "music": {
+  "music": { "optional": true,
     "id": "alif-match-a",
     "db": -20,
     "fadeIn": 0,

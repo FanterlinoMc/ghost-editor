@@ -63,7 +63,7 @@
   "sound": {
     "heroDb": -14
   },
-  "music": {
+  "music": { "optional": true,
     "db": -16,
     "fadeOut": 0.4,
     "id": "deep-techno-ambience"

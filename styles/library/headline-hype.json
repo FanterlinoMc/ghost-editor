@@ -42,7 +42,7 @@
     "complete": true,
     "popDb": -6
   },
-  "music": {
+  "music": { "optional": true,
     "id": "brainiac",
     "db": -20,
     "fadeIn": 0,

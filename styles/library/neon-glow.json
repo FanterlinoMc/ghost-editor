@@ -42,7 +42,7 @@
     "color": "255,244,226"
   },
   "sfxProfile": "standard",
-  "music": {
+  "music": { "optional": true,
     "id": "cyberpunk-city",
     "db": -20,
     "fadeOut": 0.4

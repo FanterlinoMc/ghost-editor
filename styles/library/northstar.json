@@ -1,4 +1,5 @@
 {
+  "music": { "optional": true },
   "_about": "Northstar v1 (7 Oct 2026), trained from Top-100 #2 (r14, symz.mov, podcast/motivational, score 9). A warm, tight podcast plate with stacked mixed-size captions (tiny lead words, ONE big cream bold word, an elegant serif word for the emotional beat, a handwriting phrase to close, diagonal word stairs on short asides), cut fast with cinematic stills (a starry sky, a lone figure at sunset, a dark dramatic scene) that keep the captions over them, and a light paper concept page where the key word cycles through typefaces over an engraving (brain, gears). Picture change about every second in the busiest stretches.",
   "extends": "library/monochrome-cinema--2",
   "captions": {
