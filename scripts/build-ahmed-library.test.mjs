@@ -18,6 +18,7 @@ const SEC = 12, FPS = 30;
 const mk = (name, freq) => ff("-f", "lavfi", "-i", `testsrc2=size=108x192:rate=${FPS}:duration=${SEC}`, "-f", "lavfi", "-i", `sine=frequency=${freq}:duration=${SEC}`,
   "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-c:a", "aac", "-ac", "2", "-shortest", path.join(root, name));
 mk("talk.mp4", 200); mk("talk-1.mp4", 300);
+ff("-f", "lavfi", "-i", "color=c=0x3060c0:size=64x64:duration=0.1", "-frames:v", "1", path.join(root, "pic.png"));
 
 const text = "why does money matter so much. because time is remarkable and scary. the remarkable thing is scary. a community far away lives on an isolated island. money and time again. remarkable people keep going. it is scary but remarkable. thank you for watching.".split(" ");
 const wordsFor = (n) => ({ segments: [{ start: 0, end: SEC, words: Array.from({ length: n }, (_, i) => ({ word: text[i % text.length], start: +(0.3 + i * 0.3).toFixed(2), end: +(0.55 + i * 0.3).toFixed(2) })) }] });
@@ -30,6 +31,7 @@ function project(reel, { second = false, matte = false, face1 = true } = {}) {
   fs.mkdirSync(path.join(dir, "assets"), { recursive: true });
   fs.mkdirSync(path.join(dir, "build"), { recursive: true });
   fs.copyFileSync(path.join(root, "talk.mp4"), path.join(dir, "assets", "talk.mp4"));
+  fs.copyFileSync(path.join(root, "pic.png"), path.join(dir, "assets", "pic.png"));
   fs.writeFileSync(path.join(dir, "build", "words.whisper.json"), JSON.stringify(wordsFor(second ? 18 : 38)));
   fs.writeFileSync(path.join(dir, "build", "face.json"), JSON.stringify(faceAt(340, 740)));
   if (second) {
@@ -114,6 +116,47 @@ try {
   assert.notEqual(r.status, 0);
   assert.match(r.stderr + r.stdout, /spec\.matte with 2 sources is not supported/);
   check("matte on two recordings with no ground/stage: still refused");
+
+  // ================= beat types: boxline, like, label, pin, headpage, photostack, uicard, cover, starflash, whiteflash =================
+  const PIC = "assets/pic.png";
+  const LIB_BEATS = [
+    { type: "boxline", at: 1, to: 2.5, text: "why does money matter", quotes: true, label: "the host" },
+    { type: "like", at: 2.6, to: 4 },
+    { type: "label", at: 4, to: 5.5, text: "Chapter one" },
+    { type: "pin", at: 10, to: 11.5, text: "FOLLOW" },
+    { type: "headpage", at: 5.6, to: 7, src: PIC, pin: true, avatars: [{ src: PIC, at: 6 }] },
+    { type: "photostack", at: 7.1, to: 8.8, items: [{ src: PIC, label: "one" }, { src: PIC, label: "two", at: 8 }] },
+    { type: "uicard", at: 8.9, to: 10, src: PIC, pins: [{ x: 30, y: 40, at: 9.2 }] },
+    { type: "cover", at: 0.2, to: 1, y0: 1500, y1: 1900, color: "#101010" },
+    { type: "starflash", at: 11, to: 11.8, field: ["#7a1020", "#3a0810"], text: "THE END" },
+    { type: "whiteflash", at: 3, to: 3.4 },
+  ];
+  dir = project({ beats: LIB_BEATS });
+  log = build(dir); h = html(dir);
+  for (const sel of ["bx", "bx-lab", "lk", "lbl", "lbl-box", "pin"]) assert.ok(new RegExp(`^  \\.${sel} \\{`, "m").test(h), `css .${sel}`);
+  assert.match(h, /class="ov bx" style="left:70px;top:1120px;width:640px;font-size:54px;transform:rotate\(-1\.5deg\)">‘WHY DOES MONEY MATTER’/, "boxline: uppercased quote in the white box");
+  assert.ok(h.includes("👍 Liked") && h.includes('tl.set("#b1-b", { display: "inline" }'), "like: the pill flips to Liked on the click");
+  assert.ok(h.includes("lbl-txt") && h.includes('id="b2-c0"'), "label: letter by letter");
+  assert.ok(h.includes('class="ov pin"') && h.includes("FOLLOW"), "pin");
+  assert.ok(h.includes("M12 0C5.4 0 0 5.2") && count(h, /id="b4-w\d+"/g) >= 2, "headpage: typed-on spoken words and a pin");
+  assert.ok(h.includes('id="b5-fr"') && h.includes('id="b5-lt1"') && h.includes("two"), "photostack: frame and two labelled photos");
+  assert.ok(h.includes('id="b6-in" class="ov"') && h.includes('id="b6-pn0"'), "uicard with a pin");
+  assert.ok(h.includes("linear-gradient(180deg, transparent 0, #101010 120px"), "cover band with a feathered top");
+  assert.ok(h.includes('id="b8-f"') && h.includes("THE END") && h.includes('id="b8-s"'), "starflash with a colour field and text");
+  assert.ok(h.includes('id="b9-in" style="position:absolute;inset:0;background:#fff"'), "whiteflash");
+  // full-page beats and covers have no scale-out exit tween; the others do
+  for (const id of ["b4", "b5", "b9", "b7"]) assert.ok(!new RegExp(`tl\\.to\\("#${id}-in", \\{ autoAlpha: 0, scale: 0\\.9, duration: 0\\.18`).test(h), `no scale exit on #${id}`);
+  assert.ok(/tl\.to\("#b0-in", \{ autoAlpha: 0, scale: 0\.9, duration: 0\.18/.test(h), "boxline keeps the normal exit");
+  const et = JSON.parse(fs.readFileSync(path.join(dir, "build", "edit_truth.json"), "utf8"));
+  assert.deepEqual(et.beats.map((b) => b.type).sort(), LIB_BEATS.map((b) => b.type).sort(), "edit_truth lists the new types");
+  assert.deepEqual(Object.keys(et.beats[0]), ["type", "kind", "at", "to", "in", "out"], "edit_truth beat shape unchanged");
+  check("beat types: boxline, like, label, pin, headpage, photostack, uicard, cover, starflash, whiteflash (+ edit_truth)");
+
+  // gating: none of that CSS appears on a plain reel
+  dir = project({ beats: [{ type: "popcard", at: 2, to: 4, src: PIC }] });
+  build(dir); h = html(dir);
+  for (const sel of ["bx", "lk", "lbl", "pin"]) assert.ok(!new RegExp(`^  \\.${sel} \\{`, "m").test(h), `no .${sel} css without the beat`);
+  check("beat CSS is only written when the beat exists");
 
   console.log("\nall build-ahmed-library tests passed");
 } finally {

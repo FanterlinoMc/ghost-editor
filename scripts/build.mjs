@@ -1221,6 +1221,7 @@ const enter = (sel, t, kind = "pop") => kind === "slide"
 const exit = (sel, end) => `tl.to("${sel}", { autoAlpha: 0, scale: 0.9, duration: 0.18, ease: "power2.in" }, ${r3(end - 0.22)});`;
 const slotUsed = [];
 const hiddenCaps = [];
+const uiRects = [];   // uicard rectangles (UI Story Ad #10), so podcast captions sit above them
 // reel.layers[]: a motion or text layer with hideCaptions:true hides the captions while it is up, the way a
 // beat's hideCaptions does. Layer times are output seconds, so a section build (which rebases takes)
 // rebases them with the same offset renderLayer() uses.
@@ -1290,7 +1291,7 @@ for (const b of beatsList) {
   if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(EB(o, "at") - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
   beatSpans.push({ t0, t1 });
   const dur = r3(t1 - t0);
-  if (["endcard", "scene", "motion", "ground"].includes(b.type) && t0 <= SPEECH + 1e-3 && t1 >= TOTAL - 0.5 / FPS) outroCovered = true;
+  if (["endcard", "scene", "motion", "ground", "headpage", "photostack", "starflash"].includes(b.type) && (b.type !== "starflash" || b.field) && t0 <= SPEECH + 1e-3 && t1 >= TOTAL - 0.5 / FPS) outroCovered = true;
   const inSlot = ["emoji", "logo", "meme", "icon"].includes(b.type);
   if (inSlot) {
     for (const [s, e] of slotUsed) if (t0 < e && t1 > s) warn.push(`reaction slot double-booked at ${b.at} (${b.type})`);
@@ -1720,6 +1721,171 @@ for (const b of beatsList) {
       beatSfx(b, t0, "pop-whoosh-light", "pop card", { db: -4 });
       break;
     }
+    // ---- R1 B1 port of phantasic engine/core (origin/main): opt-in beat types of Ahmed's library bundle -----------------------------
+    // uicard / photostack / headpage / cover / whiteflash (UI Story Ad #10), starflash (Iman Gadzhi shorts transition), boxline / like
+    // (Podcast), label / pin (Breakdown). Additive: no existing case is touched. Page CSS: LIBRARY_CSS, written only when such a beat exists.
+    case "uicard": {
+      // UI Story Ad #10 (opt-in beat): a white rounded card holding a picture (a map, a screen) pops up over the lower
+      // half while the speaker keeps talking; optional yellow pins drop on cue. {at, to, src|art, y, w, h, pad, fit, pins: [{x, y, at}] (% of the card)}
+      const img = b.art ? artAsset(b.art) : userAsset(b.src);
+      const W = b.w ?? 840, H = b.h ?? 480, y = b.y ?? 1060, pad = b.pad ?? 30;
+      const pins = (b.pins || []).map((pn, k) => {
+        const at = r3(Math.max(t0, pn.at != null ? E(pn.at, "pin") : t0 + 0.4 + k * 0.15));
+        tl.push(`ft("#${id}-pn${k}", { autoAlpha: 0, y: -40, scale: 0.4 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.3, ease: "back.out(2.6)" }, ${at});`);
+        return `<svg id="${id}-pn${k}" viewBox="0 0 24 32" style="position:absolute;left:calc(${pn.x}% - 22px);top:calc(${pn.y}% - 58px);width:44px;height:58px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.35))"><path d="M12 0C5.4 0 0 5.2 0 11.7 0 20.5 12 32 12 32s12-11.5 12-20.3C24 5.2 18.6 0 12 0z" fill="${pn.color ?? "#F5D90A"}"/><circle cx="12" cy="11.5" r="4.6" fill="#fff"/></svg>`;
+      }).join("");
+      uiRects.push({ t0, t1, y0: y, y1: y + H });   // podcast captions step above the card
+      inner = `<div id="${id}-in" class="ov" style="position:absolute;left:${Math.round(540 - W / 2)}px;top:${y}px;width:${W}px;height:${H}px;border-radius:${b.radius ?? 58}px;background:#fff;box-shadow:0 26px 64px rgba(0,0,0,.5);overflow:hidden"><img src="${img}" style="position:absolute;left:${pad}px;top:${pad}px;width:${W - 2 * pad}px;height:${H - 2 * pad}px;object-fit:${b.fit ?? "contain"}"/>${pins}</div>`;
+      tl.push(`ft("#${id}-in", { autoAlpha: 0, scale: 0.6, y: 80, filter: "blur(10px)" }, { autoAlpha: 1, scale: 1, y: 0, filter: "blur(0px)", duration: 0.36, ease: "back.out(1.6)" }, ${t0});`);
+      tl.push(`tl.to("#${id}-in", { autoAlpha: 0, scale: 0.86, filter: "blur(8px)", duration: 0.2, ease: "power2.in" }, ${r3(t1 - 0.2)});`);
+      beatSfx(b, t0, "pop-whoosh-light", "ui card", { db: -5 });
+      break;
+    }
+    case "photostack": {
+      // UI Story Ad #10 (opt-in beat): a white page where a grey rounded frame (slightly tilted back) holds a photo
+      // with a dark label pill on its lower edge, over a soft blue disc that pulses on each swap; photos and labels
+      // change on cue. {at, to, items: [{src|art, label, at}], disc}
+      const fw = b.w ?? 700, fh = b.h ?? 600, cy0 = b.y ?? 960;
+      const pics = b.items.map((it, k) => {
+        const at = r3(Math.max(t0, it.at != null ? E(it.at, "photostack item") : t0 + k * 1.2));
+        const src = it.art ? artAsset(it.art) : userAsset(it.src);
+        if (k > 0) {
+          tl.push(`ft("#${id}-ph${k}", { autoAlpha: 0, scale: 1.08 }, { autoAlpha: 1, scale: 1, duration: 0.22, ease: "power2.out" }, ${at});`);
+          tl.push(`ft("#${id}-lb${k}", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.01 }, ${at});`);
+          tl.push(`tl.set("#${id}-lb${k - 1}", { autoAlpha: 0 }, ${at});`);
+          tl.push(`ft("#${id}-fr", { scale: 0.94 }, { scale: 1, duration: 0.3, ease: "back.out(2.4)" }, ${at});`);
+          beatSfx(it, at, "pop", "photostack swap", { db: -8 });
+        }
+        tl.push(`ft("#${id}-dk", { autoAlpha: 0, scale: 0.7 }, { autoAlpha: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, ${at});`);
+        tl.push(`tl.to("#${id}-dk", { autoAlpha: 0, scale: 0.85, duration: 0.35, ease: "power2.in" }, ${r3(at + 0.55)});`);
+        tl.push(`ft("#${id}-lt${k}", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.35, ease: "power2.out" }, ${r3(at + 0.08)});`);
+        return [`<img id="${id}-ph${k}" src="${src}" style="position:absolute;left:24px;top:24px;width:${fw - 48}px;height:${fh - 150}px;object-fit:cover;border-radius:40px${k ? ";opacity:0" : ""}"/>`,
+          `<div id="${id}-lb${k}" style="position:absolute;left:44px;right:44px;bottom:30px;height:78px;border-radius:40px;background:#17171a;display:flex;align-items:center;justify-content:center${k ? ";opacity:0" : ""}"><span id="${id}-lt${k}" style="font:600 32px/1 Inter, system-ui, sans-serif;color:#fff;letter-spacing:-0.02em;white-space:nowrap">${esc(it.label ?? "")}</span></div>`];
+      });
+      inner = `<div id="${id}-in" style="position:absolute;inset:0;background:#fff">`
+        + `<div id="${id}-dk" style="position:absolute;left:${540 - fw * 0.58}px;top:${cy0 - fw * 0.42}px;width:${fw * 1.16}px;height:${fw * 0.84 + fh * 0.4}px;border-radius:50%;background:radial-gradient(ellipse at 50% 55%, ${b.disc ?? "#2F6BFF"} 0 62%, rgba(47,107,255,0) 72%)"></div>`
+        + `<div style="position:absolute;inset:0;perspective:1400px"><div id="${id}-fr" style="position:absolute;left:${540 - fw / 2}px;top:${cy0 - fh / 2}px;width:${fw}px;height:${fh}px;border-radius:64px;background:#E8E8EB;box-shadow:0 30px 60px rgba(0,0,0,.18);transform:rotateX(9deg);overflow:hidden">${pics.map((x) => x[0]).join("")}${pics.map((x) => x[1]).join("")}</div></div></div>`;
+      // the frame is on the page from its first frame (a fade-in left one empty white frame) and springs up into place
+      tl.push(`ft("#${id}-fr", { autoAlpha: 1, scale: 0.82, y: 50 }, { autoAlpha: 1, scale: 1, y: 0, duration: 0.32, ease: "back.out(1.8)" }, ${t0});`);
+      hiddenCaps.push([t0, r3(t1 + 0.06)]);   // the captions come back after the page, not over its last frames
+      beatSfx(b, t0, "pop-whoosh-light", "photostack", { db: -5 });
+      break;
+    }
+    case "headpage": {
+      // UI Story Ad #10 (opt-in beat): the white opening page. The spoken words type on at the top in small dark
+      // sans, a picture sits in a soft green glow in the middle (a map, an object) with an optional red pin, and
+      // round avatars with a blue star badge pop in around it. {at, to, src|art, glow, pin, avatars: [{src, at}]}
+      const hw = words.filter((w) => w.start >= t0 - 0.02 && w.start < t1);
+      const head = hw.map((w, k) => {
+        tl.push(`ft("#${id}-w${k}", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.05 }, ${r3(Math.max(t0, w.start - 0.02))});`);
+        return `<span id="${id}-w${k}" style="opacity:0">${esc(w.word)} </span>`;
+      }).join("");
+      const img = b.src || b.art ? (b.art ? artAsset(b.art) : userAsset(b.src)) : null;
+      const ring = [[-330, -250], [330, -250], [-360, 190], [360, 190], [0, 330], [-170, -360], [170, -360]];
+      const av = (b.avatars || []).map((a, k) => {
+        const at = r3(Math.max(t0, a.at != null ? E(a.at, "avatar") : t0 + 0.5 + k * 0.25));
+        const [dx, dy] = a.pos ?? ring[k % ring.length];
+        tl.push(`ft("#${id}-a${k}", { autoAlpha: 0, scale: 0.3 }, { autoAlpha: 1, scale: 1, duration: 0.3, ease: "back.out(2.6)" }, ${at});`);
+        beatSfx(a, at, "pop", "avatar", { db: -10 });
+        return `<div id="${id}-a${k}" style="position:absolute;left:${540 + dx - 78}px;top:${(b.y ?? 900) + dy - 78}px;width:156px;height:156px"><img src="${userAsset(a.src)}" style="width:156px;height:156px;border-radius:50%;object-fit:cover;border:6px solid #fff;box-shadow:0 8px 22px rgba(0,0,0,.25)"/><svg viewBox="0 0 24 24" style="position:absolute;left:58px;bottom:-16px;width:40px;height:40px"><circle cx="12" cy="12" r="11" fill="#2F6BFF" stroke="#fff" stroke-width="2"/><path d="M12 6.2l1.7 3.6 3.9.5-2.9 2.7.8 3.9L12 15l-3.5 1.9.8-3.9-2.9-2.7 3.9-.5z" fill="#fff"/></svg></div>`;
+      }).join("");
+      const cy = b.y ?? 900;
+      inner = `<div id="${id}-in" style="position:absolute;inset:0;background:#fff">`
+        + `<div style="position:absolute;left:150px;right:150px;top:${b.textY ?? 360}px;text-align:center;font:600 ${b.textSize ?? 44}px/1.18 Inter, system-ui, sans-serif;color:#141414;letter-spacing:-0.03em">${head}</div>`
+        + `<div id="${id}-gl" style="position:absolute;left:${540 - 400}px;top:${cy - 270}px;width:800px;height:540px;border-radius:50%;background:radial-gradient(ellipse, ${b.glow ?? "#3CF06A"} 0 58%, rgba(60,240,106,0) 71%)"></div>`
+        + (img ? `<img id="${id}-im" src="${img}" style="position:absolute;left:${540 - (b.imgW ?? 520) / 2}px;top:${cy - (b.imgH ?? 420) / 2}px;width:${b.imgW ?? 520}px;height:${b.imgH ?? 420}px;object-fit:contain${b.imgBlend === false ? "" : ";mix-blend-mode:multiply"}"/>` : "")
+        + (b.pin ? `<svg id="${id}-pin" viewBox="0 0 24 32" style="position:absolute;left:${518}px;top:${cy - 90}px;width:44px;height:58px;filter:drop-shadow(0 4px 5px rgba(0,0,0,.35))"><path d="M12 0C5.4 0 0 5.2 0 11.7 0 20.5 12 32 12 32s12-11.5 12-20.3C24 5.2 18.6 0 12 0z" fill="#E5242B"/><circle cx="12" cy="11.5" r="4.6" fill="#fff"/></svg>` : "")
+        + av + `</div>`;
+      tl.push(`ft("#${id}-gl", { scale: 0.6, autoAlpha: 0 }, { scale: 1, autoAlpha: 1, duration: 0.4, ease: "back.out(1.6)" }, ${t0});`);
+      tl.push(`tl.to("#${id}-gl", { keyframes: [{ scale: 1.06, opacity: 0.75, duration: 0.8, ease: "sine.inOut" }, { scale: 1, opacity: 1, duration: 0.8, ease: "sine.inOut" }], repeat: ${Math.max(0, Math.floor((t1 - t0 - 0.4) / 1.6) - 1)} }, ${r3(t0 + 0.4)});`);
+      if (b.pin) tl.push(`ft("#${id}-pin", { autoAlpha: 0, y: -50 }, { autoAlpha: 1, y: 0, duration: 0.3, ease: "bounce.out" }, ${r3(t0 + 0.3)});`);
+      hiddenCaps.push([t0, r3(t1 + 0.06)]);
+      break;
+    }
+    case "cover": {
+      // opt-in content beat: hides something burned into the SOURCE (a lower-third, a subtitle) under a soft band in
+      // the colour of what is around it. {at, to, y0, y1, color, feather (px), opacity}
+      const y0 = b.y0 ?? 1450, y1 = b.y1 ?? 1920, f = b.feather ?? 120, col = b.color ?? "#0b0b0d";
+      inner = `<div id="${id}-in" style="position:absolute;left:0;right:0;top:${y0 - f}px;height:${y1 - y0 + f}px;opacity:${b.opacity ?? 0.96};background:linear-gradient(180deg, transparent 0, ${col} ${f}px, ${col} 100%)"></div>`;
+      tl.push(`ft("#${id}-in", { autoAlpha: 0 }, { autoAlpha: ${b.opacity ?? 0.96}, duration: 0.01 }, ${t0});`);
+      break;
+    }
+    case "whiteflash": {
+      // UI Story Ad #10 (opt-in beat): a quick white wash over the footage (the ref's cut between two ideas)
+      inner = `<div id="${id}-in" style="position:absolute;inset:0;background:${b.color ?? "#fff"}"></div>`;
+      tl.push(`ft("#${id}-in", { autoAlpha: 0 }, { autoAlpha: ${b.peak ?? 0.82}, duration: ${b.rise ?? 0.12}, ease: "power2.in" }, ${t0});`);
+      tl.push(`tl.to("#${id}-in", { autoAlpha: 0, duration: ${r3(Math.max(0.1, t1 - t0 - (b.rise ?? 0.12)))}, ease: "power2.out" }, ${r3(t0 + (b.rise ?? 0.12))});`);
+      beatSfx(b, t0, "whoosh", "white flash", { db: -8 });
+      break;
+    }
+    case "starflash": {
+      // a white four-point star bursts from the centre and floods the frame, then clears (the Iman Gadzhi shorts
+      // transition). With `field: [c1, c2]` the flash cuts to a colour field where the star settles as a mark and
+      // optional `text` lands. {at, to, color, y (% of height), field, text, textColor, textSize, textY}
+      const col = b.color ?? "#FFFFFF";
+      const star = `<svg id="${id}-s" viewBox="-50 -50 100 100" style="position:absolute;left:50%;top:${b.y ?? 50}%;width:600px;height:600px;margin:-300px 0 0 -300px;filter:drop-shadow(0 0 24px ${col}) drop-shadow(0 0 60px ${col})"><path d="M0,-50 C4,-8 8,-4 50,0 C8,4 4,8 0,50 C-4,8 -8,4 -50,0 C-8,-4 -4,-8 0,-50Z" fill="${col}"/></svg>`;
+      const field = b.field ? `<div id="${id}-f" style="position:absolute;inset:0;background:linear-gradient(180deg, ${b.field[0]} 0%, ${b.field[1] ?? b.field[0]} 100%)"></div>` : "";
+      const txt = b.text ? `<div id="${id}-t" style="position:absolute;left:0;right:0;top:${b.textY ?? 1150}px;text-align:center;font:900 ${b.textSize ?? 110}px/1 Inter, system-ui, sans-serif;letter-spacing:-0.03em;color:${b.textColor ?? "#fff"};text-shadow:0 0 30px rgba(255,255,255,.5)">${esc(b.text)}</div>` : "";
+      if (field) hiddenCaps.push([r3(t0 + 0.28), t1]);   // the brand card is clean: captions hide under it
+      inner = `${field}<div id="${id}-w" style="position:absolute;inset:0;background:${col}"></div>${star}${txt}`;
+      if (field) tl.push(`ft("#${id}-f", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.01 }, ${r3(t0 + 0.3)});`);
+      tl.push(`ft("#${id}-s", { scale: 0.05, rotation: -40, autoAlpha: 1 }, { scale: 1.6, rotation: 0, duration: 0.32, ease: "expo.out" }, ${t0});`);
+      tl.push(`ft("#${id}-w", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.12, ease: "power2.in" }, ${r3(t0 + 0.18)});`);
+      tl.push(`tl.to("#${id}-w", { autoAlpha: 0, duration: 0.3, ease: "power2.out" }, ${r3(t0 + 0.32)});`);
+      tl.push(`tl.to("#${id}-s", { scale: ${field ? 0.9 : 3.2}, autoAlpha: ${field ? 1 : 0}, duration: 0.45, ease: "power2.out" }, ${r3(t0 + 0.32)});`);
+      if (txt) tl.push(`ft("#${id}-t", { autoAlpha: 0, y: 40 }, { autoAlpha: 1, y: 0, duration: 0.35, ease: "expo.out" }, ${r3(t0 + 0.4)});`);
+      beatSfx(b, t0, "whoosh", "star flash", { db: -6 });
+      break;
+    }
+    case "boxline": {
+      // Podcast: a white box with black heavy caps (the hook question, a pull quote in quotes). It slaps in slightly
+      // tilted; an optional label (a name / title) sits off its corner with a hand-drawn arrow
+      const txt = (b.quotes ? `‘${b.text}’` : b.text).toUpperCase();  // the speaker's words, no added punctuation
+      const x = b.x ?? 70, y = b.y ?? 1120, w = b.w ?? 640;
+      const lab = b.label ? `<div id="${id}-lab" class="bx-lab" style="left:${x + w - 180}px;top:${y + (b.labelDy ?? 150)}px"><svg viewBox="0 0 80 60"><path d="M70 6 C 50 10, 20 20, 12 50" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M4 38 L12 52 L24 42" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${esc(b.label)}</span></div>` : "";
+      inner = `<div id="${id}-in" class="ov bx" style="left:${x}px;top:${y}px;width:${w}px;font-size:${b.size ?? 54}px;transform:rotate(${b.tilt ?? -1.5}deg)">${esc(txt)}</div>${lab}`;
+      tl.push(`ft("#${id}-in", { autoAlpha: 0, scale: 1.25, rotation: ${(b.tilt ?? -1.5) - 6} }, { autoAlpha: 1, scale: 1, rotation: ${b.tilt ?? -1.5}, duration: 0.18, ease: "back.out(2)" }, ${t0});`);
+      if (b.label) tl.push(`ft("#${id}-lab", { autoAlpha: 0, x: 20 }, { autoAlpha: 1, x: 0, duration: 0.25, ease: "power3.out" }, ${r3(t0 + 0.2)});`);
+      if (b.hideCaptions !== false) hiddenCaps.push([t0, t1]);
+      beatSfx(b, t0, "impact-1", "box line", { db: -8 });
+      break;
+    }
+    case "like": {
+      // Podcast: a Like pill pops up, a cursor glides in and clicks it (the pill flips to "Liked")
+      const x = b.x ?? 470, y = b.y ?? 1500;
+      inner = `<div id="${id}-in" class="ov lk" style="left:${x}px;top:${y}px"><span id="${id}-a">👍 Like</span><span id="${id}-b" style="display:none">👍 Liked</span></div><div id="${id}-cur" class="ov lk-cur" style="left:${x + 150}px;top:${y + 60}px"><svg viewBox="0 0 24 24"><path d="M5 2 L5 20 L10 15 L13 22 L16 21 L13 14 L20 14 Z" fill="#fff" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg></div>`;
+      tl.push(`ft("#${id}-in", { autoAlpha: 0, scale: 0.6 }, { autoAlpha: 1, scale: 1, duration: 0.2, ease: "back.out(2.4)" }, ${t0});`);
+      tl.push(`ft("#${id}-cur", { autoAlpha: 0, x: 140, y: 120 }, { autoAlpha: 1, x: 0, y: 0, duration: 0.35, ease: "power2.out" }, ${r3(t0 + 0.15)});`);
+      const click = r3(t0 + 0.55);
+      tl.push(`tl.to("#${id}-cur", { scale: 0.85, duration: 0.06, yoyo: true, repeat: 1 }, ${click});`);
+      tl.push(`tl.to("#${id}-in", { scale: 0.92, duration: 0.06, yoyo: true, repeat: 1 }, ${click});`);
+      tl.push(`tl.set("#${id}-a", { display: "none" }, ${click}); tl.set("#${id}-b", { display: "inline" }, ${click}); tl.set("#${id}-in", { backgroundColor: "#0A66C2" }, ${click});`);
+      beatSfx(b, click, "click-1", "like click", { db: -2 });
+      break;
+    }
+    case "label": {
+      // Breakdown: a top label (serif italic, white on the accent box). The letters write on one by one while the
+      // box grows in behind them from the right; it holds until `to`
+      const chars = [...b.text];
+      const step = Math.min(0.04, (b.typeFor ?? 0.35) / chars.length);
+      inner = `<div id="${id}-in" class="ov lbl" style="top:${b.y ?? 300}px"><div id="${id}-box" class="lbl-box" style="background:${b.color ?? brand.accent}"></div><div class="lbl-txt">${chars.map((c, k) => `<span id="${id}-c${k}" style="display:none">${c === " " ? "&nbsp;" : esc(c)}</span>`).join("")}</div></div>`;
+      chars.forEach((c, k) => tl.push(`tl.set("#${id}-c${k}", { display: "inline" }, ${r3(t0 + k * step)});`));
+      tl.push(`ft("#${id}-box", { clipPath: "inset(0% 0% 0% 100%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.3, ease: "power3.out" }, ${r3(t0 + 0.05)});`);
+      tl.push(`ft("#${id}-in", { xPercent: -50, autoAlpha: 1 }, { xPercent: -50, autoAlpha: 1, duration: 0.01 }, ${t0});`);
+      tl.push(`tl.to("#${id}-in", { autoAlpha: 0, y: -20, duration: 0.18, ease: "power2.in" }, ${r3(t1 - 0.18)});`);
+      beatSfx(b, t0, "typing-1", "label type-on", { db: -10 });
+      break;
+    }
+    case "pin": {
+      // Breakdown CTA: the keyword flickers in (on/off on alternate frames) in a red→purple→blue gradient and stays
+      // pinned at the top to the end
+      inner = `<div id="${id}-in" class="ov pin" style="top:${b.y ?? 260}px;font-size:${b.size ?? 170}px">${esc(b.text)}</div>`;
+      for (let k = 0; k < 6; k++) tl.push(`tl.set("#${id}-in", { autoAlpha: ${k % 2 ? 0 : 1} }, ${r3(t0 + k / 30)});`);
+      tl.push(`tl.set("#${id}-in", { autoAlpha: 1, xPercent: -50 }, ${r3(t0 + 6 / 30)});`);
+      tl.push(`tl.set("#${id}-in", { xPercent: -50 }, 0);`);
+      beatSfx(b, t0, "impact-2", "pinned CTA", { db: -6 });
+      break;
+    }
     case "leak": {
       // a warm light-leak flash (a real burn/leak clip, screen-blended) with a bloom on the camera: the "$80" transition
       deferredLeaks.push({ b, t0, t1 });
@@ -1767,7 +1933,7 @@ for (const b of beatsList) {
       die(`unknown beat type '${b.type}'`);
   }
   if (b.type === "behind" || b.type === "ground") continue;
-  if (!["endcard", "scene", "motion"].includes(b.type) && !(b.type === "meme" && memeLib(b.id).meta.clip)) tl.push(exit(`#${id}-in`, t1));
+  if (!["endcard", "scene", "motion", "headpage", "photostack", "whiteflash", "cover"].includes(b.type) && !(b.type === "meme" && memeLib(b.id).meta.clip)) tl.push(exit(`#${id}-in`, t1));
   const clipMeme = b.type === "meme" && memeLib(b.id).meta.clip;
   overlays.push({ html: clipMeme
     ? `<div id="${id}" class="layer">${inner}</div>` // the <video> inside is the timed element; a timed wrapper would break it
@@ -2556,6 +2722,24 @@ if (spec.master) fs.writeFileSync(path.join(proj, "build", "master.json"), JSON.
 
 // Explainer (opt-in beats / scenes; hand port of phantasic engine/core): the CSS of the `effect` hook title and the `cutout` concept page.
 // Written into index.html ONLY when such a beat / scene exists, so every other reel is byte-identical.
+// Ahmed's library-bundle beats (boxline, like, label, pin): their page CSS, written only when such a beat exists (so every other reel is byte-identical).
+const LIBRARY_CSS = (beats_) => {
+  const has = (t) => beats_.some((b) => b.type === t);
+  return (has("boxline") ? `
+  .bx { position: absolute; background: #fff; color: #0b0b0b; font-family: Inter, system-ui, sans-serif; font-weight: 900; line-height: 1.02; letter-spacing: -0.02em; padding: 18px 26px 20px; text-align: center; box-shadow: 0 14px 40px rgba(0,0,0,.35); transform-origin: 50% 50%; }
+  .bx-lab { position: absolute; display: flex; align-items: flex-start; gap: 6px; color: #fff; font-family: Inter, system-ui, sans-serif; font-weight: 700; font-size: 46px; text-shadow: 0 2px 10px rgba(0,0,0,.7); }
+  .bx-lab svg { width: 90px; height: 70px; }` : "")
+  + (has("like") ? `
+  .lk { position: absolute; background: #1877F2; color: #fff; font-family: Inter, system-ui, sans-serif; font-weight: 700; font-size: 62px; padding: 12px 34px 16px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  .lk-cur { position: absolute; width: 70px; height: 70px; }
+  .lk-cur svg { width: 100%; height: 100%; filter: drop-shadow(0 3px 6px rgba(0,0,0,.5)); }` : "")
+  + (has("label") ? `
+  .lbl { position: absolute; left: 50%; display: inline-block; }
+  .lbl-box { position: absolute; inset: 0; border-radius: 4px; }
+  .lbl-txt { position: relative; color: #fff; font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-size: 84px; line-height: 1; padding: 10px 30px 18px; white-space: nowrap; }` : "")
+  + (has("pin") ? `
+  .pin { position: absolute; left: 50%; font-family: Inter, system-ui, sans-serif; font-weight: 800; letter-spacing: -0.06em; line-height: 1; white-space: nowrap; background: linear-gradient(90deg, #F0333A, #9B3BE8 50%, #2124E7); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 6px 20px rgba(0,0,0,.35)); }` : "");
+};
 const EXPLAINER_CSS = (spec_, beats_) => {
   const hasEffect = beats_.some((b) => b.type === "effect"), hasCut = beats_.some((b) => b.type === "scene" && b.kind === "cutout");
   return (hasEffect ? `
@@ -2719,7 +2903,7 @@ const html = `<!doctype html>
   .compact .l-line { font-size: 36px; margin: 2px 0; }
   .compact .strike-x { font-size: 80px; top: 8px; }
   .w { display: inline-block; margin: 0 0.2em; transform-origin: 50% 80%; }
-  ${(spec.beats || []).some((b) => b.type === "scene" && String(b.kind).startsWith("gm-")) ? GM_CSS : ""}${(spec.beats || []).some((b) => String(b.type).startsWith("hz-")) ? `\n  :root { --hz-accent: ${brand.accent}; }\n  ${HZ_CSS}` : ""}${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}${EXPLAINER_CSS(spec, beatsList)}${spec.captions?.editorialShadow === "strong" ? `
+  ${(spec.beats || []).some((b) => b.type === "scene" && String(b.kind).startsWith("gm-")) ? GM_CSS : ""}${(spec.beats || []).some((b) => String(b.type).startsWith("hz-")) ? `\n  :root { --hz-accent: ${brand.accent}; }\n  ${HZ_CSS}` : ""}${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}${EXPLAINER_CSS(spec, beatsList)}${LIBRARY_CSS(beatsList)}${spec.captions?.editorialShadow === "strong" ? `
   /* captions.editorialShadow "strong" (opt-in; Ahmed's f88943d): editorial captions legible on bright or busy footage */
   .ew { text-shadow: 0 1px 2px rgba(0,0,0,.9), 0 3px 8px rgba(0,0,0,.7), 0 6px 26px rgba(0,0,0,.6); }
   .ew.ebold { text-shadow: 0 2px 3px rgba(0,0,0,.85), 0 6px 24px rgba(0,0,0,.65); }
