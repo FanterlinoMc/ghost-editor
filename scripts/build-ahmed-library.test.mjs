@@ -158,6 +158,54 @@ try {
   for (const sel of ["bx", "lk", "lbl", "pin"]) assert.ok(!new RegExp(`^  \\.${sel} \\{`, "m").test(h), `no .${sel} css without the beat`);
   check("beat CSS is only written when the beat exists");
 
+  // ================= caption styles: cluster, duo, podcast, type =================
+  const layoutModes = (d) => { const j = JSON.parse(fs.readFileSync(path.join(d, "build", "caption_layout.json"), "utf8")); return new Set((j.blocks || j.log || []).map((b) => b.mode)); };
+  dir = project({ captions: { style: "cluster", heroes: ["money", "remarkable"], serif: ["remarkable"], stairs: [[3, 4], [500, 600]], glowWords: ["scary"], glowColor: "#ffd21e", align: "center" } });
+  log = build(dir); h = html(dir);
+  assert.ok(count(h, /class="cl clip"/g) >= 5 && h.includes('class="cw hb"') && h.includes('class="cw hs"') && h.includes('class="cw sm"'), "cluster: phrases with a small lead, a hero and a serif hero");
+  assert.ok(h.includes('class="cl-row" style="margin-left:'), "cluster: a staircase phrase");
+  assert.ok(/^  \.cl \{ position: absolute;/m.test(h) && h.includes(".cw.glw { color: #ffd21e"), "cluster css (glowColor)");
+  assert.match(log, /captions\.stairs \[500, 600\] does not resolve to one kept take: dropped/, "an unresolvable span is dropped, not widened");
+  assert.ok(layoutModes(dir).has("cluster"), "cluster blocks are logged for caption_layout.json / qa.py");
+  assert.ok(!h.includes("cap-group clip"), "cluster replaces the default caption groups");
+  check("captions cluster: lead / hero / serif hero / staircase / glow word, a bad span dropped with a warning, logged");
+
+  dir = project({ captions: { style: "duo", energy: [[2, 3.5], [900, 901]], serif: ["remarkable"], fixedY: 1100 } });
+  log = build(dir); h = html(dir);
+  assert.ok(count(h, /class="duo clip big/g) >= 2 && count(h, /class="duo clip"/g) >= 10, "duo: big words inside the energy span, small elsewhere");
+  assert.ok(h.includes("duo clip ser") || h.includes(" ser\""), "duo: serif word");
+  assert.match(log, /captions\.energy \[900, 901\] does not resolve to one kept take: dropped/);
+  assert.ok(layoutModes(dir).has("duo"), "duo logged");
+  check("captions duo: one word at a time, big in the energy span, serif words, a bad span dropped");
+
+  dir = project({ showLogo: { small: "THE", big: "SHOW" }, captions: { style: "podcast", keys: ["money", "time"], reds: ["scary"], splitAtPages: true }, beats: [{ type: "uicard", at: 5, to: 8, src: PIC, y: 1000, h: 400 }] });
+  build(dir); h = html(dir);
+  assert.ok(h.includes('class="pcw pck"') && h.includes("#F0333A") && h.includes('class="pc-small"') && h.includes('class="pc-key"'), "podcast: key words yellow, reds, small-over-big stack");
+  assert.ok(h.includes('class="show-logo"') && /^  \.show-logo \{/m.test(h) && h.includes("<b>SHOW</b>"), "showLogo");
+  const pcTops = [...h.matchAll(/class="pc-group clip" style="top:(\d+)px" data-start="([\d.]+)"/g)].map((m) => [Number(m[1]), Number(m[2])]);
+  assert.ok(pcTops.length >= 5 && pcTops.filter(([y, t]) => t > 5 && t < 8).every(([y]) => y < 1000), "podcast captions step above a uicard");
+  assert.ok(layoutModes(dir).has("podcast"), "podcast logged");
+  dir = project({ beats: [] });
+  build(dir); h = html(dir);
+  assert.ok(!h.includes("show-logo"), "no showLogo css/markup without it");
+  check("captions podcast: keys / reds / stacks, steps above a uicard, showLogo (only when set)");
+
+  dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
+  build(dir); h = html(dir);
+  assert.ok(count(h, /class="tc clip/g) >= 5 && h.includes("tc-red") && h.includes("tc-cur") && h.includes('class="tc-ch"'), "type: cards typed letter by letter behind a cursor, red verdicts");
+  assert.ok(/^  \.tc-cur \{/m.test(h) && h.includes('tl.set("#tc0 .tc-ch", { display: "none" }, 0);'), "type css and the typewriter sets");
+  check("captions type: typed-on cards, cursor, red verdict cards");
+
+  // type behind the head (stage + captions.behind): the card sits between the plate and the speaker, placed from the head-top track of its own take
+  fs.writeFileSync(path.join(root, "headtop.json"), JSON.stringify(Array.from({ length: 61 }, (_, i) => [+(i / 5).toFixed(2), 300])));
+  dir = project({ stage: { fixedScale: 1 }, captions: { style: "type", behind: true } }, { matte: true });
+  fs.writeFileSync(path.join(dir, "build", "headtop.json"), fs.readFileSync(path.join(root, "headtop.json")));
+  build(dir); h = html(dir);
+  assert.ok(h.indexOf('<div id="caps">') > h.indexOf('<div id="pip">') && h.indexOf('<div id="caps">') < h.indexOf('<div id="base">'), "captions sit inside #pip, under the speaker");
+  assert.equal(count(h, /<div id="caps">/g), 1, "and only once");
+  assert.ok(layoutModes(dir).has("behind"), "behind-the-head cards are logged");
+  check("captions type + stage + behind: cards under the cut-out, placed from the head-top track");
+
   console.log("\nall build-ahmed-library tests passed");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });

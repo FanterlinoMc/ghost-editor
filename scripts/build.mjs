@@ -934,7 +934,7 @@ if (spec.matte) {
 // cut on demand), a recording with no face track is left un-matted and plays as the plain plate, and the head-top track
 // (which sets the subject scale) is read per recording.
 // stage.windows [{at, to, set?}]: the set only on those moments; stage.sets {key: {...}}: a set per window.
-let stageBgHtml = "", stageCss = "", stageFgHtml = "", SUBJ = 1;
+let stageBgHtml = "", stageCss = "", stageFgHtml = "", SUBJ = 1, headTopAt = null;   // headTopAt(src, a, b): the highest head top in a recording's cut-out (stage only)
 const stageWins = [];
 if (spec.stage) {
   if (FORMAT !== "9:16") warn.push(`stage is tuned for 9:16 (head-top track, subject scale and set sizes); ${FORMAT} may look off`);
@@ -958,7 +958,7 @@ if (spec.stage) {
     trackOf.set(src, track);
     return track;
   };
-  const headTopAt = (src, o0, o1) => { const v = headTrack(src).filter(([t, y]) => y !== null && t >= o0 - 0.2 && t <= o1 + 0.2).map(([, y]) => y); return v.length ? Math.min(...v) : null; };
+  headTopAt = (src, o0, o1) => { const v = headTrack(src).filter(([t, y]) => y !== null && t >= o0 - 0.2 && t <= o1 + 0.2).map(([, y]) => y); return v.length ? Math.min(...v) : null; };
   const mattedTakes = takes.map((k) => stageMatted(k.src));
   if (!mattedTakes.some(Boolean)) warn.push("stage: no recording has a face track, so nothing is cut out (every take plays as the plain plate)");
   // auto subject scale (anchored at the bottom): the highest head top in the used (matted) takes sits >= safeTop + room
@@ -1179,6 +1179,13 @@ if (FACE_ANCHOR) {
   for (const p of snapPatches) tl[p.idx] = snapLines(p.sn, p.fromZ);
 }
 const placer = makePlacer({ face, faces, takes, zoom: { ...zoom, snapsEdit: snaps, pushesEdit }, TOTAL: SECTION_MODE ? SECTION_TOTAL : TOTAL, platform, ideal: spec.captions?.y ?? Math.round(H * 1180 / 1920), H, W, cropScale, cropOffsetX, cropOffsetY, crops, fps: FPS });
+// lib/safezone.mjs keeps its card rectangles private; podcast captions ask "is a card in the way" (placer.clash), so shadow the same list
+// here: every placer.card() result is recorded, and clash() finds the first one that overlaps in time and in height. No output changes.
+{
+  const cardRects = [], placeCard = placer.card;
+  placer.card = (t0, t1, h, ...rest) => { const r = placeCard(t0, t1, h, ...rest); if (r) cardRects.push({ t0, t1, y0: r.y, y1: r.y + h }); return r; };
+  placer.clash ??= (t0, t1, y, h) => cardRects.find((o) => t0 < o.t1 && t1 > o.t0 && y < o.y1 && y + h > o.y0);
+}
 
 // legibility gate (OFF unless spec.legibility.behind is set; ported from engine/review-fixes a30d106). The value is the
 // share of a behind-the-head word that must stay visible (e.g. 0.6): the speaker's matte is modelled as head (face
@@ -2128,7 +2135,264 @@ const noirOrphanBreak = (g, size) => {
   if (lines.length < 2 || lines.at(-1).length !== 1 || lines.at(-2).length < 3) return -1;
   return lines.at(-2).at(-1);
 };
-const capHtml = cap.style === "glow" ? glowHtml : cap.style === "none" || edit ? "" : groups.map((g, gi) => {
+// duo: one word at a time in two sizes. Calm lines are a small word at chest height; energy spans
+// (cap.energy, source seconds) are a big word. Serif words (cap.serif / cap.serifSpans) switch to the
+// italic display serif inside the same flow. Every word clears out of a blur, about three frames.
+const tryE = (t) => { try { return E(t); } catch { return null; } };
+// captions.energy / serifSpans / stairs: [from, to] pairs of recording seconds -> edit seconds. A pair that does not resolve to ONE kept
+// take (outside every take, or ambiguous between recordings: write {src, t}) is dropped with a warning, never widened to the whole reel.
+const capSpans = (xs, what) => (xs || []).flatMap(([a, b]) => {
+  const x = tryE(a), y = tryE(b);
+  if (x === null || y === null) { warn.push(`captions.${what} [${JSON.stringify(a)}, ${JSON.stringify(b)}] does not resolve to one kept take: dropped`); return []; }
+  return [[x, y]];
+});
+// podcast: 1-3 words in heavy caps at the lower third; cap.keys words in the key colour (yellow); a group that holds
+// a key word and others stacks: the others small above, the key big under them ("what's the / NUMBER 1 CUE")
+const podcastHtml = cap.style !== "podcast" ? "" : (() => {
+  const bareOf = (w) => w.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const keys = new Set((cap.keys || []).map(bareOf)), reds = new Set((cap.reds || []).map(bareOf));
+  const groups = []; let cur = [];
+  words.forEach((w, i) => {
+    const prev = words[i - 1];
+    // cap.splitAtPages (opt-in): a page beginning or ending between two words splits the group, so words said under a page
+    // do not linger on the footage after it
+    const crossesPage = cap.splitAtPages && prev && hiddenCaps.some(([ha, hb]) => (prev.start < ha && w.start >= ha - 0.02) || (prev.start < hb && w.start >= hb - 0.08));
+    if (cur.length && (crossesPage || cur.length >= (cap.maxWords ?? 3) || w.start - prev.end > 0.3 || /[.?!,]$/.test(prev.word) || keys.has(bareOf(prev.word)))) { groups.push(cur); cur = []; }
+    cur.push(w);
+  });
+  if (cur.length) groups.push(cur);
+  const S = cap.size ?? 78, KS = cap.keySize ?? 120, SS = cap.smallSize ?? 50, Y = Math.round((cap.fixedY ?? 1250) * H / 1920);
+  return groups.map((g, gi) => {
+    const s = r3(Math.max(0, g[0].start - 0.04));
+    const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.04 : SPEECH;
+    let e = r3(Math.min(g.at(-1).end + 0.25, nextS, SPEECH, takeEndAt(takes, FPS, g.at(-1).start, SPEECH)));
+    // splitAtPages: a group said under a page ends with the page (it would otherwise reappear on the footage)
+    if (cap.splitAtPages) { const win = hiddenCaps.find(([ha, hb]) => s >= ha - 0.05 && s < hb); if (win) e = r3(Math.min(e, win[1] - 0.06)); }
+    if (e - s < 0.05) return "";
+    const ki = g.findIndex((w) => keys.has(bareOf(w.word)) || reds.has(bareOf(w.word)));
+    const colourOf = (w) => reds.has(bareOf(w.word)) ? (cap.red ?? "#F0333A") : keys.has(bareOf(w.word)) ? (cap.key ?? "#FFD43B") : "#fff";
+    // cap.smallStyle "italic" (opt-in): words that are not the key stay in their own case, small italic sans (the afterpranav lead line)
+    const soft = cap.smallStyle === "italic";
+    const span = (w, k, size, isKey = keys.has(bareOf(w.word)) || reds.has(bareOf(w.word))) => soft && !isKey
+      ? `<span id="pc${gi}w${k}" class="pcw pcs" style="font-size:${size}px">${esc(w.word.replace(/[,.]$/, ""))}</span>`
+      : `<span id="pc${gi}w${k}" class="pcw${isKey ? " pck" : ""}" style="font-size:${size}px;color:${colourOf(w)}">${esc(w.word.replace(/[,.]$/, "").toUpperCase())}</span>`;
+    g.forEach((w, k) => { if (k > 0) tl.push(`ft("#pc${gi}w${k}", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.04 }, ${r3(Math.max(s, w.start - 0.03))});`); });
+    tl.push(`ft("#pc${gi}", { scale: 0.92 }, { scale: 1, duration: 0.1, ease: "back.out(2.5)" }, ${s});`);
+    let body;
+    if (ki >= 0 && g.length > 1) {
+      const others = g.map((w, k) => [w, k]).filter(([, k]) => k !== ki);
+      const fit = (w) => Math.floor(940 / (Math.max(3, w.word.replace(/[^\w]/g, "").length) * 0.74));  // heavy caps ~0.74 em per letter
+      const keyW = g[ki], ksz = Math.min(KS, fit(keyW));
+      body = `<div class="pc-small">${others.map(([w, k]) => span(w, k, SS)).join(" ")}</div><div class="pc-key">${span(keyW, ki, ksz)}</div>`;
+    } else {
+      const big = ki >= 0;
+      const fit = (w) => Math.floor(940 / (Math.max(3, w.word.replace(/[^\w]/g, "").length) * 0.74));
+      const total = g.reduce((n, w) => n + w.word.length + 1, 0);
+      const line = big ? Math.min(KS, fit(g[0])) : soft ? Math.min(SS, Math.floor(940 / (total * 0.5))) : Math.min(S, Math.floor(940 / (total * 0.72)));
+      body = `<div>${g.map((w, k) => span(w, k, line)).join(" ")}</div>`;
+    }
+    // a card (big / strike / list ...) in the band at the same time: the caption steps below it, else above it
+    const hgt = Math.round(ki >= 0 && g.length > 1 ? SS * 1.15 + KS : (ki >= 0 ? KS : S) * 1.15);
+    let y = Y;
+    // cap.dodgeFace (opt-in): on a close-up the chest line would sit on the mouth, so the caption drops under the
+    // chin (or as low as the safe area allows)
+    if (cap.dodgeFace) {
+      const sp = placer.span(s, Math.max(s, e - 0.05));
+      if (sp.seen && y < sp.mouth + 30) y = Math.round(Math.min(placer.safeBottom - hgt, Math.max(y, sp.bottom + 20)));
+    }
+    const ui = uiRects.find((r) => s < r.t1 && e > r.t0 && y < r.y1 && y + hgt > r.y0);
+    if (ui) y = Math.max(placer.safeTop, ui.y0 - hgt - 26);
+    const hit = e - s > 0.35 ? placer.clash(s + 0.15, e - 0.15, y, hgt) : placer.clash(s, e, y, hgt);
+    if (hit) y = hit.y1 + 24 + hgt <= placer.safeBottom ? hit.y1 + 24 : Math.max(placer.safeTop, hit.y0 - 24 - hgt);
+    placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: Math.round(y), h: hgt, mode: "podcast", scale: 1, face: null });
+    return `<div id="pc${gi}" class="pc-group clip" style="top:${Math.round(y)}px" data-start="${s}" data-duration="${r3(e - s)}" data-track-index="5">${body}</div>`;
+  }).join("\n      ");
+})();
+const duoHtml = cap.style !== "duo" ? "" : (() => {
+  const energy = capSpans(cap.energy, "energy"), serifSpans = capSpans(cap.serifSpans, "serifSpans");
+  const bareOf = (w) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
+  const serifSet = new Set((cap.serif || []).map(bareOf));
+  const inSpan = (xs, t) => xs.some(([a, b]) => t >= a - 0.02 && t < b);
+  return words.map((w, i) => {
+    const next = words[i + 1];
+    const s = r3(Math.max(0, w.start - 0.03));
+    const e = r3(Math.min(next ? next.start - 0.03 : SPEECH, w.end + (cap.hold ?? 0.6), SPEECH, takeEndAt(takes, FPS, w.start, SPEECH)));
+    if (e - s < 0.04) return "";
+    const big = inSpan(energy, w.start);
+    const serif = serifSet.has(bareOf(w.word)) || inSpan(serifSpans, w.start);
+    const size = Math.round((big ? (cap.energySize ?? 112) : (cap.calmSize ?? 44)) * (serif ? 1.22 : 1));
+    const pl = cap.fixedY ? { y: Math.round((big ? (cap.energyY ?? cap.fixedY - 40) : cap.fixedY) * H / 1920) } : placer.place(s, e, size * 1.25);
+    if (cap.fixedY) placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: pl.y, h: Math.round(size * 1.25), mode: "duo", scale: 1, face: null });
+    tl.push(`ft("#dw${i}", { autoAlpha: 0.2, filter: "blur(${big ? 8 : 5}px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: ${big ? 0.12 : 0.08}, ease: "power2.out" }, ${s});`);
+    return `<div id="dw${i}" class="duo clip${big ? " big" : ""}${serif ? " ser" : ""}" style="top:${pl.y}px;font-size:${size}px" data-start="${s}" data-duration="${r3(e - s)}" data-track-index="5">${esc(caseOf(w.word.replace(/,$/, "")))}</div>`;
+  }).join("\n      ");
+})();
+// cluster: each phrase is a little typographic composition (the "$80 edit" look): lead-in words small above, ONE
+// hero word 3-4x bigger, trailing words small under it; every word clears out of a blur as it is spoken and the
+// cluster builds until the phrase ends. cap.heroes (words), cap.serif (hero words drawn in the display serif),
+// cap.script (words written on in handwriting), cap.stairs ([[from,to]] source spans set as a diagonal staircase).
+const clusterHtml = cap.style !== "cluster" ? "" : (() => {
+  const bareOf = (w) => w.toLowerCase().replace(/[^a-z0-9]/g, "");   // apostrophes dropped: "don't" = "don’t" = "dont"
+  const STOP = new Set("a an the to of and or but in on at for with my your his her their our is are was be been so if that this it i you we they he she me us them do does did have has had just really very what which who how im youre dont".split(" "));
+  const heroes = new Set((cap.heroes || []).map(bareOf)), serif = new Set((cap.serif || []).map(bareOf)), script = new Set((cap.script || []).map(bareOf));
+  const glowSet = new Set((cap.glowWords || []).map(bareOf));
+  const stairs = capSpans(cap.stairs, "stairs");
+  const inStairs = (t) => stairs.some(([a, b]) => t >= a - 0.02 && t < b);
+  // phrases: break on punctuation, a pause > 0.35 s, a stairs boundary, or 6 words
+  const phrases = []; let cur = [];
+  words.forEach((w, i) => {
+    const prev = words[i - 1];
+    // a cutaway starting or ending between two words splits the phrase, so each side gets its own visible hero
+    const crossesScene = prev && hiddenCaps.concat(shownCaps).some(([a, b]) => (prev.start < a && w.start >= a - 0.02) || (prev.start < b && w.start >= b - 0.02));
+    if (cur.length && (cur.length >= (cap.maxWords ?? 6) || w.start - prev.end > 0.35 || crossesScene || inStairs(w.start) !== inStairs(prev.start) || /[.?!,]$/.test(prev.word))) { phrases.push(cur); cur = []; }
+    cur.push(w);
+  });
+  if (cur.length) phrases.push(cur);
+  const S = cap.smallSize ?? 44, HS = cap.heroSize ?? 168, X0 = cap.x ?? 150;
+  let html = "", lastHeroSfx = -99;
+  phrases.forEach((ph, pi) => {
+    const s = r3(Math.max(0, ph[0].start - 0.04)), nextS = pi + 1 < phrases.length ? phrases[pi + 1][0].start - 0.04 : SPEECH;
+    let e = r3(Math.min(nextS, ph.at(-1).end + (cap.hold ?? 0.45), SPEECH, takeEndAt(takes, FPS, ph.at(-1).start, SPEECH)));
+    // cap.splitAtPages (opt-in): a phrase said under a page ends with the page (it would otherwise rebuild on the footage after it)
+    if (cap.splitAtPages) { const s0 = ph[0].start; const win = hiddenCaps.find(([ha, hb]) => s0 >= ha - 0.05 && s0 < hb); if (win) e = r3(Math.min(e, win[1] - 0.06)); }
+    if (e - s < 0.05) return;
+    let y = Math.round((cap.fixedY ?? 1150) * H / 1920);
+    // avoidFace: the face-aware placer picks the zone (below the chin, above the head, else as low as the platform
+    // allows) instead of a fixed height, so close-ups never get captions across the mouth
+    if (cap.avoidFace && face) {
+      // a quiet phrase (no listed hero, heroFallback "none") is one small line: reserve only that, so it can sit lower
+      const quiet = cap.heroFallback === "none" && !ph.some((w) => heroes.has(bareOf(w.word)));
+      y = quiet ? placer.place(s, e, Math.round(S * 1.4)).y + Math.round(S * 0.6) : placer.place(s, e, Math.round(S * 2.5 + HS)).y + Math.round(HS * 0.75);
+    }
+    const id = `cl${pi}`;
+    if (!(cap.avoidFace && face)) placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: Math.round(y), h: Math.round(S * 2.5 + HS), mode: "cluster", scale: 1, face: null });
+    const wspan = (w, k, cls, size) => {
+      const isScript = script.has(bareOf(w.word));
+      const t = r3(Math.max(s, w.start - 0.03));
+      if (isScript) tl.push(`ft("#${id}w${k}", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% -10% 0% 0%)", duration: ${r3(Math.max(0.35, Math.min(0.7, w.end - w.start + 0.25)))}, ease: "power1.inOut" }, ${t});`);
+      // 3-frame land with a light blur: a longer, heavier blur reads as a ghosted double on a still frame
+      else tl.push(`ft("#${id}w${k}", { autoAlpha: 0, filter: "blur(4px)", y: 6 }, { autoAlpha: 1, filter: "blur(0px)", y: 0, duration: 0.1, ease: "power2.out" }, ${t});`);
+      const isGlow = glowSet.has(bareOf(w.word));   // captions.glowWords: the one or two words that get the accent colour + glow
+      return `<span id="${id}w${k}" class="cw ${cls}${isScript ? " scr" : ""}${isGlow ? " glw" : ""}" style="font-size:${isScript ? Math.round(size * 1.5) : size}px">${esc(caseOf(w.word.replace(/[,.]$/, "")))}</span>`;
+    };
+    if (inStairs(ph[0].start)) {
+      // staircase: each word one step down and to the right
+      const step = cap.stairStep ?? [70, 78];
+      html += `<div id="${id}" class="cl clip" style="left:${X0}px;top:${y - 200}px" data-start="${s}" data-duration="${r3(e - s)}" data-track-index="5">${ph.map((w, k) => `<div class="cl-row" style="margin-left:${k * step[0]}px;height:${step[1]}px">${wspan(w, k, "st", cap.stairSize ?? 72)}</div>`).join("")}</div>`;
+      return;
+    }
+    // hero: a listed hero word, else the longest non-stop word
+    // the LAST listed hero in the phrase wins: the payoff word usually closes the line ("I know that AI is HERE")
+    let hi = -1; ph.forEach((w, k) => { if (heroes.has(bareOf(w.word))) hi = k; });
+    // heroFallback "none": a phrase without a listed hero stays all small (Monochrome Cinema: filler lines are quiet)
+    if (hi < 0 && cap.heroFallback === "none") {
+      html += `<div id="${id}" class="cl clip" style="${cap.align === "center" || cap.align === "block" ? "left:540px;transform:translateX(-50%)" : `left:${X0}px`};top:${y - Math.round(S * 0.6)}px" data-start="${s}" data-duration="${r3(e - s)}" data-track-index="5"><div class="cl-row lead">${ph.map((w, k) => wspan(w, k, "sm", S) + " ").join("")}</div></div>`;
+      return;
+    }
+    if (hi < 0) { let best = -1; ph.forEach((w, k) => { const b = bareOf(w.word); if (!STOP.has(b) && b.length > best) { best = b.length; hi = k; } }); }
+    if (hi < 0) hi = ph.length - 1;
+    const hero = ph[hi], heroSerif = serif.has(bareOf(hero.word));
+    const hsz = Math.min(HS, Math.floor(860 / Math.max(2, bareOf(hero.word).length * (heroSerif ? 0.5 : 0.58))));
+    const lead = ph.slice(0, hi), tail = ph.slice(hi + 1);
+    const line = (ws, off, cls) => ws.length ? `<div class="cl-row ${cls}">${ws.map((w, k) => wspan(w, off + k, "sm", S) + " ").join("")}</div>` : "";
+    html += `<div id="${id}" class="cl clip" style="${cap.align === "center" || cap.align === "block" ? "left:540px;transform:translateX(-50%)" : `left:${X0}px`};top:${y - Math.round(hsz * 0.75)}px" data-start="${s}" data-duration="${r3(e - s)}" data-track-index="5">${line(lead, 0, "lead")}<div class="cl-row hero">${wspan(hero, hi, heroSerif ? "hs" : "hb", hsz)}</div>${line(tail, hi + 1, "tail")}</div>`;
+    // heroSfxGap: at most one hero whoosh per N seconds (Monochrome Cinema measured ~35 hits/min, not one per hero)
+    if (cap.heroSfx !== false && hero.start - lastHeroSfx >= (cap.heroSfxGap ?? 0)) { lastHeroSfx = hero.start; addSfx(Math.max(0, hero.start - 0.04), cap.heroSfx ?? "whoosh", "cluster hero", { db: spec.sound?.heroDb ?? -10 }); }
+  });
+  return html;
+})();
+// type (premium, opt-in): the Empire / Iman Gadzhi card. One phrase at a time in glowing heavy ALL CAPS, typed on
+// letter by letter behind a blinking cursor bar, replaced (never stacked) by the next phrase. cap.reds (spoken words)
+// turn their phrase into a verdict card: those words go red with a red glow at redScale x size, the card slams in with
+// a 3-frame shake and a low hit; calm cards get an alternating pop. Placed by the face-aware placer (captions.prefer).
+const typeHtml = cap.style !== "type" ? "" : (() => {
+  const bareOf = (w) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
+  const reds = new Set((cap.reds || []).map(bareOf));
+  // a red written with its punctuation ("language.") only fires on that spoken form, so the same word mid-sentence
+  // stays white; a bare red ("language") fires everywhere
+  const redExact = new Map((cap.reds || []).filter((r) => /[.,!?;:]$/.test(r.trim())).map((r) => [bareOf(r), r.trim().toLowerCase()]));
+  const isRedWord = (word) => reds.has(bareOf(word)) && (!redExact.has(bareOf(word)) || word.trim().toLowerCase() === redExact.get(bareOf(word)));
+  const S0 = cap.size ?? 96, MAXW = cap.maxWidth ?? 860, CHW = cap.charW ?? 0.74, CPS = cap.cps ?? 30, TYPE_MAX = cap.typeMax ?? 0.42;
+  const RS = cap.redScale ?? 1.22;
+  let html = "", popN = 0, lastTick = -9;
+  // cap.maxChars: a phrase longer than this (letters + spaces) becomes consecutive cards, so no card shrinks small
+  const MAXC = cap.maxChars ?? 22, tGroups = [];
+  const isRedW = (w) => isRedWord(w.word);
+  for (const g of groups) {
+    let cur = [], n = 0;
+    for (const w of g) {
+      const L = w.word.trim().length;
+      const redBreak = cap.redAlone !== false && cur.length && isRedW(w) !== isRedW(cur.at(-1)) && (isRedW(w) || cur.some(isRedW));
+      if (cur.length && (n + 1 + L > MAXC || redBreak)) { tGroups.push(cur); cur = []; n = 0; }
+      cur.push(w); n += (n ? 1 : 0) + L;
+    }
+    if (cur.length) { if (cur.length === 1 && !isRedW(cur[0]) && !(tGroups.at(-1) || []).some(isRedW) && tGroups.length && tGroups.at(-1).length && g.includes(tGroups.at(-1)[0]) && tGroups.at(-1).reduce((a, w) => a + w.word.trim().length + 1, 0) + cur[0].word.trim().length <= MAXC + 6) tGroups.at(-1).push(...cur); else tGroups.push(cur); }
+  }
+  const groupsT = tGroups;
+  groupsT.forEach((g, gi) => {
+    const s = Math.max(0, g[0].start - 0.05);
+    const nextS = gi + 1 < groupsT.length ? groupsT[gi + 1][0].start - 0.05 : SPEECH;
+    const e = Math.min(g.at(-1).end + (cap.tail ?? 0.3), nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99), takeEndAt(takes, FPS, g.at(-1).start, SPEECH));
+    // transcript quote marks ("What is...") are speech punctuation, not caption text
+    const ws = g.map((w) => ({ text: caseOf(w.word.trim().replace(/["\u201C\u201D]/g, "")), red: isRedWord(w.word), w }));
+    const isRed = ws.some((x) => x.red);
+    // lines: one line when it fits at a readable size, else two balanced lines (break at the most even split)
+    const em = (x) => x.text.length * (x.red ? RS : 1) + 0.35;
+    const width1 = ws.reduce((n, x) => n + em(x), 0);
+    let lines = [ws];
+    if (width1 * S0 * CHW > MAXW && ws.length > 1) {
+      let best = 1, bd = 1e9;
+      for (let k = 1; k < ws.length; k++) { const a = ws.slice(0, k).reduce((n, x) => n + em(x), 0), b = width1 - a; if (Math.abs(a - b) < bd) { bd = Math.abs(a - b); best = k; } }
+      lines = [ws.slice(0, best), ws.slice(best)];
+    }
+    const widest = Math.max(...lines.map((l) => l.reduce((n, x) => n + em(x), 0)));
+    // red verdicts are wide caps with a glow: size them on a wider letter estimate so they never touch the frame edge
+    const size = Math.max(cap.minSize ?? 54, Math.min(S0, Math.floor((isRed ? (cap.redMaxWidth ?? MAXW) : MAXW) / (widest * (isRed ? CHW * (cap.redCharW ?? 1.14) : CHW)))));
+    const lineH = size * 1.06 * (isRed ? RS : 1);
+    let pl;
+    // the take that owns this card, for the head-top track of ITS recording (a recording with no cut-out falls back to the placer)
+    const ownTake = spec.stage && cap.behind && headTopAt ? locateTake(takes, s, FPS) : null;
+    if (ownTake && stageMatted(ownTake.src)) {
+      // behind the head: the block's bottom line dips `overlap` x its height under the crown, so the head covers the
+      // middle of the last line (the DtFS look); never above the platform's top bar
+      const o0 = ownTake.a + (s - ownTake.start), o1 = ownTake.a + (Math.min(e, ownTake.start + ownTake.dur) - ownTake.start), ht = headTopAt(ownTake.src, o0, o1) ?? 300;
+      const htS = 1920 - SUBJ * (1920 - ht), blockH = lines.length * lineH;
+      pl = { y: Math.round(Math.max(cap.safeTop ?? 200, htS + lineH * (cap.overlap ?? 0.3) - blockH)), mode: "behind" };
+      placer.log.push({ t0: r3(s), t1: r3(e), y: pl.y, h: Math.round(blockH), mode: "behind", scale: 1, face: null });
+    } else pl = placer.place(s, e, lines.length * lineH + 20);
+    const id = `tc${gi}`;
+    let k = 0;
+    const lineStart = [];
+    const body = lines.map((l, li) => { lineStart.push(k); return `<div class="tc-line">${l.map((x, xi) => {
+      const chars = [...x.text].map((c) => `<span id="${id}c${k++}" class="tc-ch">${esc(c)}</span>`).join("");
+      return `<span class="tc-w${x.red ? " tc-red" : ""}">${chars}</span>${xi < l.length - 1 ? `<span id="${id}c${k++}" class="tc-ch tc-sp"> </span>` : ""}`;
+    }).join("")}<span id="${id}-cur${li}" class="tc-cur"${li ? ' style="opacity:0"' : ""}></span></div>`; }).join("");
+    const nCh = k;
+    html += `<div id="${id}" class="tc clip${isRed ? " tc-hot" : ""}" style="top:${pl.y}px;font-size:${size}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5"><div id="${id}-in" class="tc-in">${body}</div></div>`;
+    // typewriter: 1 letter per frame (30 cps), faster when the phrase would take longer than typeMax to type
+    // cap.redInstant: a verdict card lands whole (it slams, it isn't typed); cap.blurIn: every card arrives out of a
+    // short motion blur (the ref's ghosted swap), 4 frames
+    const cps = isRed && cap.redInstant ? 1e6 : Math.max(CPS, nCh / TYPE_MAX);
+    if (cap.blurIn) tl.push(`ft("#${id}-in", { filter: "blur(${cap.blurIn}px)", opacity: 0.35 }, { filter: "blur(0px)", opacity: 1, duration: 0.13, ease: "power2.out" }, ${r3(Math.max(0.02, s))});`);
+    tl.push(`tl.set("#${id} .tc-ch", { display: "none" }, 0);`);
+    for (let c = 0; c < nCh; c++) tl.push(`tl.set("#${id}c${c}", { display: "inline" }, ${r3(Math.max(0.02, s + c / cps))});`);
+    const typed = s + nCh / cps;
+    // the cursor: solid while typing, then blinks (0.5 s period) until the card cuts
+    // one cursor per line: line i's cursor shows while it types, hands over to the next line, the last one blinks
+    lineStart.forEach((c0, li) => { if (li) { tl.push(`tl.set("#${id}-cur${li - 1}", { opacity: 0 }, ${r3(s + c0 / cps)});`); tl.push(`tl.set("#${id}-cur${li}", { opacity: 1 }, ${r3(s + c0 / cps)});`); } });
+    const lastCur = `#${id}-cur${lines.length - 1}`;
+    for (let t = typed + 0.25, on = false; t < e - 0.05; t += 0.25, on = !on) tl.push(`tl.set("${lastCur}", { opacity: ${on ? 1 : 0} }, ${r3(t)});`);
+    if (isRed) {
+      tl.push(`ft("#${id}-in", { scale: ${cap.slam ?? 1.14} }, { scale: 1, duration: 0.2, ease: "power3.out" }, ${r3(s)});`);
+      [4, -4, 3, 0].forEach((dx, j) => tl.push(`tl.set("#${id}-in", { x: ${dx} }, ${r3(s + j / FPS)});`));
+      addSfx(s, cap.redSfx ?? "cinematic-cine-hit", "type card hit (red)", { db: cap.redDb ?? -4 });
+    } else if (cap.popSfx !== false) addSfx(s, (cap.popSfx ?? ["pop-1", "pop-2"])[popN++ % 2], "type card in", { db: cap.popDb ?? -2 });
+    // typing ticks: one per word, never denser than tickGap
+    if (cap.ticks !== false) ws.forEach((x, xi) => { if (xi && x.w.start - lastTick >= (cap.tickGap ?? 0.5) && x.w.start < e) { lastTick = x.w.start; addSfx(x.w.start, "tick-1", "type tick", { db: cap.tickDb ?? -8 }); } });
+  });
+  return html;
+})();
+const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podcastHtml : cap.style === "cluster" ? clusterHtml : cap.style === "duo" ? duoHtml : cap.style === "glow" ? glowHtml : cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
   const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.05 : SPEECH;
   const e = Math.min(g.at(-1).end + 0.3, nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99), takeEndAt(takes, FPS, g.at(-1).start, SPEECH));
@@ -2157,7 +2421,44 @@ const capHtml = cap.style === "glow" ? glowHtml : cap.style === "none" || edit ?
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
 const UI_FONT = brand.font || (cyr ? "Inter" : "Geist");
-const capCss = cap.style === "hormozi"
+const capCss = cap.style === "type"
+  ? `.tc { position: absolute; left: 50%; transform: translateX(-50%); width: max-content; max-width: 960px; text-align: center; pointer-events: none; }
+  .tc-in { font-family: ${cap.font ?? brand.font ?? "Montserrat"}, system-ui, sans-serif; font-weight: ${cap.weight ?? 900}; line-height: 1.06; letter-spacing: ${cap.tracking ?? "0.01em"}; color: ${cap.ink ?? "#FFFFFF"}; transform-origin: 50% 60%;
+    text-shadow: 0 0 ${cap.glow ?? 20}px rgba(255,255,255,${cap.glowA ?? 0.55}), 0 0 ${Math.round((cap.glow ?? 20) * 2.4)}px rgba(255,255,255,${(cap.glowA ?? 0.55) * 0.4}), 0 3px 14px rgba(0,0,0,.65), 0 1px 2px rgba(0,0,0,.6); }
+  .tc-line { white-space: nowrap; }
+  .tc-red { color: ${cap.red ?? "#FF2A2A"}; font-size: ${cap.redScale ?? 1.22}em; text-shadow: 0 0 ${cap.redGlow ?? cap.glow ?? 20}px rgba(255,0,0,${cap.redGlowA ?? 0.6}), 0 0 ${Math.round((cap.redGlow ?? cap.glow ?? 20) * 2.4)}px rgba(255,0,0,${(cap.redGlowA ?? 0.6) * 0.6}), 0 3px 14px rgba(0,0,0,.7), 0 1px 2px rgba(0,0,0,.6); }
+  .tc-cur { display: inline-block; width: .09em; height: .86em; margin-left: .06em; vertical-align: -0.08em; background: currentColor; box-shadow: 0 0 12px rgba(255,255,255,.7); }
+  .tc-hot .tc-cur { background: ${cap.red ?? "#FF2A2A"}; box-shadow: 0 0 12px rgba(255,0,0,.7); }`
+  : cap.style === "cluster"
+  ? `.cl { position: absolute; display: flex; flex-direction: column; align-items: flex-start; pointer-events: none; }
+  .cl-row { white-space: nowrap; line-height: 1; }
+  .cl-row.lead { margin: 0 0 4px 6px; } .cl-row.tail { margin: 6px 0 0 ${cap.align === "center" ? 0 : Math.round((cap.heroSize ?? 168) * 0.35)}px; }
+  ${cap.align === "center" ? ".cl { align-items: center; text-align: center; }" : ""}
+  ${cap.heroGlow ? `.cw.hb, .cw.hs { text-shadow: 0 0 18px ${cap.heroGlow}, 0 0 42px ${cap.heroGlow}, 0 4px 24px rgba(0,0,0,.45); }` : ""}
+  .cw { display: inline-block; color: ${cap.ink ?? "#fff"}; text-shadow: ${cap.ink && cap.ink !== "#fff" ? "none" : "0 4px 24px rgba(0,0,0,.45)"}; }
+  .cw.sm { font-family: ${cap.font ?? UI_FONT}, system-ui, sans-serif; font-weight: 600; letter-spacing: -0.03em; margin-right: 0.24em; }
+  .cw.hb { font-family: ${cap.font ?? UI_FONT}, system-ui, sans-serif; font-weight: 800; letter-spacing: -0.06em; line-height: .86;${cap.heroItalic ? " font-style: italic;" : ""}${cap.heroColor ? ` color: ${cap.heroColor};` : ""} }
+  ${cap.smallItalic ? `.cw.sm { font-style: italic; font-weight: 500; }` : ""}
+  ${cap.smallSerif ? `.cw.sm { font-family: "${cap.serifFont ?? "Instrument Serif"}", Georgia, serif !important; font-weight: 400 !important; letter-spacing: -0.01em !important; }` : ""}
+  .cw.hs { font-family: "${cap.serifFont ?? "Instrument Serif"}", Georgia, serif; font-weight: 400; letter-spacing: -0.03em; line-height: .9; }
+  ${cap.serifItalic ? ".cw.hs { font-style: italic; letter-spacing: -0.02em; }" : ""}
+  ${cap.glowColor ? `.cw.glw { color: ${cap.glowColor} !important; text-shadow: 0 0 16px ${cap.glowColor}, 0 0 40px ${cap.glowColor}, 0 4px 22px rgba(0,0,0,.45) !important; }` : ""}
+  ${cap.serifItalic ? `.cw.hs { font-style: italic; font-weight: 600; letter-spacing: -0.04em;${cap.heroColor ? ` color: ${cap.heroColor};` : ""} }` : ""}
+  .cw.st { font-family: ${cap.font ?? UI_FONT}, system-ui, sans-serif; font-weight: 700; letter-spacing: -0.04em; }
+  .cw.scr { font-family: "${cap.scriptFont ?? "Yellowtail"}", cursive; font-weight: 400; letter-spacing: 0; }`
+  : cap.style === "podcast"
+  ? `.pc-group { position: absolute; left: 50%; transform: translateX(-50%); text-align: center; white-space: nowrap; line-height: .95; font-family: ${cap.font ?? "Inter"}, system-ui, sans-serif; font-weight: 900; letter-spacing: -0.02em; }
+  .pcw { display: inline-block; margin: 0 0.13em; text-shadow: 0 3px 0 rgba(0,0,0,.55), 0 6px 24px rgba(0,0,0,.6); }
+  .pc-small { margin-bottom: 2px; }
+  .pc-key .pcw { letter-spacing: -0.035em; }
+  ${cap.smallStyle === "italic" ? `.pcs { font-family: ${cap.smallFont ?? "Inter"}, system-ui, sans-serif; font-style: italic; font-weight: 500; letter-spacing: -0.03em; margin: 0 0.1em; color: #fff; text-shadow: 0 2px 14px rgba(0,0,0,.6); }` : ""}
+  ${cap.keyFont ? `.pck { font-family: "${cap.keyFont}", ${cap.font ?? "Inter"}, sans-serif; }` : ""}${cap.keyItalic ? `.pck { font-style: italic; font-weight: 800; }` : ""}
+  ${cap.keyGradient ? `.pck { background: linear-gradient(180deg, ${cap.keyGradient.join(", ")}); -webkit-background-clip: text; background-clip: text; color: transparent !important; text-shadow: none; padding: 0 0.08em; filter: drop-shadow(0 0 ${cap.keyGlow ?? 16}px ${cap.keyGlowColor ?? "rgba(242,193,78,.45)"}) drop-shadow(0 4px 8px rgba(0,0,0,.55)); }` : ""}`
+  : cap.style === "duo"
+  ? `.duo { position: absolute; left: 50%; transform: translateX(-50%); white-space: nowrap; line-height: 1; font-family: ${cap.font ?? UI_FONT}, system-ui, sans-serif; font-weight: 600; letter-spacing: -0.05em; color: #fff; text-shadow: 0 2px 16px rgba(0,0,0,.35); }
+  .duo.big { font-weight: 700; letter-spacing: -0.055em; text-shadow: 0 6px 26px rgba(0,0,0,.4); }
+  .duo.ser { font-family: "${cap.serifFont ?? "Instrument Serif"}", Georgia, serif; font-style: italic; font-weight: 400; letter-spacing: -0.02em; }`
+  : cap.style === "hormozi"
   ? `.cap-group { font-family: Montserrat, ${UI_FONT}, system-ui, sans-serif; font-size: ${cap.size ?? 60}px; font-weight: 500; color: #fff; letter-spacing: -.5px; line-height: 1.2; max-width: 900px; text-shadow: 0 2px 10px rgba(0,0,0,.7), 0 0 2px rgba(0,0,0,.6); }
      .cap-group .w { margin: 0 .12em; } .cap-group .w.emph { font-weight: 800; }`
   : cap.style === "lux"
@@ -2268,6 +2569,8 @@ if (LAYERS.length) {
 let brandHtml = "";
 const TOP_UI = Math.round(H * 0.08);   // nothing static in the top 8% (phone status bar / app header)
 if (spec.watermark?.text) brandHtml += `<div style="position:absolute;top:${Math.max(TOP_UI, spec.watermark.y ?? 120)}px;right:${spec.watermark.x ?? 60}px;z-index:9;font-family:'${spec.watermark.font ?? "Instrument Serif"}',Georgia,serif;font-size:${spec.watermark.size ?? 54}px;letter-spacing:-0.5px;color:#fff;opacity:${spec.watermark.opacity ?? 0.38};pointer-events:none">${esc(spec.watermark.text)}</div>`;
+// a pinned show logo top-left (podcast): small spaced caps over one big word
+if (spec.showLogo) brandHtml += `<div class="show-logo" style="left:${spec.showLogo.x ?? 70}px;top:${spec.showLogo.y ?? 150}px;opacity:${spec.showLogo.opacity ?? 0.92}"><i>${esc(spec.showLogo.small ?? "")}</i><b>${esc(spec.showLogo.big ?? "")}</b></div>`;
 if (spec.look?.tint) brandHtml += `<div${LOOK_OV ? ' class="look-ov"' : ""} style="position:absolute;inset:0;z-index:3;pointer-events:none;background:${spec.look.tint.color ?? "#1d6b75"};mix-blend-mode:${spec.look.tint.blend ?? "soft-light"};opacity:${spec.look.tint.opacity ?? 0.22}"></div>`;
 if (spec.look?.grade) tl.push(`tl.set("#base", { filter: "${spec.look.grade}" }, 0);`);
 if (premiumDefs.length) brandHtml += premiumDefs.join("");
@@ -2723,9 +3026,13 @@ if (spec.master) fs.writeFileSync(path.join(proj, "build", "master.json"), JSON.
 // Explainer (opt-in beats / scenes; hand port of phantasic engine/core): the CSS of the `effect` hook title and the `cutout` concept page.
 // Written into index.html ONLY when such a beat / scene exists, so every other reel is byte-identical.
 // Ahmed's library-bundle beats (boxline, like, label, pin): their page CSS, written only when such a beat exists (so every other reel is byte-identical).
-const LIBRARY_CSS = (beats_) => {
+const LIBRARY_CSS = (beats_, spec_) => {
   const has = (t) => beats_.some((b) => b.type === t);
-  return (has("boxline") ? `
+  return (spec_.showLogo ? `
+  .show-logo { position: absolute; z-index: 9; color: #fff; font-family: Inter, system-ui, sans-serif; text-align: center; line-height: 1; pointer-events: none; text-shadow: 0 2px 10px rgba(0,0,0,.5); }
+  .show-logo i { display: block; font-style: normal; font-weight: 700; font-size: 30px; letter-spacing: .12em; }
+  .show-logo b { display: block; font-weight: 900; font-size: 64px; letter-spacing: -0.02em; }` : "")
+  + (has("boxline") ? `
   .bx { position: absolute; background: #fff; color: #0b0b0b; font-family: Inter, system-ui, sans-serif; font-weight: 900; line-height: 1.02; letter-spacing: -0.02em; padding: 18px 26px 20px; text-align: center; box-shadow: 0 14px 40px rgba(0,0,0,.35); transform-origin: 50% 50%; }
   .bx-lab { position: absolute; display: flex; align-items: flex-start; gap: 6px; color: #fff; font-family: Inter, system-ui, sans-serif; font-weight: 700; font-size: 46px; text-shadow: 0 2px 10px rgba(0,0,0,.7); }
   .bx-lab svg { width: 90px; height: 70px; }` : "")
@@ -2903,7 +3210,7 @@ const html = `<!doctype html>
   .compact .l-line { font-size: 36px; margin: 2px 0; }
   .compact .strike-x { font-size: 80px; top: 8px; }
   .w { display: inline-block; margin: 0 0.2em; transform-origin: 50% 80%; }
-  ${(spec.beats || []).some((b) => b.type === "scene" && String(b.kind).startsWith("gm-")) ? GM_CSS : ""}${(spec.beats || []).some((b) => String(b.type).startsWith("hz-")) ? `\n  :root { --hz-accent: ${brand.accent}; }\n  ${HZ_CSS}` : ""}${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}${EXPLAINER_CSS(spec, beatsList)}${LIBRARY_CSS(beatsList)}${spec.captions?.editorialShadow === "strong" ? `
+  ${(spec.beats || []).some((b) => b.type === "scene" && String(b.kind).startsWith("gm-")) ? GM_CSS : ""}${(spec.beats || []).some((b) => String(b.type).startsWith("hz-")) ? `\n  :root { --hz-accent: ${brand.accent}; }\n  ${HZ_CSS}` : ""}${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}${EXPLAINER_CSS(spec, beatsList)}${LIBRARY_CSS(beatsList, spec)}${spec.captions?.editorialShadow === "strong" ? `
   /* captions.editorialShadow "strong" (opt-in; Ahmed's f88943d): editorial captions legible on bright or busy footage */
   .ew { text-shadow: 0 1px 2px rgba(0,0,0,.9), 0 3px 8px rgba(0,0,0,.7), 0 6px 26px rgba(0,0,0,.6); }
   .ew.ebold { text-shadow: 0 2px 3px rgba(0,0,0,.85), 0 6px 24px rgba(0,0,0,.65); }
@@ -2913,13 +3220,13 @@ const html = `<!doctype html>
 </head>
 <body>
 <div id="root" class="${spec.layout?.compact ? "compact" : ""}" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${SECTION_MODE ? SECTION_TOTAL : TOTAL}" data-fps="${FPS}">
-  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip">${stageBgHtml}<div id="base"><div id="snap"><div id="push">${TX ? `<div id="tx" style="position:absolute;inset:0;transform-origin:50% 45%">` : ""}${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}${TX ? "</div>" : ""}${frontHtml.join("")}
+  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip">${stageBgHtml}${spec.stage && cap.behind ? `<div id="caps">${capHtml}</div>` : ""}<div id="base"><div id="snap"><div id="push">${TX ? `<div id="tx" style="position:absolute;inset:0;transform-origin:50% 45%">` : ""}${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}${TX ? "</div>" : ""}${frontHtml.join("")}
   </div></div></div>${stageFgHtml}</div>${roomWins.length ? `</div></div>` : ""}
   ${overlays.filter((o) => o.html).map((o) => o.html).join("\n  ")}
   ${layersUnderHtml}${grainHtml}${vignetteHtml}${letterboxHtml}
-  <div id="caps">
+  ${spec.stage && cap.behind ? "" : `<div id="caps">
       ${capHtml}
-  </div>
+  </div>`}
   ${titleHtml}
   ${brandHtml}${layersOverHtml}
   ${leakHtml}
