@@ -902,15 +902,17 @@ let matteHtml = "";
 // FIRST recording's cut-out at that timestamp and show the wrong person, silently. Refusing is the
 // only honest option until there is a matte per source, which is MULTIANGLE Gap 6's territory
 // (per-source framing) and not in this change.
-// spec.stage (below) lifts the single-source rule: each take reads the matte of its own recording
-if (spec.matte && SOURCES.length > 1 && !spec.stage) {
+// spec.stage (below) and ground beats lift the single-source rule: each take reads the matte of its own recording
+// A `ground` beat (speaker cut out over a page) takes the same per-recording route as `stage`: each take reads the matte of its own recording.
+const perSrcMatte = !!spec.stage || (spec.beats || []).some((b) => b.type === "ground");
+if (spec.matte && SOURCES.length > 1 && !perSrcMatte) {
   die(`spec.matte with ${SOURCES.length} sources is not supported: one matte is cut from ${SRC}, and every take indexes it by its own source time, so takes from the other recording(s) would show the wrong cut-out - drop spec.matte, or keep this reel single-source (MULTIANGLE Gap 6)`);
 }
 const matteRelOf = (s) => (s === SRC ? "assets/talk-matte.webm" : `assets/${path.basename(s).replace(/\.[^.]+$/, "")}-matte.webm`);
 // stage: a recording is cut out only when it has a face track (a screen recording or a photo has no person to cut out)
 const stageMatted = (s) => s === SRC || fs.existsSync(path.join(proj, facePathFor(s)));
 if (spec.matte) {
-  for (const s of spec.stage ? SOURCES.filter(stageMatted) : [SRC]) {
+  for (const s of perSrcMatte ? SOURCES.filter(stageMatted) : [SRC]) {
     const mp = path.resolve(proj, matteRelOf(s));
     if (!fs.existsSync(mp)) {
       console.log(`cutting the speaker out of ${s} (hyperframes remove-background, ~4 fps; cached in ${matteRelOf(s)})...`);
@@ -920,11 +922,11 @@ if (spec.matte) {
       execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 }); console.log("  matte done");
     }
   }
-  matteHtml = takes.map((k, i) => (spec.stage && !stageMatted(k.src)) ? "" : `
+  matteHtml = takes.map((k, i) => (perSrcMatte && !stageMatted(k.src)) ? "" : `
       <video id="matte-${i}" class="matte" src="${matteRelOf(k.src)}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="2" muted playsinline></video>`).join("");
   // the cut-out layer mirrors the plate's join transition so a `behind` beat never shows the
   // matte hard-cutting on top of a plate that is whipping or blurring underneath it.
-  for (const { i, kind, T, outDur, inDur } of takeJoins) if (!spec.stage || (stageMatted(takes[i - 1].src) && stageMatted(takes[i].src))) pushJoinTransition(`#matte-${i - 1}`, `#matte-${i}`, kind, T, outDur, inDur);
+  for (const { i, kind, T, outDur, inDur } of takeJoins) if (!perSrcMatte || (stageMatted(takes[i - 1].src) && stageMatted(takes[i].src))) pushJoinTransition(`#matte-${i - 1}`, `#matte-${i}`, kind, T, outDur, inDur);
 }
 // stage (premium, opt-in; hand port of phantasic d5b11ea + Podcast Glow v0.2-v0.5): the speaker is cut out (matte, one per
 // recording) and composited on a designed set; the plate is hidden. Ahmed's version cuts ONE matte from spec.source and
@@ -1224,6 +1226,7 @@ const hiddenCaps = [];
 // rebases them with the same offset renderLayer() uses.
 for (const l of LAYERS) if (l.hideCaptions === true && (l.kind === "motion" || l.kind === "text")) hiddenCaps.push([r3(l.t0 - (SECTION_MODE ? SECTION_START : 0)), r3(l.t1 - (SECTION_MODE ? SECTION_START : 0))]);
 const behindHtml = [];
+const groundWins = [];   // [t0, t1] of every `ground` beat (edit seconds), for the post-loop look/matte handling
 const frontHtml = [];   // behind-the-head words promoted in front of the matte by the legibility gate (spec.legibility.behind)
 let outroCovered = false;   // a full-frame beat (end card, scene, motion graphic) is drawn over the whole outro
 const shownCaps = []; // scenes that keep captions (captions.onlyInScenes shows ONLY these)
@@ -1287,7 +1290,7 @@ for (const b of beatsList) {
   if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(EB(o, "at") - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
   beatSpans.push({ t0, t1 });
   const dur = r3(t1 - t0);
-  if (["endcard", "scene", "motion"].includes(b.type) && t0 <= SPEECH + 1e-3 && t1 >= TOTAL - 0.5 / FPS) outroCovered = true;
+  if (["endcard", "scene", "motion", "ground"].includes(b.type) && t0 <= SPEECH + 1e-3 && t1 >= TOTAL - 0.5 / FPS) outroCovered = true;
   const inSlot = ["emoji", "logo", "meme", "icon"].includes(b.type);
   if (inSlot) {
     for (const [s, e] of slotUsed) if (t0 < e && t1 > s) warn.push(`reaction slot double-booked at ${b.at} (${b.type})`);
@@ -1623,6 +1626,45 @@ for (const b of beatsList) {
       beatSfx(b, t0, "impact", "behind word");
       break;
     }
+    case "ground": {
+      // (R1 B1 port of phantasic 0fd3ff2 + red-poster-fix2: gateBehind, b.lead, frame-0 fix, hideCaptions)
+      // the speaker CUT OUT over a flat page: a full-frame ground replaces the room behind them (between the plate and
+      // the matte), e.g. a maroon magazine page, grid paper, a teal card. {at, to, color | paper: "grid"|"cream"|"white",
+      // gradient: [c1, c2], backdrop: "<css filter>", grain, text, textColor, textSize, textY, lead, leadSize, leadY, leadColor,
+      // hideCaptions, ink, in: "fade", gridColor, gridSize}. Needs "matte": true. On a multi-source reel each take reads the
+      // matte of its own recording (a recording with no face track has none, and shows no speaker over the page: warned).
+      if (!spec.matte) die("a 'ground' beat needs \"matte\": true (a person cut-out of talk.mp4)");
+      if (SOURCES.length > 1) { const bare = takes.filter((k) => !stageMatted(k.src) && k.start < t1 && k.start + k.dur > t0); if (bare.length) warn.push(`ground at ${t0}s: ${[...new Set(bare.map((k) => k.src))].join(", ")} has no face track, so no cut-out speaker is drawn over the page there`); }
+      groundWins.push([t0, t1, b]);
+      const papers = { cream: "#EFE8DA", white: "#F7F7F5", grid: "#F4F3EF" };
+      // backdrop: "grayscale(1) contrast(1.1)" keeps the room but filters it (B&W room, colour speaker on top)
+      const base = b.backdrop ? "transparent" : b.gradient ? `linear-gradient(180deg, ${b.gradient[0]} 0%, ${b.gradient[1]} 100%)` : (b.color ?? papers[b.paper] ?? brand.accent);
+      const gc = b.gridColor ?? "rgba(0,0,0,.07)", grid = b.paper === "grid" ? `background-image:linear-gradient(${gc} 1px, transparent 1px),linear-gradient(90deg, ${gc} 1px, transparent 1px);background-size:${b.gridSize ?? 54}px ${b.gridSize ?? 54}px;` : "";
+      // text sits above the head by default (face track), else at textY / 300
+      let gsz = Math.min(b.textSize ?? 180, Math.floor(980 / Math.max(1, String(b.text || "").length * 0.62))), gy = b.textY, gFront = false;
+      if (gy === undefined) { const sp = face ? placer.span(t0, t1) : null; gy = sp && sp.seen ? Math.round(Math.max(placer.safeTop, sp.top - gsz - 30)) : 300; }
+      if (b.text) { const g = gateBehind(b.text, gsz, gy, t0, t1, 0.62, `ground word "${b.text}" at ${b.at}`); gy = g.y; gsz = g.size; gFront = g.front; }
+      const txt = b.text ? `<div id="${id}-t" class="ground-t" style="position:absolute;left:0;right:0;text-align:center;font-weight:900;line-height:.9;letter-spacing:-0.04em;font-family:${brand.displayFont ? `'${brand.displayFont}', ` : ""}Inter, system-ui, sans-serif;top:${gy + 230}px;font-size:${gsz}px;color:${b.textColor ?? "#fff"}${gFront ? ";text-shadow:0 6px 28px rgba(0,0,0,.4)" : ""}">${esc(b.text)}</div>` : "";
+      // b.lead (opt-in): a small serif line under the word carrying the words spoken while the page is up, so speech under a poster is never
+      // uncaptioned. leadY = its top (page px), else under the word
+      const leadHtml = b.lead ? `<div id="${id}-ld" style="position:absolute;left:60px;right:60px;text-align:center;font-family:'Instrument Serif',Georgia,serif;font-size:${b.leadSize ?? 66}px;line-height:1.05;color:${b.leadColor ?? b.textColor ?? "#fff"};top:${(b.leadY ?? (gy + Math.round(gsz * 0.95))) + 230}px">${esc(b.lead)}</div>` : "";
+      behindHtml.push(`<div id="${id}" class="clip ground" data-start="${t0}" data-duration="${dur}" data-track-index="1" style="position:absolute;inset:-12%;pointer-events:none;background:${base}${b.backdrop ? `;backdrop-filter:${b.backdrop};-webkit-backdrop-filter:${b.backdrop}` : ""}"><div class="ground-g" style="position:absolute;inset:0;${grid}${b.grain === false ? "" : "box-shadow: inset 0 0 220px rgba(0,0,0,.18);"}"></div>${gFront ? "" : txt}${leadHtml}</div>`);
+      // the word in front of the speaker: same frame (inset -12%) and timing, drawn above the matte
+      if (gFront) frontHtml.push(`<div id="${id}-f" class="clip" data-start="${t0}" data-duration="${dur}" data-track-index="3" style="position:absolute;inset:-12%;pointer-events:none">${txt}</div>`);
+      // a cut is a set: a 0.01 s tween from 0 left the page's first frame empty (raw room on frame 0 of a reel). A ground from frame 0
+      // gets only the "show" set: two sets at the same time 0 (hide, then show) left it hidden for its whole span when the renderer
+      // seeks frames (the room showed through for the first ground page)
+      if (b.in === "fade") tl.push(`ft("#${id}", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.25 }, ${t0});`);
+      else tl.push(t0 > 0.001 ? `tl.set("#${id}", { autoAlpha: 0 }, 0); tl.set("#${id}", { autoAlpha: 1 }, ${t0});` : `tl.set("#${id}", { autoAlpha: 1 }, 0);`);
+      // captions switch to dark ink while a light page is up (paper/white/cream, or b.ink), and back after
+      const ink = b.ink ?? (["grid", "cream", "white"].includes(b.paper) ? "#111" : null);
+      if (ink) { tl.push(`tl.set(".cw, .cap-group, .cap-group .w, .ew:not(.eser):not(.ealarm)", { color: "${ink}", textShadow: "none" }, ${t0});`); tl.push(`tl.set(".cw, .cap-group, .cap-group .w, .ew:not(.eser):not(.ealarm)", { clearProps: "color,textShadow" }, ${t1});`); }
+      if (b.text) tl.push(`ft("#${id}-t", { autoAlpha: 0, y: 40 }, { autoAlpha: 1, y: 0, duration: 0.35, ease: "expo.out" }, ${r3(t0 + 0.05)});`);
+      // b.hideCaptions (opt-in): the page's one huge word IS the caption (a caption over it doubled the word)
+      if (b.hideCaptions) hiddenCaps.push([t0, r3(t1 + 0.06)]);
+      beatSfx(b, t0, "whoosh", "ground page");
+      break;
+    }
     case "scene": {
       const sd = spec.scenes || {};
       const bb = { ...(sd[b.kind] || {}), ...b };
@@ -1724,7 +1766,7 @@ for (const b of beatsList) {
     default:
       die(`unknown beat type '${b.type}'`);
   }
-  if (b.type === "behind") continue;
+  if (b.type === "behind" || b.type === "ground") continue;
   if (!["endcard", "scene", "motion"].includes(b.type) && !(b.type === "meme" && memeLib(b.id).meta.clip)) tl.push(exit(`#${id}-in`, t1));
   const clipMeme = b.type === "meme" && memeLib(b.id).meta.clip;
   overlays.push({ html: clipMeme
@@ -1733,6 +1775,11 @@ for (const b of beatsList) {
 }
 
 CUR_BEAT = null;
+// .look-ov marks the brand tint, grain and vignette so a flat page can switch them off while it is up. Emitted ONLY when a ground
+// page (without backdrop) or look.cleanScenes asks for it, so every other reel's markup is unchanged.
+const groundFlat = groundWins.filter(([, , g]) => !g.backdrop && g.tint !== true);
+const LOOK_OV = groundFlat.length > 0 || !!spec.look?.cleanScenes;
+const OV = LOOK_OV ? " look-ov" : "";
 // a layer never straddles a section boundary (lib/sections.mjs): its span counts like a beat's
 for (const l of LAYERS) beatSpans.push({ t0: l.t0, t1: l.t1 });
 
@@ -2055,7 +2102,7 @@ if (LAYERS.length) {
 let brandHtml = "";
 const TOP_UI = Math.round(H * 0.08);   // nothing static in the top 8% (phone status bar / app header)
 if (spec.watermark?.text) brandHtml += `<div style="position:absolute;top:${Math.max(TOP_UI, spec.watermark.y ?? 120)}px;right:${spec.watermark.x ?? 60}px;z-index:9;font-family:'${spec.watermark.font ?? "Instrument Serif"}',Georgia,serif;font-size:${spec.watermark.size ?? 54}px;letter-spacing:-0.5px;color:#fff;opacity:${spec.watermark.opacity ?? 0.38};pointer-events:none">${esc(spec.watermark.text)}</div>`;
-if (spec.look?.tint) brandHtml += `<div style="position:absolute;inset:0;z-index:3;pointer-events:none;background:${spec.look.tint.color ?? "#1d6b75"};mix-blend-mode:${spec.look.tint.blend ?? "soft-light"};opacity:${spec.look.tint.opacity ?? 0.22}"></div>`;
+if (spec.look?.tint) brandHtml += `<div${LOOK_OV ? ' class="look-ov"' : ""} style="position:absolute;inset:0;z-index:3;pointer-events:none;background:${spec.look.tint.color ?? "#1d6b75"};mix-blend-mode:${spec.look.tint.blend ?? "soft-light"};opacity:${spec.look.tint.opacity ?? 0.22}"></div>`;
 if (spec.look?.grade) tl.push(`tl.set("#base", { filter: "${spec.look.grade}" }, 0);`);
 if (premiumDefs.length) brandHtml += premiumDefs.join("");
 
@@ -2561,12 +2608,23 @@ const HL_CSS = (spec.beats || []).some((b) => b.type === "headline") ? `
   .hl-ar { position: absolute; width: 170px; height: 215px; overflow: visible; filter: drop-shadow(0 0 10px ${rgbaOf(cap.color ?? brand.accent, 0.5)}); }` : "";
 const look = spec.look || {};
 if (look.exposure && look.exposure !== 1) tl.push(`tl.set("#pip", { filter: "brightness(${look.exposure}) contrast(${look.contrast ?? 1.04})" }, 0);`);
-const grainHtml = look.grain ? `<div id="grain" class="look-grain" style="opacity:${look.grain}"></div>` : "";
+const grainHtml = look.grain ? `<div id="grain" class="look-grain${OV}" style="opacity:${look.grain}"></div>` : "";
 // spec.letterbox { h }: black cinema bars top + bottom (h px each, 9:16 pixels scaled to the format), above the picture and
 // grain, under the captions (z 7; captions z 8, layers/watermark z 9)
 const lbxH = spec.letterbox ? Math.round((spec.letterbox.h ?? 300) * H / 1920) : 0;
 const letterboxHtml = spec.letterbox ? `<div class="lbx" style="position:absolute;left:0;right:0;top:0;height:${lbxH}px;background:#000;z-index:7"></div><div class="lbx" style="position:absolute;left:0;right:0;bottom:0;height:${lbxH}px;background:#000;z-index:7"></div>` : "";
-const vignetteHtml = look.vignette ? `<div class="look-vignette" style="background:radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 45%, rgba(0,0,0,${look.vignette}) 100%)"></div>` : "";
+const vignetteHtml = look.vignette ? `<div class="look-vignette${OV}" style="background:radial-gradient(ellipse at 50% 42%, rgba(0,0,0,0) 45%, rgba(0,0,0,${look.vignette}) 100%)"></div>` : "";
+// matteWindows (opt-in, with matte): the 4 fps cut-out is only needed while a behind word or a ground page is up; left on for the
+// whole reel it ghosts over the 30 fps plate, so it is shown only in those windows
+if (spec.matte && spec.matteWindows && !spec.stage) {
+  const wins = beatsList.map((b, i) => [b, beatSpans[i]]).filter(([b]) => ["behind", "ground"].includes(b.type)).map(([, sp]) => [sp.t0, sp.t1]).sort((p, q) => p[0] - q[0]);
+  const merged = []; for (const w of wins) { const m = merged.at(-1); if (m && w[0] <= m[1] + 0.05) m[1] = Math.max(m[1], w[1]); else merged.push([...w]); }
+  // never two sets on the same instant (a hide and a show both at 0 left the cut-out hidden in the render)
+  if (!merged.length || merged[0][0] > 0.05) tl.push(`tl.set(".matte", { autoAlpha: 0 }, 0);`);
+  for (const [a, b] of merged) { if (a > 0.05) tl.push(`tl.set(".matte", { autoAlpha: 1 }, ${r3(a - 0.02)});`); tl.push(`tl.set(".matte", { autoAlpha: 0 }, ${r3(b + 0.02)});`); }
+}
+// ground pages (flat colour/paper behind the cut-out speaker) always skip the brand tint, so white stays white
+for (const [a, b] of groundFlat) { tl.push(`tl.set(".look-ov", { visibility: "hidden" }, ${r3(a)});`); tl.push(`tl.set(".look-ov", { visibility: "visible" }, ${r3(b)});`); }
 if (look.grain) for (let t = 0, k = 0; t < TOTAL; t += 1 / 12, k++) tl.push(`tl.set("#grain", { backgroundPosition: "${(k * 137) % 400}px ${(k * 251) % 400}px" }, ${r3(t)});`);
 
 const html = `<!doctype html>
