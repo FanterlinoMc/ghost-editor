@@ -2040,7 +2040,7 @@ for (const b of beatsList) {
   const clipMeme = b.type === "meme" && memeLib(b.id).meta.clip;
   overlays.push({ html: clipMeme
     ? `<div id="${id}" class="layer">${inner}</div>` // the <video> inside is the timed element; a timed wrapper would break it
-    : `<div id="${id}" class="clip layer" data-start="${t0}" data-duration="${dur}" data-track-index="${b.type === "scene" ? 4 : inSlot ? 3 : 2}">${inner}</div>` });
+    : `<div id="${id}" class="clip layer" data-start="${t0}" data-duration="${dur}" data-track-index="${b.type === "scene" ? 4 : inSlot ? 3 : 2}"${b.type === "endcard" && b.bg === "none" ? ' style="z-index:5"' : ""}>${inner}</div>` });   // an over-footage card sits above B-roll scenes (premium-iman 95eaa38)
 }
 
 CUR_BEAT = null;
@@ -2469,11 +2469,19 @@ const typeHtml = cap.style !== "type" ? "" : (() => {
     }
     const widest = Math.max(...lines.map((l) => l.reduce((n, x) => n + em(x), 0)));
     // red verdicts are wide caps with a glow: size them on a wider letter estimate so they never touch the frame edge
-    const size = Math.max(cap.minSize ?? 54, Math.min(S0, Math.floor((isRed ? (cap.redMaxWidth ?? MAXW) : MAXW) / (widest * (isRed ? CHW * (cap.redCharW ?? 1.14) : CHW)))));
-    const lineH = size * 1.06 * (isRed ? RS : 1);
+    let size = Math.max(cap.minSize ?? 54, Math.min(S0, Math.floor((isRed ? (cap.redMaxWidth ?? MAXW) : MAXW) / (widest * (isRed ? CHW * (cap.redCharW ?? 1.14) : CHW)))));
+    let lineH = size * 1.06 * (isRed ? RS : 1);
     let pl;
     // the take that owns this card, for the head-top track of ITS recording (a recording with no cut-out falls back to the placer)
     const ownTake = spec.stage && cap.behind && headTopAt ? locateTake(takes, s, FPS) : null;
+    if (ownTake && stageMatted(ownTake.src)) {
+      // the block must read above the crown: when the head sits high, shrink the type to the room that is there
+      // (premium-iman 642e90e; only reached with stage + captions.behind, so no other style changes)
+      const q0 = ownTake.a + (s - ownTake.start), q1 = ownTake.a + (Math.min(e, ownTake.start + ownTake.dur) - ownTake.start);
+      const ht0 = headTopAt(ownTake.src, q0, q1) ?? 300, crown = 1920 - SUBJ * (1920 - ht0);
+      const room = crown - (cap.safeTop ?? 200), need = lines.length * lineH - lineH * (cap.overlap ?? 0.3);
+      if (need > room && room > 0) { size = Math.max(cap.minSize ?? 54, Math.floor(size * room / need)); lineH = size * 1.06 * (isRed ? RS : 1); }
+    }
     if (ownTake && stageMatted(ownTake.src)) {
       // behind the head: the block's bottom line dips `overlap` x its height under the crown, so the head covers the
       // middle of the last line (the DtFS look); never above the platform's top bar
@@ -2497,13 +2505,23 @@ const typeHtml = cap.style !== "type" ? "" : (() => {
     const cps = isRed && cap.redInstant ? 1e6 : Math.max(CPS, nCh / TYPE_MAX);
     if (cap.blurIn) tl.push(`ft("#${id}-in", { filter: "blur(${cap.blurIn}px)", opacity: 0.35 }, { filter: "blur(0px)", opacity: 1, duration: 0.13, ease: "power2.out" }, ${r3(Math.max(0.02, s))});`);
     tl.push(`tl.set("#${id} .tc-ch", { display: "none" }, 0);`);
-    for (let c = 0; c < nCh; c++) tl.push(`tl.set("#${id}c${c}", { display: "inline" }, ${r3(Math.max(0.02, s + c / cps))});`);
-    const typed = s + nCh / cps;
+    if (cap.wordReveal) {
+      // whole words land on their spoken start (no half-typed word is ever on screen); the space after a word comes
+      // with it. Char ids run line by line: word chars, then one space id between words of a line. (premium-iman b0d13c1)
+      let c = 0;
+      lines.forEach((l) => l.forEach((x, xi) => {
+        const n = [...x.text].length + (xi < l.length - 1 ? 1 : 0), at = r3(Math.max(0.02, s, Math.min(e - 0.1, x.w.start - 0.03)));
+        for (let j = 0; j < n; j++) tl.push(`tl.set("#${id}c${c + j}", { display: "inline" }, ${isRed && cap.redInstant ? r3(Math.max(0.02, s)) : at});`);
+        c += n;
+      }));
+    } else for (let c = 0; c < nCh; c++) tl.push(`tl.set("#${id}c${c}", { display: "inline" }, ${r3(Math.max(0.02, s + c / cps))});`);
+    const typed = cap.wordReveal ? s : s + nCh / cps;
     // the cursor: solid while typing, then blinks (0.5 s period) until the card cuts
     // one cursor per line: line i's cursor shows while it types, hands over to the next line, the last one blinks
-    lineStart.forEach((c0, li) => { if (li) { tl.push(`tl.set("#${id}-cur${li - 1}", { opacity: 0 }, ${r3(s + c0 / cps)});`); tl.push(`tl.set("#${id}-cur${li}", { opacity: 1 }, ${r3(s + c0 / cps)});`); } });
+    if (cap.cursor !== false) lineStart.forEach((c0, li) => { if (li) { tl.push(`tl.set("#${id}-cur${li - 1}", { opacity: 0 }, ${r3(s + c0 / cps)});`); tl.push(`tl.set("#${id}-cur${li}", { opacity: 1 }, ${r3(s + c0 / cps)});`); } });
     const lastCur = `#${id}-cur${lines.length - 1}`;
-    for (let t = typed + 0.25, on = false; t < e - 0.05; t += 0.25, on = !on) tl.push(`tl.set("${lastCur}", { opacity: ${on ? 1 : 0} }, ${r3(t)});`);
+    if (cap.cursor === false) lineStart.forEach((_, li) => tl.push(`tl.set("#${id}-cur${li}", { opacity: 0 }, 0);`));
+    else for (let t = typed + 0.25, on = false; t < e - 0.05; t += 0.25, on = !on) tl.push(`tl.set("${lastCur}", { opacity: ${on ? 1 : 0} }, ${r3(t)});`);
     if (isRed) {
       tl.push(`ft("#${id}-in", { scale: ${cap.slam ?? 1.14} }, { scale: 1, duration: 0.2, ease: "power3.out" }, ${r3(s)});`);
       [4, -4, 3, 0].forEach((dx, j) => tl.push(`tl.set("#${id}-in", { x: ${dx} }, ${r3(s + j / FPS)});`));
@@ -3331,7 +3349,9 @@ ${FX_ON ? `  #fx { position: absolute; inset: 0; transform-origin: 540px ${faceY
   .look-grain { position: absolute; inset: 0; z-index: 6; pointer-events: none; mix-blend-mode: overlay; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='400' height='400' filter='url(%23n)' opacity='0.9'/></svg>"); }
   .look-vignette { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
   .layer { z-index: 3; }
-  #caps, #ecaps { z-index: 8; }
+  #caps, #ecaps { z-index: 8; }${spec.stage && cap.behind ? `
+  /* captions.behind: the type sits BETWEEN the set and the cut-out speaker, so the head really covers it (premium-iman 642e90e) */
+  #pip > #caps { z-index: 1; } #pip > #base { z-index: 2; }` : ""}
   #push video, .fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .layer { position: absolute; inset: 0; pointer-events: none; }
   .ov { position: absolute; box-sizing: border-box; }
