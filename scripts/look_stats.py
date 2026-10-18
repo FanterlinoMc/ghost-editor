@@ -7,7 +7,7 @@ the kept takes, so build.mjs can steer the grade toward a template's target look
 Why: a fixed CSS grade on a warm webcam clip lands far from the template's references (held-out test, 6 Oct:
 saturation 137 vs refs 66). The reference editors grade per clip; look.target does the same.
 
-Ported from Ahmed's phantasic engine/core (origin/main). Fork notes: unchanged. Needs OpenCV and numpy. Nothing in the fork's build.mjs consumes `look.target` yet; this only measures.
+Ported from Ahmed's phantasic engine/core (origin/main). Fork notes: unchanged. Needs OpenCV and numpy. build.mjs consumes it for `look.target` (primary recording only).
 """
 import argparse
 import json

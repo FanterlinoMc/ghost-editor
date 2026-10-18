@@ -206,6 +206,51 @@ try {
   assert.ok(layoutModes(dir).has("behind"), "behind-the-head cards are logged");
   check("captions type + stage + behind: cards under the cut-out, placed from the head-top track");
 
+  // ================= look layer: refocus, energyPunch, cleanScenes, target =================
+  const HEADPAGE = { type: "headpage", at: 5.6, to: 7, src: PIC };
+  dir = project({ look: { refocus: { blur: 12, dur: 0.4 }, cleanScenes: true, grain: 0.1, vignette: 0.3 }, beats: [HEADPAGE] });
+  build(dir); h = html(dir);
+  assert.equal(count(h, /<div id="fx">/g), 1, "one #fx wrapper");
+  assert.ok(h.indexOf('<div id="fx">') > h.indexOf('<div id="push">') && h.indexOf('<div id="fx">') < h.indexOf('id="take-0"'), "#fx wraps the footage, inside #push");
+  assert.ok(/^  #fx \{ position: absolute; inset: 0; transform-origin: 540px \d+px;/m.test(h), "#fx css");
+  assert.ok(h.includes('tl.fromTo("#fx", { filter: "blur(12px) brightness(1)" }, { filter: "blur(0px) brightness(1)", duration: 0.4, ease: "power2.out", immediateRender: true }, 0);'), "refocus: the opening pull");
+  assert.ok(/immediateRender: false \}, 7\);/.test(h), "refocus: a pull when the page ends (7 s)");
+  assert.ok(h.includes('class="look-grain look-ov"') && h.includes('class="look-vignette look-ov"'), "cleanScenes marks the grain and vignette look-ov");
+  assert.ok(h.includes('tl.set(".look-ov", { visibility: "hidden" }, 5.6);') && h.includes('tl.set(".look-ov", { visibility: "visible" }, 7);'), "cleanScenes hides the overlays on a headpage");
+  dir = project({ look: { grain: 0.1 }, beats: [HEADPAGE] });
+  build(dir); h = html(dir);
+  assert.ok(!h.includes('id="fx"') && !h.includes("#fx {") && !h.includes("look-ov"), "no refocus/energyPunch/cleanScenes: no #fx and no look-ov at all");
+  check("look layer: refocus pulls on a #fx wrapper, cleanScenes via look-ov, and nothing extra when unset");
+
+  dir = project({ captions: { style: "duo", energy: [[2, 3.5]], energyPunch: { scale: 1.2, blur: 5 } } });
+  build(dir); h = html(dir);
+  assert.equal(count(h, /<div id="fx">/g), 1);
+  assert.ok(h.includes('tl.fromTo("#fx", { scale: 1.2, filter: "blur(5px) brightness(1)" }, { scale: 1, filter: "blur(0px) brightness(1)", duration: 0.28, ease: "power3.out", immediateRender: false }, 1.98);'), "energyPunch at the energy span start");
+  check("captions.energyPunch: a punch at each duo energy span");
+
+  // look.target: the grade is steered by a measured clip when python + OpenCV exist, else the style grade stays - either way no placeholder is left
+  dir = project({ look: { grade: "saturate(1.3) contrast(1.05)", target: { sat: 70, luma: 100 } }, beats: [{ type: "mood", at: 3, to: 4 }] });
+  log = build(dir); h = html(dir);
+  assert.ok(!h.includes("__LOOK_GRADE__"), "the mood placeholder is always filled in");
+  assert.ok(/look target: clip sat/.test(log) || /look\.target: could not measure the clip/.test(log), "measured, or warned that it could not be");
+  assert.match(h, /tl\.set\("#base", \{ filter: "(saturate\(1\.3\) contrast\(1\.05\)[^"]*) grayscale\(1\) contrast\(1\.12\)"\.trim\(\) \}, 3\);/, "the mood beat carries the (final) grade");
+  check(`look.target: mood placeholder filled, ${/look target: clip sat/.test(log) ? "clip measured" : "clip not measurable here (no python+OpenCV), style grade kept"}`);
+
+  // ================= cadence.targetPerMin / cadence.burst =================
+  const snapsOf = (d) => JSON.parse(fs.readFileSync(path.join(d, "build", "edit_truth.json"), "utf8")).snaps.map((x) => x.t);
+  dir = project({ cadence: { every: 1.3 } });
+  build(dir); const plain = snapsOf(dir);
+  dir = project({ cadence: { every: 1.3, burst: { count: 3, gap: 0.5, hold: 3 } } });
+  build(dir); const bursty = snapsOf(dir);
+  const gaps = bursty.slice(1).map((t, i) => +(t - bursty[i]).toFixed(2));
+  assert.ok(plain.length >= 4 && bursty.length >= 3, "punches exist");
+  assert.ok(gaps.some((g) => g < 1.0) && gaps.some((g) => g >= 2.5), `burst: close punches and long rests (${gaps.join(" ")})`);
+  assert.ok(Math.min(...plain.slice(1).map((t, i) => t - plain[i])) >= 0.6 - 1e-6, "without burst the minGap rule is unchanged");
+  dir = project({ cadence: { targetPerMin: 20, burst: { count: 2, gap: 0.6 } } });
+  log = build(dir);
+  assert.match(log, /cadence target 20\/min: 0 natural changes in 12\.0 s -> punch every [\d.]+ s \(bursts, hold [\d.]+ s\)/);
+  check("cadence: burst clusters punches, targetPerMin sets the pace, plain cadence unchanged");
+
   console.log("\nall build-ahmed-library tests passed");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });

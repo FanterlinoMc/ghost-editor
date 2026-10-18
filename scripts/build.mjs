@@ -682,16 +682,34 @@ const snaps = (zoom.snaps || []).map(([t, z]) => [E(t, "snap"), z]).sort((a, b) 
 const cadence = spec.cadence;
 const cadenceSnaps = new Set();
 if (cadence) {
-  const every = cadence.every ?? 1.3, minGap = cadence.minGap ?? 0.6;
+  let every = cadence.every ?? 1.3; const minGap = cadence.minGap ?? 0.6;
+  // cadence.targetPerMin (opt-in; Ahmed's engine/core): a TARGET pace instead of a fixed interval. The clip's own picture changes (jump cuts
+  // between takes, scene in/out, leaks) are counted first; punch-ins only fill the gap to the target, so a multi-take clip isn't over-cut and
+  // a one-take selfie isn't static
+  let burstHold = null;
+  if (cadence.targetPerMin) {
+    const sceneBeats = (spec.beats || []).filter((b) => b.type === "scene" || b.type === "ground").length, leaks = (spec.beats || []).filter((b) => b.type === "leak").length;
+    const natural = Math.max(0, takes.length - 1) + sceneBeats * 2 + leaks;
+    const needed = cadence.targetPerMin * SPEECH / 60 - natural;
+    every = needed > 0.5 ? Math.max(minGap, SPEECH / needed) : Infinity;
+    if (cadence.burst && Number.isFinite(every)) { const c = cadence.burst.count ?? 3, g = cadence.burst.gap ?? 0.5; burstHold = Math.max(g * 2, every * c - g * (c - 1)); }
+    console.log(`cadence target ${cadence.targetPerMin}/min: ${natural} natural changes in ${SPEECH.toFixed(1)} s -> punch every ${Number.isFinite(every) ? every.toFixed(2) + " s" : "never"}${burstHold ? ` (bursts, hold ${burstHold.toFixed(2)} s)` : ""}`);
+  }
   const scales = cadence.scales ?? [1, 1.12];
   const emphasis = new Set([].concat(spec.captions?.highlight || []).filter((h) => typeof h === "string").map((h) => h.toLowerCase()));
   const joins = takes.slice(1).map((k) => r3(k.start));
   let last = -Infinity, n = 0;
+  // cadence.burst {count, gap, hold} (opt-in): punches come in clusters (count punches `gap` s apart, then a `hold` s rest), the bunched
+  // rhythm of real edits instead of an even tick
+  const burst = cadence.burst; let inBurst = 0;
+  const need = () => burst ? (inBurst > 0 && inBurst < (burst.count ?? 3) ? (burst.gap ?? 0.5) : (burstHold ?? burst.hold ?? 4)) : every;
   const add = (t, why) => {
-    if (t - last < minGap || t >= SPEECH - 0.3) return;
-    if (snaps.some(([u]) => Math.abs(u - t) < minGap)) { last = t; return; }
+    const gapNow = burst && inBurst > 0 && inBurst < (burst.count ?? 3) ? Math.min(minGap, burst.gap ?? 0.5) : minGap;
+    if (t - last < gapNow || t >= SPEECH - 0.3) return;
+    if (snaps.some(([u]) => Math.abs(u - t) < gapNow)) { last = t; return; }
     const z = why === "emphasis" ? (cadence.emphasisScale ?? Math.max(...scales) + 0.06) : scales[n % scales.length];
     snaps.push([r3(t), z]); cadenceSnaps.add(r3(t)); last = t; n++;
+    if (burst) inBurst = inBurst >= (burst.count ?? 3) ? 1 : inBurst + 1;
   };
   let joinIndex = 0;
   for (const w of words) {
@@ -700,7 +718,7 @@ if (cadence) {
     while (joinIndex < joins.length && joins[joinIndex] <= w.start + 0.05) add(joins[joinIndex++], "jump cut");
     if (last !== before) continue;
     if (emphasis.has(core(w.word).toLowerCase()) || /!$/.test(w.word)) add(t, "emphasis");
-    else if (t - last >= every) add(t, "cadence");
+    else if (t - last >= need()) add(t, "cadence");
   }
   snaps.sort((a, b) => a[0] - b[0]);
   console.log(`cadence: ${cadenceSnaps.size} punch-ins added (~${(cadenceSnaps.size / Math.max(SPEECH, 1) * 60).toFixed(0)}/min)`);
@@ -1903,7 +1921,8 @@ for (const b of beatsList) {
     }
     case "mood": {
       // a whole sentence drops to black and white (hard cut in and out, like a grade change between shots)
-      const g = spec.look?.grade ?? "";
+      // with look.target the final grade is only known later: a placeholder, filled in once the target is measured
+      const g = spec.look?.target ? "__LOOK_GRADE__" : spec.look?.grade ?? "";
       tl.push(`tl.set("#base", { filter: "${g} grayscale(1) contrast(1.12)".trim() }, ${t0});`);
       tl.push(`tl.set("#base", { filter: "${g || "none"}" }, ${r3(t1)});`);
       break;
@@ -2208,8 +2227,9 @@ const podcastHtml = cap.style !== "podcast" ? "" : (() => {
     return `<div id="pc${gi}" class="pc-group clip" style="top:${Math.round(y)}px" data-start="${s}" data-duration="${r3(e - s)}" data-track-index="5">${body}</div>`;
   }).join("\n      ");
 })();
+const energySpans = cap.style === "duo" ? capSpans(cap.energy, "energy") : [];   // edit-second [from, to] of each energy span (duo)
 const duoHtml = cap.style !== "duo" ? "" : (() => {
-  const energy = capSpans(cap.energy, "energy"), serifSpans = capSpans(cap.serifSpans, "serifSpans");
+  const energy = energySpans, serifSpans = capSpans(cap.serifSpans, "serifSpans");
   const bareOf = (w) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
   const serifSet = new Set((cap.serif || []).map(bareOf));
   const inSpan = (xs, t) => xs.some(([a, b]) => t >= a - 0.02 && t < b);
@@ -2572,6 +2592,38 @@ if (spec.watermark?.text) brandHtml += `<div style="position:absolute;top:${Math
 // a pinned show logo top-left (podcast): small spaced caps over one big word
 if (spec.showLogo) brandHtml += `<div class="show-logo" style="left:${spec.showLogo.x ?? 70}px;top:${spec.showLogo.y ?? 150}px;opacity:${spec.showLogo.opacity ?? 0.92}"><i>${esc(spec.showLogo.small ?? "")}</i><b>${esc(spec.showLogo.big ?? "")}</b></div>`;
 if (spec.look?.tint) brandHtml += `<div${LOOK_OV ? ' class="look-ov"' : ""} style="position:absolute;inset:0;z-index:3;pointer-events:none;background:${spec.look.tint.color ?? "#1d6b75"};mix-blend-mode:${spec.look.tint.blend ?? "soft-light"};opacity:${spec.look.tint.opacity ?? 0.22}"></div>`;
+// look.target {sat, luma, satGain, satMin, satMax, lumaMin, lumaMax} (opt-in; Ahmed's engine/core): steer the grade toward the template's
+// measured look on THIS footage. The clip's own saturation/luma (look_stats.py, kept takes of the PRIMARY recording only) are pushed
+// through the style grade's saturate/brightness/contrast, and one extra saturate()+brightness() closes the gap (clamped, so a grey clip is
+// never forced to neon). If the clip cannot be measured (no python with OpenCV) the style grade is used as is, with a warning.
+if (spec.look?.target) {
+  const g = spec.look.grade && spec.look.grade !== "none" ? spec.look.grade : "";
+  const fnum = (name, dflt) => { const m = new RegExp(`${name}\\(([\\d.]+)\\)`).exec(g); return m ? parseFloat(m[1]) : dflt; };
+  try {
+    if (SOURCES.length > 1) warn.push(`look.target: measured on the primary recording (${SRC}) only; the ${SOURCES.length - 1} other recording(s) are graded by the same numbers`);
+    const stats = path.join(path.dirname(fileURLToPath(import.meta.url)), "look_stats.py");
+    const venv = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", ".venv");
+    // python is not "python3" everywhere: .venv first (Scripts\python.exe on Windows, bin/python elsewhere), then the launchers
+    const pys = [path.join(venv, "Scripts", "python.exe"), path.join(venv, "bin", "python")].filter((p) => fs.existsSync(p))
+      .concat(process.platform === "win32" ? ["py", "python"] : ["python3", "python"]);
+    const args = [stats, path.resolve(proj, SRC), "--takes", JSON.stringify(takes.filter((k) => k.src === SRC).map((k) => [k.a, k.b]))];
+    let st = null, lastErr = "";
+    for (const py of pys) {
+      try { st = JSON.parse(execFileSync(py, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })); break; } catch (e) { lastErr = String(e.stderr || e.message); }
+    }
+    if (!st) throw new Error(lastErr.trim().split("\n").at(-1) || "no python found");
+    const T = spec.look.target, clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+    // satGain: how much the finished reel's saturation exceeds the grade's prediction for this template
+    // (contrast, tint, coloured captions and cards), calibrated from held-out renders
+    const predSat = st.sat * fnum("saturate", 1) * (T.satGain ?? 1), predLuma = ((st.luma * fnum("brightness", 1)) - 128) * fnum("contrast", 1) + 128;
+    const ks = T.sat ? clamp(T.sat / Math.max(1, predSat), T.satMin ?? 0.55, T.satMax ?? 1.3) : 1;
+    const kb = T.luma ? clamp(T.luma / Math.max(1, predLuma), T.lumaMin ?? 0.75, T.lumaMax ?? 1.2) : 1;
+    spec.look.grade = `${g} saturate(${ks.toFixed(3)}) brightness(${kb.toFixed(3)})`.trim();
+    console.log(`look target: clip sat ${st.sat} luma ${st.luma} -> predicted ${predSat.toFixed(0)}/${predLuma.toFixed(0)}, target ${T.sat ?? "-"}/${T.luma ?? "-"}: saturate ${ks.toFixed(2)} brightness ${kb.toFixed(2)}`);
+  } catch (e) { warn.push(`look.target: could not measure the clip (${String(e.message).slice(0, 80)}); style grade used as is`); }
+  // fill the mood placeholder (a mood beat written before the target was measured); never leave __LOOK_GRADE__ in the page
+  for (let i = 0; i < tl.length; i++) if (typeof tl[i] === "string" && tl[i].includes("__LOOK_GRADE__")) tl[i] = tl[i].replaceAll("__LOOK_GRADE__", spec.look.grade ?? "").replace('filter: " grayscale', 'filter: "grayscale').replace('filter: "" }', 'filter: "none" }');
+}
 if (spec.look?.grade) tl.push(`tl.set("#base", { filter: "${spec.look.grade}" }, 0);`);
 if (premiumDefs.length) brandHtml += premiumDefs.join("");
 
@@ -3098,6 +3150,10 @@ const HL_CSS = (spec.beats || []).some((b) => b.type === "headline") ? `
   .hl-b { font-family: Anton, Oswald, sans-serif; font-weight: 400; line-height: .92; letter-spacing: 0.005em; white-space: nowrap; transform-origin: 50% 60%; text-shadow: 0 0 26px ${rgbaOf(cap.color ?? brand.accent, 0.55)}, 0 0 70px ${rgbaOf(cap.color ?? brand.accent, 0.35)}, 0 8px 22px rgba(0,0,0,.55); }
   .hl-ar { position: absolute; width: 170px; height: 215px; overflow: visible; filter: drop-shadow(0 0 10px ${rgbaOf(cap.color ?? brand.accent, 0.5)}); }` : "";
 const look = spec.look || {};
+// #fx is the optional blur / punch layer between #push and the footage (look.refocus, captions.energyPunch). It is emitted ONLY when one of
+// them is on. (The popcard defocus and the leak bloom also tween "#fx"; on a reel that has none of these keys they find no element and do
+// nothing - as before.)
+const FX_ON = !!look.refocus || (cap.style === "duo" && !!cap.energyPunch);
 if (look.exposure && look.exposure !== 1) tl.push(`tl.set("#pip", { filter: "brightness(${look.exposure}) contrast(${look.contrast ?? 1.04})" }, 0);`);
 const grainHtml = look.grain ? `<div id="grain" class="look-grain${OV}" style="opacity:${look.grain}"></div>` : "";
 // spec.letterbox { h }: black cinema bars top + bottom (h px each, 9:16 pixels scaled to the format), above the picture and
@@ -3116,6 +3172,20 @@ if (spec.matte && spec.matteWindows && !spec.stage) {
 }
 // ground pages (flat colour/paper behind the cut-out speaker) always skip the brand tint, so white stays white
 for (const [a, b] of groundFlat) { tl.push(`tl.set(".look-ov", { visibility: "hidden" }, ${r3(a)});`); tl.push(`tl.set(".look-ov", { visibility: "visible" }, ${r3(b)});`); }
+// look.cleanScenes: flat graphic pages (word pages, highlight pages) stay clean; the tint, vignette and grain belong to the camera picture only
+if (look.cleanScenes) for (const [b, sp] of beatsList.map((b, i) => [b, beatSpans[i]]).filter(([b]) => (b.type === "scene" && ["wordpage", "highlight", "cardpage"].includes(b.kind)) || b.type === "mood" || b.type === "headpage" || b.type === "photostack")) {
+  tl.push(`tl.set(".look-ov", { visibility: "hidden" }, ${r3(sp.t0)});`); tl.push(`tl.set(".look-ov", { visibility: "visible" }, ${r3(sp.t1)});`);
+}
+// look.refocus {blur, dur}: the video opens, and the camera comes back from every page, out of focus and pulls sharp
+if (look.refocus) {
+  const pulls = [0, ...beatsList.map((b, i) => [b, beatSpans[i]]).filter(([b]) => b.type === "scene" || b.type === "headpage" || b.type === "photostack").map(([, sp]) => sp.t1)].filter((t) => t < TOTAL - 0.3);
+  for (const t of pulls) tl.push(`tl.fromTo("#fx", { filter: "blur(${look.refocus.blur ?? 14}px) brightness(1)" }, { filter: "blur(0px) brightness(1)", duration: ${look.refocus.dur ?? 0.3}, ease: "power2.out", immediateRender: ${t === 0} }, ${r3(t)});`);
+}
+// captions.energyPunch {scale, blur} (duo only): every energy span opens with a zoom punch that smears for a few frames, then settles
+if (cap.style === "duo" && cap.energyPunch) for (const [t] of energySpans) {
+  tl.push(`tl.fromTo("#fx", { scale: ${cap.energyPunch.scale ?? 1.14}, filter: "blur(${cap.energyPunch.blur ?? 7}px) brightness(1)" }, { scale: 1, filter: "blur(0px) brightness(1)", duration: 0.28, ease: "power3.out", immediateRender: false }, ${r3(Math.max(0, t - 0.02))});`);
+  addSfx(Math.max(0, t - 0.02), "zoom-sweep-short", "energy punch", { db: spec.sound?.zoomDb ?? -10 });
+}
 if (look.grain) for (let t = 0, k = 0; t < TOTAL; t += 1 / 12, k++) tl.push(`tl.set("#grain", { backgroundPosition: "${(k * 137) % 400}px ${(k * 251) % 400}px" }, ${r3(t)});`);
 
 const html = `<!doctype html>
@@ -3144,7 +3214,7 @@ const html = `<!doctype html>
   #roomfill { position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; background: ${resolveColor(ROOM_FILL, brand)}; }
   #room { position: absolute; left: var(--room-ix, 0px); right: var(--room-ix, 0px); top: 0; bottom: var(--room-ib, 0px); z-index: 1; overflow: hidden; border-radius: var(--room-r, 0px); will-change: transform; transform-origin: 50% 0; }
   #roomin { position: absolute; left: calc(var(--room-ix, 0px) * -1); top: 0; width: ${W}px; height: ${H}px; }` : ""}
-  .behind { position: absolute; inset: 0; pointer-events: none; }${HL_CSS}
+${FX_ON ? `  #fx { position: absolute; inset: 0; transform-origin: 540px ${faceY}px; filter: blur(0px) brightness(1); }\n` : ""}  .behind { position: absolute; inset: 0; pointer-events: none; }${HL_CSS}
   .behind-in { position: absolute; left: -40px; right: -40px; text-align: center; font-weight: 900; line-height: .86; letter-spacing: -6px; text-transform: uppercase; white-space: nowrap; font-family: ${brand.displayFont ? `"${brand.displayFont}", ` : ""}${UI_FONT}, sans-serif; }
   .matte { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }${stageCss ? `\n  ${stageCss}` : ""}
   .look-grain { position: absolute; inset: 0; z-index: 6; pointer-events: none; mix-blend-mode: overlay; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='400' height='400' filter='url(%23n)' opacity='0.9'/></svg>"); }
@@ -3220,7 +3290,7 @@ const html = `<!doctype html>
 </head>
 <body>
 <div id="root" class="${spec.layout?.compact ? "compact" : ""}" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${SECTION_MODE ? SECTION_TOTAL : TOTAL}" data-fps="${FPS}">
-  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip">${stageBgHtml}${spec.stage && cap.behind ? `<div id="caps">${capHtml}</div>` : ""}<div id="base"><div id="snap"><div id="push">${TX ? `<div id="tx" style="position:absolute;inset:0;transform-origin:50% 45%">` : ""}${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}${TX ? "</div>" : ""}${frontHtml.join("")}
+  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip">${stageBgHtml}${spec.stage && cap.behind ? `<div id="caps">${capHtml}</div>` : ""}<div id="base"><div id="snap"><div id="push">${FX_ON ? '<div id="fx">' : ""}${TX ? `<div id="tx" style="position:absolute;inset:0;transform-origin:50% 45%">` : ""}${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}${TX ? "</div>" : ""}${frontHtml.join("")}${FX_ON ? "</div>" : ""}
   </div></div></div>${stageFgHtml}</div>${roomWins.length ? `</div></div>` : ""}
   ${overlays.filter((o) => o.html).map((o) => o.html).join("\n  ")}
   ${layersUnderHtml}${grainHtml}${vignetteHtml}${letterboxHtml}
