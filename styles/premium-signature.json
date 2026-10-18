@@ -48,7 +48,8 @@
     "pen": false,
     "zoom": false,
     "complete": true,
-    "heroDb": -10
+    "heroDb": -10,
+    "completeMix": true
   },
   "music": {
     "id": "silent-descent",

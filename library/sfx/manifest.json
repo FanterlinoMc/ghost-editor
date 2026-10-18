@@ -632,5 +632,79 @@
     "licence": "Mixkit Free SFX licence (commercial OK, no redistribution as-is)",
     "licensed": true,
     "mixkit_id": "2901"
+  },
+  "zoom-sweep-small": {
+    "file": "zoom-sweep-small.wav",
+    "role": "ui",
+    "tags": [
+      "zoom",
+      "punch",
+      "sweep"
+    ],
+    "duration": 0.6,
+    "peak_db": -1.0,
+    "source": "https://mixkit.co/free-sound-effects/ #1714",
+    "licence": "Mixkit Free SFX licence (commercial OK, no redistribution as-is)",
+    "licensed": true,
+    "mixkit_id": "1714"
+  },
+  "zoom-sweep-short": {
+    "file": "zoom-sweep-short.wav",
+    "role": "ui",
+    "tags": [
+      "zoom",
+      "sweep"
+    ],
+    "duration": 0.7,
+    "peak_db": -1.0,
+    "source": "https://mixkit.co/free-sound-effects/ #2719",
+    "licence": "Mixkit Free SFX licence (commercial OK, no redistribution as-is)",
+    "licensed": true,
+    "mixkit_id": "2719"
+  },
+  "pop-whoosh-light": {
+    "file": "pop-whoosh-light.wav",
+    "role": "ui",
+    "tags": [
+      "pop",
+      "whoosh",
+      "light"
+    ],
+    "duration": 0.447,
+    "peak_db": -1.0,
+    "source": "https://mixkit.co/free-sound-effects/ #1485",
+    "licence": "Mixkit Free SFX licence (commercial OK, no redistribution as-is)",
+    "licensed": true,
+    "mixkit_id": "1485"
+  },
+  "burn-whoosh-fast": {
+    "file": "burn-whoosh-fast.wav",
+    "role": "whoosh",
+    "tags": [
+      "burn",
+      "flash",
+      "whoosh"
+    ],
+    "duration": 1.1,
+    "peak_db": -1.0,
+    "source": "https://mixkit.co/free-sound-effects/ #1486",
+    "licence": "Mixkit Free SFX licence (commercial OK, no redistribution as-is)",
+    "licensed": true,
+    "mixkit_id": "1486"
+  },
+  "burn-whoosh-tunnel": {
+    "file": "burn-whoosh-tunnel.wav",
+    "role": "whoosh",
+    "tags": [
+      "burn",
+      "whoosh",
+      "reverb"
+    ],
+    "duration": 1.5,
+    "peak_db": -1.0,
+    "source": "https://mixkit.co/free-sound-effects/ #2909",
+    "licence": "Mixkit Free SFX licence (commercial OK, no redistribution as-is)",
+    "licensed": true,
+    "mixkit_id": "2909"
   }
 }

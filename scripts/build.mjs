@@ -41,7 +41,7 @@ import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const LIB = path.join(SKILL, "library");
+const LIB = process.env.PHANTASIC_LIB ? path.resolve(process.env.PHANTASIC_LIB) : path.join(SKILL, "library");   // PHANTASIC_LIB: another library root (tests; a studio with its own sounds)
 const proj = path.resolve(process.argv[2] || ".");
 const rawSpec = JSON.parse(fs.readFileSync(path.join(proj, "reel.json"), "utf8"));
 // a style preset (styles/<name>.json) supplies defaults; reel.json overrides
@@ -2246,8 +2246,10 @@ for (const e of memeHits) {
 }
 // An event with a .fade (a riser cut at the boom) gets a volume lane that ends on silence. NOTE: sounds added after this point
 // (type-card hits, list marks, zoom swishes, leaks, object pops, burns...) are dropped from the mix because the tags are built
-// here; sound.complete: true builds them at write time instead, so every planned hit plays. Off by default so every existing
-// style keeps the mix it was approved with.
+// here; sound.completeMix: true builds them at write time instead, so every planned hit plays. Off by default so every existing
+// style keeps the mix it was approved with. NOTE the key: Ahmed's engine calls this `sound.complete`, and a dozen fork styles already
+// carry that as data (breakdown, gadzhi-*, hormozi, mono, monologue, podcast*, ...). Reading it would change their mix, so the
+// premium styles use this separate opt-in until someone decides to switch the older ones.
 const sfxFade = (e) => { const d = r3(Math.min(e.dur, TOTAL - e.t)); return ` data-automation='${JSON.stringify({ version: 1, lanes: [{ target: "volume", points: [{ t: 0, v: 1 }, { t: r3(Math.max(0, d - e.fade)), v: 1 }, { t: d, v: 0 }] }] })}'`; };
 const sfxTag = (e, i) => `<audio id="sfx-${i}" src="${e.src}" data-start="${e.t}" data-duration="${r3(Math.min(e.dur, TOTAL - e.t))}" data-track-index="${14 + (i % 4)}" data-volume="${e.vol}"${e.fade ? sfxFade(e) : ""}></audio>`;
 const sfxAudio = sfxEvents.filter((e) => !e.id.startsWith("meme:")).map(sfxTag);
@@ -3607,7 +3609,7 @@ ${FX_ON ? `  #fx { position: absolute; inset: 0; transform-origin: 540px ${faceY
   ${edit ? edit.html : ""}
   ${takeAudio}${layerAudioHtml}
   ${overlays.filter((o) => o.audio).map((o) => o.audio).join("\n  ")}
-  ${(spec.sound?.complete ? sfxAudioAll() : sfxAudio).join("\n  ")}
+  ${(spec.sound?.completeMix ? sfxAudioAll() : sfxAudio).join("\n  ")}
   ${musicHtml}
 </div>
 <script>
