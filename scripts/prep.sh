@@ -108,6 +108,23 @@ rot=$(ffprobe -v error -select_streams v:0 -show_entries stream_side_data=rotati
 if [ "${rot:-0}" = "90" ] || [ "${rot:-0}" = "270" ]; then t=$w; w=$h; h=$t; fi
 echo "source ${w}x${h} (rotation ${rot:-none}), $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$src") s -> target ${tw}x${th} ($fmt)"
 
+# ---- STABILIZE=1 (opt-in; Ahmed's Keynote 3, phantasic ff71824): 2-pass vidstab with heavy smoothing and auto zoom, so a handheld
+# camera reads as locked off (e.g. the Monk's "one locked shot"); STAB_TRIPOD=1 locks to the first frame, STAB_SMOOTH=N sets the
+# smoothing (default 150). The face crop below then sees a still frame and picks a static crop instead of a pan. Needs an ffmpeg
+# built with libvidstab; without it (or on any failure) the source is used as it is and the log says so. Video sources only.
+# Run inside build/ with bare file names: a Windows drive-letter colon in "result=D:/..." would break the filter-option parser.
+if [ "${STABILIZE:-0}" = "1" ] && [ "$kind" = video ]; then
+  case "$src" in /*|?:*) abssrc="$src" ;; *) abssrc="$PWD/$src" ;; esac
+  stabtrf="stab$sfx.trf"; stabmp4="stab$sfx.mp4"
+  if (cd "$proj/build" \
+      && ffmpeg -nostdin -hide_banner -nostats -v error -y -i "$abssrc" -vf "vidstabdetect=shakiness=6${STAB_TRIPOD:+:tripod=1}:result=$stabtrf" -f null - \
+      && ffmpeg -nostdin -hide_banner -nostats -v error -y -i "$abssrc" -vf "vidstabtransform=input=$stabtrf:smoothing=${STAB_SMOOTH:-150}${STAB_TRIPOD:+:tripod=1}:optzoom=1:interpol=bicubic,unsharp=5:5:0.6" -c:v libx264 -crf 16 -preset fast -c:a copy "$stabmp4"); then
+    src="$proj/build/$stabmp4"; echo "stabilized (vidstab, smoothing ${STAB_SMOOTH:-150})"
+  else
+    echo "stabilize: STABILIZE=1 but ffmpeg vidstab failed (is libvidstab built in?) -- using the source as it is"
+  fi
+fi
+
 # One filter for every source orientation and every target aspect: scale up (preserving the
 # source's own aspect ratio) until the frame covers tw:th on both axes, then crop to exactly
 # tw:th. This replaces the old w<h branch (portrait: scale-then-crop; landscape:

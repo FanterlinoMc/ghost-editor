@@ -2094,7 +2094,7 @@ if (spec.leaks) {
     if (!fs_.length) return "";
     const { scale: cs, offsetX: cox, offsetY: coy } = crops[k.src] || { scale: 1, offsetX: 0, offsetY: 0 };
     const med = (i) => fs_.map((s) => s[i]).sort((a, b) => a - b)[Math.floor(fs_.length / 2)];
-    const cx = ((med(3) + med(4)) / 2 * cs + cox) / W * 100, cy = ((med(1) + med(2)) / 2 * cs + coy) / H * 100, rx = (med(4) - med(3)) * cs / W * 100 * 1.5, ry = (med(2) - med(1)) * cs / H * 100 * 1.4;
+    const cx = ((med(3) + med(4)) / 2 * cs + cox) / W * 100, cy = ((med(1) + med(2)) / 2 * cs + coy) / H * 100, rx = (med(4) - med(3)) * cs / W * 100 * (spec.leaks.maskScale ?? 1.5), ry = (med(2) - med(1)) * cs / H * 100 * (spec.leaks.maskScale != null ? spec.leaks.maskScale * 0.93 : 1.4);   // leaks.maskScale (opt-in; Ahmed's Keynote 3, ff71824): the face hole vs the face box. A close-up face fills the frame, so 1.5x hid the whole flash
     const g = `radial-gradient(ellipse ${rx.toFixed(1)}% ${ry.toFixed(1)}% at ${cx.toFixed(1)}% ${cy.toFixed(1)}%, transparent 55%, #000 100%)`;
     return `-webkit-mask-image:${g};mask-image:${g};`;
   };
@@ -2104,9 +2104,16 @@ if (spec.leaks) {
     // Alif: a flash is never silent; the whoosh rides it
     if (spec.sound?.leaks) addSfx(t - 0.3, spec.sound.leakSfx ?? "whoosh-cine", "light leak", { db: spec.sound.leakDb ?? -12 });
     if (clip) { packOverlay(clip, t - 0.35, 1.3, { blend: "screen", z: 7, opacity: 1, media: spec.leaks.media ?? 1.2, fadeIn: 0.25, fadeOut: 0.5, filter: spec.leaks.boost ?? "brightness(1.9) saturate(1.25)" }); return; }
-    leakHtml += `<div id="leak${i}" class="clip" data-start="${r3(Math.max(0, t - 0.25))}" data-duration="0.9" data-track-index="10" style="position:absolute;inset:0;z-index:7;pointer-events:none;mix-blend-mode:screen;opacity:0;${leakMaskAt(t)}background:radial-gradient(ellipse 120% 90% at ${spec.leaks.x ?? 30}% ${spec.leaks.y ?? 40}%, rgba(${color},0.95) 0%, rgba(${color},0.55) 35%, rgba(255,90,20,0.18) 70%, rgba(0,0,0,0) 100%)"></div>`;
+    // leaks.shape "edge" / leaks.blend / leaks.hold / leaks.fadeOut (all opt-in; Ahmed's Keynote 3, ff71824). Defaults reproduce the old
+    // flash exactly: a centred glow, blend "screen", 0.9 s clip, a 0.55 s burn-out right after the peak. "edge" is a warm orange burn
+    // entering from one frame edge (alternating sides), never the centre; hold keeps the peak, fadeOut is a slower burn-out.
+    const lHold = spec.leaks.hold ?? 0, lOut = spec.leaks.fadeOut ?? 0.55;
+    const leakBg = spec.leaks.shape === "edge"
+      ? `radial-gradient(ellipse 95% 75% at ${i % 2 ? 100 : 0}% ${spec.leaks.y ?? 38}%, rgba(255,150,40,0.95) 0%, rgba(255,105,25,0.55) 38%, rgba(255,80,10,0) 78%)`
+      : `radial-gradient(ellipse 120% 90% at ${spec.leaks.x ?? 30}% ${spec.leaks.y ?? 40}%, rgba(${color},0.95) 0%, rgba(${color},0.55) 35%, rgba(255,90,20,0.18) 70%, rgba(0,0,0,0) 100%)`;
+    leakHtml += `<div id="leak${i}" class="clip" data-start="${r3(Math.max(0, t - 0.25))}" data-duration="${r3(0.9 + lHold + Math.max(0, lOut - 0.55))}" data-track-index="10" style="position:absolute;inset:0;z-index:7;pointer-events:none;mix-blend-mode:${spec.leaks.blend ?? "screen"};opacity:0;${leakMaskAt(t)}background:${leakBg}"></div>`;
     tl.push(`ft("#leak${i}", { opacity: 0 }, { opacity: ${leakPeak}, duration: 0.22, ease: "power2.in" }, ${r3(Math.max(0, t - 0.22))});`);
-    tl.push(`tl.to("#leak${i}", { opacity: 0, duration: 0.55, ease: "power2.out" }, ${r3(t + 0.05)});`);
+    tl.push(`tl.to("#leak${i}", { opacity: 0, duration: ${lOut}, ease: "power2.out" }, ${r3(t + 0.05 + lHold)});`);
   });
   if (times.length) console.log(`light leaks: ${times.length} at ${times.join(", ")}`);
 }

@@ -1,0 +1,15 @@
+{
+  "_about": "Keynote 5: Keynote 4 plus the rest of Ahmed's Keynote 3.1 light-leak work (phantasic ff71824, 9 Oct 2026), all opt-in keys. Leaks become a warm orange burn entering from alternate frame edges (leaks.shape edge, blend normal) that holds at its peak (hold 0.35) and burns out slowly (fadeOut 0.75) so the flash reads at phone speed; peak 0.8; the face hole in the mask is 0.9x the face box (leaks.maskScale), because a close-up face fills the frame and 1.5x hid the whole flash. Leaves keynote, keynote-3 and keynote-4 untouched. NOT in a style: the pillarbox-aware crop is prep.sh FACE_CROP=1 with FACE_PILLAR=1, and STABILIZE=1 is also a prep.sh environment option.",
+  "extends": "keynote-4",
+  "leaks": {
+    "every": 9,
+    "sentenceFallback": true,
+    "faceSafe": true,
+    "peak": 0.8,
+    "shape": "edge",
+    "blend": "normal",
+    "hold": 0.35,
+    "fadeOut": 0.75,
+    "maskScale": 0.9
+  }
+}
