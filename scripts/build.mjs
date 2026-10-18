@@ -1271,7 +1271,28 @@ const faceFile = path.join(proj, spec.face || "build/face.json");
 const faceY = medianFaceY(fs.existsSync(faceFile) ? JSON.parse(fs.readFileSync(faceFile, "utf8")) : null, 700);
 const faceYBySrc = new Map(SOURCES.map((s) => [s, medianFaceY(faces[s], SOURCES.length > 1 && s !== PRIMARY_SRC && !faces[s]?.samples?.length ? 700 : faceY)]));
 const faceYAt = (t) => faceYBySrc.get(locateTake(takes, t, FPS)?.src) ?? faceY;
-const motionCtx = { tl, E, r3, brollGrade, gmTheme: spec.gm?.theme, safeTop: placer.safeTop, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
+// white 24x24 glyphs for the UI Story Ad #10 pills (drawn here, no icon font)
+const UI_GLYPHS = {
+  check: `<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`,
+  doc: `<path d="M6 2.5h8l4.5 4.5v14.5H6z" fill="#fff"/><path d="M14 2.5V7h4.5" fill="none" stroke="#1FC24A" stroke-width="1.2"/><path d="M8.5 11h7M8.5 14h7M8.5 17h5" stroke="#1FC24A" stroke-width="1.4" stroke-linecap="round"/>`,
+  report: `<path d="M5 3h10l4 4v14H5z" fill="#fff"/><path d="M8 17v-3M11.5 17v-6M15 17v-4" stroke="#1FC24A" stroke-width="1.8" stroke-linecap="round"/>`,
+  chart: `<path d="M4 20h16" stroke="#fff" stroke-width="2" stroke-linecap="round"/><rect x="5" y="12" width="3" height="6" rx=".6" fill="#fff"/><rect x="10.5" y="8" width="3" height="10" rx=".6" fill="#fff"/><rect x="16" y="4" width="3" height="14" rx=".6" fill="#fff"/>`,
+  people: `<circle cx="9" cy="8" r="3.4" fill="#fff"/><path d="M2.5 20c.6-4 3.2-6 6.5-6s5.9 2 6.5 6z" fill="#fff"/><circle cx="16.5" cy="9" r="2.6" fill="#fff"/><path d="M16 14.2c3 .2 5 2 5.5 5.3h-4.4" fill="#fff"/>`,
+  globe: `<circle cx="12" cy="12" r="9" fill="none" stroke="#fff" stroke-width="2"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18" fill="none" stroke="#fff" stroke-width="1.6"/>`,
+  image: `<rect x="3" y="4.5" width="18" height="15" rx="2" fill="none" stroke="#fff" stroke-width="2"/><circle cx="8.5" cy="9.5" r="1.8" fill="#fff"/><path d="M4 18l5.5-5.5 4 4 2.5-2.5 4 4" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>`,
+  book: `<path d="M4 4.5c3-1 6-1 8 1 2-2 5-2 8-1V19c-3-1-6-1-8 1-2-2-5-2-8-1z" fill="#fff"/><path d="M12 5.5V20" stroke="#1FC24A" stroke-width="1.3"/>`,
+  archive: `<rect x="3" y="4" width="18" height="5" rx="1" fill="#fff"/><path d="M4.5 10h15v9.5H4.5z" fill="#fff"/><path d="M9.5 13h5" stroke="#1FC24A" stroke-width="1.8" stroke-linecap="round"/>`,
+  museum: `<path d="M12 2.8L21 7.5H3z" fill="#fff"/><path d="M5 9.5v8M9.7 9.5v8M14.3 9.5v8M19 9.5v8" stroke="#fff" stroke-width="2.2"/><path d="M3 19.5h18v1.8H3z" fill="#fff"/>`,
+  home: `<path d="M3.5 11L12 4l8.5 7" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10.5V20h12v-9.5" fill="#fff"/>`,
+  shield: `<path d="M12 2.5l8 3v6c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10v-6z" fill="#fff"/><path d="M8.5 12l2.5 2.5 4.5-5" fill="none" stroke="#1FC24A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+  heart: `<path d="M12 20.5S3.5 15.3 3.5 9.2A4.4 4.4 0 0112 7a4.4 4.4 0 018.5 2.2c0 6.1-8.5 11.3-8.5 11.3z" fill="#fff"/>`,
+  clock: `<circle cx="12" cy="12" r="9" fill="#fff"/><path d="M12 7v5.3l3.4 2" fill="none" stroke="#1FC24A" stroke-width="2" stroke-linecap="round"/>`,
+  star: `<path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6L12 16.7 6.6 19.6l1.1-6L3.2 9.4l6.1-.8z" fill="#fff"/>`,
+  bolt: `<path d="M13.5 2L5 13.5h6L10 22l9-12h-6z" fill="#fff"/>`,
+  mask: `<path d="M3 8.5c3-1.5 6-2 9-2s6 .5 9 2v4c0 3.5-4 6.5-9 6.5s-9-3-9-6.5z" fill="#fff"/><path d="M7 11h10M7 14h10" stroke="#1FC24A" stroke-width="1.3" stroke-linecap="round"/>`,
+  tree: `<path d="M12 2.5l6.5 9h-3.3l4.3 6H4.5l4.3-6H5.5z" fill="#fff"/><rect x="10.8" y="17" width="2.4" height="4.5" fill="#fff"/>`,
+};
+const motionCtx = { conceptCenter: spec.conceptCenter, tl, E, r3, brollGrade, gmTheme: spec.gm?.theme, safeTop: placer.safeTop, esc, addSfx, brand, userAsset, artAsset, icon: (slug) => icon(slug), zoomBase: (spec.zoom || {}).base ?? 1, words, proj, LIB, faceY, faceYAt, sound: spec.sound || {}, pageScreen: spec.pageScreen, pageMap: spec.pageMap, pagePaper: spec.pagePaper, sceneIn: spec.sceneIn, sceneOut: spec.sceneOut, source: SRC, rtl, get SPEECH() { return SPEECH; }, get TOTAL() { return TOTAL; } };
 
 // a scene that hands over to an expand/wipe scene stays underneath until the
 // incoming panel has covered it
@@ -1733,14 +1754,20 @@ for (const b of beatsList) {
       // softly defocuses and dims so the card is the one sharp thing in frame
       const img = b.ui ? null : b.art ? artAsset(b.art) : userAsset(b.src);
       const w = b.w ?? spec.popcard?.w ?? 620, h = b.h ?? spec.popcard?.h ?? 560, y = b.y ?? spec.popcard?.y ?? 300;
-      const face = b.ui ? uiCard(b.ui, `${id}u`, t0, t1, motionCtx).html : `<img id="${id}-img" class="popcard-img" src="${img}" style="max-width:${w}px;max-height:${h}px" />`;
-      inner = `<div id="${id}-in" class="ov popcard" style="top:${y}px">${face}${b.label ? `<div id="${id}-lab" class="popcard-lab" style="background:${brand.accent};font-size:${b.labelSize ?? 64}px">${esc(b.label)}</div>` : ""}</div>`;
+      // opt-in (popcard.object / objectFilter / glow / stage / outFade / dim, hand port of Ahmed's build.mjs): object mode shows a cut-out PNG with no photo frame, stage is a page behind the card, outFade lets the card leave before the focus returns
+      const obj = b.object ?? spec.popcard?.object;
+      const objFx = obj ? `;border:none;border-radius:0;box-shadow:none;filter:${spec.popcard?.objectFilter ?? "grayscale(1) brightness(1.15)"} drop-shadow(0 0 28px ${spec.popcard?.glow ?? brand.accent}) drop-shadow(0 18px 40px rgba(0,0,0,.6))` : "";
+      const face = b.ui ? uiCard(b.ui, `${id}u`, t0, t1, motionCtx).html : `<img id="${id}-img" class="popcard-img" src="${img}" style="max-width:${w}px;max-height:${h}px${objFx}" />`;
+      const stage = b.stage ?? spec.popcard?.stage;
+      inner = `${stage ? `<div id="${id}-stg" style="position:absolute;inset:0;background:${stage}"></div>` : ""}<div id="${id}-in" class="ov popcard" style="top:${y}px">${face}${b.label ? `<div id="${id}-lab" class="popcard-lab" style="background:${brand.accent};font-size:${b.labelSize ?? 64}px">${esc(b.label)}</div>` : ""}</div>`;
       tl.push(`ft("#${id}-in", { xPercent: -50, autoAlpha: 0, rotationY: ${b.tilt ?? 70}, rotationX: -12, scale: 0.72, filter: "blur(14px)" }, { xPercent: -50, autoAlpha: 1, rotationY: 0, rotationX: 0, scale: 1, filter: "blur(0px)", duration: 0.45, ease: "expo.out" }, ${t0});`);
       tl.push(`tl.to("#${id}-in", { y: -14, duration: ${r3(Math.max(0.3, t1 - t0 - 0.3))}, ease: "sine.inOut" }, ${r3(t0 + 0.3)});`);
       if (b.label) tl.push(`ft("#${id}-lab", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.24, ease: "power3.out" }, ${r3(t0 + 0.18)});`);
+      const outFade = b.outFade ?? spec.popcard?.outFade;
+      if (outFade) tl.push(`tl.to("#${id}-in", { autoAlpha: 0, scale: 0.94, duration: ${outFade}, ease: "power2.in" }, ${r3(t1 - outFade - 0.12)});`);
       if (b.defocus !== false) {
-        tl.push(`tl.to("#fx", { filter: "blur(${b.blur ?? 9}px) brightness(0.72)", duration: 0.25, ease: "power2.out" }, ${t0});`);
-        tl.push(`tl.to("#fx", { filter: "blur(0px) brightness(1)", duration: 0.26, ease: "power2.out" }, ${r3(t1 - 0.3)});`);
+        tl.push(`tl.to("#fx", { filter: "blur(${b.blur ?? 9}px) brightness(${b.dim ?? spec.popcard?.dim ?? 0.72})", duration: 0.25, ease: "power2.out" }, ${t0});`);
+        tl.push(`tl.to("#fx", { filter: "blur(0px) brightness(1)", duration: ${outFade ? 0.14 : 0.26}, ease: "power2.out" }, ${r3(outFade ? t1 - 0.14 : t1 - 0.3)});`);
       }
       hiddenCaps.push([t0, t1]);
       beatSfx(b, t0, "pop-whoosh-light", "pop card", { db: -4 });
@@ -1749,6 +1776,29 @@ for (const b of beatsList) {
     // ---- R1 B1 port of phantasic engine/core (origin/main): opt-in beat types of Ahmed's library bundle -----------------------------
     // uicard / photostack / headpage / cover / whiteflash (UI Story Ad #10), starflash (Iman Gadzhi shorts transition), boxline / like
     // (Podcast), label / pin (Breakdown). Additive: no existing case is touched. Page CSS: LIBRARY_CSS, written only when such a beat exists.
+    case "pills": {
+      // UI Story Ad #10 (afterpranav, opt-in beat): a checklist of white pills, each with a green slanted tab holding
+      // a white glyph, dropping in one by one over the footage as each item is said; the stack blurs out at `to`.
+      // {at, to, y, w, items: [{text, glyph, at}]}; style "pills": {w, h, gap, tab, color, size, y}
+      const P = spec.pills || {};
+      const W = b.w ?? P.w ?? 672, H = P.h ?? 104, gap = P.gap ?? 62, tab = P.tab ?? 150, green = P.color ?? "#1FC24A";
+      const y0 = b.y ?? P.y ?? 900;
+      const items = b.items.map((it, i) => {
+        const at = r3(Math.max(t0, it.at != null ? E(it.at, "pill") : t0 + i * 0.4));
+        tl.push(`ft("#${id}-p${i}", { autoAlpha: 0, x: -70, scale: 0.92, filter: "blur(8px)" }, { autoAlpha: 1, x: 0, scale: 1, filter: "blur(0px)", duration: 0.3, ease: "back.out(1.7)" }, ${at});`);
+        tl.push(`ft("#${id}-t${i}", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.32, ease: "power2.out" }, ${r3(at + 0.12)});`);
+        beatSfx(it, at, P.sfx ?? "pop", "pill", { db: P.sfxDb ?? -6 });
+        const g = UI_GLYPHS[it.glyph ?? "check"] ?? UI_GLYPHS.check;
+        return `<div id="${id}-p${i}" style="position:absolute;left:0;top:${i * (H + gap)}px;width:${W}px;height:${H}px;border-radius:${Math.round(H * 0.26)}px;background:#fff;box-shadow:0 12px 34px rgba(0,0,0,.38);overflow:hidden">`
+          + `<div style="position:absolute;left:0;top:0;bottom:0;width:${tab}px;background:${green};clip-path:polygon(0 0,100% 0,74% 100%,0 100%)"></div>`
+          + `<svg viewBox="0 0 24 24" style="position:absolute;left:${Math.round(tab * 0.2)}px;top:${Math.round(H * 0.24)}px;width:${Math.round(H * 0.52)}px;height:${Math.round(H * 0.52)}px">${g}</svg>`
+          + `<div id="${id}-t${i}" style="position:absolute;left:${tab}px;right:20px;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font:600 ${P.size ?? 38}px/1 Inter, system-ui, sans-serif;color:#141414;letter-spacing:-0.025em;white-space:nowrap">${esc(it.text)}</div></div>`;
+      });
+      inner = `<div id="${id}-in" class="ov" style="position:absolute;left:${Math.round(540 - W / 2)}px;top:${y0}px;width:${W}px;height:${b.items.length * (H + gap)}px">${items.join("")}</div>`;
+      tl.push(`tl.to("#${id}-in", { autoAlpha: 0, scale: 1.05, filter: "blur(18px)", duration: 0.3, ease: "power2.in" }, ${r3(t1 - 0.3)});`);
+      if (b.hideCaptions !== false) hiddenCaps.push([t0, t1]);
+      break;
+    }
     case "uicard": {
       // UI Story Ad #10 (opt-in beat): a white rounded card holding a picture (a map, a screen) pops up over the lower
       // half while the speaker keeps talking; optional yellow pins drop on cue. {at, to, src|art, y, w, h, pad, fit, pins: [{x, y, at}] (% of the card)}
@@ -1866,12 +1916,39 @@ for (const b of beatsList) {
       // Podcast: a white box with black heavy caps (the hook question, a pull quote in quotes). It slaps in slightly
       // tilted; an optional label (a name / title) sits off its corner with a hand-drawn arrow
       const txt = (b.quotes ? `‘${b.text}’` : b.text).toUpperCase();  // the speaker's words, no added punctuation
-      const x = b.x ?? 70, y = b.y ?? 1120, w = b.w ?? 640;
-      const lab = b.label ? `<div id="${id}-lab" class="bx-lab" style="left:${x + w - 180}px;top:${y + (b.labelDy ?? 150)}px"><svg viewBox="0 0 80 60"><path d="M70 6 C 50 10, 20 20, 12 50" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M4 38 L12 52 L24 42" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${esc(b.label)}</span></div>` : "";
+      const x = b.x ?? 70, w = b.w ?? 640;
+      let y = b.y ?? 1120, nowrap = !!(spec.boxline?.dodgeFace || spec.boxline?.fitLabel), labLeft = x + w - 180, labDy = b.labelDy ?? 150, hideCap = b.hideCaptions !== false;
+      // spec.boxline.dodgeFace (opt-in, The Podcast): the box (and its name label) never covers the face, measured on
+      // screen over the box's whole life (punch-ins included): its own y if clear, else under the chin, else above the
+      // head, else as low as the safe area allows. b.prefer "above" tries above the head first (a title over a
+      // talking clip). The label sits under the box's real height and is kept inside the frame (fitLabel).
+      if (spec.boxline?.dodgeFace || spec.boxline?.fitLabel) {
+        const sz = b.size ?? 54, inner = w - 52, words_ = txt.split(/\s+/);
+        let lines = 1, cur = 0;
+        for (const wd of words_) { const ww = wd.length * sz * 0.68, sp = sz * 0.28; if (cur && cur + sp + ww > inner) { lines++; cur = ww; } else cur += (cur ? sp : 0) + ww; }
+        const bh = Math.round(lines * sz * 1.02 + 38);
+        labDy = b.labelDy ?? bh + 14;
+        if (b.label) labLeft = Math.max(40, Math.min(labLeft, 1080 - 60 - Math.round(90 + 6 + String(b.label).length * 46 * 0.58)));
+        const H_ = bh + (b.label ? 14 + 70 : 0);
+        if (spec.boxline?.dodgeFace && face) {
+          const sp = placer.span(t0, t1), lo = placer.safeTop, hi = placer.safeBottom - H_, g = 30;
+          const clear = (yy) => !sp.seen || yy >= sp.bottom + g || yy + H_ <= sp.top - g;
+          const below = sp.seen ? Math.max(y, sp.bottom + g) : y, above = sp.seen ? sp.top - g - H_ : y;
+          const order = b.prefer === "above" ? [above, y, below] : [y, below, above];
+          const pick = order.find((yy) => yy >= lo && yy <= hi && clear(yy));
+          if (pick !== undefined) y = Math.round(pick);
+          else { y = Math.round(Math.max(lo, hi)); if (b.prefer === "above") hideCap = true; }
+          // a title above the head with captions running: the captions step around it
+          // (only when it really sits above the head; anywhere lower it takes the caption band, so captions hide)
+          if (!hideCap && sp.seen && y + H_ > sp.top - g) hideCap = true;
+          if (!hideCap) uiRects.push({ t0, t1, y0: y, y1: y + H_ });
+        }
+      }
+      const lab = b.label ? `<div id="${id}-lab" class="bx-lab" style="left:${labLeft}px;top:${y + labDy}px${nowrap ? ";white-space:nowrap" : ""}"><svg viewBox="0 0 80 60"><path d="M70 6 C 50 10, 20 20, 12 50" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/><path d="M4 38 L12 52 L24 42" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${esc(b.label)}</span></div>` : "";
       inner = `<div id="${id}-in" class="ov bx" style="left:${x}px;top:${y}px;width:${w}px;font-size:${b.size ?? 54}px;transform:rotate(${b.tilt ?? -1.5}deg)">${esc(txt)}</div>${lab}`;
       tl.push(`ft("#${id}-in", { autoAlpha: 0, scale: 1.25, rotation: ${(b.tilt ?? -1.5) - 6} }, { autoAlpha: 1, scale: 1, rotation: ${b.tilt ?? -1.5}, duration: 0.18, ease: "back.out(2)" }, ${t0});`);
       if (b.label) tl.push(`ft("#${id}-lab", { autoAlpha: 0, x: 20 }, { autoAlpha: 1, x: 0, duration: 0.25, ease: "power3.out" }, ${r3(t0 + 0.2)});`);
-      if (b.hideCaptions !== false) hiddenCaps.push([t0, t1]);
+      if (hideCap) hiddenCaps.push([t0, t1]);
       beatSfx(b, t0, "impact-1", "box line", { db: -8 });
       break;
     }
@@ -1959,7 +2036,7 @@ for (const b of beatsList) {
       die(`unknown beat type '${b.type}'`);
   }
   if (b.type === "behind" || b.type === "ground") continue;
-  if (!["endcard", "scene", "motion", "headpage", "photostack", "whiteflash", "cover"].includes(b.type) && !(b.type === "meme" && memeLib(b.id).meta.clip)) tl.push(exit(`#${id}-in`, t1));
+  if (!["endcard", "scene", "motion", "headpage", "photostack", "whiteflash", "cover"].includes(b.type) && !(b.type === "meme" && memeLib(b.id).meta.clip) && !(b.type === "popcard" && (b.outFade ?? spec.popcard?.outFade))) tl.push(exit(`#${id}-in`, t1));
   const clipMeme = b.type === "meme" && memeLib(b.id).meta.clip;
   overlays.push({ html: clipMeme
     ? `<div id="${id}" class="layer">${inner}</div>` // the <video> inside is the timed element; a timed wrapper would break it
@@ -2242,6 +2319,19 @@ const duoHtml = cap.style !== "duo" ? "" : (() => {
     const serif = serifSet.has(bareOf(w.word)) || inSpan(serifSpans, w.start);
     const size = Math.round((big ? (cap.energySize ?? 112) : (cap.calmSize ?? 44)) * (serif ? 1.22 : 1));
     const pl = cap.fixedY ? { y: Math.round((big ? (cap.energyY ?? cap.fixedY - 40) : cap.fixedY) * H / 1920) } : placer.place(s, e, size * 1.25);
+    // cap.dodgeMouth (opt-in, px of clearance under the mouth centre; Ahmed's mini2-breakdown): on a close-up the fixed chest line sits on the
+    // mouth, so the word drops just under it (the mouth over the word +-1 s, 40 px steps so it does not jitter). A face off to the side
+    // never moves the word, and a one-sample blip is ignored (75th percentile of the mouth over the window, not its maximum)
+    if (cap.fixedY && cap.dodgeMouth) {
+      const ms = [];
+      for (let t = Math.max(0, s - 1); t <= e + 1; t += 0.1) {
+        const sp = placer.span(t, t);
+        if (sp.seen && (sp.left + sp.right) / 2 > W * 0.28 && (sp.left + sp.right) / 2 < W * 0.72) ms.push(sp.mouth);
+      }
+      ms.sort((a, b) => a - b);
+      const mouth = ms.length ? ms[Math.floor(ms.length * 0.75)] : -1;
+      if (mouth > 0) pl.y = Math.min(placer.safeBottom - size * 1.1, Math.max(pl.y, Math.ceil((mouth + cap.dodgeMouth) / 40) * 40));
+    }
     if (cap.fixedY) placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: pl.y, h: Math.round(size * 1.25), mode: "duo", scale: 1, face: null });
     tl.push(`ft("#dw${i}", { autoAlpha: 0.2, filter: "blur(${big ? 8 : 5}px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: ${big ? 0.12 : 0.08}, ease: "power2.out" }, ${s});`);
     return `<div id="dw${i}" class="duo clip${big ? " big" : ""}${serif ? " ser" : ""}" style="top:${pl.y}px;font-size:${size}px" data-start="${s}" data-duration="${r3(e - s)}" data-track-index="5">${esc(caseOf(w.word.replace(/,$/, "")))}</div>`;
@@ -2284,6 +2374,18 @@ const clusterHtml = cap.style !== "cluster" ? "" : (() => {
       const quiet = cap.heroFallback === "none" && !ph.some((w) => heroes.has(bareOf(w.word)));
       y = quiet ? placer.place(s, e, Math.round(S * 1.4)).y + Math.round(S * 0.6) : placer.place(s, e, Math.round(S * 2.5 + HS)).y + Math.round(HS * 0.75);
     }
+    // captions.chestBand (opt-in; Ahmed's Name Reveal / Monochrome Cinema Stark round 3): on a close-up with the speaker on screen the caption
+    // never goes on the face. The chin is estimated at mouth + chinPad: with the chin below chinMax there is no room, so the phrase gets NO
+    // caption (cards and stills carry the words); otherwise it is one small line between the chin and the safe bottom.
+    let closeQuiet = false;
+    if (cap.chestBand && face && !beatsList.some((b) => b.type === "scene" && tryE(b.at) !== null && tryE(b.at) <= s + 0.05 && (tryE(b.to) ?? TOTAL) >= e - 0.05)) {
+      const sp = placer.span(s, e);
+      if (sp.seen && sp.bottom > H * 0.65) {
+        const chin = sp.mouth + (cap.chinPad ?? 260);
+        if (chin > (cap.chinMax ?? 1430)) return;
+        closeQuiet = true; y = Math.round(chin + 20 + S * 0.6);
+      }
+    }
     const id = `cl${pi}`;
     if (!(cap.avoidFace && face)) placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: Math.round(y), h: Math.round(S * 2.5 + HS), mode: "cluster", scale: 1, face: null });
     const wspan = (w, k, cls, size) => {
@@ -2305,7 +2407,7 @@ const clusterHtml = cap.style !== "cluster" ? "" : (() => {
     // the LAST listed hero in the phrase wins: the payoff word usually closes the line ("I know that AI is HERE")
     let hi = -1; ph.forEach((w, k) => { if (heroes.has(bareOf(w.word))) hi = k; });
     // heroFallback "none": a phrase without a listed hero stays all small (Monochrome Cinema: filler lines are quiet)
-    if (hi < 0 && cap.heroFallback === "none") {
+    if ((hi < 0 && cap.heroFallback === "none") || closeQuiet) {
       html += `<div id="${id}" class="cl clip" style="${cap.align === "center" || cap.align === "block" ? "left:540px;transform:translateX(-50%)" : `left:${X0}px`};top:${y - Math.round(S * 0.6)}px" data-start="${s}" data-duration="${r3(e - s)}" data-track-index="5"><div class="cl-row lead">${ph.map((w, k) => wspan(w, k, "sm", S) + " ").join("")}</div></div>`;
       return;
     }
@@ -2588,7 +2690,9 @@ if (LAYERS.length) {
 // ---------- watermark (spec.watermark = { text, opacity?, font? }) and colour tint (spec.look.tint) ----------
 let brandHtml = "";
 const TOP_UI = Math.round(H * 0.08);   // nothing static in the top 8% (phone status bar / app header)
-if (spec.watermark?.text) brandHtml += `<div style="position:absolute;top:${Math.max(TOP_UI, spec.watermark.y ?? 120)}px;right:${spec.watermark.x ?? 60}px;z-index:9;font-family:'${spec.watermark.font ?? "Instrument Serif"}',Georgia,serif;font-size:${spec.watermark.size ?? 54}px;letter-spacing:-0.5px;color:#fff;opacity:${spec.watermark.opacity ?? 0.38};pointer-events:none">${esc(spec.watermark.text)}</div>`;
+// watermark.spread (opt-in): the header words spread across the full width, one span each (Magazine Spread's header row)
+if (spec.watermark?.text && spec.watermark.spread) brandHtml += `<div style="position:absolute;top:${Math.max(TOP_UI, spec.watermark.y ?? 120)}px;left:${spec.watermark.x ?? 60}px;right:${spec.watermark.x ?? 60}px;display:flex;justify-content:space-between;z-index:9;font-family:'${spec.watermark.font ?? "Inter"}',system-ui,sans-serif;font-weight:600;font-size:${spec.watermark.size ?? 24}px;letter-spacing:0.04em;color:#fff;opacity:${spec.watermark.opacity ?? 0.9};pointer-events:none">${String(spec.watermark.text).replace(/ /g, " ").trim().split(/\s+/).map((w) => `<span>${esc(w)}</span>`).join("")}</div>`;
+else if (spec.watermark?.text) brandHtml += `<div style="position:absolute;top:${Math.max(TOP_UI, spec.watermark.y ?? 120)}px;right:${spec.watermark.x ?? 60}px;z-index:9;font-family:'${spec.watermark.font ?? "Instrument Serif"}',Georgia,serif;font-size:${spec.watermark.size ?? 54}px;letter-spacing:-0.5px;color:#fff;opacity:${spec.watermark.opacity ?? 0.38};pointer-events:none">${esc(spec.watermark.text)}</div>`;
 // a pinned show logo top-left (podcast): small spaced caps over one big word
 if (spec.showLogo) brandHtml += `<div class="show-logo" style="left:${spec.showLogo.x ?? 70}px;top:${spec.showLogo.y ?? 150}px;opacity:${spec.showLogo.opacity ?? 0.92}"><i>${esc(spec.showLogo.small ?? "")}</i><b>${esc(spec.showLogo.big ?? "")}</b></div>`;
 if (spec.look?.tint) brandHtml += `<div${LOOK_OV ? ' class="look-ov"' : ""} style="position:absolute;inset:0;z-index:3;pointer-events:none;background:${spec.look.tint.color ?? "#1d6b75"};mix-blend-mode:${spec.look.tint.blend ?? "soft-light"};opacity:${spec.look.tint.opacity ?? 0.22}"></div>`;
@@ -3100,7 +3204,7 @@ const LIBRARY_CSS = (beats_, spec_) => {
   .pin { position: absolute; left: 50%; font-family: Inter, system-ui, sans-serif; font-weight: 800; letter-spacing: -0.06em; line-height: 1; white-space: nowrap; background: linear-gradient(90deg, #F0333A, #9B3BE8 50%, #2124E7); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 6px 20px rgba(0,0,0,.35)); }` : "");
 };
 const EXPLAINER_CSS = (spec_, beats_) => {
-  const hasEffect = beats_.some((b) => b.type === "effect"), hasCut = beats_.some((b) => b.type === "scene" && b.kind === "cutout");
+  const hasEffect = beats_.some((b) => b.type === "effect"), hasCut = beats_.some((b) => b.type === "scene" && b.kind === "cutout"), hasBd = beats_.some((b) => b.type === "scene" && (b.kind === "chapter" || b.kind === "title"));
   return (hasEffect ? `
   .ef { position: absolute; left: 0; right: 0; text-align: center; color: #fff; text-shadow: 0 3px 16px rgba(0,0,0,.55); }
   .ef-sm { font-family: Inter, system-ui, sans-serif; font-weight: 600; font-size: 54px; letter-spacing: .35em; margin: 6px 0; padding-left: .35em; }
@@ -3117,7 +3221,13 @@ const EXPLAINER_CSS = (spec_, beats_) => {
   .co-word { font-family: "Playfair Display", Georgia, serif; font-weight: 800; color: #111; line-height: 1.02; letter-spacing: .02em; text-align: center; padding: 0 40px; white-space: nowrap; }
   .co-bars { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
   .co-bar { background: #0b0b0b; color: #fff; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 64px; letter-spacing: .02em; padding: 6px 20px 12px; white-space: nowrap; min-height: 1em; }
-  .co-bar:empty { display: none; }` : "");
+  .co-bar:empty { display: none; }` : "")
+  + (hasBd ? `
+  .ch-num { position: absolute; left: 0; right: 0; top: 50%; margin-top: -760px; height: 1520px; line-height: 1520px; text-align: center; font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-size: 1400px; letter-spacing: -0.04em; }
+  .ch-word { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; font-family: Inter, system-ui, sans-serif; font-weight: 600; font-size: 132px; letter-spacing: -0.05em; line-height: 1; white-space: nowrap; }
+  .ch-word.ser { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-weight: 400; font-size: 160px; letter-spacing: -0.02em; }
+  .ti-blk { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; transform-origin: 50% 50%; }
+  .ti-line { font-family: "Instrument Serif", Georgia, serif; font-size: 190px; line-height: .92; letter-spacing: 0.01em; color: #fff; text-transform: uppercase; }` : "");
 };
 
 // ---------- write ----------
@@ -3207,16 +3317,17 @@ const html = `<!doctype html>
   @font-face { font-family: Montserrat; src: url(assets/fonts/montserrat-latin-ext.woff2) format("woff2"); font-weight: 100 900; unicode-range: ${RANGES["latin-ext"]}; }
   ${fontFaces}
   body { margin: 0; background: #000; }
-  #root { position: relative; width: ${W}px; height: ${H}px; overflow: hidden; background: #000; font-family: ${UI_FONT}, system-ui, sans-serif; }
+  #root { position: relative; width: ${W}px; height: ${H}px; overflow: hidden; background: ${spec.look?.rootBg ?? "#000"}; font-family: ${UI_FONT}, system-ui, sans-serif; }
   #base, #snap, #push { position: absolute; inset: 0; transform-origin: ${zoom.origin || "50% 29%"}; }
-  #base { transform: scale(${zoom.base ?? 1});${look.grade ? ` filter: ${look.grade};` : ""} }
+  #base { transform: scale(${zoom.base ?? 1});${zoom.originY !== undefined ? ` transform-origin: 50% ${zoom.originY}%;` : ""}${look.grade ? ` filter: ${look.grade};` : ""} }
   #pip { position: absolute; inset: 0; z-index: 1; transform-origin: ${W / 2}px ${faceY}px; }${roomWins.length ? `
   #roomfill { position: absolute; inset: 0; z-index: 1; opacity: 0; pointer-events: none; background: ${resolveColor(ROOM_FILL, brand)}; }
   #room { position: absolute; left: var(--room-ix, 0px); right: var(--room-ix, 0px); top: 0; bottom: var(--room-ib, 0px); z-index: 1; overflow: hidden; border-radius: var(--room-r, 0px); will-change: transform; transform-origin: 50% 0; }
   #roomin { position: absolute; left: calc(var(--room-ix, 0px) * -1); top: 0; width: ${W}px; height: ${H}px; }` : ""}
 ${FX_ON ? `  #fx { position: absolute; inset: 0; transform-origin: 540px ${faceY}px; filter: blur(0px) brightness(1); }\n` : ""}  .behind { position: absolute; inset: 0; pointer-events: none; }${HL_CSS}
   .behind-in { position: absolute; left: -40px; right: -40px; text-align: center; font-weight: 900; line-height: .86; letter-spacing: -6px; text-transform: uppercase; white-space: nowrap; font-family: ${brand.displayFont ? `"${brand.displayFont}", ` : ""}${UI_FONT}, sans-serif; }
-  .matte { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }${stageCss ? `\n  ${stageCss}` : ""}
+  .matte { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }${spec.matteFilter ? `
+  .matte { filter: ${spec.matteFilter}; }` : ""}${stageCss ? `\n  ${stageCss}` : ""}
   .look-grain { position: absolute; inset: 0; z-index: 6; pointer-events: none; mix-blend-mode: overlay; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='400' height='400' filter='url(%23n)' opacity='0.9'/></svg>"); }
   .look-vignette { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
   .layer { z-index: 3; }

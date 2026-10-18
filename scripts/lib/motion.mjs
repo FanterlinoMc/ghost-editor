@@ -670,8 +670,9 @@ export function buildScene(b, id, t0, t1, ctx) {
   else if (b.kind === "wordpage") {
     // one spoken word at a time on a flat field: accent with white words, or paper with accent words.
     // b.big: words drawn 1.5x (the payoff of the line); b.serif: words in the italic display serif
-    const onAccent = (b.bg ?? "accent") === "accent";
-    customBg = onAccent ? brand.accent : (b.paper ?? "#F3F3F3");
+    // bg "black" (opt-in): the cinematic word card (white words on black), used by Monochrome Cinema
+    const onBlack = b.bg === "black", onAccent = onBlack || (b.bg ?? "accent") === "accent";
+    customBg = onBlack ? "#000" : onAccent ? brand.accent : (b.paper ?? "#F3F3F3");
     const spoken = words.filter((w) => w.start >= t0 - 0.05 && w.start < t1);
     const serif = new Set((b.serif || []).map(norm)), big = new Set((b.big || []).map(norm));
     body = spoken.map((w, i) => {
@@ -679,7 +680,9 @@ export function buildScene(b, id, t0, t1, ctx) {
       const ser = serif.has(norm(w.word)), size = Math.round((b.size ?? 118) * (big.has(norm(w.word)) ? 1.5 : 1) * (ser ? 1.2 : 1));
       tl.push(`ft("#${id}-w${i}", { autoAlpha: 0, filter: "blur(8px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: 0.1, ease: "power2.out" }, ${s});`);
       if (i + 1 < spoken.length) tl.push(`tl.set("#${id}-w${i}", { autoAlpha: 0 }, ${e});`);
-      return `<div id="${id}-w${i}" class="wp-word${ser ? " ser" : ""}" style="font-size:${size}px;color:${onAccent ? "#fff" : brand.accent}">${esc(w.word.replace(/,$/, ""))}</div>`;
+      // b.ink (opt-in): the word colour on any page; b.gold: words drawn in b.goldColor (one coloured payoff word)
+      const gold = (b.gold || []).map(norm).includes(norm(w.word));
+      return `<div id="${id}-w${i}" class="wp-word${ser ? " ser" : ""}" style="font-size:${size}px;color:${gold ? (b.goldColor ?? "#F2C94C") : (b.ink ?? (onAccent ? "#fff" : brand.accent))}">${esc(w.word.replace(/,$/, ""))}</div>`;
     }).join("");
   }
 
@@ -699,7 +702,8 @@ export function buildScene(b, id, t0, t1, ctx) {
         if (l.box) tl.push(`ft("#${wid}", { autoAlpha: 1, clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.14, ease: "power2.out" }, ${at});`);
         else tl.push(`ft("#${wid}", { autoAlpha: 0, filter: "blur(6px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: 0.1, ease: "power2.out" }, ${at});`);
         if (l.box && wi === 0) addSfx(at, "click-1", "highlight box", { db: -6 });
-        return `<span id="${wid}" class="${l.box ? "hl-boxw" : "hl-w"}"${l.box ? ` style="background:${brand.accent}"` : ` style="color:${brand.accent}"`}>${esc(w)}</span>`;
+        // b.boxColor / b.boxInk / b.ink (opt-in): a marker-yellow highlight with dark type, grey article text
+        return `<span id="${wid}" class="${l.box ? "hl-boxw" : "hl-w"}"${l.box ? ` style="background:${b.boxColor ?? brand.accent}${b.boxInk ? `;color:${b.boxInk}` : ""}"` : ` style="color:${b.ink ?? brand.accent}"`}>${esc(w)}</span>`;
       }).join("");
       return `<div class="hl-line" style="font-size:${l.size ?? b.size ?? 104}px">${ws}</div>`;
     }).join("");
@@ -747,15 +751,19 @@ export function buildScene(b, id, t0, t1, ctx) {
       return `<div id="${id}-f${k}" class="cc-word" style="font-family:'${fam}',serif;font-style:${st};font-weight:${wt};font-size:${b.size ?? 120}px">${esc(word)}</div>`;
     }).join("");
     const imgs = (b.engravings || []).map((eng, i, arr) => {
+      // an engraving name containing "/" is the project's own picture (already copied; Northstar's public-domain engraving)
+      const own = String(eng).includes("/");
       const src = path.join(ctx.LIB, "engravings", "png", `${eng}.png`);
       const dst = path.join(ctx.proj, "assets", `${eng}.png`);
-      if (fs.existsSync(src) && !fs.existsSync(dst)) fs.copyFileSync(src, dst);
+      if (!own && fs.existsSync(src) && !fs.existsSync(dst)) fs.copyFileSync(src, dst);
       const at = r3(t0 + i * ((t1 - t0) / arr.length));
       if (i > 0) tl.push(`tl.set("#${id}-e${i}", { autoAlpha: 0 }, 0);`);
       tl.push(`tl.set("#${id}-e${i}", { autoAlpha: 1 }, ${at});`);
-      tl.push(`ft("#${id}-e${i}", { scale: 1.06 }, { scale: 1, duration: 0.2, ease: "power2.out" }, ${at});`);
+      // conceptCenter (opt-in): GSAP's scale overwrote the CSS translateX(-50%), pushing the engraving half off the right edge
+      const xp = ctx.conceptCenter ? "xPercent: -50, " : "";
+      tl.push(`ft("#${id}-e${i}", { ${xp}scale: 1.06 }, { ${xp}scale: 1, duration: 0.2, ease: "power2.out" }, ${at});`);
       if (i + 1 < arr.length) tl.push(`tl.set("#${id}-e${i}", { autoAlpha: 0 }, ${r3(t0 + (i + 1) * ((t1 - t0) / arr.length))});`);
-      return `<img id="${id}-e${i}" class="cc-img" src="assets/${eng}.png" />`;
+      return `<img id="${id}-e${i}" class="cc-img" src="${own ? eng : `assets/${eng}.png`}" />`;
     }).join("");
     body = `<div class="cc-words">${faces}</div><div class="cc-imgs">${imgs}</div>`;
   }
@@ -930,6 +938,48 @@ export function buildScene(b, id, t0, t1, ctx) {
     }
   }
 
+
+  // ---- Breakdown scenes (opt-in kinds; hand port of phantasic engine/core + mini2-breakdown b.fit / b.size). CSS: build.mjs EXPLAINER_CSS, only when one exists.
+  else if (b.kind === "chapter") {
+    // Breakdown: a full-screen chapter card. A giant low-contrast serif-italic numeral enters on a diagonal motion
+    // blur and drifts; the spoken words land one at a time on top of it (white on dark cards, ink on light ones).
+    const tone = b.tone ?? "navy";
+    const CH = { navy: [brand.navy ?? "#0A182C", "rgba(255,255,255,.13)", "#fff"], paper: [brand.paper ?? "#F1F1F1", "rgba(10,24,44,.09)", "#0A182C"],
+      blue: [brand.accent, "rgba(255,255,255,.2)", "#fff"], cream: [brand.cream ?? "#EEE2C0", "rgba(10,24,44,.1)", "#0A182C"] }[tone];
+    customBg = CH[0];
+    const spoken = words.filter((w) => w.start >= t0 - 0.05 && w.start < t1);
+    const serif = new Set((b.serif || []).map(norm));
+    tl.push(`ft("#${id}-num", { x: 260, y: -200, skewX: -18, filter: "blur(30px)", autoAlpha: 0 }, { x: 0, y: 0, skewX: 0, filter: "blur(0px)", autoAlpha: 1, duration: 0.16, ease: "power3.out" }, ${t0});`);
+    tl.push(`tl.to("#${id}-num", { scale: 1.08, x: -30, duration: ${r3(Math.max(0.2, t1 - t0 - 0.16))}, ease: "none" }, ${r3(t0 + 0.16)});`);
+    const ws = spoken.map((w, i) => {
+      const s0 = r3(Math.max(t0 + 0.05 + i * 0.04, w.start - 0.03));
+      const e0 = r3(i + 1 < spoken.length ? Math.max(s0 + 0.04, t0 + 0.05 + (i + 1) * 0.04, spoken[i + 1].start - 0.03) : t1);
+      const ser = serif.has(norm(w.word));
+      tl.push(`ft("#${id}-w${i}", { autoAlpha: 0, filter: "blur(10px)", y: 10 }, { autoAlpha: 1, filter: "blur(0px)", y: 0, duration: ${i + 1 < spoken.length ? r3(Math.min(0.1, Math.max(0.02, e0 - s0 - 0.01))) : 0.1}, ease: "power2.out" }, ${s0});`);
+      if (i + 1 < spoken.length) tl.push(`tl.set("#${id}-w${i}", { autoAlpha: 0 }, ${e0});`);
+      // b.fit (opt-in): a long word steps down so it never runs off the card (sans ~0.56 em, serif ~0.5 em a letter)
+      const txt = w.word.replace(/[,.]$/, ""), fit = b.fit ? Math.floor((b.fitWidth ?? 960) / (Math.max(4, txt.length) * (ser ? 0.5 : 0.56))) : 0;
+      return `<div id="${id}-w${i}" class="ch-word${ser ? " ser" : ""}" style="color:${CH[2]}${fit && fit < (ser ? 160 : 132) ? `;font-size:${fit}px` : ""}">${esc(txt)}</div>`;
+    }).join("");
+    body = `<div id="${id}-num" class="ch-num" style="color:${CH[1]}">${esc(String(b.num))}</div>${ws}`;
+    addSfx(t0, b.sfx ?? "whoosh", "chapter card", { db: -4 });
+  }
+
+  else if (b.kind === "title") {
+    // Breakdown: the hook title on a navy card in condensed serif caps; the second line snaps in under the first,
+    // then the block slowly shrinks (~15%)
+    customBg = brand.navy ?? "#0A182C";
+    const ls = (b.lines || []).map((l, i) => {
+      const at = r3(Math.max(t0, l && typeof l === "object" && l.at != null ? E(l.at, "title line") : t0 + i * 0.18));
+      tl.push(`ft("#${id}-t${i}", { autoAlpha: 0, y: 30, filter: "blur(10px)" }, { autoAlpha: 1, y: 0, filter: "blur(0px)", duration: 0.12, ease: "power3.out" }, ${at});`);
+      // b.size / l.size (opt-in): the line size in px (the planner steps long words down so they fit the card)
+      const tsz = l.size ?? b.size;
+      return `<div id="${id}-t${i}" class="ti-line"${tsz ? ` style="font-size:${tsz}px"` : ""}>${esc(l.text ?? l)}</div>`;
+    }).join("");
+    body = `<div id="${id}-blk" class="ti-blk">${ls}</div>`;
+    tl.push(`ft("#${id}-blk", { scale: 1 }, { scale: 0.85, duration: ${r3(t1 - t0)}, ease: "power1.inOut" }, ${t0});`);
+    addSfx(t0, "impact-1", "title card", { db: -8 });
+  }
 
   // ---- Explainer cutout page (opt-in scene kind; hand port of phantasic engine/core + the mini2-explainer hardening: b.word, b.barChars,
   // b.maxBars, sound.cutout). Its CSS is only written into index.html when a cutout scene exists (build.mjs EXPLAINER_CSS).

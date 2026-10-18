@@ -284,6 +284,20 @@ Folio (`folio-2`, `scripts/folio_plan.py`):
 
 Planners (`explainer_plan.py`, `mono_plan.py`, `folio_plan.py`) are deterministic Python (no API key); they read `reel.json`, the transcript and `build/face.json` of the PRIMARY recording only, and write beats into `reel.json`. Not wired into the studio.
 
+## Ahmed's style library (all opt-in, phase B2; hand port of phantasic origin/main `engine/core/styles` + the fix2 / mini2 branches)
+
+Style ids: `library/<id>` (114 styles in `styles/library/`, e.g. `library/podcast-punch--19`; the name is `library/` plus an id, nothing else with a slash is accepted), `podcast`, `breakdown`, and the hardened looks `gold-ledger`, `northstar`, `red-poster`, `magazine-spread`, `monochrome-cinema-stark`, `name-reveal`. A library style extends a fork base (`clean`, `closer`, `cinematic`, `monologue`, `mono`, `pitch`, `editorial-collage`, `podcast`) or another library style.
+
+Keys and fields the renderer reads for them (each emits nothing unless set):
+- `look.rootBg`: the page colour behind the picture (default `#000`). `zoom.originY`: `#base` scales from `50% <originY>%`. `matteFilter`: a CSS filter on the cut-out layer. `watermark.spread: true`: the watermark words spread across the full width, one span each (Magazine Spread's header). `conceptCenter: true`: concept-scene engravings stay centred while they scale. A concept `engravings` name containing a `/` is the project's own picture (`assets/x.png`), not a library engraving.
+- `popcard` / popcard beat: `object` (cut-out PNG, no photo frame), `objectFilter`, `glow`, `stage` (a full-frame page behind the card, any CSS background), `outFade` (seconds; the card leaves before the focus returns), `dim` (the defocus brightness, default 0.72), `labelSize`. Each is also a beat field except `objectFilter`/`glow`.
+- beat `pills` `{at, to, y, w, items: [{text, glyph, at}]}` with style `pills: {w, h, gap, tab, color, size, y, sfx, sfxDb}`: the UI Story Ad #10 checklist (glyphs: check doc report chart people globe image book archive museum home shield heart clock star bolt mask tree).
+- scene kind `title` `{at, to, lines: [string | {text, at, size}], size}`: the Breakdown hook title (navy card, condensed serif caps, the block shrinks ~15%). scene kind `chapter` `{at, to, num, tone: navy|paper|blue|cream, serif: [words], fit, fitWidth, sfx}`: a chapter card with a giant numeral and the spoken words one at a time; `fit: true` steps a long word down to `fitWidth` (default 960 px). Their CSS is written only when such a scene exists.
+- scene kind `wordpage`: `bg: "black"` (white words on black), `ink` (word colour), `gold: [words]` + `goldColor`. scene kind `highlight`: `boxColor`, `boxInk`, `ink`.
+- `boxline.dodgeFace` / `boxline.fitLabel` (style keys): the box and its name label never cover the face and stay inside the frame; beat field `prefer: "above"`. `captions.dodgeMouth` (duo captions with `fixedY`): px of clearance under the mouth. `captions.chestBand` (cluster captions; with `chinPad`, `chinMax`): on a close-up the caption goes under the chin or is dropped.
+
+Carried as data, not read by the renderer yet (the style still builds; these only matter once the code lands): `sound.complete` (the five fork styles that already carried it are unchanged), `prep.speakerCrop` (a prep.sh option), `monochrome.*`, `podcastPunch.*`, `mono.hookRotation` (read by Ahmed's planners), and the hardened-look keys `zoom.fit.always/maxBase/blur/dim/sat/radius` (+ `capRoom`, `minBase`, `top`, `punch`), `safeTopMin`, `captions.underChin/floor/hardFloor/keepUnderUi/uiRoom/stillY/chinAlways/chinMid/noWeakEnd/properCase/minLead/shrinkHero/scriptLead/scriptHold`, `pills.floor/textWith`. The framed close-up guard (`zoom.fit`) needs `safezone.mjs` to know each take's own card size, which is not in the fork.
+
 ## Motion layer (scripts/lib/motion.mjs)
 
 Top-level fields:
