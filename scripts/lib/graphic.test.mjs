@@ -409,6 +409,12 @@ test("findChrome: GRAPHIC_CHROME_PATH first, and a broken one refuses instead of
   const pinned = path.join(home, "pinned", exeName);
   fs.mkdirSync(path.dirname(pinned), { recursive: true }); fs.writeFileSync(pinned, "#!/bin/sh\n"); fs.chmodSync(pinned, 0o755);
   const others = { HYPERFRAMES_BROWSER_PATH: "/other/hf", PRODUCER_HEADLESS_SHELL_PATH: "/other/producer" };
+  // a symlink to the executable: checked, then resolved, so the shim runs exactly the checked file
+  if (process.platform !== "win32") {
+    const link = path.join(home, "link-chrome");
+    fs.symlinkSync(pinned, link);
+    assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: link, ...others }, home), fs.realpathSync(pinned));
+  }
   // wins over both env paths and over the cache
   assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: pinned, ...others }, home), fs.realpathSync(pinned));
   assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: pinned }, home), fs.realpathSync(pinned));
@@ -424,12 +430,6 @@ test("findChrome: GRAPHIC_CHROME_PATH first, and a broken one refuses instead of
     process.chdir(path.dirname(pinned));
     for (const rel of [exeName, `./${exeName}`]) assert.throws(() => RR.findChrome({ GRAPHIC_CHROME_PATH: rel, ...others }, home), { message: `GRAPHIC_CHROME_PATH=${rel} must be an absolute path` });
   } finally { process.chdir(cwd); }
-  // a symlink to the executable: checked, then resolved, so the shim runs exactly the checked file
-  if (process.platform !== "win32") {
-    const link = path.join(home, "link-chrome");
-    fs.symlinkSync(pinned, link);
-    assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: link, ...others }, home), fs.realpathSync(pinned));
-  }
   // unset (or empty): today's order
   assert.equal(RR.findChrome({ ...others }, home), "/other/hf");
   assert.equal(RR.findChrome({ PRODUCER_HEADLESS_SHELL_PATH: "/other/producer" }, home), "/other/producer");
