@@ -16,7 +16,9 @@
     "group": 3,
     "y": 960,
     "keywordStyle": "serif",
-    "smartBreaks": true
+    "smartBreaks": true,
+    "fitLine": 820,
+    "backingUntil": 2
   },
   "cadence": {
     "every": 1.4,

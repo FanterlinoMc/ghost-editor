@@ -13,7 +13,8 @@
     "prevAlpha": 0.92,
     "alarmTail": 0.5,
     "scriptDur": 0.28,
-    "breakOnCut": true
+    "breakOnCut": true,
+    "fitLine": false
   },
   "cadence": {
     "emphasisScale": 1.28

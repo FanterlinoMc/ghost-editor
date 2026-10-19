@@ -2789,8 +2789,10 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   const pl = fy != null ? { y: Math.round(fy * H / 1920), mode: cap.style, scale: 1 } : placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
   if (fy != null) placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: pl.y, h: Math.round(capSize * 1.3), mode: cap.style, scale: 1, face: null });
   // captions.backing false (opt-in): no grey box over the lower face, a heavy text shadow instead
-  const backed = pl.mode === "lower-face" && cap.backing !== false && !["pill", "box", "sessions"].includes(cap.style);
-  const shadowed = pl.mode === "lower-face" && cap.backing === false;
+  // captions.backingUntil: <edit s> (opt-in): only blocks starting before it get the box; later ones the shadow
+  const noBox = cap.backing === false || (typeof cap.backingUntil === "number" && s >= cap.backingUntil);
+  const backed = pl.mode === "lower-face" && !noBox && !["pill", "box", "sessions"].includes(cap.style);
+  const shadowed = pl.mode === "lower-face" && noBox;
   const orphanAt = cap.style === "noir" ? noirOrphanBreak(g, capSize) : -1;   // index of the word that opens the last line, or -1
   const tilt = cap.tilt ? `;rotate:${gi % 2 ? -cap.tilt : cap.tilt * 0.7}deg` : "";  // R1b port (Broadsheet clippings)
   return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : shadowed ? " cap-shadow" : ""}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w${wi === emphI ? " emph" : ""}">${esc(caseOf(w.word))}</span>`).map((sp, wi) => wi === 0 ? sp : (wi === orphanAt ? "<br>" : "<wbr>") + sp).join("")}</div>`;
@@ -3666,7 +3668,7 @@ ${FX_ON ? `  #fx { position: absolute; inset: 0; transform-origin: 540px ${faceY
   .ec-url { font-family: GeistMono, monospace; font-size: 30px; margin-top: 22px; color: #555; white-space: nowrap; }
   #caps { position: absolute; left: 0; right: 0; top: 0; height: 0; }
   .cap-group { position: absolute; left: 50%; transform: translateX(-50%); width: max-content; max-width: ${W - 2 * placer.sidePad}px !important; text-align: center; line-height: 1.18; }
-  .cap-backed { background: rgba(8,8,10,.55); border-radius: 20px; padding: 6px 22px; -webkit-text-stroke: 0 !important; }${cap.backing === false ? `
+  .cap-backed { background: rgba(8,8,10,.55); border-radius: 20px; padding: 6px 22px; -webkit-text-stroke: 0 !important; }${cap.backing === false || typeof cap.backingUntil === "number" ? `
   .cap-shadow { text-shadow: 0 2px 4px rgba(0,0,0,.85), 0 6px 22px rgba(0,0,0,.75), 0 0 2px rgba(0,0,0,.9) !important; }
   .eshadow .ew { text-shadow: 0 2px 4px rgba(0,0,0,.85), 0 6px 22px rgba(0,0,0,.75), 0 0 2px rgba(0,0,0,.9); }` : ""}
   ${capCss}
