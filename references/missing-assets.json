@@ -1,0 +1,2047 @@
+{
+ "_about": "Files under library/ that the engine would resolve and a clean checkout lacks. Generated, do not hand-edit: node scripts/missing_assets.mjs > references/missing-assets.json. uses = styles, brand kits and example reels that name the asset (after `extends`) + engine code sites that name it. Styles named only through a family (whoosh/pop/impact) count for every variant. counts per kind: referenced = named by a style/reel/code (dangling ids included), catalogued_only = in a library manifest and named by nothing; dangling = named but no manifest entry, so no path. The engine-code sound scan is a heuristic (a line regex plus an exclusion list), so the code-site lists and the dangling sfx list are a strong hint, not exact.",
+ "resolution": {
+  "root": "build.mjs:45 LIB = $PHANTASIC_LIB or library/",
+  "sfx": "build.mjs:519 reads sfx/manifest.json; build.mjs:618-643 addSfx: id (a family pop/whoosh/impact picks its variants round-robin, :596-602) -> sfx/<manifest[id].file>; no entry or no file = skipped with a warning",
+  "music": "build.mjs:3292-3306 (auto, fallback) and lib/motion.mjs:1242-1255 buildMusic: id -> music/<manifest[id].file>; missing = fatal unless music.optional",
+  "art": "build.mjs:528-535 artAsset: key -> art/<key>.jpg (fatal when missing); layer images build.mjs:2124,2865 (skipped when missing)",
+  "engraving": "build.mjs:3170,3201 objectPops and lib/motion.mjs:281,622,760,866,999: key -> engravings/png/<key>.png; lib/motion.mjs:664 engravings/bulge.png",
+  "object": "lib/gadzhi.mjs:28,129: name -> gm-objects/<name>.png (brain -> puzzle)",
+  "meme": "build.mjs:520-525 memeLib: id -> memes/<id>/meta.json (fatal when missing)",
+  "pack": "build.mjs:2824-2837 packClip: style `packs` on -> packs/<pack>/<kind>/*.mp4 (leaks, burns, 8mm-gate, 8mm-dust); build.mjs:3037 openFlash.clip -> packs/<pack>/burns/<clip>. Absent = asset-free fallback"
+ },
+ "counts": {
+  "art": {
+   "referenced": 0,
+   "catalogued_only": 42,
+   "missing": 42,
+   "dangling": 0
+  },
+  "engraving": {
+   "referenced": 18,
+   "catalogued_only": 44,
+   "missing": 38,
+   "dangling": 0
+  },
+  "music": {
+   "referenced": 10,
+   "catalogued_only": 8,
+   "missing": 13,
+   "dangling": 5
+  },
+  "object": {
+   "referenced": 7,
+   "catalogued_only": 0,
+   "missing": 0,
+   "dangling": 0
+  },
+  "pack": {
+   "referenced": 4,
+   "catalogued_only": 0,
+   "missing": 4,
+   "dangling": 0
+  },
+  "sfx": {
+   "referenced": 40,
+   "catalogued_only": 17,
+   "missing": 48,
+   "dangling": 9
+  }
+ },
+ "missing": [
+  {
+   "path": "art/astronomer.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/birth-of-venus.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/build-1.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/calm-2.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/calm-4.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/city-1.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/city-2.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/creation-of-adam.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/gleaners.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/great-wave.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/growth-2.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/growth-3.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/harvesters.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/liberty.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/message-1.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/message-2.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/mona-lisa.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/money-1.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/night-watch.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/numbers-1.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/persistence-clock.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/portrait-1.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/portrait-2.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/portrait-3.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/portrait-4.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/raft-medusa.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/school-of-athens.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/speed-2.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/starry-night.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/stone-breakers.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/success-1.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/sunflowers.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/taste-1.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/taste-2.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/taste-3.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/taste-4.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/team-1.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/the-scream.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/thinking-4.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/vanitas.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/wanderer.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons, pre-1900: scripts/art_famous.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "art/work-1.jpg",
+   "kind": "art",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (The Met Open Access, CC0: scripts/art_fetch.py); gitignored, fetched per machine"
+  },
+  {
+   "path": "engravings/png/anchor.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/arrow.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/book.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/bridge.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/cards.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/chain.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/clock.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/compass.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/crowd.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/crown.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/dice.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/eye.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/factory.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/fire.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/glasses.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/globe.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/heart.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/horse.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/key.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/lightning.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/lion.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/lock.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/man.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/maze.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/megaphone.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/money.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/mountain.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/pen.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/road.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/rope.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/scales.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/seed.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/ship.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/skull.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/telephone.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/telescope.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/tree.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "engravings/png/typewriter.png",
+   "kind": "engraving",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png"
+  },
+  {
+   "path": "music/brainiac.mp3",
+   "kind": "music",
+   "uses": 11,
+   "for": {
+    "styles": [
+     "library/headline-hype",
+     "library/headline-hype--* (10)"
+    ],
+    "engine": []
+   },
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/comical.mp3",
+   "kind": "music",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/cyberpunk-city.mp3",
+   "kind": "music",
+   "uses": 7,
+   "for": {
+    "styles": [
+     "examples/coffer-reach-motion-en.reel",
+     "library/neon-glow",
+     "library/neon-glow--* (5)"
+    ],
+    "engine": []
+   },
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/deep-techno-ambience.mp3",
+   "kind": "music",
+   "uses": 36,
+   "for": {
+    "styles": [
+     "examples/gameplan-motion-ru.reel",
+     "examples/genz-motion-en.reel",
+     "gadzhi-blue",
+     "gadzhi-green",
+     "gadzhi-motion",
+     "gadzhi-red",
+     "gadzhi-yellow",
+     "hormozi",
+     "hormozi-blue",
+     "hormozi-green",
+     "hormozi-orange",
+     "hormozi-purple",
+     "hormozi-teal",
+     "library/magazine-spread",
+     "library/magazine-spread--* (1)",
+     "library/soft-luxe-serif",
+     "library/soft-luxe-serif--* (11)",
+     "magazine-spread",
+     "podcast-glow",
+     "podcast-glow-blue",
+     "podcast-glow-green",
+     "podcast-glow-pink",
+     "podcast-glow-purple",
+     "podcast-glow-red",
+     "podcast-glow-white"
+    ],
+    "engine": [
+     "build.mjs music \"auto\" default"
+    ]
+   },
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/digital-clouds.mp3",
+   "kind": "music",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/happy-times.mp3",
+   "kind": "music",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/infinity.mp3",
+   "kind": "music",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/keeping-fit.mp3",
+   "kind": "music",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/life-is-a-dream.mp3",
+   "kind": "music",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/lo-fi-02.mp3",
+   "kind": "music",
+   "uses": 9,
+   "for": {
+    "styles": [
+     "breakdown",
+     "explainer-2",
+     "mono-2",
+     "mono-burgundy",
+     "mono-charcoal",
+     "mono-navy",
+     "mono-plum",
+     "mono-royal",
+     "mono-rust"
+    ],
+    "engine": []
+   },
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/silent-descent.mp3",
+   "kind": "music",
+   "uses": 46,
+   "for": {
+    "styles": [
+     "library/arabic-kashida",
+     "library/arabic-kashida--* (1)",
+     "library/monochrome-cinema",
+     "library/monochrome-cinema--* (5)",
+     "library/name-reveal-mono",
+     "library/name-reveal-mono--* (4)",
+     "library/northstar",
+     "library/podcast-punch",
+     "library/podcast-punch--* (20)",
+     "library/sky-script",
+     "monologue",
+     "northstar",
+     "podcast",
+     "premium-noir",
+     "premium-noir-ice",
+     "premium-noir-jade",
+     "premium-noir-red",
+     "premium-noir-rose",
+     "premium-noir-silver",
+     "premium-signature"
+    ],
+    "engine": []
+   },
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/vastness.mp3",
+   "kind": "music",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "music/vocal-percussions.mp3",
+   "kind": "music",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+  },
+  {
+   "path": "packs/editorsinventory/8mm-dust/",
+   "kind": "pack",
+   "uses": 10,
+   "for": {
+    "styles": [
+     "keynote",
+     "keynote-3",
+     "keynote-4",
+     "keynote-5",
+     "keynote-lilac",
+     "keynote-mint",
+     "keynote-orange",
+     "keynote-rose",
+     "keynote-sky"
+    ],
+    "engine": [
+     "build.mjs packClip"
+    ]
+   },
+   "source": "licensed pack, not shipped"
+  },
+  {
+   "path": "packs/editorsinventory/8mm-gate/",
+   "kind": "pack",
+   "uses": 10,
+   "for": {
+    "styles": [
+     "keynote",
+     "keynote-3",
+     "keynote-4",
+     "keynote-5",
+     "keynote-lilac",
+     "keynote-mint",
+     "keynote-orange",
+     "keynote-rose",
+     "keynote-sky"
+    ],
+    "engine": [
+     "build.mjs packClip"
+    ]
+   },
+   "source": "licensed pack, not shipped"
+  },
+  {
+   "path": "packs/editorsinventory/burns/",
+   "kind": "pack",
+   "uses": 30,
+   "for": {
+    "styles": [
+     "ak-consulting-content",
+     "alif",
+     "broadsheet",
+     "editorial-collage",
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal",
+     "keynote",
+     "keynote-3",
+     "keynote-4",
+     "keynote-5",
+     "keynote-lilac",
+     "keynote-mint",
+     "keynote-orange",
+     "keynote-rose",
+     "keynote-sky",
+     "library/grid-paper-editorial",
+     "library/grid-paper-editorial--* (9)"
+    ],
+    "engine": [
+     "build.mjs packClip"
+    ]
+   },
+   "source": "licensed pack, not shipped"
+  },
+  {
+   "path": "packs/editorsinventory/leaks/",
+   "kind": "pack",
+   "uses": 20,
+   "for": {
+    "styles": [
+     "ak-consulting-content",
+     "alif",
+     "editorial-collage",
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal",
+     "keynote",
+     "keynote-3",
+     "keynote-4",
+     "keynote-5",
+     "keynote-lilac",
+     "keynote-mint",
+     "keynote-orange",
+     "keynote-rose",
+     "keynote-sky",
+     "library/studio-gloss--* (1)"
+    ],
+    "engine": [
+     "build.mjs packClip"
+    ]
+   },
+   "source": "licensed pack, not shipped"
+  },
+  {
+   "path": "sfx/burn-whoosh-fast.wav",
+   "kind": "sfx",
+   "uses": 22,
+   "for": {
+    "styles": [
+     "ak-consulting-content",
+     "alif",
+     "broadsheet",
+     "editorial-collage",
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal",
+     "library/grid-paper-editorial",
+     "library/grid-paper-editorial--* (9)"
+    ],
+    "engine": [
+     "build.mjs:1555",
+     "lib/premium.mjs:186"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/burn-whoosh-tunnel.wav",
+   "kind": "sfx",
+   "uses": 21,
+   "for": {
+    "styles": [
+     "ak-consulting-content",
+     "alif",
+     "broadsheet",
+     "editorial-collage",
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal",
+     "library/grid-paper-editorial",
+     "library/grid-paper-editorial--* (9)"
+    ],
+    "engine": [
+     "lib/premium.mjs:187"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/buzzer-1.wav",
+   "kind": "sfx",
+   "uses": 1,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:1529"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/cinematic-cine-hit.wav",
+   "kind": "sfx",
+   "uses": 2,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:2701",
+     "build.mjs:3352"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/cinematic-deep-boom.wav",
+   "kind": "sfx",
+   "uses": 3,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:1405",
+     "build.mjs:1639",
+     "lib/premium.mjs:181"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/cinematic-drone-swell.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/cinematic-film-flash.wav",
+   "kind": "sfx",
+   "uses": 2,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:3019",
+     "build.mjs:3051"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/cinematic-heartbeat.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/cinematic-rumble-riser.wav",
+   "kind": "sfx",
+   "uses": 2,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:1405",
+     "lib/premium.mjs:180"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/click-1.wav",
+   "kind": "sfx",
+   "uses": 10,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:2067",
+     "build.mjs:3142",
+     "lib/gadzhi.mjs:221",
+     "lib/hormozi.mjs:49",
+     "lib/motion.mjs:231",
+     "lib/motion.mjs:337",
+     "lib/motion.mjs:707",
+     "lib/motion.mjs:728",
+     "lib/motion.mjs:838",
+     "lib/premium.mjs:184"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/ding-1.wav",
+   "kind": "sfx",
+   "uses": 7,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:1604",
+     "build.mjs:1673",
+     "build.mjs:3141",
+     "build.mjs:3142",
+     "lib/motion.mjs:230",
+     "lib/motion.mjs:233",
+     "lib/motion.mjs:468"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/impact-1.wav",
+   "kind": "sfx",
+   "uses": 13,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:1480",
+     "build.mjs:1508",
+     "build.mjs:1529",
+     "build.mjs:1639",
+     "build.mjs:1733",
+     "build.mjs:1734",
+     "build.mjs:1775",
+     "build.mjs:2054",
+     "lib/motion.mjs:1208",
+     "lib/motion.mjs:1215",
+     "lib/motion.mjs:441",
+     "lib/motion.mjs:985",
+     "lib/premium.mjs:181"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/impact-2.wav",
+   "kind": "sfx",
+   "uses": 11,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:1480",
+     "build.mjs:1508",
+     "build.mjs:1529",
+     "build.mjs:1639",
+     "build.mjs:1775",
+     "build.mjs:2090",
+     "build.mjs:3140",
+     "lib/motion.mjs:1208",
+     "lib/motion.mjs:1215",
+     "lib/motion.mjs:233",
+     "lib/motion.mjs:441"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/kaching-1.wav",
+   "kind": "sfx",
+   "uses": 2,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:3139",
+     "lib/motion.mjs:228"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/pop-1.wav",
+   "kind": "sfx",
+   "uses": 30,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal",
+     "gold-ledger",
+     "library/ui-story-ad--* (1)",
+     "mono-2",
+     "mono-burgundy",
+     "mono-charcoal",
+     "mono-navy",
+     "mono-plum",
+     "mono-royal",
+     "mono-rust"
+    ],
+    "engine": [
+     "build.mjs:1489",
+     "build.mjs:1520",
+     "build.mjs:1537",
+     "build.mjs:1611",
+     "build.mjs:1892",
+     "build.mjs:1934",
+     "build.mjs:1966",
+     "build.mjs:2702",
+     "lib/motion.mjs:327",
+     "lib/motion.mjs:487",
+     "lib/motion.mjs:558",
+     "lib/motion.mjs:626",
+     "lib/motion.mjs:641",
+     "lib/motion.mjs:646",
+     "lib/premium.mjs:184"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/pop-2.wav",
+   "kind": "sfx",
+   "uses": 19,
+   "for": {
+    "styles": [
+     "gold-ledger",
+     "library/ui-story-ad--* (1)"
+    ],
+    "engine": [
+     "build.mjs:1489",
+     "build.mjs:1520",
+     "build.mjs:1537",
+     "build.mjs:1611",
+     "build.mjs:1892",
+     "build.mjs:1934",
+     "build.mjs:1966",
+     "build.mjs:2702",
+     "lib/gadzhi.mjs:156",
+     "lib/gadzhi.mjs:221",
+     "lib/gadzhi.mjs:267",
+     "lib/motion.mjs:327",
+     "lib/motion.mjs:487",
+     "lib/motion.mjs:558",
+     "lib/motion.mjs:626",
+     "lib/motion.mjs:641",
+     "lib/motion.mjs:646"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/pop-3.wav",
+   "kind": "sfx",
+   "uses": 15,
+   "for": {
+    "styles": [
+     "gold-ledger",
+     "library/ui-story-ad--* (1)"
+    ],
+    "engine": [
+     "build.mjs:1489",
+     "build.mjs:1520",
+     "build.mjs:1537",
+     "build.mjs:1611",
+     "build.mjs:1892",
+     "build.mjs:1934",
+     "build.mjs:1966",
+     "lib/motion.mjs:327",
+     "lib/motion.mjs:487",
+     "lib/motion.mjs:558",
+     "lib/motion.mjs:626",
+     "lib/motion.mjs:641",
+     "lib/motion.mjs:646"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/pop-whoosh-light.wav",
+   "kind": "sfx",
+   "uses": 13,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "build.mjs:1875",
+     "build.mjs:1918",
+     "build.mjs:1948",
+     "build.mjs:3134",
+     "build.mjs:3140",
+     "lib/motion.mjs:870",
+     "lib/premium.mjs:183"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/reaction-applause-short.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/reaction-boing.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/reaction-cartoon-pop.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/reaction-crowd-boo.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/reaction-crowd-laugh.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/reaction-ding-ding.wav",
+   "kind": "sfx",
+   "uses": 1,
+   "for": {
+    "styles": [
+     "examples/gallery/meme.reel"
+    ],
+    "engine": []
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/reaction-drum-roll.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/reaction-fail-trombone.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/reaction-gasp.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/reaction-rimshot.wav",
+   "kind": "sfx",
+   "uses": 1,
+   "for": {
+    "styles": [
+     "examples/gallery/meme.reel"
+    ],
+    "engine": []
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/reaction-slide-whistle.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/reaction-tape-rewind.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/riser-1.wav",
+   "kind": "sfx",
+   "uses": 7,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:3140",
+     "build.mjs:3141",
+     "build.mjs:3351",
+     "lib/motion.mjs:233",
+     "lib/motion.mjs:234",
+     "lib/motion.mjs:382",
+     "lib/premium.mjs:180"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/shutter-1.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/tech-camera-flash.wav",
+   "kind": "sfx",
+   "uses": 1,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:1405"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/tech-digital-whoosh.wav",
+   "kind": "sfx",
+   "uses": 1,
+   "for": {
+    "styles": [],
+    "engine": [
+     "lib/premium.mjs:186"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/tech-glitch-1.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/tech-glitch-2.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/tech-keyboard-burst.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/tech-notification-2.wav",
+   "kind": "sfx",
+   "uses": 3,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:3139",
+     "build.mjs:3141",
+     "lib/motion.mjs:234"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/tech-ui-confirm.wav",
+   "kind": "sfx",
+   "uses": 2,
+   "for": {
+    "styles": [],
+    "engine": [
+     "lib/gadzhi.mjs:234",
+     "lib/motion.mjs:231"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/tech-ui-error.wav",
+   "kind": "sfx",
+   "uses": 0,
+   "for": "catalogued in its manifest; nothing in the fork names it",
+   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+  },
+  {
+   "path": "sfx/tick-1.wav",
+   "kind": "sfx",
+   "uses": 17,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "build.mjs:1673",
+     "build.mjs:2704",
+     "build.mjs:3139",
+     "build.mjs:3141",
+     "lib/gadzhi.mjs:156",
+     "lib/gadzhi.mjs:255",
+     "lib/motion.mjs:229",
+     "lib/motion.mjs:234",
+     "lib/motion.mjs:431",
+     "lib/motion.mjs:578",
+     "lib/premium.mjs:184"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/typing-1.wav",
+   "kind": "sfx",
+   "uses": 4,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:1851",
+     "build.mjs:2080",
+     "lib/motion.mjs:231",
+     "lib/motion.mjs:475"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/whoosh-1.wav",
+   "kind": "sfx",
+   "uses": 112,
+   "for": {
+    "styles": [
+     "closer",
+     "closer-blue",
+     "closer-green",
+     "closer-orange",
+     "closer-pink",
+     "closer-red",
+     "closer-white",
+     "examples/coffer-reach-motion-en.reel",
+     "examples/gameplan-motion-ru.reel",
+     "examples/genz-motion-en.reel",
+     "headline-2",
+     "headline-3",
+     "keynote",
+     "keynote-3",
+     "keynote-4",
+     "keynote-5",
+     "keynote-lilac",
+     "keynote-mint",
+     "keynote-orange",
+     "keynote-rose",
+     "keynote-sky",
+     "library/grid-paper-editorial",
+     "library/grid-paper-editorial--* (7)",
+     "library/last-word",
+     "library/monochrome-cinema",
+     "library/monochrome-cinema--* (5)",
+     "library/name-reveal-mono",
+     "library/name-reveal-mono--* (5)",
+     "library/neon-glow--* (3)",
+     "library/northstar",
+     "library/podcast-punch",
+     "library/podcast-punch--* (20)",
+     "library/sky-script",
+     "library/studio-gloss",
+     "library/studio-gloss--* (5)",
+     "library/ui-story-ad--* (7)",
+     "monologue",
+     "name-reveal",
+     "northstar",
+     "premium-signature"
+    ],
+    "engine": [
+     "build.mjs:1501",
+     "build.mjs:1571",
+     "build.mjs:1588",
+     "build.mjs:1679",
+     "build.mjs:1814",
+     "build.mjs:1840",
+     "build.mjs:1995",
+     "build.mjs:2014",
+     "build.mjs:2098",
+     "build.mjs:2133",
+     "build.mjs:2595",
+     "build.mjs:3140",
+     "build.mjs:793",
+     "lib/hormozi.mjs:42",
+     "lib/motion-graphics.mjs:407",
+     "lib/motion.mjs:1047",
+     "lib/motion.mjs:1203",
+     "lib/motion.mjs:232",
+     "lib/motion.mjs:351",
+     "lib/motion.mjs:383",
+     "lib/motion.mjs:452",
+     "lib/motion.mjs:494",
+     "lib/motion.mjs:527",
+     "lib/motion.mjs:558",
+     "lib/motion.mjs:632",
+     "lib/motion.mjs:646",
+     "lib/motion.mjs:969"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/whoosh-2.wav",
+   "kind": "sfx",
+   "uses": 120,
+   "for": {
+    "styles": [
+     "closer",
+     "closer-blue",
+     "closer-green",
+     "closer-orange",
+     "closer-pink",
+     "closer-red",
+     "closer-white",
+     "examples/coffer-reach-motion-en.reel",
+     "examples/gameplan-motion-ru.reel",
+     "examples/genz-motion-en.reel",
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal",
+     "headline-2",
+     "headline-3",
+     "keynote",
+     "keynote-3",
+     "keynote-4",
+     "keynote-5",
+     "keynote-lilac",
+     "keynote-mint",
+     "keynote-orange",
+     "keynote-rose",
+     "keynote-sky",
+     "library/grid-paper-editorial",
+     "library/grid-paper-editorial--* (7)",
+     "library/last-word",
+     "library/monochrome-cinema",
+     "library/monochrome-cinema--* (5)",
+     "library/name-reveal-mono",
+     "library/name-reveal-mono--* (4)",
+     "library/neon-glow--* (3)",
+     "library/northstar",
+     "library/podcast-punch",
+     "library/podcast-punch--* (20)",
+     "library/sky-script",
+     "library/studio-gloss",
+     "library/studio-gloss--* (5)",
+     "library/ui-story-ad--* (7)",
+     "monologue",
+     "northstar",
+     "premium-signature"
+    ],
+    "engine": [
+     "build.mjs:1501",
+     "build.mjs:1571",
+     "build.mjs:1588",
+     "build.mjs:1679",
+     "build.mjs:1733",
+     "build.mjs:1814",
+     "build.mjs:1840",
+     "build.mjs:1995",
+     "build.mjs:2014",
+     "build.mjs:2098",
+     "build.mjs:2133",
+     "build.mjs:2595",
+     "build.mjs:3142",
+     "build.mjs:793",
+     "lib/gadzhi.mjs:165",
+     "lib/gadzhi.mjs:194",
+     "lib/gadzhi.mjs:233",
+     "lib/hormozi.mjs:36",
+     "lib/motion-graphics.mjs:407",
+     "lib/motion.mjs:1047",
+     "lib/motion.mjs:1203",
+     "lib/motion.mjs:232",
+     "lib/motion.mjs:351",
+     "lib/motion.mjs:383",
+     "lib/motion.mjs:452",
+     "lib/motion.mjs:494",
+     "lib/motion.mjs:527",
+     "lib/motion.mjs:558",
+     "lib/motion.mjs:632",
+     "lib/motion.mjs:646",
+     "lib/motion.mjs:969"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/whoosh-3.wav",
+   "kind": "sfx",
+   "uses": 108,
+   "for": {
+    "styles": [
+     "closer",
+     "closer-blue",
+     "closer-green",
+     "closer-orange",
+     "closer-pink",
+     "closer-red",
+     "closer-white",
+     "examples/coffer-reach-motion-en.reel",
+     "examples/gameplan-motion-ru.reel",
+     "examples/genz-motion-en.reel",
+     "headline-2",
+     "headline-3",
+     "keynote",
+     "keynote-3",
+     "keynote-4",
+     "keynote-5",
+     "keynote-lilac",
+     "keynote-mint",
+     "keynote-orange",
+     "keynote-rose",
+     "keynote-sky",
+     "library/grid-paper-editorial",
+     "library/grid-paper-editorial--* (7)",
+     "library/last-word",
+     "library/monochrome-cinema",
+     "library/monochrome-cinema--* (5)",
+     "library/name-reveal-mono",
+     "library/name-reveal-mono--* (4)",
+     "library/neon-glow--* (3)",
+     "library/northstar",
+     "library/podcast-punch",
+     "library/podcast-punch--* (20)",
+     "library/sky-script",
+     "library/studio-gloss",
+     "library/studio-gloss--* (5)",
+     "library/ui-story-ad--* (7)",
+     "monologue",
+     "northstar",
+     "premium-signature"
+    ],
+    "engine": [
+     "build.mjs:1501",
+     "build.mjs:1571",
+     "build.mjs:1588",
+     "build.mjs:1679",
+     "build.mjs:1814",
+     "build.mjs:1840",
+     "build.mjs:1995",
+     "build.mjs:2014",
+     "build.mjs:2098",
+     "build.mjs:2133",
+     "build.mjs:2595",
+     "build.mjs:793",
+     "lib/motion-graphics.mjs:407",
+     "lib/motion.mjs:1047",
+     "lib/motion.mjs:1203",
+     "lib/motion.mjs:232",
+     "lib/motion.mjs:351",
+     "lib/motion.mjs:383",
+     "lib/motion.mjs:452",
+     "lib/motion.mjs:494",
+     "lib/motion.mjs:527",
+     "lib/motion.mjs:558",
+     "lib/motion.mjs:632",
+     "lib/motion.mjs:646",
+     "lib/motion.mjs:969"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/whoosh-cine.wav",
+   "kind": "sfx",
+   "uses": 12,
+   "for": {
+    "styles": [
+     "examples/gallery/meme.reel",
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "build.mjs:1405",
+     "build.mjs:1480",
+     "build.mjs:2971",
+     "lib/premium.mjs:182",
+     "lib/premium.mjs:183"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/zoom-sweep-short.wav",
+   "kind": "sfx",
+   "uses": 9,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "build.mjs:3287",
+     "build.mjs:3498",
+     "lib/premium.mjs:185"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  },
+  {
+   "path": "sfx/zoom-sweep-small.wav",
+   "kind": "sfx",
+   "uses": 8,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "build.mjs:3287",
+     "lib/premium.mjs:185"
+    ]
+   },
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+  }
+ ],
+ "dangling": [
+  {
+   "kind": "music",
+   "id": "alif-match-a",
+   "uses": 53,
+   "for": {
+    "styles": [
+     "gold-ledger",
+     "library/grid-paper-editorial",
+     "library/grid-paper-editorial--* (7)",
+     "library/magazine-spread--* (1)",
+     "library/studio-gloss",
+     "library/studio-gloss--* (5)",
+     "library/ui-story-ad",
+     "library/ui-story-ad--* (26)",
+     "mono",
+     "mono-2",
+     "mono-burgundy",
+     "mono-charcoal",
+     "mono-navy",
+     "mono-plum",
+     "mono-royal",
+     "mono-rust",
+     "pitch",
+     "red-poster"
+    ],
+    "engine": []
+   },
+   "effect": "no manifest entry: buildMusic throws unless music.optional or a usable music.fallback is set"
+  },
+  {
+   "kind": "music",
+   "id": "alif-match-b",
+   "uses": 1,
+   "for": {
+    "styles": [
+     "breakdown"
+    ],
+    "engine": []
+   },
+   "effect": "no manifest entry: buildMusic throws unless music.optional or a usable music.fallback is set"
+  },
+  {
+   "kind": "music",
+   "id": "alif-match-c",
+   "uses": 1,
+   "for": {
+    "styles": [
+     "library/grid-paper-editorial--* (1)"
+    ],
+    "engine": []
+   },
+   "effect": "no manifest entry: buildMusic throws unless music.optional or a usable music.fallback is set"
+  },
+  {
+   "kind": "music",
+   "id": "alif-match-d",
+   "uses": 2,
+   "for": {
+    "styles": [
+     "library/monochrome-cinema--* (1)",
+     "monochrome-cinema-stark"
+    ],
+    "engine": []
+   },
+   "effect": "no manifest entry: buildMusic throws unless music.optional or a usable music.fallback is set"
+  },
+  {
+   "kind": "music",
+   "id": "head-bang",
+   "uses": 2,
+   "for": {
+    "styles": [
+     "library/grid-paper-editorial--* (1)",
+     "premium-iman"
+    ],
+    "engine": []
+   },
+   "effect": "no manifest entry: buildMusic throws unless music.optional or a usable music.fallback is set"
+  },
+  {
+   "kind": "sfx",
+   "id": "paper-crinkle",
+   "uses": 6,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": []
+   },
+   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
+  },
+  {
+   "kind": "sfx",
+   "id": "paper-page-turn",
+   "uses": 8,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "lib/motion.mjs:1030",
+     "lib/motion.mjs:253"
+    ]
+   },
+   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
+  },
+  {
+   "kind": "sfx",
+   "id": "paper-pages",
+   "uses": 7,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "lib/motion.mjs:253"
+    ]
+   },
+   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
+  },
+  {
+   "kind": "sfx",
+   "id": "paper-quick",
+   "uses": 9,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "build.mjs:3093",
+     "build.mjs:3212",
+     "lib/motion.mjs:253"
+    ]
+   },
+   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
+  },
+  {
+   "kind": "sfx",
+   "id": "pen-letters",
+   "uses": 7,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "lib/motion.mjs:258"
+    ]
+   },
+   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
+  },
+  {
+   "kind": "sfx",
+   "id": "pen-scribble",
+   "uses": 8,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "build.mjs:3094",
+     "lib/motion.mjs:258"
+    ]
+   },
+   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
+  },
+  {
+   "kind": "sfx",
+   "id": "pen-scribble-2",
+   "uses": 7,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "lib/motion.mjs:258"
+    ]
+   },
+   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
+  },
+  {
+   "kind": "sfx",
+   "id": "pen-short",
+   "uses": 9,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "build.mjs:1733",
+     "build.mjs:3139",
+     "lib/motion.mjs:258"
+    ]
+   },
+   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
+  },
+  {
+   "kind": "sfx",
+   "id": "vine-boom",
+   "uses": 1,
+   "for": {
+    "styles": [],
+    "engine": [
+     "build.mjs:1639"
+    ]
+   },
+   "effect": "no manifest entry, but every code site checks the manifest first and uses another sound instead (meme beats: cinematic-deep-boom, else the impact family); nothing is skipped and no warning is printed"
+  }
+ ]
+}
