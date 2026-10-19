@@ -33,7 +33,7 @@ class Moment(BaseModel):
     kind: str = Field(description="gm-object | gm-flow | gm-counter | gm-nodes")
     at: float
     to: float
-    object: str = Field("", description="brain | target | stopwatch | rocket | gears | lightbulb")
+    object: str = Field("", description="puzzle | target | stopwatch | rocket | gears | lightbulb")
     text: str = Field("", description="gm-object: words above the object, spoken, '*word*' = big serif accent, '^word' = big sans")
     textBelow: str = ""
     labels: list[str] = Field(default_factory=list, description="gm-flow: 2-3 short spoken labels")

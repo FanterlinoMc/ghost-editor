@@ -69,7 +69,7 @@ CONCEPTS = [
     (r"\b(automat\w*|ai|system|systems|process|workflow|tools?|software|api|machine)\b", "gears", "cpu"),
     (r"\b(grow|growth|scale|scaling|launch|future|faster|boom|skyrocket|win)\b", "rocket", "trend"),
     (r"\b(idea|ideas|insight|clarity|strategy|plan|creative|innovation)\b", "lightbulb", "bolt"),
-    (r"\b(think|brain|mind|know|learn|value|smart|decision|question)\b", "brain", "target"),
+    (r"\b(think|brain|mind|know|learn|value|smart|decision|question)\b", "puzzle", "target"),
 ]
 ICON_WORDS = [(r"recurring|monthly|repeat|every (month|week)", "repeat"), (r"year|month|calendar|week", "calendar"), (r"api|ai|model|tool|software", "cpu"),
               (r"cost|price|money|\$|revenue|fee", "dollar"), (r"time|hour|minute|second", "clock"), (r"team|employee|people|staff|hire", "users"),
@@ -91,7 +91,7 @@ def concept(s):
     for rx, obj, ico in CONCEPTS:
         if re.search(rx, s):
             return obj, ico
-    return "brain", "target"
+    return "puzzle", "target"
 
 
 def icon_for(s):
@@ -312,7 +312,7 @@ def plan_gadzhi(ws, args):
         o2, _ = concept(text(last[3]))
         a = r3(last[3][0]["start"] - 0.05)
         cand.append({"score": 9, "beat": {"type": "scene", "kind": "gm-nodes", "at": a, "to": r3(min(last[3][-1]["end"] + 0.3, a + 2.4)), "captions": False,
-                                           "nodes": [{"n": k + 1, "at": r3(a + 0.1 + 0.25 * k)} for k in range(len(pts))], "object": "brain" if o2 == "chart" else o2,
+                                           "nodes": [{"n": k + 1, "at": r3(a + 0.1 + 0.25 * k)} for k in range(len(pts))], "object": "puzzle" if o2 == "chart" else o2,
                                            "pill": {"text": text(lp).strip(",.?!").lower(), "at": r3(lp[-1]["start"])}}})
         # a point that lists several things -> icon flow
         for n, mk, body, best in pts[:-1]:
@@ -354,7 +354,7 @@ def plan_gadzhi(ws, args):
             b.update(value=m.value, prefix=m.prefix, suffix=m.suffix, label=m.label, icon=icon_for(m.label or "money"), countAt=r3(m.at + 0.4), countDur=0.5)
         elif m.kind == "gm-nodes":
             pa = said_at(m.pill, m.at, m.to) if m.pill else None
-            b.update(nodes=[{"n": k + 1, "at": r3(m.at + 0.1 + 0.25 * k)} for k in range(3)], object=m.object or "brain", **({"pill": {"text": m.pill.lower(), "at": pa}} if pa else {}))
+            b.update(nodes=[{"n": k + 1, "at": r3(m.at + 0.1 + 0.25 * k)} for k in range(3)], object=m.object or "puzzle", **({"pill": {"text": m.pill.lower(), "at": pa}} if pa else {}))
         else:
             continue
         cand.append({"score": 20, "beat": b})

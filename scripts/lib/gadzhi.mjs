@@ -9,7 +9,7 @@
 //               a pill label lands on it
 // Words: a token list "let me let you *know* a _little_ ^secret" (plain = small grey sans, *x* = big purple serif
 // italic, _x_ = mid purple serif italic, ^x = big grey sans). Each token lands on the matching spoken word, in order.
-// Objects: library names (brain, stopwatch, gears, rocket, lightbulb, chart, target) from the gm-objects pack, or a path.
+// Objects: library names (chart, gears, lightbulb, puzzle, rocket, stopwatch, target) from the gm-objects pack, or a path.
 // (hand port of phantasic engine/core/scripts/lib/gadzhi.mjs; the theme comes from ctx.gmTheme = spec.gm.theme)
 import path from "node:path";
 import fs from "node:fs";
@@ -22,7 +22,7 @@ const objBounds = (o) => {
 };
 const edgeOf = (o) => { const bb = (o.includes("/") ? null : objBounds(o)) ?? { top: 0, bottom: 1 }; return { top: bb.top, bottom: bb.bottom }; };
 const objAspect = (o) => { try { const f = o.includes("/") ? o : path.join(OBJ_DIR, `${o}.png`); const b = fs.readFileSync(f); return b.readUInt32BE(20) / b.readUInt32BE(16); } catch { return 1; } };
-// premium set: Nano Banana Pro 2k renders in graphite + chrome (neutral in every colour theme)
+// the pack: 3dicons v1 (CC0), premium style desaturated to graphite + chrome (neutral in every colour theme); see library/gm-objects/SOURCES.md
 const OBJ_DIR = process.env.PHANTASIC_GM_OBJECTS || path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "library", "gm-objects");
 // colour themes: one preset per accent (gadzhi-purple, -blue, -yellow, -red, -green). ink = big serif type on paper,
 // glow = halo behind objects, deep = dark ground for flow/counter/nodes, pill = label pill, light = serif on dark

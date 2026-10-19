@@ -54,7 +54,7 @@ const SCENES = [
   { type: "scene", kind: "gm-kinetic", text: "a real *surprise*", at: 5, to: 6.5 },
   { type: "scene", kind: "gm-flow", title: "Costs", items: [{ icon: "dollar", label: "Setup", at: 7 }, { icon: "clock", label: "Monthly", at: 7.6 }], at: 6.8, to: 8.6 },
   { type: "scene", kind: "gm-counter", icon: "users", value: 2000, prefix: "$", label: "per month", at: 9, to: 10.4, countAt: 9.2 },
-  { type: "scene", kind: "gm-nodes", nodes: [{ n: 1, at: 10.6 }, { n: 2, at: 10.9 }], object: "brain", pill: { text: "value", at: 11 }, at: 10.5, to: 11.9 },
+  { type: "scene", kind: "gm-nodes", nodes: [{ n: 1, at: 10.6 }, { n: 2, at: 10.9 }], object: "puzzle", pill: { text: "value", at: 11 }, at: 10.5, to: 11.9 },
 ];
 
 try {
@@ -65,7 +65,13 @@ try {
   for (const cls of ["gm-paper", "gm-halo", "gm-objwrap", "gm-title", "gm-tile", "gm-card", "gm-num", "gm-chip", "gm-pill"]) assert.ok(h.includes(cls), `markup/css has ${cls}`);
   assert.ok(h.includes(".gm-t.k {"), "GM_CSS present");
   assert.ok(h.includes("--gm-ink:#4B1F7A"), "purple theme from gm.theme");
-  assert.ok(fs.existsSync(path.join(dir, "assets", "target.png")) && fs.existsSync(path.join(dir, "assets", "brain.png")), "objects copied from library/gm-objects");
+  assert.ok(fs.existsSync(path.join(dir, "assets", "target.png")) && fs.existsSync(path.join(dir, "assets", "puzzle.png")), "objects copied from library/gm-objects");
+  // the pack and bounds.json agree, and it is the CC0 set (library/gm-objects/SOURCES.md): no brain, a puzzle instead
+  const LIB = path.join(HERE, "..", "library", "gm-objects");
+  const pngs = fs.readdirSync(LIB).filter((f) => f.endsWith(".png")).map((f) => f.replace(/\.png$/, "")).sort();
+  assert.deepEqual(pngs, ["chart", "gears", "lightbulb", "puzzle", "rocket", "stopwatch", "target"], "the seven CC0 objects");
+  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(LIB, "bounds.json"), "utf8"))).sort(), pngs, "bounds.json covers exactly the PNGs");
+  assert.ok(/3dicons/.test(fs.readFileSync(path.join(LIB, "SOURCES.md"), "utf8")), "SOURCES.md records where the objects come from");
   assert.ok(/return|investment/.test(h) && h.includes('class="gm-t k"'), "typed rows with a serif keyword");
   check("gm-object / kinetic / flow / counter / nodes build; GM_CSS only here; library objects copied");
   dir = project({ style: "gadzhi-blue", beats: [SCENES[1]] });
@@ -134,15 +140,17 @@ try {
 
   // ---- gm layout from the object's measured edges ----
   const layoutOf = (beat) => { const d = project({ style: "gadzhi-motion", beats: [beat] }); build(d); const hh = html(d); return { objTop: +hh.match(/class="gm-objwrap" style="top:(\d+)px;width:(\d+)px/)[1], objW: +hh.match(/class="gm-objwrap" style="top:(\d+)px;width:(\d+)px/)[2], rows: [...hh.matchAll(/class="gm-row" style="top:(\d+)px/g)].map((m) => +m[1]) }; };
-  const tall = layoutOf({ type: "scene", kind: "gm-object", object: "rocket", text: "IG|*Outreach* Pro", textBelow: "^tool", objY: 520, objW: 740, textY: 300, at: 1.5, to: 4 });
+  // aspect (h / w) of a library object, from bounds.json; stopwatch is the tallest object in the pack
+  const asp = (o) => { const bb = JSON.parse(fs.readFileSync(path.join(HERE, "..", "library", "gm-objects", "bounds.json"), "utf8"))[o]; return bb.h / bb.w; };
+  const tall = layoutOf({ type: "scene", kind: "gm-object", object: "stopwatch", text: "IG|*Outreach* Pro", textBelow: "^tool", objY: 520, objW: 740, textY: 300, at: 1.5, to: 4 });
   assert.ok(tall.objTop >= tall.rows[1] + 190, `the object clears the second text row: object top ${tall.objTop}, rows ${tall.rows}`);
-  assert.ok(tall.objTop + tall.objW * (1100 / 817) <= 1601, "and still ends above the bottom limit (shrunk if needed)");
+  assert.ok(tall.objTop + tall.objW * asp("stopwatch") <= 1601, "and still ends above the bottom limit (shrunk if needed)");
   const low = layoutOf({ type: "scene", kind: "gm-object", object: "target", text: "return on", at: 1.5, to: 4 });
   assert.equal(low.objTop, 560, "a layout that already clears the object is left as given");
   const pillTop = (obj) => { const d = project({ style: "gadzhi-motion", beats: [{ type: "scene", kind: "gm-nodes", nodes: [{ n: 1, at: 2 }], object: obj, pill: { text: "value", at: 2.5 }, at: 1.5, to: 4 }] }); build(d); const hh = html(d); return { pill: +hh.match(/class="gm-pill" style="top:(\d+)px/)[1], objW: +hh.match(/class="gm-obj" style="top:(\d+)px;width:(\d+)px/)[2], objY: +hh.match(/class="gm-obj" style="top:(\d+)px;width:(\d+)px/)[1] }; };
-  const gp = pillTop("gears"), rp = pillTop("rocket");
-  assert.ok(gp.pill >= gp.objY + gp.objW * (881 / 1100), "the pill sits below the gears' bottom edge");
-  assert.ok(rp.pill >= rp.objY + rp.objW * (1100 / 817) && rp.pill + 100 <= 1741, "tall object: shrunk until object and pill fit, pill still below it");
+  const gp = pillTop("gears"), rp = pillTop("stopwatch");
+  assert.ok(gp.pill >= gp.objY + gp.objW * asp("gears"), "the pill sits below the gears' bottom edge");
+  assert.ok(rp.pill >= rp.objY + rp.objW * asp("stopwatch") && rp.pill + 100 <= 1741, "tall object: shrunk until object and pill fit, pill still below it");
   check("gm-object text clears tall objects; the gm-nodes pill sits below the object's measured bottom edge");
 
   // ---- sections hash follows sourceGrade; a section build carries gm css and graded media ----
