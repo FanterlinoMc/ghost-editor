@@ -1503,6 +1503,21 @@ const hzLists = [];   // Authority (hormozi): edit-time spans of the split-scree
 // implementation could silently drift from. lib/sections.mjs uses this to decide which take joins
 // a beat spans, so it never becomes a section boundary.
 const beatSpans = [];
+// #fx holds: the windows in which a popcard keeps the camera defocused ({a: its defocus tween starts, aEnd: that tween ends,
+// b: its focus-return tween starts, ret: that tween's length, blur, dim}). Every other tween on #fx's filter (look.refocus pulls,
+// captions.energyPunch, a leak's bloom) used to end on "blur(0px) brightness(1)". Which of two overlapping GSAP tweens on one
+// property shows depends on the seek: frame by frame forward, the one that updates last (the later END); a jump, the later
+// START. So a tween that ends after the card's defocus has ended re-sharpened the speaker for the rest of the card.
+// fxAim(start, dur) is the hold such a tween must settle into: it ends after the defocus ended (aEnd) and no later than the
+// focus-return ends (b + ret), and it starts before the return does - then the card's own tweens agree with it under both
+// seek orders, and the return still has the last word. A tween ending after b + ret keeps its sharp end (it outlives the card).
+// Overlapping cards: the hold with the latest start wins (its defocus tween is the one that started last).
+const fxHolds = [];
+const fxAim = (start, dur) => fxHolds.filter((h) => start < h.b - 1e-6 && start + dur > h.aEnd + 1e-6 && start + dur <= h.b + h.ret + 1e-6).sort((p, q) => p.a - q.a).at(-1);
+// the hold a tween STARTS in (its from-state keeps the card's dim, so a punch that outlives the card does not flash bright)
+const fxIn = (t) => fxHolds.filter((h) => t >= h.a - 1e-6 && t < h.b - 1e-6).sort((p, q) => p.a - q.a).at(-1);
+const fxRest = (h, bright = 1) => h ? `blur(${h.blur}px) brightness(${r3(h.dim * bright)})` : `blur(0px) brightness(${bright})`;
+const fxLeaks = [];   // leak bloom tweens on #fx (tl index + times), re-aimed after the loop if they land inside a popcard hold
 for (const b of beatsList) {
   CUR_BEAT = b;
   const id = `b${n++}`;
@@ -1954,6 +1969,7 @@ for (const b of beatsList) {
       if (b.defocus !== false) {
         tl.push(`tl.to("#fx", { filter: "blur(${b.blur ?? 9}px) brightness(${b.dim ?? spec.popcard?.dim ?? 0.72})", duration: 0.25, ease: "power2.out" }, ${t0});`);
         tl.push(`tl.to("#fx", { filter: "blur(0px) brightness(1)", duration: ${outFade ? 0.14 : 0.26}, ease: "power2.out" }, ${r3(outFade ? t1 - 0.14 : t1 - 0.3)});`);
+        fxHolds.push({ a: t0, aEnd: r3(t0 + 0.25), b: r3(outFade ? t1 - 0.14 : t1 - 0.3), ret: outFade ? 0.14 : 0.26, blur: b.blur ?? 9, dim: b.dim ?? spec.popcard?.dim ?? 0.72 });
       }
       hiddenCaps.push([t0, t1]);
       beatSfx(b, t0, "pop-whoosh-light", "pop card", { db: -4 });
@@ -2177,6 +2193,7 @@ for (const b of beatsList) {
     case "leak": {
       // a warm light-leak flash (a real burn/leak clip, screen-blended) with a bloom on the camera: the "$80" transition
       deferredLeaks.push({ b, t0, t1 });
+      fxLeaks.push({ i: tl.length, t0, t1, bloom: b.bloom ?? 1.5 });
       tl.push(`tl.to("#fx", { filter: "blur(0px) brightness(${b.bloom ?? 1.5})", duration: 0.1, ease: "power2.out" }, ${t0});`);
       tl.push(`tl.to("#fx", { filter: "blur(0px) brightness(1)", duration: 0.25, ease: "power2.in" }, ${r3(Math.max(t0 + 0.12, t1 - 0.25))});`);
       beatSfx(b, t0, "whoosh", "light leak", { db: -6 });
@@ -2237,6 +2254,14 @@ const LOOK_OV = groundFlat.length > 0 || !!spec.look?.cleanScenes;
 const OV = LOOK_OV ? " look-ov" : "";
 // a layer never straddles a section boundary (lib/sections.mjs): its span counts like a beat's
 for (const l of LAYERS) beatSpans.push({ t0: l.t0, t1: l.t1 });
+// a leak bloom inside a popcard hold blooms the defocused camera and settles back on the defocus, not on sharp (fxAim); a leak
+// outside every hold keeps its exact tweens, so a reel without that overlap builds byte-identically. L.i is the bloom's index in
+// tl, pushed in the leak case above (the return is L.i + 1); nothing between there and here removes or reorders tl lines.
+for (const L of fxLeaks) {
+  const back = r3(Math.max(L.t0 + 0.12, L.t1 - 0.25)), hb = fxAim(L.t0, 0.1), hr = fxAim(back, 0.25);
+  if (hb) tl[L.i] = `tl.to("#fx", { filter: "${fxRest(hb, L.bloom)}", duration: 0.1, ease: "power2.out" }, ${L.t0});`;
+  if (hr) tl[L.i + 1] = `tl.to("#fx", { filter: "${fxRest(hr)}", duration: 0.25, ease: "power2.in" }, ${back});`;
+}
 
 // ---------- making room: shrink the whole footage stack under a `room:"below"` motion beat ----------
 // Windows merge (overlap -> one shrink); #room wraps #pip and scales about the canvas top centre, OUTSIDE the
@@ -3627,11 +3652,14 @@ if (look.cleanScenes) for (const [b, sp] of beatsList.map((b, i) => [b, beatSpan
 // look.refocus {blur, dur}: the video opens, and the camera comes back from every page, out of focus and pulls sharp
 if (look.refocus) {
   const pulls = [0, ...beatsList.map((b, i) => [b, beatSpans[i]]).filter(([b]) => b.type === "scene" || b.type === "headpage" || b.type === "photostack").map(([, sp]) => sp.t1)].filter((t) => t < TOTAL - 0.3);
-  for (const t of pulls) tl.push(`tl.fromTo("#fx", { filter: "blur(${look.refocus.blur ?? 14}px) brightness(1)" }, { filter: "blur(0px) brightness(1)", duration: ${look.refocus.dur ?? 0.3}, ease: "power2.out", immediateRender: ${t === 0} }, ${r3(t)});`);
+  // a pull that lands inside a popcard hold settles on the card's defocus (fxAim), not on sharp
+  for (const t of pulls) { const h = fxAim(t, look.refocus.dur ?? 0.3); tl.push(`tl.fromTo("#fx", { filter: "blur(${look.refocus.blur ?? 14}px) brightness(${(h ?? fxIn(t))?.dim ?? 1})" }, { filter: "${fxRest(h)}", duration: ${look.refocus.dur ?? 0.3}, ease: "power2.out", immediateRender: ${t === 0} }, ${r3(t)});`); }
 }
 // captions.energyPunch {scale, blur} (duo only): every energy span opens with a zoom punch that smears for a few frames, then settles
 if (cap.style === "duo" && cap.energyPunch) for (const [t] of energySpans) {
-  tl.push(`tl.fromTo("#fx", { scale: ${cap.energyPunch.scale ?? 1.14}, filter: "blur(${cap.energyPunch.blur ?? 7}px) brightness(1)" }, { scale: 1, filter: "blur(0px) brightness(1)", duration: 0.28, ease: "power3.out", immediateRender: false }, ${r3(Math.max(0, t - 0.02))});`);
+  // a punch that lands inside a popcard hold keeps the card's dim and settles on its defocus (fxAim), not on sharp
+  const pt = r3(Math.max(0, t - 0.02)), ph = fxAim(pt, 0.28), pf = ph ?? fxIn(pt);
+  tl.push(`tl.fromTo("#fx", { scale: ${cap.energyPunch.scale ?? 1.14}, filter: "blur(${pf ? Math.max(pf.blur, cap.energyPunch.blur ?? 7) : cap.energyPunch.blur ?? 7}px) brightness(${pf ? pf.dim : 1})" }, { scale: 1, filter: "${fxRest(ph)}", duration: 0.28, ease: "power3.out", immediateRender: false }, ${r3(Math.max(0, t - 0.02))});`);
   addSfx(Math.max(0, t - 0.02), "zoom-sweep-short", "energy punch", { db: spec.sound?.zoomDb ?? -10 });
 }
 if (look.grain) for (let t = 0, k = 0; t < TOTAL; t += 1 / 12, k++) tl.push(`tl.set("#grain", { backgroundPosition: "${(k * 137) % 400}px ${(k * 251) % 400}px" }, ${r3(t)});`);
