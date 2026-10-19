@@ -12,7 +12,7 @@
 //   - the silent library: the same reel builds, the drop still cuts, no sound event and no sfx tag, the skipped-sound warning
 //   - the new die(): drop.<sound field> not an id / list of ids / false / "none"
 //   - opt-in: premium-belmar reels without the new fields (no drop, a placed drop) build the same sections.json, sfx_events.json and
-//     index.html as the base engine (git archive of PRESTIGE_BASE_REF, default origin/engine/release-1019b; skipped without it)
+//     index.html as the base engine (git archive of PRESTIGE_BASE_REF, default commit 290994d; skipped only without git or the commit)
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -206,20 +206,23 @@ test("drop sound fields: false / \"none\" silence one sound; anything but an id,
 
 // Opt-in proof for the style itself: premium-belmar reels that use none of the new fields build the same bytes as the base engine
 // (sections.json carries a globalHash over spec.drop, so even a style-only change to the drop block would show here). The base engine
-// is `git archive` of PRESTIGE_BASE_REF (default origin/engine/release-1019b, the branch this work started from); without git or the
-// ref the check is skipped and says so.
-const BASE_REF = process.env.PRESTIGE_BASE_REF || "origin/engine/release-1019b";
-const baseEngine = (() => {
-  const dir = path.join(root, "base-engine");
-  try {
-    const repo = path.join(HERE, "..");
-    execFileSync("git", ["-C", repo, "rev-parse", "--verify", "--quiet", `${BASE_REF}^{commit}`], { stdio: "pipe" });
-    const tar = execFileSync("git", ["-C", repo, "archive", "--format=tar", BASE_REF, "scripts", "styles", "presets", "templates", "brands", "templates-registry.json"], { maxBuffer: 1 << 28 });
-    fs.mkdirSync(dir); execFileSync("tar", ["-xf", "-", "-C", dir], { input: tar });
-    return dir;
-  } catch { return null; }
+// is `git archive` of PRESTIGE_BASE_REF (default 290994d, the engine/release-1019b commit this work started from; a commit, so it does
+// not go stale once this branch is merged). Skipped ONLY when git is not installed or the ref is not in this clone (a shallow CI
+// checkout); any other git archive / tar error fails the test.
+const BASE_REF = process.env.PRESTIGE_BASE_REF || "290994d";
+const REPO = path.join(HERE, "..");
+const baseSkip = (() => {
+  const v = spawnSync("git", ["--version"], { encoding: "utf8" });
+  if (v.error) return `git is not available (${v.error.code ?? v.error.message})`;
+  const r = spawnSync("git", ["-C", REPO, "rev-parse", "--verify", "--quiet", `${BASE_REF}^{commit}`], { encoding: "utf8" });
+  if (r.status !== 0) return `${BASE_REF} is not in this clone (a shallow checkout? fetch it, or set PRESTIGE_BASE_REF)`;
+  return null;
 })();
-test(`premium-belmar without the new fields builds byte-identically to ${BASE_REF} (no drop; a placed drop; silent and stub library)`, { skip: baseEngine ? false : `${BASE_REF} not available` }, () => {
+test(`premium-belmar without the new fields builds byte-identically to ${BASE_REF} (no drop; a placed drop; silent and stub library)`, (t) => {
+  if (baseSkip) { t.skip(baseSkip); return; }
+  const baseEngine = path.join(root, "base-engine");
+  const tar = execFileSync("git", ["-C", REPO, "archive", "--format=tar", BASE_REF, "scripts", "styles", "presets", "templates", "brands", "templates-registry.json"], { maxBuffer: 1 << 28 });
+  fs.mkdirSync(baseEngine); execFileSync("tar", ["-xf", "-", "-C", baseEngine], { input: tar });
   const runWith = (engine, dir, lib) => {
     const r = spawnSync(process.execPath, [path.join(engine, "scripts", "build.mjs"), "."], { cwd: dir, encoding: "utf8", env: { ...process.env, PHANTASIC_LIB: lib, [pathKey]: fakeBin + path.delimiter + process.env[pathKey] } });
     assert.equal(r.status, 0, r.stderr + r.stdout);
