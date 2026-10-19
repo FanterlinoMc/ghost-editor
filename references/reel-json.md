@@ -782,7 +782,7 @@ reverse play, dotLottie (`.lottie`), image or text layers, expressions.
 
 ## Prompt Motion graphic (`kind: "graphic"` layer, `type: "graphic"` beat): spec (CP1), not built yet
 
-Status: **spec (CP1) v3.2 (CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found); not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
+Status: **spec (CP1) v3.2.1 (CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found; v3.2.1 notes the G31 trade-off); not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
 `kind: "graphic"` dies with the existing `unknown kind "graphic"` error and a `graphic` beat is not placed. PM2
 (sandbox + render) and PM3 (in the reel) build it exactly as written here. The PC mirrors every **static** rule
 (G1 to G28) and every placement rule in the validator word for word, at the same time.
@@ -1194,7 +1194,8 @@ with an HTML entity (`<code>&#115;etTimeout</code>`), or inside a JS string with
 (`"setTimeout(cb)"`, `"Launch Date (Q3)"`); the scan does not match either and the page displays
 the same text. A function or method of your own must not be called `animate` (G13 `.animate(`), `open` or `click` (G25), and a
 variable must not be called `location`; `this[...]` in any form (including ``this[`x${i}`]``) is refused by
-G25, so the writer prompt must avoid it; and `anime`, `d3`, `THREE`,
+G25, so the writer prompt must avoid it; CSS never contains a backslash (G31: write the character itself, e.g.
+`content:"—"`, never `content:"\2014"`); and `anime`, `d3`, `THREE`,
 ... are reserved names (G19).
 
 | # | check | `<reason>` (exact) |
@@ -1229,7 +1230,7 @@ G25, so the writer prompt must avoid it; and `anime`, `d3`, `THREE`,
 | G28 | listing G28 (v3: only on a member access, `x['a' + b]`, not an array literal) | `graphic file <html> builds a name from pieces (<match>): write property names out in full` |
 | G29 | listing G29 (v3.2) | `graphic file <html> has an event-handler attribute (<match>): no on...= attributes; everything runs from seek(t)` |
 | G30 | listing G30 (v3.2) | `graphic file <html> has an HTML comment (<!--): use /* */ inside <style> and <script> instead` |
-| G31 | listing G31 (v3.2) | `graphic file <html> has a backslash escape in CSS (<match>): write CSS without escapes` |
+| G31 | listing G31 (v3.2). ANY backslash in CSS is refused, legitimate ones too (`content:"\2014"`): write the character itself (`content:"—"`), never a CSS escape | `graphic file <html> has a backslash escape in CSS (<match>): write CSS without escapes` |
 | G32 | listing G32 (v3.2) | `graphic file <html> has an end tag written as <match>: write </script>, </style> and </title> exactly` |
 | G33 | listing G33 (v3.2, two lines) | `graphic file <html> uses a script URL (<match>)` |
 | G34 | listing G34 (v3.2) | `graphic file <html> has <match> (no math, noscript, xmp, noembed, noframes, plaintext, textarea or template elements, and no <script> or <style> inside <svg>)` |

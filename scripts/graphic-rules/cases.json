@@ -1,5 +1,5 @@
 {
- "_": "Cases for scripts/graphic-rules/parity.mjs: html in, expect = the first failure (rules.mjs format) or null. bypass/fp: the CP3 reviewer's sets; meta: G18/G21-G26; v3: the CP3 re-review. mine: the CP3 re-reviewer's 11 extra cases; v31: line endings. pc: the PC reviewer's four v3.2 probe files verbatim (OK = the base script) plus the octal control; v32: siblings and controls.",
+ "_": "Cases for scripts/graphic-rules/parity.mjs: html in, expect = the first failure (rules.mjs format) or null. bypass/fp: the CP3 reviewer's sets; meta: G18/G21-G26; v3: the CP3 re-review. mine: the CP3 re-reviewer's 11 extra cases; v31: line endings. pc: the PC reviewer's four v3.2 probe files verbatim (OK = the base script) plus the octal control; v32: siblings and controls. v321: the CP3 v3.2 re-reviewer's must-pass controls and the content escape.",
  "cases": {
   "bypass.fetchConcat": {
    "html": "<script>window['fe'+'tch']('https://x')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
@@ -591,11 +591,11 @@
    "expect": "G25:SCRIPT:\".href=\""
   },
   "mine.unicodeWordBoundary": {
-   "html": "<script>var \u00e9fetch = 1; \u00e9fetch(2);</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "html": "<script>var éfetch = 1; éfetch(2);</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
    "expect": "G8:SCRIPT:\"fetch(\""
   },
   "mine.nbspFetch": {
-   "html": "<script>fetch\u00a0(\"x\")</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "html": "<script>fetch (\"x\")</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
    "expect": "G8:SCRIPT:\"fetch (\""
   },
   "mine.historyArr": {
@@ -763,6 +763,43 @@
   },
   "v32.ctlLessThanInScript": {
    "html": "<html><head></head><body><script>for (var i=0;i<3;i++) {}</script><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v321.ctlSvgStyleOpacity": {
+   "html": "<html><head></head><body><svg><rect style=\"fill:#f00;opacity:.5\" width=\"10\" height=\"10\"/></svg><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v321.ctlSvgGradient": {
+   "html": "<html><head></head><body><svg><defs><linearGradient id=\"g\"><stop offset=\"0\" stop-color=\"#fff\"/></linearGradient></defs><rect fill=\"url(#g)\" width=\"10\" height=\"10\"/></svg><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v321.ctlCanvas2d": {
+   "html": "<html><head></head><body><canvas id=\"c\" width=\"100\" height=\"100\"></canvas><script>var ctx = document.getElementById(\"c\").getContext(\"2d\"); ctx.fillStyle = \"#f00\"; ctx.fillRect(0, 0, 10, 10);</script><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v321.ctlCssComment": {
+   "html": "<html><head><style>/* layout */ h1{color:#fff}</style></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v321.ctlJsComment": {
+   "html": "<html><head></head><body><script>// draw the bars\nvar a = 1;</script><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v321.ctlAttrLessThan": {
+   "html": "<html><head></head><body><div data-label=\"a<b\"></div><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v321.ctlTextLessThan": {
+   "html": "<html><head></head><body><p>3 < 5</p><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v321.cssContentEscape": {
+   "html": "<html><head><style>.d::before{content:\"\\2014\"}</style></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "note": "G31 refuses every CSS backslash: write the character itself (content:\"—\"), never a CSS escape",
+   "expect": "G31:STYLE:\"\\\\2\""
+  },
+  "v321.ctlCssContentChar": {
+   "html": "<html><head><style>.d::before{content:\"—\"}</style></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
    "expect": null
   }
  }
