@@ -27,7 +27,10 @@ def main():
     if pad < 0.5 / fps:
         return
     tmp = src + ".tail.mp4"
-    vf = f"trim=end_frame={int(round(speech * fps))},setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration={pad}"
+    # fps= between trim and tpad: on ffmpeg 7.1 (macOS arm64, measured 19 Oct) tpad cloned NOTHING after trim, so the
+    # video stream stopped at `speech` while the audio ran to `total`. A same-rate fps filter is a no-op on the kept
+    # frames (framemd5-identical, in order) and makes tpad emit the held frames.
+    vf = f"trim=end_frame={int(round(speech * fps))},setpts=PTS-STARTPTS,fps={fps},tpad=stop_mode=clone:stop_duration={pad}"
     subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", src, "-filter_complex", f"[0:v]{vf}[v]", "-map", "[v]", "-map", "0:a?",
                     "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), "-c:a", "copy",
                     "-t", f"{total:.3f}", "-movflags", "+faststart", tmp], check=True)
