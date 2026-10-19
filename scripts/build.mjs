@@ -3844,7 +3844,9 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
   const modes = {};
   for (const b of placer.log) modes[b.mode] = (modes[b.mode] || 0) + 1;
   console.log(`caption placement (${placer.platform.name}, safe y ${placer.safeTop}-${placer.safeBottom}): ${JSON.stringify(modes)}`);
-  if (modes["lower-face"]) warn.push(`${modes["lower-face"]} caption block(s) in close-up fallback (under the mouth, on a backing); see build/caption_layout.json`);
+  // captions.backing false / backingUntil: count the blocks that really got the grey box, not every close-up block
+  const boxed = ((edit ? edit.html : capHtml).match(/ (ebacked|cap-backed)"/g) || []).length;
+  if (modes["lower-face"]) warn.push(`${modes["lower-face"]} caption block(s) in close-up fallback (under the mouth, ${boxed === modes["lower-face"] ? "on a backing" : `${boxed} on the grey box, ${modes["lower-face"] - boxed} without it`}); see build/caption_layout.json`);
 }
 
 console.log(`\n${takes.length} takes, ${SPEECH.toFixed(2)}s speech + ${OUTRO}s outro = ${TOTAL}s`);
