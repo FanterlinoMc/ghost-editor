@@ -9,6 +9,22 @@ __pycache__/
 
 # licensed/ripped media is restored by scripts/library_restore.py, never committed
 library/music/*.mp3
+# No audio file in either folder may ever be committed, whatever its extension: this repo is public and every
+# sound is licensed (see library/SOURCES.md). A deployment restores them outside git.
+library/sfx/*.mp3
+library/music/*.wav
+library/sfx/*.m4a
+library/music/*.m4a
+library/sfx/*.aac
+library/music/*.aac
+library/sfx/*.ogg
+library/music/*.ogg
+library/sfx/*.flac
+library/music/*.flac
+library/sfx/*.part
+library/music/*.part
+# licensed asset packs (overlays, transitions, sounds): restored by a deployment, never committed
+library/packs/
 .env
 
 # face model: face_track.py downloads it on first use (opencv_zoo, MIT)

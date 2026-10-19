@@ -22,6 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { silentLibrary } from "./lib/silent-library.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.join(HERE, "build.mjs");
@@ -59,7 +60,8 @@ const fakeBin = path.join(root, "fake-bin"); fs.mkdirSync(fakeBin);
 fs.writeFileSync(path.join(fakeBin, "npx.cmd"), "@echo off\r\necho npx is disabled in build-ahmed-premium.test.mjs: seed the matte 1>&2\r\nexit /b 97\r\n");
 fs.writeFileSync(path.join(fakeBin, "npx"), "#!/bin/sh\necho 'npx is disabled in build-ahmed-premium.test.mjs: seed the matte' >&2\nexit 97\n", { mode: 0o755 });
 const pathKey = Object.keys(process.env).find((k) => k.toLowerCase() === "path") ?? "PATH";
-const SAFE_ENV = { ...process.env, [pathKey]: fakeBin + path.delimiter + process.env[pathKey] };
+// The gate builds against a library with no audio (lib/silent-library.mjs), so a developer with restored sounds gets CI's result.
+const SAFE_ENV = { ...process.env, PHANTASIC_LIB: silentLibrary(), [pathKey]: fakeBin + path.delimiter + process.env[pathKey] };
 const run = (dir, env = {}) => spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: { ...SAFE_ENV, ...env } });
 const build = (dir, env) => { const r = run(dir, env); assert.equal(r.status, 0, r.stderr + r.stdout); return r.stdout + r.stderr; };
 const fails = (dir, re) => { const r = run(dir); assert.notEqual(r.status, 0, "should have failed"); assert.match(r.stdout + r.stderr, re); };

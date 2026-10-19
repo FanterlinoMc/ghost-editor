@@ -38,6 +38,7 @@
     "complete": true
   },
   "music": {
+    "optional": true,
     "id": "alif-match-a",
     "db": -12,
     "fadeIn": 0,

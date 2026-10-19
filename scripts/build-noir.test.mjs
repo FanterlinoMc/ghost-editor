@@ -17,6 +17,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { silentLibrary } from "./lib/silent-library.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.join(HERE, "build.mjs");
@@ -47,7 +48,7 @@ function project(reel, { second = false } = {}) {
   fs.writeFileSync(path.join(dir, "reel.json"), JSON.stringify({ title: "noir", source: "assets/talk.mp4", words: "build/words.whisper.json", face: "build/face.json", fps: FPS, outro: 0.4, zoom: {}, takes: [{ a: 0, b: SEC }], beats: [], ...reel }, null, 2));
   return dir;
 }
-const run = (dir, env = {}) => spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: { ...process.env, ...env } });
+const run = (dir, env = {}) => spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: { ...process.env, PHANTASIC_LIB: silentLibrary(), ...env } });   // no audio: see lib/silent-library.mjs
 const build = (dir, env) => { const r = run(dir, env); assert.equal(r.status, 0, r.stderr + r.stdout); return r.stdout + r.stderr; };
 const html = (dir) => fs.readFileSync(path.join(dir, "index.html"), "utf8");
 const truth = (dir) => JSON.parse(fs.readFileSync(path.join(dir, "build", "edit_truth.json"), "utf8"));

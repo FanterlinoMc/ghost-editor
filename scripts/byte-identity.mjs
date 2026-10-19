@@ -26,6 +26,7 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { BUSY_BEAT, ROOM_BEAT } from "./lib/motion-fixture.mjs";
+import { silentLibrary } from "./lib/silent-library.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD_MJS = path.join(HERE, "build.mjs");
@@ -70,7 +71,8 @@ function buildOnce(name, reel, tag) {
   fs.writeFileSync(path.join(dir, "build", "words.whisper.json"), JSON.stringify(wordsJson()));
   fs.writeFileSync(path.join(dir, "build", "face.json"), JSON.stringify(faceJson()));
   fs.writeFileSync(path.join(dir, "reel.json"), JSON.stringify(reel, null, 2));
-  sh(process.execPath, [BUILD_MJS, "."], { cwd: dir });
+  // the golden hashes are the SHIPPED library (no audio): a fetched library/sfx would change every reel with a sound
+  sh(process.execPath, [BUILD_MJS, "."], { cwd: dir, env: { ...process.env, PHANTASIC_LIB: silentLibrary() } });
   const out = {};
   out["index.html"] = sha(fs.readFileSync(path.join(dir, "index.html")));
   for (const f of fs.readdirSync(path.join(dir, "build")).sort()) {
