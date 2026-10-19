@@ -39,6 +39,7 @@ import { HZ_CSS, hzBeat } from "./lib/hormozi.mjs";
 import { createHash } from "node:crypto";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 import { matteThreads, cutMatteThreaded, writeAtomically } from "./lib/matte.mjs";
+import * as RL from "./lib/relight.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -893,6 +894,20 @@ if (spec.sourceGrade) {
     mediaOf.set(s, g);
   }
 }
+// spec.relight (opt-in; references/reel-json.md "Empire depth relight"): coloured side light on the REAL footage, shaped by a
+// depth map (Depth Anything V2 Small, run locally by scripts/depth_map.py, cached as assets/<recording>-depth.mp4). The relit
+// copy (assets/<recording>-relit-<hash>.mp4, from the sourceGrade'd file when that is set) replaces the media like sourceGrade
+// does; takes, words, faces and edit_truth keep the recording's own name. Only recordings with a person in them are relit
+// (the primary, and any with a face track - the same rule as stage). With matte / stage the cut-out is relit too (below).
+const RELIGHT = spec.relight == null || spec.relight === false ? null : (() => { try { return RL.normalizeRelight(spec.relight); } catch (e) { die(e.message); } })();
+const relitMatteOf = new Map();
+const relightable = (s) => s === SRC || fs.existsSync(path.join(proj, facePathFor(s)));
+if (RELIGHT) {
+  for (const s of SOURCES.filter(relightable)) {
+    try { mediaOf.set(s, RL.ensureRelit(proj, s, mediaOf.get(s), RELIGHT)); } catch (e) { die(e.message); }
+  }
+  console.log(`relight: ${SOURCES.filter(relightable).map((s) => `${s} -> ${mediaOf.get(s)}`).join(", ")}`);
+}
 // Every take must fit inside its OWN recording. With one source this is the check that already
 // existed implicitly via srcDur; with several it is the only thing standing between a typo in
 // take.src and a take that silently plays black.
@@ -983,14 +998,16 @@ const perSrcMatte = !!spec.stage || (spec.beats || []).some((b) => b.type === "g
 if (spec.matte && SOURCES.length > 1 && !perSrcMatte) {
   die(`spec.matte with ${SOURCES.length} sources is not supported: one matte is cut from ${SRC}, and every take indexes it by its own source time, so takes from the other recording(s) would show the wrong cut-out - drop spec.matte, or keep this reel single-source (MULTIANGLE Gap 6)`);
 }
-const matteRelOf = (s) => (s === SRC ? "assets/talk-matte.webm" : `assets/${path.basename(s).replace(/\.[^.]+$/, "")}-matte.webm`);
+const matteCutOf = (s) => (s === SRC ? "assets/talk-matte.webm" : `assets/${path.basename(s).replace(/\.[^.]+$/, "")}-matte.webm`);
+// relight: the cut-out shows the relit subject (its alpha over the relit colour); without relight this is the cut itself
+const matteRelOf = (s) => relitMatteOf.get(s) ?? matteCutOf(s);
 // stage: a recording is cut out only when it has a face track (a screen recording or a photo has no person to cut out)
 const stageMatted = (s) => s === SRC || fs.existsSync(path.join(proj, facePathFor(s)));
 if (spec.matte) {
   for (const s of perSrcMatte ? SOURCES.filter(stageMatted) : [SRC]) {
-    const mp = path.resolve(proj, matteRelOf(s));
+    const mp = path.resolve(proj, matteCutOf(s));
     if (!fs.existsSync(mp)) {
-      console.log(`cutting the speaker out of ${s} (hyperframes remove-background, ~4 fps; cached in ${matteRelOf(s)})...`);
+      console.log(`cutting the speaker out of ${s} (hyperframes remove-background, ~4 fps; cached in ${matteCutOf(s)})...`);
       // npx is a .cmd shim on Windows and CreateProcess cannot launch it directly, so this
       // threw ENOENT and took every `behind` beat with it (they die() without a matte).
       const npx = process.platform === "win32" ? ["cmd", ["/c", "npx"]] : ["npx", []];
@@ -1003,6 +1020,9 @@ if (spec.matte) {
         else execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", out], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 });
       });
       console.log("  matte done");
+    }
+    if (RELIGHT && relightable(s)) {
+      try { relitMatteOf.set(s, RL.ensureRelitMatte(proj, s, matteCutOf(s), mediaOf.get(s))); } catch (e) { die(e.message); }
     }
   }
   matteHtml = takes.map((k, i) => (perSrcMatte && !stageMatted(k.src)) ? "" : `
@@ -3743,7 +3763,7 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
     // Settings that invalidate every section at once, kept separate from each section's own hash
     // so a manifest diff can tell "one caption changed" apart from "the whole reel's look
     // changed" - see lib/sections.mjs's invalidation note.
-    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE, ...(spec.sourceGrade ? { sourceGrade: spec.sourceGrade, sourceExposure: spec.sourceExposure ?? null, gradeGamma, ...(spec.sourceNeutral ? { sourceNeutral: spec.sourceNeutral, gradeCast } : {}) } : {}), ...(gradePresetUsed ? { gradePreset: gradePresetUsed } : {}), ...(PREMIUM_HASH ? { premium: PREMIUM_HASH } : {}) }),
+    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE, ...(spec.sourceGrade ? { sourceGrade: spec.sourceGrade, sourceExposure: spec.sourceExposure ?? null, gradeGamma, ...(spec.sourceNeutral ? { sourceNeutral: spec.sourceNeutral, gradeCast } : {}) } : {}), ...(gradePresetUsed ? { gradePreset: gradePresetUsed } : {}), ...(PREMIUM_HASH ? { premium: PREMIUM_HASH } : {}), ...(RELIGHT ? { relight: RELIGHT } : {}) }),
     sections: manifest,
   }, null, 2));
   console.log(`sections: ${sections.length} (${sections.map((s) => `${s.start}-${s.end}`).join(", ")})`);
