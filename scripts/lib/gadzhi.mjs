@@ -150,7 +150,10 @@ export function gmScene(b, id, t0, t1, ctx) {
       const em = { s: 0.5, m: 0.4, k: 0.4, b: 0.52 }, fs0 = big ? { s: 120, m: 160, k: 250, b: 230 } : { s: 84, m: 124, k: 196, b: 176 };
       const estW = row.reduce((a, t) => a + (t.text.length * em[t.cls] + 0.32) * fs0[t.cls], 0);
       const fit = estW > 980 ? r3(980 / estW) : 1;
-      const html = `<div class="gm-row" style="top:${y}px${fit < 1 ? `;transform:scale(${fit});transform-origin:50% 0` : ""}">${row.map((t, ti) => {
+      // a nowrap row wider than the frame overflows from its LEFT edge (text-align:center only centres content that fits),
+      // so an over-wide row is shrink-wrapped from the frame centre and centred on its own width before the fit scale;
+      // a row that fits keeps its plain full-width markup
+      const html = `<div class="gm-row" style="top:${y}px${fit < 1 ? `;left:50%;right:auto;transform:translateX(-50%) scale(${fit});transform-origin:50% 0` : ""}">${row.map((t, ti) => {
         const sel = `${id}-${tag}${ri}-${ti}`, at = r3(Math.min(t1 - 0.15, Math.max(t0 + 0.05, t.at - 0.03)));
         landWord(`#${sel}`, at, t.cls);
         addSfx(at, t.cls === "s" ? "tick-1" : "pop-2", "gm word lands", { db: t.cls === "s" ? -16 : -9 });
