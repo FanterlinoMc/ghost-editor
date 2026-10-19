@@ -76,6 +76,7 @@ It writes a contact sheet, full-resolution frames and a second-by-second edit lo
 - Sound effects and music: [Mixkit](https://mixkit.co/license/) (free, commercial use, no attribution). `library_restore.py` downloads them on your machine; none are stored in this repo.
 - Fonts: SIL OFL.
 - Face model (YuNet): MIT.
+- Depth model (Depth Anything V2 Small, ONNX export by onnx-community), used only by the opt-in `relight` (Empire side light): Apache-2.0. Not stored in this repo: `python3 scripts/depth_map.py --fetch` downloads it to `~/.cache/phantasic/models` and checks the sha256 in `library/models.json`.
 - No memes ship. Add clips you have the rights to with `scripts/meme_add.py`.
 
 Take selection is adapted from [mariagorskikh/talking-head-reel](https://github.com/mariagorskikh/talking-head-reel) (MIT).

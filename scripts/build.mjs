@@ -39,6 +39,7 @@ import { HZ_CSS, hzBeat } from "./lib/hormozi.mjs";
 import { createHash } from "node:crypto";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 import { matteThreads, cutMatteThreaded, writeAtomically } from "./lib/matte.mjs";
+import * as RL from "./lib/relight.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -917,6 +918,20 @@ if (spec.sourceGrade) {
     mediaOf.set(s, g);
   }
 }
+// spec.relight (opt-in; references/reel-json.md "Empire depth relight"): coloured side light on the REAL footage, shaped by a
+// depth map (Depth Anything V2 Small, run locally by scripts/depth_map.py, cached as assets/<recording>-depth.mp4). The relit
+// copy (assets/<recording>-relit-<hash>.mp4, from the sourceGrade'd file when that is set) replaces the media like sourceGrade
+// does; takes, words, faces and edit_truth keep the recording's own name. Only recordings with a person in them are relit
+// (the primary, and any with a face track - the same rule as stage). With matte / stage the cut-out is relit too (below).
+const RELIGHT = spec.relight == null || spec.relight === false ? null : (() => { try { return RL.normalizeRelight(spec.relight); } catch (e) { die(e.message); } })();
+const relitMatteOf = new Map();
+const relightable = (s) => s === SRC || fs.existsSync(path.join(proj, facePathFor(s)));
+if (RELIGHT) {
+  for (const s of SOURCES.filter(relightable)) {
+    try { mediaOf.set(s, RL.ensureRelit(proj, s, mediaOf.get(s), RELIGHT)); } catch (e) { die(e.message); }
+  }
+  console.log(`relight: ${SOURCES.filter(relightable).map((s) => `${s} -> ${mediaOf.get(s)}`).join(", ")}`);
+}
 // Every take must fit inside its OWN recording. With one source this is the check that already
 // existed implicitly via srcDur; with several it is the only thing standing between a typo in
 // take.src and a take that silently plays black.
@@ -1007,9 +1022,16 @@ const perSrcMatte = !!spec.stage || (spec.beats || []).some((b) => b.type === "g
 if (spec.matte && SOURCES.length > 1 && !perSrcMatte) {
   die(`spec.matte with ${SOURCES.length} sources is not supported: one matte is cut from ${SRC}, and every take indexes it by its own source time, so takes from the other recording(s) would show the wrong cut-out - drop spec.matte, or keep this reel single-source (MULTIANGLE Gap 6)`);
 }
-const matteRelOf = (s) => (s === SRC ? "assets/talk-matte.webm" : `assets/${path.basename(s).replace(/\.[^.]+$/, "")}-matte.webm`);
+const matteCutOf = (s) => (s === SRC ? "assets/talk-matte.webm" : `assets/${path.basename(s).replace(/\.[^.]+$/, "")}-matte.webm`);
+// relight: the cut-out shows the relit subject (its alpha over the relit colour); without relight this is the cut itself
+const matteRelOf = (s) => relitMatteOf.get(s) ?? matteCutOf(s);
 // stage: a recording is cut out only when it has a face track (a screen recording or a photo has no person to cut out)
 const stageMatted = (s) => s === SRC || fs.existsSync(path.join(proj, facePathFor(s)));
+// relight: the cut-out of recording `s` (already cut) gets the relit colour; matteRelOf(s) reads it from then on
+const relightMatte = (s) => {
+  if (!RELIGHT || !relightable(s) || relitMatteOf.has(s)) return;
+  try { relitMatteOf.set(s, RL.ensureRelitMatte(proj, s, matteCutOf(s), mediaOf.get(s))); } catch (e) { die(e.message); }
+};
 // cut the window file for recording seconds [w.a, w.b] (cached by name)
 const cutWindow = (w) => {
   const mp = path.resolve(proj, w.rel);
@@ -1044,9 +1066,12 @@ const cutMatte = (s, mp, label) => {
 // around each clipped cut-out piece (+-1 s, frame-aligned, in recording seconds) is cut out, into
 // assets/talk-matte@<startMs>-<endMs>.webm. The pieces are known only after the beats are laid out, so the cut waits for the
 // matteClip block below (windowCut); the whole-recording cut here is skipped.
-const windowCut = !!(spec.matte && spec.matteClip && spec.matteWindows && !spec.stage && SOURCES.length === 1 && !takeJoins.length && !fs.existsSync(path.resolve(proj, matteRelOf(SRC))));
+const windowCut = !!(spec.matte && spec.matteClip && spec.matteWindows && !spec.stage && SOURCES.length === 1 && !takeJoins.length && !fs.existsSync(path.resolve(proj, matteCutOf(SRC))));
 if (spec.matte) {
-  if (!windowCut) for (const s of perSrcMatte ? SOURCES.filter(stageMatted) : [SRC]) cutMatte(path.resolve(proj, s), path.resolve(proj, matteRelOf(s)), s);
+  if (!windowCut) for (const s of perSrcMatte ? SOURCES.filter(stageMatted) : [SRC]) {
+    cutMatte(path.resolve(proj, s), path.resolve(proj, matteCutOf(s)), s);
+    relightMatte(s);
+  }
   matteHtml = takes.map((k, i) => (perSrcMatte && !stageMatted(k.src)) ? "" : `
       <video id="matte-${i}" class="matte" src="${matteRelOf(k.src)}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="2" muted playsinline></video>`).join("");
   // the cut-out layer mirrors the plate's join transition so a `behind` beat never shows the
@@ -3572,12 +3597,17 @@ if (spec.matte && spec.matteWindows && !spec.stage) {
         for (const w of pieces.map(([, , , s, e, m0]) => [Math.max(0, Math.floor((m0 - 1) * FPS) / FPS), Math.ceil((m0 + (e - s) + 1) * FPS) / FPS]).sort((p, q) => p[0] - q[0])) { const m = wins.at(-1); if (m && w[0] <= m[1]) m[1] = Math.max(m[1], w[1]); else wins.push([...w]); }
         wins = wins.map(([a, b]) => ({ a, b, rel: `assets/talk-matte@${Math.round(a * 1000)}-${Math.round(b * 1000)}.webm` }));
         wins.forEach(cutWindow);
+        // relight: each window cut-out carries the relit colour of the SAME frames (the relit file cut on the same frame indices)
+        if (RELIGHT && relightable(SRC)) for (const w of wins) {
+          try { w.rel = RL.ensureRelitMatte(proj, SRC, w.rel, mediaOf.get(SRC), { win: [Math.round(w.a * FPS), Math.round(w.b * FPS), FPS] }); } catch (e) { die(e.message); }
+        }
       }
       // a piece reads the window file that holds it, else the whole-recording matte (cut now if it is not there)
       const srcOf = (k, m0, d) => {
         const w = wins.find((x) => x.a <= m0 + 1e-3 && m0 + d <= x.b + 1e-3);
         if (w) return [w.rel, r3(m0 - w.a)];
-        cutMatte(path.resolve(proj, k.src), path.resolve(proj, matteRelOf(k.src)), k.src);
+        cutMatte(path.resolve(proj, k.src), path.resolve(proj, matteCutOf(k.src)), k.src);
+        relightMatte(k.src);
         return [matteRelOf(k.src), r3(m0)];
       };
       matteHtml = pieces.map(([k, i, j, s, e, m0]) => {
@@ -3850,7 +3880,7 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
     // Settings that invalidate every section at once, kept separate from each section's own hash
     // so a manifest diff can tell "one caption changed" apart from "the whole reel's look
     // changed" - see lib/sections.mjs's invalidation note.
-    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE, ...(spec.sourceGrade ? { sourceGrade: spec.sourceGrade, sourceExposure: spec.sourceExposure ?? null, gradeGamma, ...(spec.sourceNeutral ? { sourceNeutral: spec.sourceNeutral, gradeCast } : {}) } : {}), ...(gradePresetUsed ? { gradePreset: gradePresetUsed } : {}), ...(PREMIUM_HASH ? { premium: PREMIUM_HASH } : {}) }),
+    globalHash: globalHash({ style: rawSpec.style ?? null, ...(String(rawSpec.style ?? "").startsWith("user:") ? { userStyle: preset } : {}), format: FORMAT, platform, brand, sfxProfile: SFX_PROFILE, ...(spec.sourceGrade ? { sourceGrade: spec.sourceGrade, sourceExposure: spec.sourceExposure ?? null, gradeGamma, ...(spec.sourceNeutral ? { sourceNeutral: spec.sourceNeutral, gradeCast } : {}) } : {}), ...(gradePresetUsed ? { gradePreset: gradePresetUsed } : {}), ...(PREMIUM_HASH ? { premium: PREMIUM_HASH } : {}), ...(RELIGHT ? { relight: RELIGHT } : {}) }),
     sections: manifest,
   }, null, 2));
   console.log(`sections: ${sections.length} (${sections.map((s) => `${s.start}-${s.end}`).join(", ")})`);
