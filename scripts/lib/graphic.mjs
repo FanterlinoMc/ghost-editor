@@ -342,9 +342,11 @@ const fmtT = (t) => String(+t.toFixed(3));
 export function preScript({ fps, L, inF, D, after }) {
   return `(function () {
   var err = console.error.bind(console), add = EventTarget.prototype.addEventListener, round = Math.round, min = Math.min;
+  var toFixed = Number.prototype.toFixed, split = String.prototype.split, Str = String;
   var FPS = ${fps}, L = ${L}, IN = ${inF}, D = ${D}, AFTER = ${JSON.stringify(after)}, said = false, R = ${JSON.stringify(REFUSED)};
   function refuse(m) { if (!said) { said = true; err(R + m); } }
-  function fmt(t) { return String(+t.toFixed(3)); }
+  function fmt(t) { try { return Str(+toFixed.call(t, 3)); } catch (x) { return "?"; } }
+  function msg(x) { try { return split.call(Str(x && x.message !== undefined ? x.message : x), "\\n")[0]; } catch (y) { return "(unreadable error)"; } }
   Object.defineProperty(window, "__graphicRefuse", { value: refuse, writable: false, configurable: false, enumerable: false });
   // R11 navigation trap. Not pagehide/beforeunload: measured, pagehide also fires when HyperFrames closes the page at
   // the end of a NORMAL render. The Navigation API's navigate event fires only for navigations the page starts
@@ -359,7 +361,7 @@ export function preScript({ fps, L, inF, D, after }) {
     try {
       var r = window.seek(t);
       if (r && typeof r.then === "function") refuse("seek(" + fmt(t) + ") returned a Promise");
-    } catch (x) { refuse("seek(" + fmt(t) + ") threw: " + String(x && x.message !== undefined ? x.message : x).split("\\n")[0]); }
+    } catch (x) { refuse("seek(" + fmt(t) + ") threw: " + msg(x)); }
   });
 })();`;
 }

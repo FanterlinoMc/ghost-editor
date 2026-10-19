@@ -224,6 +224,9 @@ test("bridge: frame map, refusals (R3, R4, R5, R11), integrity against the graph
   assert.deepEqual(n.errors, ["GRAPHIC-REFUSED: navigated"]);
   assert.deepEqual(bridge({ nav: false }).errors, ["GRAPHIC-REFUSED: navigation trap unavailable (no window.navigation)"]);
   // a graphic that stubs console.error and tries to replace the refusal function is still reported
+  const tamper = bridge({ seek: () => { throw new Error("line1\nline2"); }, graphic: "Number.prototype.toFixed = function () { return 'X'; }; String.prototype.split = function () { return ['Y']; }; String = function () { return 'Z'; };" });
+  tamper.fire(1);
+  assert.deepEqual(tamper.errors, ["GRAPHIC-REFUSED: seek(1) threw: line1"], "toFixed / split / String replaced by the graphic do not change the refusal text");
   const silenced = bridge({ seek: () => { throw new Error("hidden"); }, graphic: "console.error = function () {}; try { window.__graphicRefuse = function () {}; } catch (e) {} EventTarget.prototype.addEventListener = function () {};" });
   silenced.fire(0);
   assert.deepEqual(silenced.errors, ["GRAPHIC-REFUSED: seek(0) threw: hidden"]);
@@ -419,6 +422,18 @@ test("renderGraphic guards (injected): probe, versions, refusals delete everythi
   assert.ok(slow.r.codes.includes("R7"));
 });
 
+test("killChromes: only live, verified Chrome PIDs > 1; a group only when Chrome leads it", () => {
+  const sent = [];
+  const kill = (p) => sent.push(p);
+  const info = (pid) => ({ 1: { exe: "chrome-headless-shell", pgid: 1 }, 4242: { exe: "node", pgid: 4242 }, 5555: { exe: "chrome-headless-shell", pgid: 5555 }, 6666: { exe: "chrome-headless-shell", pgid: 1 }, 7777: { exe: "launchd", pgid: 7777 } })[pid] || null;
+  const r = RR.killChromes([1, 4242, 5555, 6666, 7777, 8888, 0, -1, NaN], { kill, info });
+  assert.deepEqual(r, ["-5555", "5555", "6666"]);
+  assert.deepEqual(sent, [-5555, 5555, 6666], "never 1, -1, a non-Chrome PID or a dead PID; a group only when Chrome leads it");
+  assert.equal(RR.procInfo(1), null);
+  assert.equal(RR.isChrome(process.pid), false, "this node process is not Chrome");
+  assert.ok(RR.procInfo(process.pid) && RR.procInfo(process.pid).pgid > 0);
+});
+
 test("runRender: no inherited origins, the PID marker, a hung render is killed with its process group", { skip: process.platform === "win32" }, async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-run-"));
   const bin = path.join(dir, "fake-hf.cjs");
@@ -438,6 +453,34 @@ test("runRender: no inherited origins, the PID marker, a hung render is killed w
   const child = Number(/CHILD=(\d+)/.exec(h.log)[1]);
   await new Promise((ok) => setTimeout(ok, 300));
   assert.throws(() => process.kill(child, 0), "the grandchild in the render's process group is dead too");
+
+  // the marker: a normal exit signals nothing; on a timeout only the verified Chrome is killed, never "1" or another PID
+  const sleeper = () => { const c = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" }); c.unref(); return c.pid; };
+  const chromeLike = sleeper(), other = sleeper();
+  const info = (pid) => (pid === chromeLike ? { exe: "chrome-headless-shell", pgid: chromeLike } : pid === other ? { exe: "node", pgid: other } : null);
+  const sent = [];
+  const kill = (p, sig) => { sent.push(p); if (p === 1 || p === -1 || p === other || p === -other) throw new Error("must not signal " + p); return process.kill(p, sig); };
+  const markBin = path.join(dir, "fake-hf-mark.cjs");
+  fs.writeFileSync(markBin, `require("fs").writeFileSync(process.env.GRAPHIC_SHIM_MARK, "1\\n${chromeLike}\\n${other}\\n"); if (process.argv.includes("--hang")) setInterval(() => {}, 1000);`);
+  const normal = await RR.runRender({ dir, out: "--x", mode: "overlay", fps: 30, launcher: { argv: [] }, shim: null, markFile: path.join(dir, "m3"), bin: markBin, timeoutMs: 20000, kill, info });
+  assert.deepEqual([normal.timedOut, normal.killed, sent], [false, [], []], "a normal exit kills nothing");
+  assert.doesNotThrow(() => process.kill(chromeLike, 0));
+  const hung = await RR.runRender({ dir, out: "--hang", mode: "overlay", fps: 30, launcher: { argv: [] }, shim: null, markFile: path.join(dir, "m4"), bin: markBin, timeoutMs: 1500, kill, info });
+  assert.equal(hung.timedOut, true);
+  assert.deepEqual(hung.killed.slice(1), [`-${chromeLike}`, String(chromeLike)], "the hung Chrome (and the group it leads) is killed");
+  assert.ok(!sent.includes(1) && !sent.includes(-1) && !sent.includes(other));
+  await new Promise((ok) => setTimeout(ok, 300));
+  assert.throws(() => process.kill(chromeLike, 0), "the hung Chrome is dead");
+  assert.doesNotThrow(() => process.kill(other, 0), "the non-Chrome PID in the marker is alive");
+  process.kill(other, "SIGKILL");
+  // with a GRAPHIC_SANDBOX launcher the marked PIDs are not touched (they may be in another PID namespace)
+  const chrome2 = sleeper();
+  fs.writeFileSync(markBin, `require("fs").writeFileSync(process.env.GRAPHIC_SHIM_MARK, "${chrome2}\\n"); setInterval(() => {}, 1000);`);
+  const info2 = (pid) => (pid === chrome2 ? { exe: "chrome-headless-shell", pgid: chrome2 } : null);
+  const sb = await RR.runRender({ dir, out: "--x", mode: "overlay", fps: 30, launcher: { argv: ["env"] }, shim: null, markFile: path.join(dir, "m5"), bin: markBin, timeoutMs: 1500, kill, info: info2 });
+  assert.equal(sb.timedOut, true);
+  assert.doesNotThrow(() => process.kill(chrome2, 0), "launcher set: marked PIDs skipped");
+  process.kill(chrome2, "SIGKILL");
 });
 
 test("rules.json is the source: parity with its cases.json, engine fonts = DESIGNER_FONTS", () => {

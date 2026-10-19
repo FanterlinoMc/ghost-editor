@@ -160,6 +160,7 @@ export function chromeShim(dir, chrome) {
   fs.writeFileSync(tmp, `#!/bin/sh
 BYPASS='<-loopback>'
 OLDIFS=$IFS; IFS=';'
+set -f
 for o in $GRAPHIC_RENDER_ORIGINS; do
   case "$o" in
     localhost:*|127.0.0.1:*)
@@ -168,6 +169,7 @@ for o in $GRAPHIC_RENDER_ORIGINS; do
   esac
 done
 IFS=$OLDIFS
+set +f
 if [ -n "$GRAPHIC_SHIM_MARK" ]; then echo $$ >> "$GRAPHIC_SHIM_MARK"; fi
 exec ${q(chrome)} "$@" ${CHROME_FLAGS.map(q).join(" ")} "--proxy-bypass-list=$BYPASS"
 `, { mode: 0o755 });
@@ -238,35 +240,75 @@ export function maxAlpha(file) {
   return Math.max(0, ...[...r.stdout.matchAll(/YMAX=(\d+)/g)].map((m) => Number(m[1])));
 }
 
+// ---------- killing a hung render, safely ----------
+// A PID from the shim's marker file is signalled only if it is > 1, still alive, and still Chrome (Linux: the
+// basename of /proc/<pid>/exe; elsewhere: `ps -o comm= -p <pid>`), so a PID that was reused by another process, or a
+// forged "1", is never touched. Its process group is killed only when that verified Chrome leads it (pgid == pid).
+const CHROME_EXE = /^(chrome-headless-shell|chrome|chromium|chromium-browser|headless_shell|Google Chrome for Testing)$/;
+export function procInfo(pid) {
+  if (!Number.isInteger(pid) || pid <= 1) return null;
+  try { process.kill(pid, 0); } catch { return null; }
+  if (process.platform === "linux") {
+    try {
+      const exe = path.basename(fs.readlinkSync(`/proc/${pid}/exe`)).replace(/ \(deleted\)$/, "");
+      const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
+      const pgid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[2]);
+      return { exe, pgid };
+    } catch { return null; }
+  }
+  const r = spawnSync("ps", ["-o", "pgid=,comm=", "-p", String(pid)], { encoding: "utf8", timeout: 5000 });
+  const m = /^\s*(\d+)\s+(.+?)\s*$/.exec(String(r.stdout || ""));
+  return m ? { exe: path.basename(m[2]), pgid: Number(m[1]) } : null;
+}
+export const isChrome = (pid, info = procInfo) => { const i = info(pid); return !!(i && CHROME_EXE.test(i.exe)); };
+// -> the signals sent, as ["pid" | "-pgid"] (for tests). kill and info are injectable.
+export function killChromes(pids, { kill = process.kill, info = procInfo } = {}) {
+  const sent = [];
+  for (const pid of pids) {
+    if (!Number.isInteger(pid) || pid <= 1) continue;
+    const i = info(pid);
+    if (!i || !CHROME_EXE.test(i.exe)) continue;
+    if (i.pgid === pid) { try { kill(-pid, "SIGKILL"); sent.push(`-${pid}`); } catch {} }
+    try { kill(pid, "SIGKILL"); sent.push(String(pid)); } catch {}
+  }
+  return sent;
+}
+
 // ---------- one hyperframes render inside the launcher (async) ----------
-// Its own process group (detached), killed whole with SIGKILL after timeoutMs; Chrome is detached by puppeteer into its
-// own group, so the PIDs the shim wrote to markFile are killed too (by PID, with their groups) once the render ends.
-// -> Promise<{ status, secs, log, timedOut, shimPids }>
-export function runRender({ dir, out, mode, fps, workers, launcher, shim, logFile, markFile, timeoutMs = 600000, bin }) {
+// Its own process group (detached). Nothing is killed after a normal exit (HyperFrames has closed Chrome itself, and its
+// PIDs may already belong to other processes). On a TIMEOUT: the render's own group (its leader is our live child),
+// then the shim-marked PIDs that are still verified Chrome (puppeteer detaches Chrome into its own group). With a
+// GRAPHIC_SANDBOX launcher the marked PIDs are skipped: a launcher may run the render in its own PID namespace, where
+// those numbers name other processes out here (GRAPHIC_SANDBOX must not create a PID namespace if you want them killed).
+// -> Promise<{ status, secs, log, timedOut, shimPids, killed }>
+export function runRender({ dir, out, mode, fps, workers, launcher, shim, logFile, markFile, timeoutMs = 600000, bin, kill = process.kill, info = procInfo }) {
   const argv = [...launcher.argv, process.execPath, bin || resolveHyperframes(), "render", "--format", mode === "insert" ? "mp4" : "webm", "-f", String(fps), "-q", "looks", ...(workers ? ["--workers", String(workers)] : []), "-o", out, dir];
   const env = cleanEnv({ ...RENDER_ENV, NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --require "${PRELOAD}"`.trim() });
   if (shim) { env.HYPERFRAMES_BROWSER_PATH = shim; delete env.PRODUCER_HEADLESS_SHELL_PATH; }
   if (markFile) { fs.writeFileSync(markFile, ""); env.GRAPHIC_SHIM_MARK = markFile; }
   const t0 = process.hrtime.bigint();
   return new Promise((resolve) => {
-    let log = "", timedOut = false;
+    let log = "", timedOut = false, finished = false;
+    const killed = [];
     const cp = spawn(argv[0], argv.slice(1), { cwd: dir, env, detached: !isWin, stdio: ["ignore", "pipe", "pipe"] });
-    const killAll = () => {
-      try { if (!isWin) process.kill(-cp.pid, "SIGKILL"); else cp.kill("SIGKILL"); } catch {}
-      for (const pid of shimPids()) { try { process.kill(-pid, "SIGKILL"); } catch {} try { process.kill(pid, "SIGKILL"); } catch {} }
+    const shimPids = () => { try { return fs.readFileSync(markFile, "utf8").split(/\s+/).filter((x) => /^\d+$/.test(x)).map(Number); } catch { return []; } };
+    const onTimeout = () => {
+      timedOut = true;
+      if (!finished) { try { if (!isWin && cp.pid > 1) { kill(-cp.pid, "SIGKILL"); killed.push(`-${cp.pid}`); } else cp.kill("SIGKILL"); } catch {} }
+      if (!launcher.argv.length) killed.push(...killChromes(shimPids(), { kill, info }));
     };
-    const shimPids = () => { try { return fs.readFileSync(markFile, "utf8").split(/\s+/).filter(Boolean).map(Number); } catch { return []; } };
-    const timer = setTimeout(() => { timedOut = true; killAll(); }, timeoutMs);
+    const timer = setTimeout(onTimeout, timeoutMs);
     cp.stdout.on("data", (d) => (log += d));
     cp.stderr.on("data", (d) => (log += d));
     const done = (status, extra = "") => {
+      if (finished) return;
+      finished = true;
       clearTimeout(timer);
       const pids = shimPids();
-      killAll();
       const secs = Number(process.hrtime.bigint() - t0) / 1e9;
       log += extra + (timedOut ? `\nkilled after ${Math.round(timeoutMs / 1000)} s (render timeout)` : "");
       if (logFile) fs.writeFileSync(logFile, strip(log));
-      resolve({ status: timedOut ? -1 : status ?? -1, secs: +secs.toFixed(2), log, timedOut, shimPids: pids });
+      resolve({ status: timedOut ? -1 : status ?? -1, secs: +secs.toFixed(2), log, timedOut, shimPids: pids, killed });
     };
     cp.on("error", (e) => done(-1, `\n${e.message}`));
     cp.on("close", (code) => done(code));
