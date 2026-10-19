@@ -183,6 +183,31 @@ try {
   assert.ok(fs.existsSync(path.join(dir, "index.html")));
   check("blank reel with gadzhi-motion builds");
 
+  // ---- gm-kinetic: a long word and a long line stay inside the frame (MAC-TASKS "Chrome Motion text overflow") ----
+  // .gm-row is full width with text-align:center, but a nowrap line WIDER than the row overflows from its left edge
+  // (centering only works when the content fits), so scaling it about the row's centre left it hanging off the right.
+  // An over-wide row must be shrink-wrapped and centred on ITS OWN width (left:50% + translateX(-50%)) before the
+  // fit scale; then its painted box is [540 - fit*W/2, 540 + fit*W/2] with fit*W <= 980, i.e. 50 px clear each side.
+  const rowsOfKinetic = (text) => {
+    const d = project({ style: "gadzhi-motion", beats: [{ type: "scene", kind: "gm-kinetic", text, at: 1.5, to: 4 }] });
+    build(d);
+    return [...html(d).matchAll(/<div class="gm-row" style="([^"]*)">/g)].map((m) => m[1]);
+  };
+  const overWide = (style, label) => {
+    const fit = +(style.match(/scale\(([\d.]+)\)/) || [])[1];
+    assert.ok(fit > 0 && fit < 1, `${label}: the row is scaled to fit (${style})`);
+    assert.ok(/(^|;)left:50%;right:auto(;|$)/.test(style), `${label}: the row is shrink-wrapped from the frame centre (${style})`);
+    assert.ok(style.includes(`transform:translateX(-50%) scale(${fit});transform-origin:50% 0`), `${label}: centred on its own width, then scaled (${style})`);
+  };
+  overWide(rowsOfKinetic("*unbelievably-transformational*")[0], "long serif word");
+  overWide(rowsOfKinetic("^unbelievably-transformational")[0], "long sans word");
+  overWide(rowsOfKinetic("the smallest habits quietly compound into everything")[0], "long multi-word line");
+  const mixed = rowsOfKinetic("this is the *most* _incredibly_ ^important thing|so *real*");
+  overWide(mixed[0], "long mixed line");
+  assert.equal(mixed[1], "top:" + mixed[1].match(/^top:(\d+)px/)[1] + "px", "a row that fits keeps its exact markup (no fit, no centring change)");
+  assert.deepEqual(rowsOfKinetic("so *real*"), ["top:520px"], "a fitting gm-kinetic line is unchanged");
+  check("gm-kinetic long word / long line are centred on their own width and scaled inside 980 px; fitting rows unchanged");
+
   console.log("\nall build-chrome checks passed");
 } catch (e) {
   console.error(e);
