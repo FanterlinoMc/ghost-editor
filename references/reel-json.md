@@ -782,7 +782,7 @@ reverse play, dotLottie (`.lottie`), image or text layers, expressions.
 
 ## Prompt Motion graphic (`kind: "graphic"` layer, `type: "graphic"` beat): spec (CP1), not built yet
 
-Status: **spec (CP1) v2, after the CP3 review; not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
+Status: **spec (CP1) v3, after the CP3 re-review; not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
 `kind: "graphic"` dies with the existing `unknown kind "graphic"` error and a `graphic` beat is not placed. PM2
 (sandbox + render) and PM3 (in the reel) build it exactly as written here. The PC mirrors every **static** rule
 (G1 to G28) and every placement rule in the validator word for word, at the same time.
@@ -893,27 +893,37 @@ without running the file):
   an inserted meta refresh and `RTCPeerConnection` with a STUN url all reached a non-loopback listener on this
   Mac, and none of them logs a CSP line. The production container has no OS-level lockdown available (the PC
   measured: no CAP_NET_ADMIN / SYS_ADMIN, `unshare` denied, no iptables, no egress firewall). So the requirement
-  is **browser-level isolation, the same on every platform**:
+  is **browser-level isolation, the same on every platform**. **The requirement: the graphic page reaches
+  NOTHING but HyperFrames' own render server** (`http://localhost:<port>`, the exact origin of that render):
   - **Every graphic render launches Chrome through a `HYPERFRAMES_BROWSER_PATH` shim** (the variable hyperframes
     0.8.81's BrowserManager reads) that execs the pinned `chrome-headless-shell` with, at least:
-    `--proxy-server=http://127.0.0.1:9` (a dead proxy: every non-loopback HTTP(S)/WS request goes nowhere; Chrome
-    bypasses the proxy for loopback by default, so HyperFrames' local server and CDP still work),
-    `"--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE localhost"` (no DNS lookups),
+    `--proxy-server=http://127.0.0.1:9` (a dead proxy: every proxied HTTP(S)/WS request goes nowhere),
+    `--proxy-bypass-list=<-loopback>;localhost:<port>` (`<-loopback>` removes Chrome's implicit loopback bypass,
+    so loopback is proxied too, i.e. dead, except the ONE exact render origin; see "Closing loopback" below),
+    `"--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE localhost"` (no DNS lookups; this also closes the IP
+    literals `127.0.0.1` and `[::1]`, which fail with `ERR_NAME_NOT_RESOLVED`: only the NAME `localhost` stays
+    resolvable, and HyperFrames serves its page as `http://localhost:<port>` (0.8.81's `createFileServer` binds
+    `127.0.0.1` and returns `url: http://localhost:${port}`), so renders work),
     `--force-webrtc-ip-handling-policy=disable_non_proxied_udp` and
-    `--webrtc-ip-handling-policy=disable_non_proxied_udp` (no STUN/UDP), and `--disable-quic`.
+    `--webrtc-ip-handling-policy=disable_non_proxied_udp` (no STUN/UDP), and `--disable-quic`. The shim passes
+    `--version` straight through to the binary (so the cache key's `chrome` and R13 read the same build).
     **Final flag list: `<PM2 fills this in from its measurements>`.**
-  - Measured on this Mac with exactly the flags above (puppeteer on the same Chrome, page served from
-    127.0.0.1, the target the Mac's own non-loopback IPv4 address, the v2 CSP below): **0 of 22** routes
-    reached the listener (fetch, `new Image`, image-set, innerHTML img, document.write script, srcdoc iframe,
-    sendBeacon, eval via constructor, `@font-face` url, SVG `<image>`, `location =`, script `<a>` + click,
-    `open()`, form POST, meta refresh, STUN, prefetch, preload, WebSocket, static `<a>` + click, dns-prefetch,
-    CSS `@import`). Without the shim, 6 of 22 did (`location =`, both `<a>` clicks, `open()`, meta refresh:
-    GET; STUN: UDP). Through `hyperframes render` itself: a page that navigates at t > 0.3 s and opens a STUN
-    connection sent `2 GET /nav` + `3 UDP` without the shim and **nothing** with it; a normal page rendered under
-    the shim gave the same 60 frame md5s as without it.
+  - Measured on this Mac with the flags above minus `--proxy-bypass-list` (puppeteer on the same Chrome, the
+    page served from `http://localhost:<port>`, the target the Mac's own non-loopback IPv4 address, the v2 CSP
+    below): **0 of 22** routes reached the listener, every page having run (fetch, `new Image`, image-set,
+    innerHTML img, document.write script, srcdoc iframe, sendBeacon, eval via constructor, `@font-face` url, SVG
+    `<image>`, `location =`, script `<a>` + click, `open()`, form POST, meta refresh, STUN, prefetch, preload,
+    WebSocket, static `<a>` + click, dns-prefetch, CSS `@import`). Without the shim, 6 of 22 did (`location =`,
+    both `<a>` clicks, `open()`, meta refresh: GET; STUN: UDP). The CP3 re-review measured 0 of 24 more under the
+    shim (IP-literal http/https/ftp navigation, TURN over TCP and UDP, `turns:`, WebSocket to an IP,
+    preconnect). Through `hyperframes render` itself: a page that navigates at t > 0.3 s and opens a STUN
+    connection sent `2 GET /nav` + `3 UDP` without the shim and **nothing** with it; a normal page rendered
+    under the shim gave the same 60 frame md5s as without it. (v2 said these pages were served from
+    `127.0.0.1`; under the resolver rule such a page does not load, so that run is replaced by this one.)
   - **The probe (R12), fail closed, before EVERY graphic render and inside `scripts/graphic-determinism.mjs`:**
     the renderer launches Chrome through the same shim, opens a page with NO CSP (a CSP would make the probe
-    fail for the wrong reason) and loads `http://1.1.1.1/` and `http://169.254.169.254/` (`fetch(url, {mode:
+    fail for the wrong reason) served from `http://localhost:<port>` (not `127.0.0.1`, which the resolver rule
+    closes) and loads `http://1.1.1.1/` and `http://169.254.169.254/` (`fetch(url, {mode:
     "no-cors"})`, 3 s timeout each). Both must FAIL; if either loads, the render is refused (R12) and nothing is
     rendered unlocked. Measured on this Mac: plain Chrome REACHED `1.1.1.1`; Chrome under the flag shim failed
     both (TypeError); the parent Node process itself CONNECTED to `1.1.1.1:443` (so the probe is not vacuous
@@ -925,8 +935,29 @@ without running the file):
     "localhost:*")) (allow network-outbound (remote unix-socket))` around the same Chrome also gave 0 of 22 and
     a passing render; Chrome then needs `--no-sandbox`, which hyperframes 0.8.81 already passes), `unshare -n`
     on a Linux host that permits it.
-  - What stays open: loopback (the shim bypasses the proxy for it). A graphic could reach a service listening on
-    the render host's own `localhost`; the static rules (G8, G25, G27) and the CSP refuse the obvious routes to it.
+  - **Closing loopback (the requirement; PM2 builds and measures it).** Without `<-loopback>`, loopback is
+    open: the CP3 re-review reached a service on `127.0.0.1` with `location = "http://localhost:9320/lh"` under
+    the v2 shim (a blind GET; `form-action 'none'` keeps it GET-only). The fix is to proxy everything, loopback
+    included, and bypass ONLY HyperFrames' exact render origin `localhost:<port>`, never `localhost` as a whole.
+    Measured on this Mac (puppeteer, same Chrome): with `--proxy-bypass-list=<-loopback>;localhost:9310`, the
+    page on `localhost:9310` loaded (200, its script ran) and its `location = "http://localhost:9320/lh"` reached
+    nothing; with the v2 shim (no `<-loopback>`), the same page reached `/lh`. The catch: hyperframes 0.8.81
+    starts its render file server on an EPHEMERAL port (`createFileServer2({ ..., port: 0 })` at every render
+    call site; no option or env pins it), and the browser shim does not receive the page URL. PM2 finds a way
+    and measures it, for example: the shim runs a tiny local proxy as `--proxy-server` (with `<-loopback>` and
+    no bypass) that forwards only to the first origin requested (the render page) or only to a port the parent
+    hyperframes process listens on, and refuses everything else.
+  - **Residual risk if the exact-origin bypass is not possible** (documented fallback, accepted by the PC):
+    loopback stays open to the NAME `localhost` (IP literals are closed by the resolver rule). The PC measured
+    the staging container (same image as production) from `/proc/net/tcp` and `tcp6`: exactly ONE listening
+    socket, `[::]:8080`, the Next.js studio (next-server v16.3.6, under podman-init); no database, worker port or
+    admin daemon on loopback; render jobs run inside the Next process. A cookieless request to `127.0.0.1:8080`
+    gets 404 from the studio's token gate, except the Stripe webhook (POST, signature-verified, and the CSP's
+    `form-action 'none'` plus the lock leave only GET) and, on production, the public marketing pages; owner and
+    admin routes also check the session; HyperFrames renders in a headless profile with no shared cookie jar.
+    So the residual is a cookieless blind GET to our own app, answered 404 or a public page. On the dev Mac,
+    whatever listens on the Mac's `localhost` is reachable the same way. The static rules (G8, G25, G27) and the
+    CSP refuse the obvious routes to it.
 - The engine writes `build/graphics/<name>-<key16>/index.html`: a CSP meta (v2: `default-src 'none'; script-src
   'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src
   'none'; form-action 'none'; base-uri 'none'; frame-src 'none'`), the font `@font-face` rules, the `rng`
@@ -1097,15 +1128,22 @@ check is the one reported, and for a regex its LEFTMOST match in the first scope
   `&apos;`/`&#39;` -> `'`, `&amp;` -> `&` decoded; all joined with `\n`.
 - `MARKUP`: the file with every `<script ...>...</script>` and `<style ...>...</style>` element (the same two
   regexes) removed.
-- Before the scopes are cut, every character in `[   -     　﻿]`
-  is replaced by a space, so `\s` means the same in JavaScript and in Python `re.ASCII`.
+- Before the scopes are cut, every character in
+  `[\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]` (written here as escapes; the
+  characters themselves) is replaced by a space, so `\s` means the same in JavaScript and in Python `re.ASCII`.
 - Comments are scanned (a forbidden word in a JS or CSS comment fails); text content of the page is not scanned
-  by the JS and CSS rules (`<p>We fetch (data)</p>` passes), only by the markup rules.
+  by the JS and CSS rules (`<p>We fetch (data)</p>` passes), only by the markup rules. Two markup rules read
+  prose too: G7's `url(` (a visible `url(http...` text is refused; rare) and G13's `<set` (HTML parses `<set of
+  3>` as an element anyway).
 
 **Regex dialect.** Each regex below is the exact source, JavaScript syntax; flags column `i` = case-insensitive,
 `-` = case-sensitive. The Python mirror compiles the same source with `re.ASCII` (plus `re.IGNORECASE` for `i`)
-and uses `search`; measured: node and Python `re.ASCII` give identical first-failure results on the reviewer's
-41 bypass cases, 54 false-positive cases and 29 G18/G21-G26 cases (scratch harness, not committed).
+and uses `search`. The sources are also in `scripts/graphic-rules/rules.json`, read by a node implementation
+(`rules.mjs`) and a Python one (`rules.py`, `re.ASCII`); `node scripts/graphic-rules/parity.mjs` runs both on
+`cases.json` (139 cases: the CP3 reviewer's 41 bypasses and 54 false positives, 29 font / literal-assignment
+cases, 15 from the re-review) and prints `PARITY: PASS` only when node == Python == the recorded expectation
+for every case (`$PYTHON` picks the interpreter). Measured: `139 cases, 139 agree`, `PARITY: PASS` (node 26,
+Python 3.9.6). The harness covers the regex rules, G18 and G21-G23/G26; it is not in the gate.
 
 ```text
 id   scope         flags source
@@ -1126,15 +1164,16 @@ G14  MARKUP        i  <meta\b[^>]*http-equiv\s*=\s*["']?refresh
 G19  SCRIPT        -  \b(gsap|TweenMax|TweenLite|TimelineMax|TimelineLite|ScrollTrigger|anime|THREE|lottie|bodymovin|d3|p5|PIXI|Matter|Konva|BABYLON|Phaser|mojs|createjs|React|ReactDOM|Vue|Velocity|popmotion)\s*[.(]
 G19  WHOLE         i  GreenSock
 G20  SCRIPT        -  getContext\s*\(\s*['"](webgl2?|experimental-webgl|webgpu)['"]
-G25  SCRIPT        -  \b(localStorage|sessionStorage|indexedDB|caches|navigator|location|history|crypto)\s*(\.\s*[A-Za-z_$]|\[)|(?<![\w$.])location\s*=(?!=)|\bdocument\s*\.\s*(cookie|referrer|domain|location|write|writeln|open)\b|\bwindow\s*\.\s*(open|parent|top|opener|location|frames)\b|(?<![\w$.])(globalThis|self|top|parent|opener|frames)\s*[.\[]|\bwindow\s*\[|(?<![\w$.])open\s*\(|\bpostMessage\s*\(|\bReflect\s*\.
+G25  SCRIPT        -  \b(localStorage|sessionStorage|indexedDB|caches|navigator|location|crypto)\s*(\.\s*[A-Za-z_$]|\[)|\blocation\s*=(?!=)|\bdocument\s*\.\s*(cookie|referrer|domain|location|write|writeln|open)\b|\bwindow\s*\.\s*(open|parent|top|opener|location|frames)\b|\bglobalThis\s*[.\[]|\bwindow\s*\[|\bthis\s*\[|\bdefaultView\b|\bopen\s*\(|\.\s*href\s*=(?!=)|\.\s*click\s*\(|\bpostMessage\s*\(|\bReflect\s*\.
 G27  MARKUP        i  <(a|area)(?![\w-])[^>]*\shref\s*=\s*(?!["']?#)|\sping\s*=
-G28  SCRIPT        -  \[\s*(['"`])[^'"`]*\1\s*\+|\[\s*`[^`]*\$\{
+G28  SCRIPT        -  [\w$\])]\s*\[\s*(['"`])[^'"`]*\1\s*\+|[\w$\])]\s*\[\s*`[^`]*\$\{
 ```
 
 **Writing forbidden words as text.** A graphic that SHOWS such a word (the Code category) writes it in markup
 with an HTML entity (`<code>&#115;etTimeout</code>`), or inside a JS string with a `\uXXXX` escape
 (`"setTimeout(cb)"`, `"Launch Date (Q3)"`); the scan does not match either and the page displays
-the same text. A method of your own must not be called `animate` (G13 `.animate(`), and `anime`, `d3`, `THREE`,
+the same text. A function or method of your own must not be called `animate` (G13 `.animate(`), `open` or `click` (G25), and a
+variable must not be called `location`; and `anime`, `d3`, `THREE`,
 ... are reserved names (G19).
 
 | # | check | `<reason>` (exact) |
@@ -1160,13 +1199,13 @@ the same text. A method of your own must not be called `animate` (G13 `.animate(
 | G19 | listing G19 (two lines) | `graphic file <src> uses a library (<match>): no GSAP or any other animation, 3D, chart or UI library; write plain seek(t) code` |
 | G20 | listing G20 | `graphic file <src> asks for a WebGL/WebGPU context (only canvas 2d)` |
 | G21 | `\bwindow\s*\.\s*seek\s*=` (`SCRIPT`) present. A top-level `function seek(t) {}` alone is refused here | `graphic file <src> does not define window.seek(t)` |
-| G22 | in `SCRIPT`: `\bwindow\s*\.\s*duration\s*=(?!=)` occurs exactly once AND `\bwindow\s*\.\s*duration\s*=\s*(\d+(?:\.\d+)?)\s*(?:;\|$)` (flag `m`) matches exactly once, value 0.5..30 (a leading digit is required: `.5` and `3.` fail) | `graphic file <src> does not set window.duration to a number literal from 0.5 to 30` |
+| G22 | in `SCRIPT`: `\bwindow\s*\.\s*duration\s*=(?!=)` occurs exactly once AND `\bwindow\s*\.\s*duration\s*=\s*(\d+(?:\.\d+)?)\s*(?:;\|$\|//)` (flag `m`; a trailing `//` comment is allowed) matches exactly once, value 0.5..30 (a leading digit is required: `.5` and `3.` fail) | `graphic file <src> does not set window.duration to a number literal from 0.5 to 30` |
 | G23 | in `SCRIPT`: `\bwindow\s*\.\s*size\s*=(?!=)` occurs 0 times, or once AND `\bwindow\s*\.\s*size\s*=\s*\{\s*w\s*:\s*(\d+)\s*,\s*h\s*:\s*(\d+)\s*,?\s*\}` matches once (w before h, unquoted keys, a trailing comma allowed), both even, `16 <= w <= W`, `16 <= h <= H` | `graphic size must be window.size = { w: <even int>, h: <even int> } within 16..<W> x 16..<H>` |
 | G24 | `mode: "insert"` and a `window.size` other than W x H | `an insert graphic must be <W>x<H> (window.size is <w>x<h>)` |
-| G25 | listing G25 | `graphic file <src> uses <match> (no storage, navigation, window access or environment reads)` |
+| G25 | listing G25 (v3: `defaultView`, `this[`, `.href =`, `.click(` added; the broad `self`/`top`/`parent`/`opener`/`frames` and `history` forms dropped) | `graphic file <src> uses <match> (no storage, navigation, window access or environment reads)` |
 | G26 | `\bwindow\s*\.\s*rng\s*=(?!\s*window\s*\.\s*rng\s*\|\|)` (`SCRIPT`) matches | `graphic file <src> redefines window.rng (copy the engine snippet as is)` |
 | G27 | listing G27 (new in v2) | `graphic file <src> has a link that leaves the page (<match>): <a>/<area> href must be a #fragment, no ping` |
-| G28 | listing G28 (new in v2) | `graphic file <src> builds a name from pieces (<match>): write property names out in full` |
+| G28 | listing G28 (v3: only on a member access, `x['a' + b]`, not an array literal) | `graphic file <src> builds a name from pieces (<match>): write property names out in full` |
 
 **G18, the font rule, exactly.** Allowed families (compared case-insensitively): the engine's (`Inter`, `Geist`,
 `Montserrat`, `Oswald`, `Unbounded`, `Gloock`, `Instrument Serif`, `EB Garamond`, `Playfair Display`,
@@ -1233,7 +1272,9 @@ sendBeacon, constructor eval, `@font-face` url, SVG `<image>`, `location =`, scr
 form POST, meta refresh, STUN, prefetch, preload, WebSocket, static `<a>` + click, dns-prefetch, CSS `@import`),
 each written to pass the static scan where possible and aimed at a listener the test opens on the host's
 non-loopback address; the gate test renders each through the shim and passes only if the listener sees **zero
-requests and zero packets** (and the R12 probe passes first).
+requests and zero packets** (and the R12 probe passes first). One more fixture (v3) aims `location =`,
+`open()` and a script `<a>` + click at a listener on `http://localhost:<another port>`: zero hits required once
+"Closing loopback" is built (until then it documents the residual).
 
 Not in this version: sound inside a graphic, audio-reactive visualisers (Music graphics draw from seeded data),
 WebGL / three.js, GSAP or any library (owner's pause, licence question), variables passed in at render
