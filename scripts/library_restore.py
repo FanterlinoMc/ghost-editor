@@ -2,13 +2,14 @@
 """Rebuild the memes the repo does not track (it keeps only their meta.json):
 every meme from its meta.json source + args. Existing files are kept.
 
-    library_restore.py [--memes-only] [--licensed-only]
+    library_restore.py [--memes-only]
 
 Sound effects and music are NOT restored here, and nothing in this repo downloads them: they come
 from a licensed pack restored by the deployment outside git (library/SOURCES.md); the manifests carry
 no download URL, and scripts/no-mixkit-fetch.test.mjs fails if a download path comes back.
 
---licensed-only is the public build: no meme clips (they are unlicensed rips), so nothing to do.
+Meme clips are rips, not licensed media: the public edition (export_public.py) ships none, so a
+public install does not run this at all.
 """
 import argparse
 import json
@@ -23,12 +24,8 @@ LIB = os.path.join(HERE, "..", "library")
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--memes-only", action="store_true", help="the default now: memes are all this restores")
-    ap.add_argument("--licensed-only", action="store_true", help="skip memes (public build)")
     a = ap.parse_args()
     print("skip sfx and music: not downloaded by this repo (see library/SOURCES.md)")
-    if a.licensed_only:
-        print("skip memes (--licensed-only: meme clips are unlicensed rips)")
-        sys.exit(0)
     bad = 0
     mdir = os.path.join(LIB, "memes")
     for d in sorted(os.listdir(mdir)):
