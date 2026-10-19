@@ -10,11 +10,12 @@ def rx(pair):
     if "m" in fl: f |= re.MULTILINE
     if "s" in fl: f |= re.DOTALL
     return re.compile(src, f)
+NEWLINES = re.compile(J["newlines"][0])  # CRLF and CR -> LF before anything is scanned
 SPACES = re.compile(J["unicodeSpaces"])  # Python re reads the \uXXXX escapes itself
 def dec(v): return re.sub(r"&quot;|&#34;", '"', re.sub(r"&apos;|&#39;", "'", v)).replace("&amp;", "&")
 
 def scopes(raw):
-    html = SPACES.sub(" ", raw)
+    html = SPACES.sub(" ", NEWLINES.sub(J["newlines"][1], raw))
     sc, st, sa = rx(J["scopes"]["script"]), rx(J["scopes"]["style"]), rx(J["scopes"]["styleAttr"])
     script = "\n".join(m.group(1) for m in sc.finditer(html))
     style_els = [m.group(1) for m in st.finditer(html)]

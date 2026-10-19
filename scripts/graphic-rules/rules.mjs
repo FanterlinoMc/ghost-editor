@@ -9,10 +9,11 @@ import { fileURLToPath } from "node:url";
 const J = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "rules.json"), "utf8"));
 const re = ([src, fl], g = false) => new RegExp(src, fl + (g ? "g" : ""));
 const SPACES = new RegExp(J.unicodeSpaces, "g");
+const NEWLINES = new RegExp(J.newlines[0], "g");   // CRLF and CR -> LF before anything is scanned
 const dec = (v) => v.replace(/&quot;|&#34;/g, '"').replace(/&apos;|&#39;/g, "'").replace(/&amp;/g, "&");
 
 export function scopes(raw) {
-  const html = raw.replace(SPACES, " ");
+  const html = raw.replace(NEWLINES, J.newlines[1]).replace(SPACES, " ");
   const SCRIPT = [...html.matchAll(re(J.scopes.script, true))].map((m) => m[1]).join("\n");
   const styleEls = [...html.matchAll(re(J.scopes.style, true))].map((m) => m[1]);
   const MARKUP = html.replace(re(J.scopes.script, true), "").replace(re(J.scopes.style, true), "");

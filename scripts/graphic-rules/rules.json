@@ -1,50 +1,268 @@
 {
   "_": "Prompt Motion graphic static rules, spec v3 (references/reel-json.md, 'Prompt Motion graphic'). JavaScript regex sources; flags 'i' or ''. Python mirrors compile the same source with re.ASCII (+ re.IGNORECASE for 'i').",
   "unicodeSpaces": "[\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]",
+  "newlines": [
+    "\\r\\n?",
+    "\n"
+  ],
   "scopes": {
-    "script": ["<script\\b[^>]*>([\\s\\S]*?)</script\\s*>", "i"],
-    "style": ["<style\\b[^>]*>([\\s\\S]*?)</style\\s*>", "i"],
-    "styleAttr": ["\\sstyle\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')", "i"]
+    "script": [
+      "<script\\b[^>]*>([\\s\\S]*?)</script\\s*>",
+      "i"
+    ],
+    "style": [
+      "<style\\b[^>]*>([\\s\\S]*?)</style\\s*>",
+      "i"
+    ],
+    "styleAttr": [
+      "\\sstyle\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')",
+      "i"
+    ]
   },
   "rules": [
-    ["G5", ["WHOLE"], "i", "<script\\b[^>]*\\b(src\\s*=|type\\s*=\\s*[\"']?module)"],
-    ["G6", ["WHOLE"], "i", "<link(?![\\w-])"],
-    ["G7", ["STYLE"], "i", "@import\\b"],
-    ["G7", ["STYLE", "MARKUP"], "", "url\\(\\s*(?![\\s'\"]|data:|#)|url\\(\\s*['\"](?!data:|#)|image-set\\(\\s*['\"](?!data:|#)"],
-    ["G8", ["SCRIPT"], "", "\\bfetch\\s*\\(|\\bXMLHttpRequest\\b|\\bWebSocket\\b|\\bEventSource\\b|\\bsendBeacon\\b|\\bimport\\s*\\(|\\bWorker\\s*\\(|\\bSharedWorker\\b|\\bimportScripts\\b|\\bRTCPeerConnection\\b|\\bimport\\s*\\.\\s*meta\\b"],
-    ["G9", ["SCRIPT"], "", "\\beval\\s*\\(|\\bnew\\s+Function\\b|\\bFunction\\s*\\(|\\bFunction\\s*\\.\\s*prototype\\b|\\.\\s*constructor\\s*\\.\\s*constructor\\b|\\.\\s*constructor\\s*\\("],
-    ["G10", ["SCRIPT"], "", "\\b(setTimeout|setInterval|requestAnimationFrame|requestIdleCallback|queueMicrotask)\\b"],
-    ["G11", ["SCRIPT"], "", "\\bnew\\s+Date\\b|\\bDate\\s*\\(|\\bDate\\s*\\.\\s*(now|parse|UTC)\\b|\\bperformance\\s*\\.\\s*(now|timeOrigin|mark|measure|getEntries)\\b|\\bdocument\\s*\\.\\s*timeline\\b|\\.\\s*timeStamp\\b"],
-    ["G12", ["SCRIPT"], "", "\\bMath\\s*\\.\\s*random\\b"],
-    ["G13", ["STYLE"], "i", "@keyframes\\b|(?<![\\w-])animation(-name)?\\s*:|(?<![\\w-])transition(-property)?\\s*:"],
-    ["G13", ["SCRIPT"], "", "\\.\\s*(animation|transition)\\s*=|\\.\\s*animate\\s*\\(|\\bgetAnimations\\b"],
-    ["G13", ["MARKUP"], "i", "<(animate|animateTransform|animateMotion|set)(?![\\w-])"],
-    ["G14", ["MARKUP"], "i", "<(video|audio|iframe|frame|frameset|object|embed|base|form|portal)(?![\\w-])"],
-    ["G14", ["MARKUP"], "i", "<meta\\b[^>]*http-equiv\\s*=\\s*[\"']?refresh"],
-    ["G19", ["SCRIPT"], "", "\\b(gsap|TweenMax|TweenLite|TimelineMax|TimelineLite|ScrollTrigger|anime|THREE|lottie|bodymovin|d3|p5|PIXI|Matter|Konva|BABYLON|Phaser|mojs|createjs|React|ReactDOM|Vue|Velocity|popmotion)\\s*[.(]"],
-    ["G19", ["WHOLE"], "i", "GreenSock"],
-    ["G20", ["SCRIPT"], "", "getContext\\s*\\(\\s*['\"](webgl2?|experimental-webgl|webgpu)['\"]"],
-    ["G25", ["SCRIPT"], "", "\\b(localStorage|sessionStorage|indexedDB|caches|navigator|location|crypto)\\s*(\\.\\s*[A-Za-z_$]|\\[)|\\blocation\\s*=(?!=)|\\bdocument\\s*\\.\\s*(cookie|referrer|domain|location|write|writeln|open)\\b|\\bwindow\\s*\\.\\s*(open|parent|top|opener|location|frames)\\b|\\bglobalThis\\s*[.\\[]|\\bwindow\\s*\\[|\\bthis\\s*\\[|\\bdefaultView\\b|\\bopen\\s*\\(|\\.\\s*href\\s*=(?!=)|\\.\\s*click\\s*\\(|\\bpostMessage\\s*\\(|\\bReflect\\s*\\."],
-    ["G27", ["MARKUP"], "i", "<(a|area)(?![\\w-])[^>]*\\shref\\s*=\\s*(?![\"']?#)|\\sping\\s*="],
-    ["G28", ["SCRIPT"], "", "[\\w$\\])]\\s*\\[\\s*(['\"`])[^'\"`]*\\1\\s*\\+|[\\w$\\])]\\s*\\[\\s*`[^`]*\\$\\{"]
+    [
+      "G5",
+      [
+        "WHOLE"
+      ],
+      "i",
+      "<script\\b[^>]*\\b(src\\s*=|type\\s*=\\s*[\"']?module)"
+    ],
+    [
+      "G6",
+      [
+        "WHOLE"
+      ],
+      "i",
+      "<link(?![\\w-])"
+    ],
+    [
+      "G7",
+      [
+        "STYLE"
+      ],
+      "i",
+      "@import\\b"
+    ],
+    [
+      "G7",
+      [
+        "STYLE",
+        "MARKUP"
+      ],
+      "",
+      "url\\(\\s*(?![\\s'\"]|data:|#)|url\\(\\s*['\"](?!data:|#)|image-set\\(\\s*['\"](?!data:|#)"
+    ],
+    [
+      "G8",
+      [
+        "SCRIPT"
+      ],
+      "",
+      "\\bfetch\\s*\\(|\\bXMLHttpRequest\\b|\\bWebSocket\\b|\\bEventSource\\b|\\bsendBeacon\\b|\\bimport\\s*\\(|\\bWorker\\s*\\(|\\bSharedWorker\\b|\\bimportScripts\\b|\\bRTCPeerConnection\\b|\\bimport\\s*\\.\\s*meta\\b"
+    ],
+    [
+      "G9",
+      [
+        "SCRIPT"
+      ],
+      "",
+      "\\beval\\s*\\(|\\bnew\\s+Function\\b|\\bFunction\\s*\\(|\\bFunction\\s*\\.\\s*prototype\\b|\\.\\s*constructor\\s*\\.\\s*constructor\\b|\\.\\s*constructor\\s*\\("
+    ],
+    [
+      "G10",
+      [
+        "SCRIPT"
+      ],
+      "",
+      "\\b(setTimeout|setInterval|requestAnimationFrame|requestIdleCallback|queueMicrotask)\\b"
+    ],
+    [
+      "G11",
+      [
+        "SCRIPT"
+      ],
+      "",
+      "\\bnew\\s+Date\\b|\\bDate\\s*\\(|\\bDate\\s*\\.\\s*(now|parse|UTC)\\b|\\bperformance\\s*\\.\\s*(now|timeOrigin|mark|measure|getEntries)\\b|\\bdocument\\s*\\.\\s*timeline\\b|\\.\\s*timeStamp\\b"
+    ],
+    [
+      "G12",
+      [
+        "SCRIPT"
+      ],
+      "",
+      "\\bMath\\s*\\.\\s*random\\b"
+    ],
+    [
+      "G13",
+      [
+        "STYLE"
+      ],
+      "i",
+      "@keyframes\\b|(?<![\\w-])animation(-name)?\\s*:|(?<![\\w-])transition(-property)?\\s*:"
+    ],
+    [
+      "G13",
+      [
+        "SCRIPT"
+      ],
+      "",
+      "\\.\\s*(animation|transition)\\s*=|\\.\\s*animate\\s*\\(|\\bgetAnimations\\b"
+    ],
+    [
+      "G13",
+      [
+        "MARKUP"
+      ],
+      "i",
+      "<(animate|animateTransform|animateMotion|set)(?![\\w-])"
+    ],
+    [
+      "G14",
+      [
+        "MARKUP"
+      ],
+      "i",
+      "<(video|audio|iframe|frame|frameset|object|embed|base|form|portal)(?![\\w-])"
+    ],
+    [
+      "G14",
+      [
+        "MARKUP"
+      ],
+      "i",
+      "<meta\\b[^>]*http-equiv\\s*=\\s*[\"']?refresh"
+    ],
+    [
+      "G19",
+      [
+        "SCRIPT"
+      ],
+      "",
+      "\\b(gsap|TweenMax|TweenLite|TimelineMax|TimelineLite|ScrollTrigger|anime|THREE|lottie|bodymovin|d3|p5|PIXI|Matter|Konva|BABYLON|Phaser|mojs|createjs|React|ReactDOM|Vue|Velocity|popmotion)\\s*[.(]"
+    ],
+    [
+      "G19",
+      [
+        "WHOLE"
+      ],
+      "i",
+      "GreenSock"
+    ],
+    [
+      "G20",
+      [
+        "SCRIPT"
+      ],
+      "",
+      "getContext\\s*\\(\\s*['\"](webgl2?|experimental-webgl|webgpu)['\"]"
+    ],
+    [
+      "G25",
+      [
+        "SCRIPT"
+      ],
+      "",
+      "\\b(localStorage|sessionStorage|indexedDB|caches|navigator|location|crypto)\\s*(\\.\\s*[A-Za-z_$]|\\[)|\\blocation\\s*=(?!=)|\\bdocument\\s*\\.\\s*(cookie|referrer|domain|location|write|writeln|open)\\b|\\bwindow\\s*\\.\\s*(open|parent|top|opener|location|frames)\\b|\\bglobalThis\\s*[.\\[]|\\bwindow\\s*\\[|\\bthis\\s*\\[|\\bdefaultView\\b|\\bopen\\s*\\(|\\.\\s*href\\s*=(?!=)|\\.\\s*click\\s*\\(|\\bpostMessage\\s*\\(|\\bReflect\\s*\\."
+    ],
+    [
+      "G27",
+      [
+        "MARKUP"
+      ],
+      "i",
+      "<(a|area)(?![\\w-])[^>]*\\shref\\s*=\\s*(?![\"']?#)|\\sping\\s*="
+    ],
+    [
+      "G28",
+      [
+        "SCRIPT"
+      ],
+      "",
+      "[\\w$\\])]\\s*\\[\\s*(['\"`])[^'\"`]*\\1\\s*\\+|[\\w$\\])]\\s*\\[\\s*`[^`]*\\$\\{"
+    ]
   ],
   "meta": {
-    "G21": ["\\bwindow\\s*\\.\\s*seek\\s*=", ""],
-    "G22all": ["\\bwindow\\s*\\.\\s*duration\\s*=(?!=)", ""],
-    "G22lit": ["\\bwindow\\s*\\.\\s*duration\\s*=\\s*(\\d+(?:\\.\\d+)?)\\s*(?:;|$|//)", "m"],
-    "G23all": ["\\bwindow\\s*\\.\\s*size\\s*=(?!=)", ""],
-    "G23lit": ["\\bwindow\\s*\\.\\s*size\\s*=\\s*\\{\\s*w\\s*:\\s*(\\d+)\\s*,\\s*h\\s*:\\s*(\\d+)\\s*,?\\s*\\}", ""],
-    "G26": ["\\bwindow\\s*\\.\\s*rng\\s*=(?!\\s*window\\s*\\.\\s*rng\\s*\\|\\|)", ""]
+    "G21": [
+      "\\bwindow\\s*\\.\\s*seek\\s*=",
+      ""
+    ],
+    "G22all": [
+      "\\bwindow\\s*\\.\\s*duration\\s*=(?!=)",
+      ""
+    ],
+    "G22lit": [
+      "\\bwindow\\s*\\.\\s*duration\\s*=\\s*(\\d+(?:\\.\\d+)?)\\s*(?:;|$|//)",
+      "m"
+    ],
+    "G23all": [
+      "\\bwindow\\s*\\.\\s*size\\s*=(?!=)",
+      ""
+    ],
+    "G23lit": [
+      "\\bwindow\\s*\\.\\s*size\\s*=\\s*\\{\\s*w\\s*:\\s*(\\d+)\\s*,\\s*h\\s*:\\s*(\\d+)\\s*,?\\s*\\}",
+      ""
+    ],
+    "G26": [
+      "\\bwindow\\s*\\.\\s*rng\\s*=(?!\\s*window\\s*\\.\\s*rng\\s*\\|\\|)",
+      ""
+    ]
   },
   "fonts": {
-    "engine": ["Inter", "Geist", "Montserrat", "Oswald", "Unbounded", "Gloock", "Instrument Serif", "EB Garamond", "Playfair Display", "Caveat Brush", "Yellowtail", "JetBrains Mono"],
-    "generic": ["serif", "sans-serif", "monospace", "system-ui", "cursive", "ui-sans-serif", "ui-serif", "ui-monospace", "inherit", "initial", "unset"],
-    "face": ["@font-face\\s*\\{[^}]*?(?<![\\w-])font-family\\s*:\\s*([^;}]*)", "i"],
-    "css": ["(?<![\\w-])font-family\\s*:\\s*([^;}<]*)", "i"],
-    "short": ["(?<![\\w-])font\\s*:\\s*([^;}<]*)", "i"],
-    "svg": ["\\sfont-family\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')", "i"],
-    "jsFam": ["\\.\\s*fontFamily\\s*=\\s*(['\"`])(.*?)\\1", ""],
-    "jsFont": ["\\.\\s*font\\s*=\\s*(['\"`])(.*?)\\1", ""],
-    "size": ["^.*?(?:^|\\s)\\S*?(?:px|pt|em|rem|%|vh|vw|vmin|vmax|ch|ex)(?:\\s*/\\s*\\S+)?\\s+(.+)$", "is"]
+    "engine": [
+      "Inter",
+      "Geist",
+      "Montserrat",
+      "Oswald",
+      "Unbounded",
+      "Gloock",
+      "Instrument Serif",
+      "EB Garamond",
+      "Playfair Display",
+      "Caveat Brush",
+      "Yellowtail",
+      "JetBrains Mono"
+    ],
+    "generic": [
+      "serif",
+      "sans-serif",
+      "monospace",
+      "system-ui",
+      "cursive",
+      "ui-sans-serif",
+      "ui-serif",
+      "ui-monospace",
+      "inherit",
+      "initial",
+      "unset"
+    ],
+    "face": [
+      "@font-face\\s*\\{[^}]*?(?<![\\w-])font-family\\s*:\\s*([^;}]*)",
+      "i"
+    ],
+    "css": [
+      "(?<![\\w-])font-family\\s*:\\s*([^;}<]*)",
+      "i"
+    ],
+    "short": [
+      "(?<![\\w-])font\\s*:\\s*([^;}<]*)",
+      "i"
+    ],
+    "svg": [
+      "\\sfont-family\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')",
+      "i"
+    ],
+    "jsFam": [
+      "\\.\\s*fontFamily\\s*=\\s*(['\"`])(.*?)\\1",
+      ""
+    ],
+    "jsFont": [
+      "\\.\\s*font\\s*=\\s*(['\"`])(.*?)\\1",
+      ""
+    ],
+    "size": [
+      "^.*?(?:^|\\s)\\S*?(?:px|pt|em|rem|%|vh|vw|vmin|vmax|ch|ex)(?:\\s*/\\s*\\S+)?\\s+(.+)$",
+      "is"
+    ]
   }
 }
