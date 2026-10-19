@@ -87,6 +87,10 @@ try {
   assert.ok(r2 > 150 && r7 > 150 && b7 < 100, `outro should hold the red frame, got rgb(${r7},_,${b7})`);
   const dur = +execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", rend], { encoding: "utf8" }).trim();
   assert.ok(Math.abs(dur - 8) < 0.1, `duration ${dur}`);
+  // the container length comes from the audio, so also count the VIDEO frames: a short hold (ffmpeg 7.1 cloned
+  // nothing after trim) still reported 8 s while the picture stopped at 6 s
+  const frames = +execFileSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-count_frames", "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", rend], { encoding: "utf8" }).trim();
+  assert.equal(frames, 8 * FPS, `held video has ${frames} frames, want ${8 * FPS}`);
   check("tailhold.py holds the last styled frame over the outro, same length");
 
   // ---- behind-word legibility gate ----
