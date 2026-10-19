@@ -781,7 +781,7 @@ reverse play, dotLottie (`.lottie`), image or text layers, expressions.
 
 ## Prompt Motion graphic (`kind: "graphic"` layer, `type: "graphic"` beat): spec (CP1), not built yet
 
-Status: **spec (CP1) v3.2.4 (v3.2.4 records PM2's security hardening, `mac/graphic-render` @ 4cbdc73; v3.2.3 adds what the PM5 fixtures measured: the streaming-encoder pin, the blob-worker R1 exclusion, authoring for determinism; v3.2.2 resolves the twelve points PM2 hit while building; CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found; v3.2.1 notes the G31 trade-off); PM3 (in the reel) built on `mac/graphic-place`, see "Placement as built (PM3)".**
+Status: **spec (CP1) v3.2.5 (v3.2.5 records PM3's placement as built, `mac/graphic-place` @ 5b3aa1d; v3.2.4 records PM2's security hardening, `mac/graphic-render` @ 4cbdc73; v3.2.3 adds what the PM5 fixtures measured: the streaming-encoder pin, the blob-worker R1 exclusion, authoring for determinism; v3.2.2 resolves the twelve points PM2 hit while building; CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found; v3.2.1 notes the G31 trade-off); PM3 (in the reel) built on `mac/graphic-place`, see "Placement as built (PM3)".**
 `build.mjs` and `layers.mjs` place a graphic layer (`kind: "graphic"`) and a `graphic` beat as written here, through PM2's
 `renderGraphic` (sandbox + render). The PC mirrors every **static** rule
 (G1 to G28) and every placement rule in the validator word for word, at the same time.
@@ -1169,9 +1169,48 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
 - **edit_truth.json.** Layer: `layerTruth` + `mode`, and `hideCaptions: true` when resolved true. Beat: as every
   beat, except `to` is the resolved end (the default window, or shortened by `cut`). sections.json: a graphic layer's
   file and key are in its layer object; a graphic beat's key is added to its section's payload (`graphics`).
-- **Tests.** `GRAPHIC_TEST_DEPS=<module>` (tests only) replaces renderGraphic's external steps with the module's
-  `deps`; `scripts/fixtures/graphic-stub-deps.mjs` writes a small ffmpeg clip and reports Chrome `0.0.0-stub`, so a
-  stubbed file never shares a key with a real render.
+- **Check order, as one list (v3.2.5).** Layer: (1) the existing `id`, `kind` and timing dies; (2) G1..G35; (3) P1;
+  (4) the `dur` die; (5) P2 on `dur` as written, BEFORE clamping to the reel; (6) clamping (existing warnings);
+  (7) `after: "cut"` (GW2); (8) the `box` die; (9) P3; (10) the `enter` / `exit` / `fit` dies. Beat: (1) G1..G35;
+  (2) P1; (3) P2 on the window in SOURCE seconds (`to - at` when both are seconds of the same recording, or the
+  default window below); (4) the time mapping (`E()`); (5) P2 on the OUTPUT window `E(to) - E(at)` when the source
+  window could not be read (`to: "end"`, `"hold:..."`, `at` and `to` in different recordings), and P2 if the mapped
+  window is under one frame; (6) `after: "cut"`; (7) the `box` problem;
+  (8) P3; (9) the `fit` problem. The first failure is the one reported.
+- **A beat's default `to` (v3.2.5).** Left out, `to` = `at` + the graphic's own length from `in`
+  (`(D_f - in_f) / fps`), in SOURCE seconds. If that end falls past the end of the take that holds `at` (or in
+  cut material), `E()` fails and the beat is DROPPED (current behaviour; whether to clamp to the take instead is
+  pending a PC decision).
+- **Drop texts for a beat (v3.2.5).** An unmappable time: `graphic <id or at>: <html>: <the E() message, first
+  line>, dropped`. A bad box or fit reuses the layer texts in the dropped form: `graphic <id or at>: <html>: box must
+  be { x, y, w, h } numbers with w, h > 0, got <json>, dropped` and `graphic <id or at>: <html>: fit must be one of
+  cover|contain, got <json>, dropped`.
+- **Unknown kind (v3.2.5).** `LAYER_KINDS` gains `graphic`, so the existing die reads `layers[<i>] (<id>): unknown
+  kind <json>; have: video, image, logo, motion, text, graphic`.
+- **sections.json (v3.2.5).** The per-section `graphics` key list is hashed into the section's hash ONLY when the reel has graphic beats
+  (and then only on the sections that hold one); a reel without them keeps the manifest's old shape. Graphic layers
+  carry their file and key inside their layer object.
+- **Face (v3.2.5, proposed for the validator; the build does not check it).** A director- or planner-placed overlay
+  beat must keep off the speaker's face. The validator samples the face track at 10 fps over the beat's window;
+  if the overlay box intersects the face box in more than 50 % of the samples, the beat is dropped with
+  **GW9** `graphic <id or at>: <html>: box covers the speaker's face for <p>% of its window, dropped` (`<p>` a
+  whole percent). A user layer (`"by": "user"`) gets the same text without `, dropped`, as a warning. Inserts are
+  exempt (full frame by design).
+- **v3.2.6.** The R6 row and the cache key's `"v": 3` line are PM2's wording (`mac/graphic-render` @ b6eca41),
+  copied verbatim: the seek-order check's own R6 text (`R6o` in PM2's code) is `frame <k> (t=<t>s) depends on the
+  seeks before it (not deterministic)`, `<k>` the graphic's own frame; the two-render texts are unchanged.
+- **Render order (PM3 CP3).** Graphic layers render first, one at a time; the first refusal kills the reel before any
+  beat is rendered. Then the beats. One render per distinct placement across both.
+- **A graphic at 0 (PM3 CP3).** A placement starting at output 0 (section 0 in a section build) is visible from frame 0
+  by its inline style (no `visibility:hidden`, `opacity` when under 1) and gets no show tween (a 1 ms tween cannot end
+  at 0).
+- **Tests (`GRAPHIC_TEST_DEPS`, PM3 CP3).** Tests only: names a module whose `deps` replace renderGraphic's external
+  steps. Honoured ONLY when `NODE_TEST_CONTEXT` is set (Node sets it in `node --test` children); anywhere else it is
+  ignored with `WARNING: GRAPHIC_TEST_DEPS is ignored outside node --test`. The module's realpath must lie inside the
+  engine's `scripts/fixtures/` (else the build dies: `GRAPHIC_TEST_DEPS must name a module inside
+  <...>/scripts/fixtures/ (got <value>)`). After its deps are spread, `chromeVersion` is forced to `0.0.0-stub`, so a
+  test render is keyed under a Chrome that does not exist and a real Chrome launched under it is refused by R13:
+  nothing is ever cached under a real key. `scripts/fixtures/graphic-stub-deps.mjs` writes a small ffmpeg clip.
 
 ### Cache key
 
@@ -1180,7 +1219,7 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
 ASCII: `html` and media paths are `[a-z0-9-]` by G1/G15). Every number is an integer.
 
 ```jsonc
-{ "v": 2,                                  // bumped when the wrapper / bridge / CSP / lock changes
+{ "v": 3,                                  // bumped when the wrapper / bridge / CSP / lock changes (3: PM2's pre-script and seek-order check)
   "html": "<sha256 hex of the HTML file bytes>",
   "media": [["assets/graphics/media/a.jpg", "<sha256 hex>"]],    // sorted by path; [] when none
   "fonts": ["Inter"],                      // the bundled families inlined, sorted; [] when none
@@ -1423,7 +1462,7 @@ render wrapper reads the whole log of both renders; any of these deletes the out
 | R3 | `GRAPHIC-REFUSED: window.seek is not a function` (bridge, at load) | `window.seek is not a function after the page loaded` |
 | R4 | `GRAPHIC-REFUSED: seek(<t>) threw: <message>` / `... returned a Promise` (bridge) | `seek(<t>) threw: <message>` / `seek(<t>) returned a Promise (it must be synchronous)` |
 | R5 | `window.duration` / `window.size` at load differ from the static values | `window.duration / window.size changed at load (static <a>, at load <b>)` |
-| R6 | the determinism check | `frame <i> (t=<t>s) differs between two renders (not deterministic)` / `the two renders have <a> and <b> frames` / (v3.2.2) both renders agree on a count `<a>` that is not the placement's `L`: `the two renders have <a> and <L> frames` |
+| R6 | the determinism check | `frame <i> (t=<t>s) differs between two renders (not deterministic)` / `the two renders have <a> and <b> frames` / (v3.2.2) both renders agree on a count `<a>` that is not the placement's `L`: `the two renders have <a> and <L> frames` / (v3.2.5) the in-page seek-order check (the bridge seeks 8 frames forward, backward and shuffled on the first `hf-seek` and compares the root's markup, the html/body styles and every canvas's pixels): `frame <k> (t=<t>s) depends on the seeks before it (not deterministic)` (`<k>` = the graphic's frame) |
 | R7 | wall time of one render over `20 s + 0.15 s x L` (v3.2.2, measured in PM2 on the Mac mini, the slower `--workers 1` render: 60 frames 4.7 s, 300 frames 15.4 s at 1080x1080 / 13.8 s insert, 900 frames 40.0 s; the budget is 3.9x to 4.2x that, headroom for the CPU-only Linux container, not yet measured) | `render took <s>s for <L> frames (budget <b>s)` |
 | R8 | rendered file over 52428800 bytes | `rendered file is <bytes> bytes (max 52428800)` |
 | R9 | overlay: every decoded frame has alpha 0 everywhere | `every frame is fully transparent` |

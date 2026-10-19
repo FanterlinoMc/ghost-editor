@@ -192,29 +192,66 @@ test("wrapper: CSP, root, fonts, rng before the graphic, media inlined, insert b
   assert.ok(build.includes(JSON.stringify(G.FONT_NAMES).slice(1, 30).replace(/":"/g, '": "')), "FONT_NAMES matches build.mjs");
 });
 
-// run the bridge in a vm with a fake window: preScript, then a "graphic" step, then postScript
+// run the bridge in a vm with a fake window and a tiny fake DOM: preScript, then a "graphic" step, then postScript.
+// The default seek writes "t=<t>" into the root's markup (pure); seen records every call.
 function bridge({ seek, duration = 2, size = { w: 1080, h: 1080 }, winDuration = duration, winSize = size, L = 90, inF = 0, D = 60, after = "hold", nav = true, graphic = "" }) {
   const listeners = {}, errors = [], seen = [], navListeners = [];
-  const window = { duration: winDuration, size: winSize, seek: seek === undefined ? (t) => seen.push(t) : seek };
+  const ctx = vm.createContext({ console: { error: (m) => errors.push(m) } });
+  vm.runInContext(`
+    function EventTarget() {} function Element() {} function Document() {} function HTMLCanvasElement() {}
+    Object.defineProperty(Element.prototype, "innerHTML", { get: function () { return this._html; }, configurable: true });
+    Element.prototype.getAttribute = function (n) { return this["_" + n] || null; };
+    HTMLCanvasElement.prototype.toDataURL = function () { return this._px; };
+    var root = Object.create(Element.prototype); root._html = "";
+    var canvas = Object.create(HTMLCanvasElement.prototype); canvas._px = "blank";
+    var document = Object.create(Document.prototype);
+    document.documentElement = Object.create(Element.prototype); document.body = Object.create(Element.prototype);
+    Document.prototype.getElementById = function (id) { return id === "graphic-root" ? root : null; };
+    Document.prototype.querySelectorAll = function (q) { return q === "canvas" ? [canvas] : []; };
+    var window = this;`, ctx);
+  const window = ctx;
+  Object.assign(window, { duration: winDuration, size: winSize });
+  window.seek = seek === undefined ? (t) => { seen.push(t); ctx.root._html = "t=" + t; } : seek;
   if (nav) window.navigation = { tag: "nav" };
-  const EventTarget = { prototype: { addEventListener(n, f) { if (this === window) listeners[n] = f; else if (this === window.navigation) navListeners.push(f); } } };
-  const ctx = vm.createContext({ window, console: { error: (m) => errors.push(m) }, EventTarget });
+  ctx.EventTarget.prototype.addEventListener = function (n, f) { if (this === ctx.window || this === window) listeners[n] = f; else if (this === window.navigation) navListeners.push(f); };
   vm.runInContext(G.preScript({ fps: 30, L, inF, D, after }), ctx);
   if (graphic) vm.runInContext(graphic, ctx);
   vm.runInContext(G.postScript({ duration, size }), ctx);
-  return { fire: (time) => listeners["hf-seek"]({ detail: { time } }), seen, errors, window,
+  return { fire: (time) => listeners["hf-seek"]({ detail: { time } }), seen, errors, window, ctx,
     navigate: () => { let prevented = false; navListeners.forEach((f) => f({ cancelable: true, preventDefault: () => (prevented = true) })); return prevented; } };
 }
 test("bridge: frame map, refusals (R3, R4, R5, R11), integrity against the graphic", () => {
   const b = bridge({});
+  b.fire(0);
+  assert.equal(b.seen.length, 3 * G.ORDER_SAMPLES + 1, "the first hf-seek runs the seek-order check first (8 frames x 3 orders)");
+  assert.deepEqual(b.seen.slice(0, G.ORDER_SAMPLES), [0, 8, 17, 25, 34, 42, 51, 59].map((k) => k / 30), "forward over frames 0..D-1");
+  b.seen.length = 0;
   b.fire(0); b.fire(1); b.fire(2.5);
   assert.deepEqual(b.seen, [0, 1, 59 / 30], "hold: past the end shows the last frame");
   const l = bridge({ after: "loop", inF: 15 });
+  l.fire(0); l.seen.length = 0;
   l.fire(2); assert.deepEqual(l.seen, [15 / 30], "loop: (in + j) mod D");
   assert.deepEqual(b.errors, []);
   const t = bridge({ seek: (x) => { if (x >= 1) throw new Error("boom"); } });
   t.fire(0.5); t.fire(1); t.fire(1.5);
-  assert.deepEqual(t.errors, ["GRAPHIC-REFUSED: seek(1) threw: boom"], "reported once");
+  assert.deepEqual(t.errors, ["GRAPHIC-REFUSED: seek(1.133) threw: boom"], "reported once (the order check met the first throwing frame, 34/30)");
+  // R6 at any length: state carried between seeks, in the markup or in a canvas
+  let calls = 0;
+  const st = bridge({ D: 30, seek: (x) => { calls++; st2.root._html = "n=" + calls + " t=" + x; } });
+  var st2 = st.ctx;
+  st.fire(0);
+  assert.deepEqual(st.errors, ["GRAPHIC-REFUSED: seek order: frame 0 (t=0s) depends on the seeks before it"]);
+  let acc = 0;
+  const cv = bridge({ seek: (x) => { acc += x; cv.ctx.canvas._px = "px" + acc; cv.ctx.root._html = "t=" + x; } });
+  cv.fire(0);
+  assert.match(cv.errors[0] || "", /^GRAPHIC-REFUSED: seek order: frame \d+ \(t=[\d.]+s\) depends on the seeks before it$/, "canvas pixels are compared too");
+  let c2 = 0;
+  const forge = bridge({ seek: (x) => { c2++; forge.ctx.root._html = "n=" + c2; }, graphic: "HTMLCanvasElement.prototype.toDataURL = function () { return 'same'; }; Object.defineProperty(Element.prototype, 'innerHTML', { get: function () { return 'same'; } }); Document.prototype.getElementById = function () { return null; };" });
+  forge.fire(0);
+  assert.match(forge.errors[0] || "", /seek order: frame 0/, "replacing innerHTML / toDataURL / getElementById does not hide the state");
+  const pure = bridge({ D: 1 });
+  pure.fire(0);
+  assert.deepEqual(pure.errors, [], "a one-frame graphic is fine");
   const p = bridge({ seek: () => ({ then() {} }) }); p.fire(0.1);
   assert.deepEqual(p.errors, ["GRAPHIC-REFUSED: seek(0.1) returned a Promise"]);
   assert.deepEqual(bridge({ seek: null }).errors, ["GRAPHIC-REFUSED: window.seek is not a function"]);
@@ -226,8 +263,8 @@ test("bridge: frame map, refusals (R3, R4, R5, R11), integrity against the graph
   // a graphic that stubs console.error and tries to replace the refusal function is still reported
   const tamper = bridge({ seek: () => { throw new Error("line1\nline2"); }, graphic: "Number.prototype.toFixed = function () { return 'X'; }; String.prototype.split = function () { return ['Y']; }; String = function () { return 'Z'; };" });
   tamper.fire(1);
-  assert.deepEqual(tamper.errors, ["GRAPHIC-REFUSED: seek(1) threw: line1"], "toFixed / split / String replaced by the graphic do not change the refusal text");
-  const silenced = bridge({ seek: () => { throw new Error("hidden"); }, graphic: "console.error = function () {}; try { window.__graphicRefuse = function () {}; } catch (e) {} EventTarget.prototype.addEventListener = function () {};" });
+  assert.deepEqual(tamper.errors, ["GRAPHIC-REFUSED: seek(0) threw: line1"], "toFixed / split / String replaced by the graphic do not change the refusal text");
+  const silenced = bridge({ seek: () => { throw new Error("hidden"); }, graphic: "console.error = function () {}; try { window.__graphicRefuse = function () {}; } catch (e) {} EventTarget.prototype.addEventListener = function () {}; HTMLCanvasElement.prototype.toDataURL = function () { return 'same'; }; Object.defineProperty(Element.prototype, 'innerHTML', { get: function () { return 'same'; } });" });
   silenced.fire(0);
   assert.deepEqual(silenced.errors, ["GRAPHIC-REFUSED: seek(0) threw: hidden"]);
   const r5 = bridge({ graphic: "try { window.__graphicRefuse = function () {}; } catch (e) {} try { Object.defineProperty(window, '__graphicRefuse', { value: function () {} }); } catch (e) {} window.duration = 9;" });
@@ -247,12 +284,13 @@ test("log rules: R1, R2, R3, R4, R5, R11, R13 lines", () => {
     "[Browser:ERROR] GRAPHIC-REFUSED: seek(0.1) returned a Promise",
     "[Browser:ERROR] GRAPHIC-REFUSED: window.duration / window.size changed at load (static 2s 1080x1080, at load 3s 1080x1080)",
     "[Browser:ERROR] GRAPHIC-REFUSED: navigated",
+    "[Browser:ERROR] GRAPHIC-REFUSED: seek order: frame 12 (t=0.4s) depends on the seeks before it",
     "[INFO] nothing",
   ].join("\n");
   assert.deepEqual(RR.scanLog(log).map((x) => x.text), [
     G.reason("R1", { url: "https://example.com/a.png" }), G.reason("R1", { url: "https://fonts.googleapis.com/css2?family=X" }),
     G.reason("R2", { message: "ReferenceError: x is not defined" }), G.reason("R3"), G.reason("R4", { t: "1.2", message: "boom" }),
-    G.reason("R4p", { t: "0.1" }), G.reason("R5", { a: "2s 1080x1080", b: "3s 1080x1080" }), G.reason("R11"),
+    G.reason("R4p", { t: "0.1" }), G.reason("R5", { a: "2s 1080x1080", b: "3s 1080x1080" }), G.reason("R11"), G.reason("R6o", { k: "12", t: "0.4" }),
   ]);
   // HyperFrames' own blob worker on the render server's origin is skipped; nothing else hides behind it
   const blob = (port, extra = "") => `[Browser:ERROR] Creating a worker from 'blob:http://localhost:${port}/2a57f48d-56eb-427a-9417-b714ca18358e' violates the following Content Security Policy directive: "script-src 'unsafe-inline'". Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.${extra}`;
@@ -271,10 +309,10 @@ test("log rules: R1, R2, R3, R4, R5, R11, R13 lines", () => {
   assert.equal(RR.budgetFor(900), 155);
 });
 
-test("cache key v2: canonical JSON, stable, sensitive to every field, media order free", () => {
+test("cache key v3: canonical JSON, stable, sensitive to every field, media order free", () => {
   const base = { html: "<html>x</html>", media: [["assets/graphics/media/b.png", "bb"], ["assets/graphics/media/a.png", "aa"]], fonts: ["Oswald", "Inter"], chrome: "152.0.7977.30", ffmpeg: "7.1.1", platform: "darwin-arm64", fps: 30, w: 1080, h: 1080, mode: "overlay", frames: 60, inF: 0, after: "hold" };
   const k = G.graphicKey(base);
-  assert.equal(k.json, `{"after":"hold","chrome":"152.0.7977.30","ffmpeg":"7.1.1","fonts":["Inter","Oswald"],"fps":30,"frames":60,"h":1080,"html":"${G.sha256("<html>x</html>")}","in":0,"media":[["assets/graphics/media/a.png","aa"],["assets/graphics/media/b.png","bb"]],"mode":"overlay","platform":"darwin-arm64","quality":"looks","renderer":"hyperframes@0.8.81","v":2,"w":1080}`);
+  assert.equal(k.json, `{"after":"hold","chrome":"152.0.7977.30","ffmpeg":"7.1.1","fonts":["Inter","Oswald"],"fps":30,"frames":60,"h":1080,"html":"${G.sha256("<html>x</html>")}","in":0,"media":[["assets/graphics/media/a.png","aa"],["assets/graphics/media/b.png","bb"]],"mode":"overlay","platform":"darwin-arm64","quality":"looks","renderer":"hyperframes@0.8.81","v":3,"w":1080}`);
   assert.equal(k.key, G.sha256(k.json));
   assert.equal(G.graphicKey({ ...base, media: [...base.media].reverse(), fonts: ["Inter", "Oswald"] }).key, k.key);
   for (const [f, v] of Object.entries({ html: "<html>y</html>", media: [], fonts: ["Inter"], chrome: "153.0.0.1", ffmpeg: "7.1.2", platform: "linux-x64", quality: "draft", fps: 25, w: 1078, h: 1078, mode: "insert", frames: 61, inF: 1, after: "loop" }))
@@ -505,7 +543,7 @@ test("REASONS are word for word the spec's tables (references/reel-json.md)", ()
   const PH = { html: "<html>", match: "<match>", bytes: "<bytes>", path: "<path>", n: "<n>", name: "<name>", value: "<value>", W: "<W>", H: "<H>", w: "<w>", h: "<h>",
     v: "<v>", s: "<s>", url: "<url>", message: "<message>", t: "<t>", a: "<a>", b: "<b>", i: "<i>", L: "<L>", code: "<code>", line: "<last log line>", k: "<k>",
     duration: "<duration>", platform: "<platform name>" };
-  const MORE = { G16: ["G16o"], G17: ["G17n"], R4: ["R4p"], R6: ["R6n", "R6L"], R12: ["R12n"] };
+  const MORE = { G16: ["G16o"], G17: ["G17n"], R4: ["R4p"], R6: ["R6n", "R6L", "R6o"], R12: ["R12n"] };
   const seen = new Set(), diffs = [];
   for (const line of sec.split("\n")) {
     const m = /^\| (G\d+|P\d+|R\d+|GW\d+)(?: \(v[\d.]+\))? \|/.exec(line);
@@ -526,4 +564,15 @@ test("REASONS are word for word the spec's tables (references/reel-json.md)", ()
   assert.deepEqual(diffs, []);
   const missing = Object.keys(G.REASONS).filter((c) => !seen.has(c));
   assert.deepEqual(missing, [], "every code in REASONS has its spec row");
+});
+
+test("CLI render lock: --lock / GRAPHIC_RENDER_LOCK re-run under lockf or flock, once", async () => {
+  const L = await import("./graphic-lock.mjs");
+  const argv = [process.execPath, "scripts/graphic-determinism.mjs", "g.html", "--lock", "/tmp/x.lock"];
+  assert.deepEqual(L.lockCommand(argv, {}, { lockf: true, flock: false }).slice(0, 1), ["lockf"]);
+  assert.deepEqual(L.lockCommand(argv, {}, { lockf: true }).at(1).slice(0, 2), ["-k", "/tmp/x.lock"]);
+  assert.deepEqual(L.lockCommand(argv.slice(0, 3), { GRAPHIC_RENDER_LOCK: "/tmp/y" }, { lockf: false, flock: true }).slice(0, 1), ["flock"]);
+  assert.equal(L.lockCommand(argv, { GRAPHIC_RENDER_LOCK_HELD: "/tmp/x.lock" }, { lockf: true }), null, "already held: run");
+  assert.equal(L.lockCommand(argv.slice(0, 3), {}, { lockf: true }), null, "no lock asked for");
+  assert.throws(() => L.lockCommand(argv, {}, { lockf: false, flock: false }), /neither lockf nor flock/);
 });
