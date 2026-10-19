@@ -420,11 +420,12 @@ Helpers:
 - Scene times may sit up to 1.2 s inside a removed pause; they snap to the next kept moment.
 - Each whisper word belongs to the one take it overlaps most, so boundary words are never duplicated.
 
-## Lottie element (`shape: "lottie"` in a motion beat or motion layer): spec (CP1), compiler not built yet
+## Lottie element (`shape: "lottie"` in a motion beat or motion layer)
 
-Status: **spec (CP1), compiler not built yet.** Nothing below is read by `build.mjs` today; a reel that
-uses it gets the existing `unknown shape 'lottie', dropped` warning. Phase 2 (CP2) builds it exactly as
-written here. The PC builds the validator and the picker against this section at the same time.
+Status: **built (CP2)** to the CP1 field list below, unchanged. Code: `scripts/lib/lottie.mjs` (the file checks,
+the library lookup, the page head), `compileMotion` in `scripts/lib/motion-graphics.mjs` (fields, warnings, the
+frame driver), `renderLayer` in `scripts/lib/layers.mjs` (a layer's source problem is returned as an error,
+`build.mjs` dies on it). Test: `scripts/lottie.test.mjs`. The PC mirrors this section in the validator and picker.
 
 **Where it lives, and why.** A Lottie is a seventh `shape` in the element list of the `motion` vocabulary
 (`docs/MOTION-GRAPHICS-SPEC.md` in phantasic; `compileMotion` in `scripts/lib/motion-graphics.mjs`), so
@@ -491,13 +492,21 @@ are driven only by `start`, `speed`, `loop` and `frames`. Limit: **3 Lottie elem
 ### How it renders (deterministic, no autoplay, no network)
 
 - **Player:** `lottie-web` pinned at **5.12.2**, file `build/player/lottie_light.min.js` (MIT, SVG renderer
-  only, no expression engine). Bundled with the engine like GSAP (task mac-10: same vendor folder and the
-  same copy-into-the-project step), never loaded from a CDN. The `<script>` and the data are written **only
-  when the reel compiles at least one Lottie element**, so every existing reel builds byte-identically.
+  only, no expression engine), vendored as `vendor/lottie-web/5.12.2/` (file, `LICENSE.md`, `SOURCES.md`) with an
+  entry in `vendor/manifest.json`, exactly like GSAP (mac-10): the page names the jsdelivr URL and a render through
+  `scripts/render.mjs` / `runRender()` (the `scripts/vendor-offline.cjs` preload) serves it from `vendor/`
+  (`vendor: served ...lottie_light.min.js`), failing the render if it did not, so nothing is fetched. The `<script>` and the data are
+  written **only when the reel compiles at least one Lottie element**, so every existing reel builds byte-identically.
+- **Off `window.lottie`.** Right after the player loads, the page moves it to `window.__geLottie` and deletes
+  `window.lottie`. HyperFrames 0.8.81 has its own Lottie adapter: it finds `window.lottie.getRegisteredAnimations()`
+  and, on every frame it renders, seeks each animation to the composition time, after our timeline has run, ignoring
+  `start`, `speed` and `frames`. Left in place, a real render showed both fixture players on frame 59 at 4.1 s
+  (want 59 and 3). Each player is also kept in `window.__geLottieAnims[<beat>-<element id>]` (the determinism check
+  and the studio read `currentFrame` there).
 - **Data inlined**, not fetched: each distinct file is written once into the page as
   `<script type="application/json" id="lottie-<sha8>">` (minified) and passed as `animationData`, so the
   load is synchronous and there is no XHR or `file://` fetch.
-- `lottie.loadAnimation({ container: #<uid>-a, renderer: "svg", loop: false, autoplay: false,
+- `__geLottie.loadAnimation({ container: #<uid>-l (inside #<uid>-a), renderer: "svg", loop: false, autoplay: false,
   animationData, rendererSettings: { preserveAspectRatio, progressiveLoad: false, hideOnTransparent: true } })`,
   then `anim.setSubframe(false)`. `preserveAspectRatio` is `xMidYMid meet` (contain), `xMidYMid slice`
   (cover) or `none` (fill).
@@ -506,16 +515,19 @@ are driven only by `start`, `speed`, `loop` and `frames`. Limit: **3 Lottie elem
   renderer seeks with events suppressed, see the count-up comment in `motion-graphics.mjs`) that computes
   the frame from the elapsed time `e` (seconds since `start`, floored at 0) and calls
   `anim.goToAndStop(f - ip, true)`:
-  - `n = last - first`, `p = Math.floor(e * fr * speed + 1e-6)` (`fr` = the file's own frame rate)
+  - `n = last - first`, `p = Math.floor(e * fr * speed + 1e-3)` (`fr` = the file's own frame rate; the 1e-3 frame
+    margin covers GSAP's 1e-7 s rounding of timeline times, which put a real render one frame early on a boundary
+    with the CP1 value 1e-6)
   - `loop: false`: `f = first + Math.min(p, n - 1)`;  `loop: true`: `f = first + (p % n)`
   - plus a `tl.set` at time 0 that shows frame `first`.
 
   Whole frames only, the same frame for the same time from any seek order, in any worker; nothing reads
   the previous frame, so a loop cannot drift. A 24 fps file in a 30 fps reel repeats frames as authored.
-- **Determinism check (CP2):** `node scripts/motion-determinism.mjs --variant lottie` (a fixture beat with a
-  looping and a play-once Lottie, a `start` > 0, `speed` 1.5 and a scale/opacity tween on the box) must
-  pass the same reference / shuffled / reverse / cold / repeat comparison as `busy`, and the reel must build
-  the same bytes twice.
+- **Determinism check:** `node scripts/motion-determinism.mjs --variant lottie` (`LOTTIE_BEAT` in
+  `scripts/lib/motion-fixture.mjs`: a hand-written vector file, a play-once player at 1.5x from 0.5 s in with a
+  scale/opacity tween on its box, and a 1x loop) runs the reference / shuffled / reverse / repeat / cold comparison
+  and also checks each player's frame at every sample time against the formula above. It seeks the timeline
+  directly, so it does not see the HyperFrames adapter; a real render does (see "Off `window.lottie`").
 
 ### Library Lottie files
 

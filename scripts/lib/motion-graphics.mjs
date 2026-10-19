@@ -13,6 +13,7 @@
 //     0.6..8 s span, is dropped whole. compileMotion never throws and never calls die().
 
 import { normalizeRoom } from "./room.mjs";
+import { LOTTIE_PER_GRAPHIC } from "./lottie.mjs";
 
 // The families the composition loads (templates/fonts, via build.mjs's @font-face loop) that suit
 // display text. Arabic (RTL) and GeistMono are deliberately out. The planner imports or mirrors this.
@@ -30,7 +31,7 @@ export const EASES = {
   "power4.in": "power4.in", "power4.out": "power4.out", "power4.inOut": "power4.inOut",
   "back.out": "back.out(1.7)", "elastic.out": "elastic.out(1,0.3)", "expo.out": "expo.out", "sine.inOut": "sine.inOut",
 };
-const SHAPES = ["text", "rect", "ellipse", "line", "path", "image"];
+const SHAPES = ["text", "rect", "ellipse", "line", "path", "image", "lottie"];
 const KEYS = ["x", "y", "scale", "scaleX", "scaleY", "rotate", "opacity", "blur", "draw", "reveal", "count"];
 const NODE_KEYS = ["x", "y", "scale", "scaleX", "scaleY", "rotate", "opacity", "blur", "reveal"];
 const DRAW_SHAPES = ["line", "path", "rect", "ellipse"];
@@ -96,8 +97,13 @@ export function revealClip(r, from, w, h, pad) {
  * Compile one `motion` beat.
  * @param b    the beat (reel.json)
  * @param ctx  { id: "b3", t0, t1 (edit seconds, resolved by the caller), W, H, brand,
- *               resolveImage(src) -> project-relative "assets/..." path or null }
- * @returns { ok: false, reason } | { ok: true, html, lines, hideCaptions, room, sfx, warnings }
+ *               resolveImage(src) -> project-relative "assets/..." path or null,
+ *               resolveLottie(src) -> lib/lottie.mjs makeLottieResolver result (absent: a lottie element is dropped),
+ *               safe: { top, bottom, right, name } (the platform's UI zone, for the lottie warning W7; optional),
+ *               lottieFatal: true in a motion LAYER: a lottie source problem goes to `errors` (the caller dies) }
+ * @returns { ok: false, reason, errors? } | { ok: true, html, lines, hideCaptions, room, sfx, warnings, errors, lottie }
+ *   lottie: Map key -> minified JSON of every Lottie file the graphic uses (the page inlines each once)
+ *   errors: lottie source problems in a layer ("layer <id>: element <el>: <reason>"); empty in a beat
  */
 export function compileMotion(b, ctx) {
   const warnings = [];
@@ -119,6 +125,11 @@ export function compileMotion(b, ctx) {
   const els = new Map();
   const rawEls = b.elements.slice(0, LIMITS.elements);
   if (b.elements.length > LIMITS.elements) warn(`only the first ${LIMITS.elements} elements are used`);
+  // Lottie (references/reel-json.md "Lottie element"): a source problem drops the element in a beat (hard rule 5) and
+  // is an error in a layer (lottieFatal: the caller dies); field problems are warnings with a fallback, in both
+  const errors = [], lottieFiles = new Map();
+  let nLottie = 0, lottieCapped = false;
+  const lottieProblem = (eid, reason) => { if (ctx.lottieFatal) errors.push(`layer ${b.id}: element ${eid}: ${reason}`); else warn(`element ${eid}: ${reason}, dropped`); };
   for (const e of rawEls) {
     if (!isObj(e)) { warn("element is not an object, dropped"); continue; }
     if (typeof e.id !== "string" || !ID_RE.test(e.id)) { warn(`element id '${e.id}' is not [a-z0-9-]{1,24}, dropped`); continue; }
@@ -150,6 +161,42 @@ export function compileMotion(b, ctx) {
         shadow: Object.hasOwn(SHADOWS, e.shadow) ? e.shadow : "none",
         split: e.split === "words" || e.split === "chars" ? e.split : "none",
       });
+    } else if (e.shape === "lottie") {
+      if (nLottie >= LOTTIE_PER_GRAPHIC) { if (!lottieCapped) { lottieCapped = true; warn(`only the first ${LOTTIE_PER_GRAPHIC} lottie elements are used`); } continue; }
+      nLottie++;
+      const r = ctx.resolveLottie ? ctx.resolveLottie(e.src) : { ok: false, reason: "lottie is not available here" };
+      if (!r.ok) { lottieProblem(e.id, r.reason); continue; }
+      const ix = Math.max(0, Math.min(el.x + el.w, W) - Math.max(el.x, 0)), iy = Math.max(0, Math.min(el.y + el.h, H) - Math.max(el.y, 0));
+      if (ix * iy < 0.2 * el.w * el.h - 1e-6) { lottieProblem(e.id, `lottie box shows less than 20% inside the ${W}x${H} canvas`); continue; }
+      const lw = (m) => warn(`element ${e.id}: ${m}`);
+      const { fr, ip, op } = r.meta;
+      let fit = "contain";
+      if (e.fit !== undefined && !["contain", "cover", "fill"].includes(e.fit)) lw(`lottie fit '${String(e.fit).slice(0, 40)}' is not contain, cover or fill, using contain`);
+      else if (e.fit !== undefined) fit = e.fit;
+      const maxStart = r3(len - 0.05);
+      let start = 0;
+      if (e.start !== undefined) {
+        if (fin(e.start) && e.start >= 0 && e.start <= maxStart) start = e.start;
+        else { start = fin(e.start) ? r3(clamp(e.start, 0, maxStart)) : 0; lw(`lottie start ${typeof e.start === "string" ? `'${e.start.slice(0, 40)}'` : e.start}s is outside 0..${maxStart}s, clamped`); }
+      }
+      let speed = 1;
+      if (e.speed !== undefined) {
+        if (!fin(e.speed)) lw(`lottie speed '${String(e.speed).slice(0, 40)}' is not a number, using 1`);
+        else if (e.speed < 0.25 || e.speed > 4) { speed = clamp(e.speed, 0.25, 4); lw(`lottie speed ${e.speed} is outside 0.25..4, clamped`); }
+        else speed = e.speed;
+      }
+      let loop = false;
+      if (e.loop !== undefined) { if (typeof e.loop === "boolean") loop = e.loop; else lw("lottie loop must be true or false, using false"); }
+      let first = ip, last = op;
+      if (e.frames !== undefined) {
+        const f = e.frames;
+        if (Array.isArray(f) && f.length === 2 && f.every((v) => Number.isInteger(v)) && ip <= f[0] && f[0] < f[1] && f[1] <= op) [first, last] = f;
+        else lw(`lottie frames must be [first, last] whole frames with ${ip} <= first < last <= ${op}, using [${ip}, ${op}]`);
+      }
+      const sz = ctx.safe;
+      if (sz && (el.y < sz.top || el.y + el.h > H - sz.bottom || el.x + el.w > W - sz.right)) lw(`lottie box crosses the ${sz.name} UI zone`);
+      lottieFiles.set(r.key, r.json);
+      Object.assign(el, { key: r.key, fit, start, speed, loop, first, last, fr, ip });
     } else if (e.shape === "image") {
       const src = typeof e.src === "string" ? ctx.resolveImage?.(e.src) : null;
       if (!src) { warn(`element ${e.id}: image src '${String(e.src).slice(0, 60)}' is not under assets/ or a library id, dropped`); continue; }
@@ -173,6 +220,7 @@ export function compileMotion(b, ctx) {
     }
     els.set(el.id, el);
   }
+  if (errors.length) return { ok: false, reason: errors[0], errors, warnings };
   if (!els.size) return { ok: false, reason: "no valid elements", warnings };
 
   // ---------- tweens -> per-element plans ----------
@@ -320,6 +368,9 @@ export function compileMotion(b, ctx) {
         body = el.text.split(" ").map((wd) => `<span style="display:inline-block;white-space:nowrap">${[...wd].map((ch) => `<span id="${el.uid}-u${ci++}" style="display:inline-block">${escHtml(ch)}</span>`).join("")}</span>`).join(" ");
       } else body = escHtml(f ? formatCount(f.from, f.f) : el.text);
       inner = `<div id="${el.uid}-a" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:${rd(el.opacity, 3)}"><div style="${sty}"><div style="max-width:100%;overflow-wrap:break-word">${body}</div></div></div>`;
+    } else if (el.shape === "lottie") {
+      // the player draws its <svg> into -l at page load (the timeline's lottie lines below); -a carries the tweens
+      inner = `<div id="${el.uid}-a" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:${rd(el.opacity, 3)}"><div id="${el.uid}-l" style="position:absolute;left:0;top:0;width:100%;height:100%"></div></div>`;
     } else if (el.shape === "image") {
       inner = `<div id="${el.uid}-a" style="position:absolute;left:0;top:0;width:100%;height:100%;opacity:${rd(el.opacity, 3)}"><img src="${escHtml(el.src)}" style="width:100%;height:100%;object-fit:${el.fit};display:block" alt=""></div>`;
     } else {
@@ -395,6 +446,22 @@ export function compileMotion(b, ctx) {
     });
     lines.push(`})();`);
   }
+  // Lottie frame drivers. The GSAP timeline is the only clock: no autoplay, no player loop. A proxy tween with
+  // ease "none" runs from the element's `start` to the end of the graphic; its `e` modifier (a modifier, not onUpdate:
+  // the renderer seeks with events suppressed, see the count-ups above) turns the elapsed seconds into a WHOLE frame
+  // of the file and shows it with goToAndStop(frame - ip, true). The + 1e-3 frame: GSAP rounds timeline times to 1e-7 s,
+  // so on a reel frame that is exactly a Lottie frame boundary e * rate can land 1.5e-6 under the whole number (measured
+  // in a real render: frame 88 of the fixture showed loop frame 27, want 28, with + 1e-6). Before the tween the element shows `first` (go(0) at
+  // load; GSAP renders the tween at e = 0 when a seek goes back past its start). Nothing reads the previous frame.
+  for (const el of sorted) {
+    if (el.shape !== "lottie") continue;
+    const n = el.last - el.first, rate = rd(el.fr * el.speed, 6), d = r3(len - el.start), par = { fit: el.fit === "cover" ? "xMidYMid slice" : el.fit === "fill" ? "none" : "xMidYMid meet" };
+    lines.push(`(() => { const a = __geLottie.loadAnimation({ container: document.getElementById(${J(el.uid + "-l")}), renderer: "svg", loop: false, autoplay: false, animationData: JSON.parse(document.getElementById(${J(el.key)}).textContent), rendererSettings: { preserveAspectRatio: ${J(par.fit)}, progressiveLoad: false, hideOnTransparent: true } });`);
+    lines.push(`  a.setSubframe(false); (window.__geLottieAnims = window.__geLottieAnims || {})[${J(el.uid)}] = a;`);
+    lines.push(`  const go = (e) => { const p = Math.floor(Math.max(0, e) * ${rate} + 1e-3); a.goToAndStop(${el.first - el.ip} + ${el.loop ? `p % ${n}` : `Math.min(p, ${n - 1})`}, true); return e; };`);
+    lines.push(`  go(0); const o = { e: 0 }; tl.fromTo(o, { e: 0 }, { e: ${d}, duration: ${d}, ease: "none", immediateRender: false, modifiers: { e: go } }, ${abs(el.start)});`);
+    lines.push(`})();`);
+  }
   // dim and exit
   const exitKind = ["fade", "cut", "none"].includes(b.exit) ? b.exit : "fade";
   const fo = Math.min(0.2, len / 3);
@@ -405,5 +472,5 @@ export function compileMotion(b, ctx) {
   if (exitKind === "fade") lines.push(`ft("#${id}-in", { opacity: 1 }, { opacity: 0, duration: ${r3(fo)}, ease: "power1.in" }, ${r3(t1 - fo)});`);
 
   const sfx = b.sfx === undefined ? "whoosh" : b.sfx;
-  return { ok: true, html: dimHtml + `<div id="${id}-in" class="ov"${ctx.beatId != null ? ` data-beat-id="${escHtml(ctx.beatId)}"` : ""} style="left:0;top:0;width:${W}px;height:${H}px">${html.join("")}</div>`, lines, hideCaptions: b.hideCaptions === true || room === "below", room, sfx, dim, exit: exitKind, warnings };
+  return { ok: true, html: dimHtml + `<div id="${id}-in" class="ov"${ctx.beatId != null ? ` data-beat-id="${escHtml(ctx.beatId)}"` : ""} style="left:0;top:0;width:${W}px;height:${H}px">${html.join("")}</div>`, lines, hideCaptions: b.hideCaptions === true || room === "below", room, sfx, dim, exit: exitKind, warnings, errors, lottie: lottieFiles };
 }

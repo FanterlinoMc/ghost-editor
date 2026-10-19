@@ -135,6 +135,45 @@ export const LAYERS_FIXTURE = [
     ] },
 ];
 
+// A hand-written, vector-only Lottie (no third-party animation): 30 fps, frames 0..60, 400 x 400. One shape layer, a
+// red 60 px square whose centre moves linearly from x 50 to x 350 at y 200 (x = 50 + 5 * frame), so a frame number can
+// be read back from the pixels. Written into the project by makeProject({ files }) - never a library asset.
+export const LOTTIE_FIXTURE = {
+  v: "5.7.4", fr: 30, ip: 0, op: 60, w: 400, h: 400, nm: "fixture-move", ddd: 0, assets: [],
+  layers: [{
+    ddd: 0, ind: 1, ty: 4, nm: "box", sr: 1, ao: 0, ip: 0, op: 60, st: 0, bm: 0,
+    ks: {
+      o: { a: 0, k: 100 }, r: { a: 0, k: 0 }, a: { a: 0, k: [0, 0, 0] }, s: { a: 0, k: [100, 100, 100] },
+      p: { a: 1, k: [{ t: 0, s: [50, 200, 0], i: { x: 1, y: 1 }, o: { x: 0, y: 0 } }, { t: 60, s: [350, 200, 0] }] },
+    },
+    shapes: [{ ty: "gr", nm: "sq", it: [
+      { ty: "rc", d: 1, s: { a: 0, k: [60, 60] }, p: { a: 0, k: [0, 0] }, r: { a: 0, k: 0 } },
+      { ty: "fl", c: { a: 0, k: [1, 0, 0, 1] }, o: { a: 0, k: 100 }, r: 1 },
+      { ty: "tr", p: { a: 0, k: [0, 0] }, a: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 } },
+    ] }],
+  }],
+};
+export const LOTTIE_FILE = "assets/lottie/move.json";
+// two Lottie elements of the same file (one inlined copy): "once" starts 0.5 s in at 1.5x and holds its last frame
+// (frame = min(floor((t - 2.5) * 45), 59)); "loopy" loops at 1x from the beat's start (frame = floor((t - 2) * 30) % 60).
+// "once" also fades and scales in, so the box tweens and the frame driver run together.
+export const LOTTIE_BEAT = {
+  type: "motion", by: "designer", id: "lot", at: BEAT_AT, to: BEAT_TO, hideCaptions: false, dim: 0, exit: "fade", sfx: "none",
+  elements: [
+    { id: "once", shape: "lottie", src: LOTTIE_FILE, x: 340, y: 300, w: 400, h: 400, start: 0.5, speed: 1.5, loop: false, z: 2 },
+    { id: "loopy", shape: "lottie", src: LOTTIE_FILE, x: 340, y: 900, w: 400, h: 400, loop: true, frames: [0, 60], z: 1 },
+  ],
+  tweens: [
+    { target: "once", at: 0.5, dur: 0.4, ease: "power2.out", from: { opacity: 0, scale: 0.8 }, to: { opacity: 1, scale: 1 } },
+  ],
+};
+// the frame each element shows at output second t (the spec's formula, written out independently of the compiler);
+// the driver stops with the beat, so after BEAT_TO a player keeps the frame of the beat's end
+export const lottieFrameAt = (t) => {
+  const u = Math.min(t, BEAT_TO);
+  return { once: u < 2.5 ? 0 : Math.min(Math.floor((u - 2.5) * 45 + 1e-3), 59), loopy: u < 2 ? 0 : Math.floor((u - 2) * 30 + 1e-3) % 60 };
+};
+
 export function stripBlur(beat) {
   const b = structuredClone(beat);
   for (const tw of b.tweens) { delete tw.from.blur; delete tw.to.blur; }
@@ -155,10 +194,14 @@ function words(seconds) {
 
 /**
  * Create (or rebuild) a project at `dir` and run the fork's build.mjs on it.
- * beat: a motion beat object, or null for the same reel with no motion beat.
+ * beat: a motion beat object, or null for the same reel with no motion beat. files: { "assets/...": string | object }.
  */
-export function makeProject(dir, { beat = null, beats = null, layers = null, seconds = SECONDS, style = "keynote-3", reuseSource = true } = {}) {
+export function makeProject(dir, { beat = null, beats = null, layers = null, seconds = SECONDS, style = "keynote-3", reuseSource = true, files = null } = {}) {
   fs.mkdirSync(path.join(dir, "assets"), { recursive: true });
+  for (const [rel, body] of Object.entries(files || {})) {   // extra project files, e.g. { "assets/lottie/move.json": LOTTIE_FIXTURE }
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), typeof body === "string" ? body : JSON.stringify(body));
+  }
   fs.mkdirSync(path.join(dir, "build"), { recursive: true });
   const src = path.join(dir, "assets", "talk.mp4");
   if (!(reuseSource && fs.existsSync(src))) {

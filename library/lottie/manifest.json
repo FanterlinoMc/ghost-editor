@@ -1,0 +1,3 @@
+{
+  "_": "Library Lottie animations for the motion `lottie` element (references/reel-json.md, \"Lottie element\"). id -> { file: \"<id>.json\", title, tags, fr, ip, op, w, h, loopable, bytes, sha256, source, licence, licensed }. The .json files are never committed (this fork is public); a deployment restores them next to this manifest. build.mjs refuses a file whose sha256 differs from its entry."
+}
