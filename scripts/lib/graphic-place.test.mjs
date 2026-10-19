@@ -19,6 +19,9 @@ test("a graphic beat: to defaults to at + the graphic's window from in; box cent
   const g = resolveGraphicBeat({ type: "graphic", id: "k", html: H, at: 1, in: 0.5, audio: "mix", fps: 25 }, ok, ctx);
   assert.equal(g.problem, undefined);
   assert.deepEqual([g.t0, g.t1, g.L, g.inF, g.D, g.after, g.mode, g.fit, g.hideCaptions], [11, 12.5, 45, 15, 60, "hold", "overlay", "contain", false]);
+  // an output window that is not whole frames is snapped: t1 - t0 = L / fps
+  const s = resolveGraphicBeat({ type: "graphic", html: H, at: 1, to: 2.01 }, ok, ctx);
+  assert.deepEqual([s.L, s.t1], [30, 12]);
   assert.deepEqual(g.box, centredBox(meta.size, 1080, 1920));
   assert.deepEqual(g.warnings, [`graphic k: ${reason("GW5")}`, `graphic k: ${reason("GW6")}`]);
   const ins = resolveGraphicBeat({ type: "graphic", at: 1, to: 4, html: H, mode: "insert", box: { x: 0, y: 0, w: 9, h: 9 }, after: "bounce" }, ok, ctx);

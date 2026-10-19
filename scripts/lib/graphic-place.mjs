@@ -67,8 +67,9 @@ export function resolveGraphicBeat(b, insp, { out, fps, W, H }) {
   const tm = graphicTiming(meta, b, fps);
   const warnings = [...tm.warnings];
   // the window, in source seconds: to - at when both are seconds of the same recording, or the graphic's own length
-  // from `in` when `to` is left out. When it cannot be read in source seconds ("end", "hold:...", two recordings),
-  // P2 is applied to the output window after mapping instead.
+  // from `in` when `to` is left out (P2 on it when it can be read: not for "end", "hold:...", two recordings). Then
+  // P2 ALWAYS again on the output window E(to) - E(at): a beat across a cut can be long in source seconds and a few
+  // frames long on screen.
   const srcOf = (x) => (fin(x) ? { src: null, t: x } : isObj(x) && fin(x.t) ? { src: x.src ?? null, t: x.t } : null);
   const A = srcOf(b.at), Z = b.to === undefined ? null : srcOf(b.to);
   const win = b.to === undefined ? (A ? tm.defaultWindow : undefined) : A && Z && A.src === Z.src ? Z.t - A.t : undefined;
@@ -81,9 +82,10 @@ export function resolveGraphicBeat(b, insp, { out, fps, W, H }) {
     else if (A) t1 = out(fin(b.at) ? r3(b.at + win) : { ...b.at, t: r3(b.at.t + win) });
     else t1 = r3(t0 + tm.defaultWindow);   // an `at` that is not a source second: the default window in output seconds
   } catch (e) { return drop(String(e.message).split("\n")[0]); }
-  if (win === undefined && p2(t1 - t0).length) return drop(p2(t1 - t0)[0]);
+  if (p2(t1 - t0).length) return drop(p2(t1 - t0)[0]);
   const Lf = Math.round((t1 - t0) * fps);
   if (Lf < 1) return drop(reason("P2", { s: r3(t1 - t0) }));
+  t1 = r3(t0 + Lf / fps);   // whole frames: the <video>'s data-duration is the rendered length L / fps
   const cut = cutFrames(meta, tm, fps, Lf);
   warnings.push(...cut.warnings);
   if (cut.L < Lf) t1 = r3(t0 + cut.L / fps);

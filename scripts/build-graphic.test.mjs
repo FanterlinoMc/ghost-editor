@@ -71,10 +71,12 @@ test("overlay layer: a timed <video> of the cached alpha WebM in its box, with z
   assert.deepEqual(truth(dir).layers, [{ id: "card", kind: "graphic", start: 1, end: 3, z: 3, pin: true, mode: "overlay" }]);
   assert.equal(r.renders.length, 1);
   // the default box: the design size (1080x1080) centred on the canvas, fit contain
-  const d2 = project({ layers: [card()] });
+  // (and a dur that is not whole frames is snapped: 2.01 s -> 60 frames, data-duration 2, edit_truth end 3)
+  const d2 = project({ layers: [card({ dur: 2.01 })] });
   const r2 = build(d2);
   assert.equal(r2.status, 0, r2.stderr);
-  assert.match(read(d2, "index.html"), /style="visibility:hidden;left:0px;top:420px;width:1080px;height:1080px;"><video id="ly-card_v"[^>]*object-fit:contain/);
+  assert.match(read(d2, "index.html"), /style="visibility:hidden;left:0px;top:420px;width:1080px;height:1080px;"><video id="ly-card_v" src="[^"]+" data-start="1" data-duration="2"[^>]*object-fit:contain/);
+  assert.equal(truth(d2).layers[0].end, 3);
 });
 
 test("insert: an opaque full-frame MP4 over the footage, captions hidden by default (layer and beat); hideCaptions:false keeps them", () => {
@@ -259,6 +261,7 @@ test("across a take join: L = round((E(to) - E(at)) * fps); a default window end
     { type: "graphic", id: "across", html: "assets/graphics/card.html", at: 2, to: 6, after: "loop", box: { x: 0, y: 300, w: 500, h: 500 } },
     { type: "graphic", id: "gap", html: "assets/graphics/card.html", at: 2.5 },                    // default to 4.5: in the gap
     { type: "graphic", id: "tail", html: "assets/graphics/card.html", at: 7.95, to: "end" },        // 0.05 s of output
+    { type: "graphic", id: "seam", html: "assets/graphics/card.html", at: 2.97, to: 5.05 },         // 2.08 s source, 0.08 s output
   ] });
   const r = build(dir);
   assert.equal(r.status, 0, r.stderr + r.stdout);
@@ -269,6 +272,7 @@ test("across a take join: L = round((E(to) - E(at)) * fps); a default window end
   assert.deepEqual(truth(dir).beats.filter((b) => b.type === "graphic").map((b) => [b.at, b.to]), [[2, 4]]);
   assert.ok(r.stdout.includes("graphic gap: assets/graphics/card.html: E(4.5) for graphic: not inside any take, dropped"), r.stdout);
   assert.ok(r.stdout.includes(beatProblem("tail", "assets/graphics/card.html", reason("P2", { s: 0.05 }))), r.stdout);
+  assert.ok(r.stdout.includes(beatProblem("seam", "assets/graphics/card.html", reason("P2", { s: 0.08 }))), "P2 on the output window too, after the source one passed");
 });
 
 test("sections.json: a graphic beat's cache key is in its section's hash", () => {

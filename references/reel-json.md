@@ -1174,8 +1174,10 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
   (7) `after: "cut"` (GW2); (8) the `box` die; (9) P3; (10) the `enter` / `exit` / `fit` dies. Beat: (1) G1..G35;
   (2) P1; (3) P2 on the window in SOURCE seconds (`to - at` when both are seconds of the same recording, or the
   default window below); (4) the time mapping (`E()`); (5) P2 on the OUTPUT window `E(to) - E(at)` when the source
-  window could not be read (`to: "end"`, `"hold:..."`, `at` and `to` in different recordings), and P2 if the mapped
-  window is under one frame; (6) `after: "cut"`; (7) the `box` problem;
+  window could not be read (`to: "end"`, `"hold:..."`, `at` and `to` in different recordings); P2 again on the output
+  window (ALWAYS, after the source check: a beat across a cut can be long in source seconds and a few frames on
+  screen), and P2 if the mapped window is under one frame; then `to` is snapped to whole frames (`t1 = t0 + L / fps`,
+  so `data-duration` is the rendered length; a layer's end likewise); (6) `after: "cut"`; (7) the `box` problem;
   (8) P3; (9) the `fit` problem. The first failure is the one reported.
 - **A beat's default `to` (v3.2.5).** Left out, `to` = `at` + the graphic's own length from `in`
   (`(D_f - in_f) / fps`), in SOURCE seconds. If that end falls past the end of the take that holds `at` (or in

@@ -109,7 +109,7 @@ export function resolveLayers(raw, { takes, total, fps, W, H, graphic }) {
     if (g) {
       const Lf = Math.round((t1 - t0) * fps), cut = cutFrames(g.meta, g.tm, fps, Lf);
       for (const w of cut.warnings) warnings.push(`layer ${L.id}: ${w}`);
-      if (cut.L < Lf) t1 = r3(t0 + cut.L / fps);
+      t1 = r3(t0 + cut.L / fps);   // whole frames (and cut): the <video>'s data-duration is the rendered length L / fps
       g.L = cut.L;
     }
     // ---- geometry ----
