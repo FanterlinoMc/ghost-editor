@@ -2,8 +2,8 @@
 // node --test scripts/no-mixkit-fetch.test.mjs
 // Mixkit is not used (library/SOURCES.md). Its download script, scripts/sfx_fetch.py, was removed and
 // library_restore.py no longer fetches sound effects or music. This fails if either comes back: the script
-// itself, anything that names or calls it, or a Mixkit download host anywhere outside the manifests (which
-// keep their entries as records only).
+// itself, anything that names or calls it, a Mixkit download host anywhere, or a library manifest that names
+// Mixkit at all (their entries are id records with source "none (needs a licensed source)").
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -13,8 +13,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SELF = "scripts/no-mixkit-fetch.test.mjs";
-// records, not code: the manifests keep the Mixkit ids/urls the styles and tests name; SOURCES.md tells the story
-const RECORDS = new Set(["library/sfx/manifest.json", "library/music/manifest.json", "library/SOURCES.md", SELF]);
+// SOURCES.md states the rule (and names the host it rules out); this file names it to test for it
+const RECORDS = new Set(["library/SOURCES.md", SELF]);
 
 function tracked() {
   const out = execFileSync("git", ["-C", ROOT, "ls-files", "-z"], { encoding: "utf8", maxBuffer: 64 << 20 });
@@ -35,6 +35,7 @@ export function offenders(files) {
     if (RECORDS.has(rel) || t == null) continue;
     if (/sfx_fetch/.test(t)) bad.push(`${rel}: names sfx_fetch`);
     if (/mixkit\.co\b/i.test(t)) bad.push(`${rel}: names a Mixkit download host`);
+    else if (/^library\/.*manifest\.json$/.test(rel) && /mixkit/i.test(t)) bad.push(`${rel}: a manifest names Mixkit`);
   }
   return bad;
 }
@@ -44,7 +45,7 @@ test("scripts/sfx_fetch.py is gone and not tracked", () => {
   assert.equal(tracked().includes("scripts/sfx_fetch.py"), false);
 });
 
-test("no tracked file names sfx_fetch or a Mixkit download host (manifests and SOURCES.md excepted)", () => {
+test("no tracked file names sfx_fetch or a Mixkit download host, and no library manifest names Mixkit (SOURCES.md excepted)", () => {
   const bad = offenders(tracked().map((rel) => [rel, textOf(rel)]));
   assert.deepEqual(bad, []);
 });
@@ -54,17 +55,21 @@ test("library_restore.py downloads nothing: no curl, no urllib, no music url", (
   assert.doesNotMatch(t, /"curl"|urllib|urlopen|\["url"\]/);
 });
 
-test("the check fires: a caller, a doc line or a download URL is caught; the records are not", () => {
+test("the check fires: a caller, a doc line, a download URL or a Mixkit manifest record is caught; a plain mention in code is not", () => {
   const bad = offenders([
     ["scripts/x.py", 'subprocess.run([sys.executable, os.path.join(HERE, "sfx_fetch.py")])'],
     ["docs/X.md", "- Sounds: [Mixkit](https://mixkit.co/license/)"],
     ["scripts/y.mjs", 'fetch("https://assets.mixkit.co/active_storage/sfx/1/1-preview.mp3")'],
     ["library/music/manifest.json", '{"a": {"url": "https://assets.mixkit.co/music/1/1.mp3"}}'],
+    ["library/sfx/manifest.json", '{"a": {"file": "a.wav", "mixkit_id": "2350"}}'],
+    ["library/sfx/timing.json", '{"a": {"dur": 1}}'],
     ["scripts/z.py", "# Mixkit ids are kept as records"],
   ]);
   assert.deepEqual(bad, [
     "scripts/x.py: names sfx_fetch",
     "docs/X.md: names a Mixkit download host",
     "scripts/y.mjs: names a Mixkit download host",
+    "library/music/manifest.json: names a Mixkit download host",
+    "library/sfx/manifest.json: a manifest names Mixkit",
   ]);
 });

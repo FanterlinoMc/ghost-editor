@@ -7,9 +7,11 @@ timing.json per sound: dur (s), peak_db (dBFS), peak_t (s, loudest 10 ms window)
 30 dB of the peak), tail_t (last sample within 30 dB of the peak). The design pass ends a riser on a cut with
 peak_t (the swell's top), not with the file's end (most risers carry a few hundred ms of decay after the top).
 
-Ported from Ahmed's phantasic engine/core (origin/main). Fork notes: SFX_DIR overrides the folder (default library/sfx). The wavs are not in git (library_restore.py rebuilds them), so
-this writes an empty index until they exist; files named in the manifest but missing on disk are skipped. Needs ffmpeg on PATH
-and numpy. The design-pass family names listed in the generated INDEX.md come from Ahmed's kit; the fork's kit may differ.
+SFX_DIR overrides the folder (default library/sfx). No audio is in git: a deployment restores the licensed sounds outside
+it (library/SOURCES.md), so on a clean checkout this writes an empty index; ids in the manifest whose file is not on disk are
+skipped. Run it after adding a sound and copy the measured dur / peak_db into that id's manifest entry. Needs ffmpeg on PATH
+and numpy. The design-pass family names in the generated INDEX.md are the ids lib/premium.mjs asks for; a restored kit may
+not have a file for every one of them.
 """
 import json, os, subprocess
 from pathlib import Path

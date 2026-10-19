@@ -20,3 +20,14 @@ test("references/missing-assets.json is what scripts/missing_assets.mjs prints",
   const committed = fs.readFileSync(path.join(ROOT, "references", "missing-assets.json"), "utf8");
   assert.ok(r.stdout === committed, "references/missing-assets.json is stale: run node scripts/missing_assets.mjs > references/missing-assets.json");
 });
+
+// every sfx id a style or the engine names has a manifest entry (an id with no licensed file yet is an entry with source
+// "none ...", listed under missing), except ids whose every code site checks the manifest first and plays another sound:
+// adding one of those (vine-boom) would change which sound the build picks, so it stays out of the manifest
+test("no sfx id is dangling except the guarded ones", () => {
+  const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "missing_assets.mjs")], { cwd: ROOT, env: { ...process.env, PHANTASIC_LIB: "" }, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  const sfx = JSON.parse(r.stdout).dangling.filter((d) => d.kind === "sfx");
+  assert.deepEqual(sfx.filter((d) => !/every code site checks the manifest first/.test(d.effect)).map((d) => d.id), []);
+  assert.deepEqual(sfx.map((d) => d.id), ["vine-boom"]);
+});

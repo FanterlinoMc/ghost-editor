@@ -3,19 +3,19 @@
 
     export_public.py <dest-dir>
 
-The private repo keeps YouTube-ripped meme sounds and green-screen memes (fine
-for personal IG/TikTok use, not ours to redistribute). The public edition ships
-only assets with a redistribution-safe source:
-  - the SFX manifest's records (no audio: see library/SOURCES.md)
+A working copy may hold green-screen memes (fine for personal IG/TikTok use, not
+ours to redistribute). The public edition ships only assets with a
+redistribution-safe source:
+  - the sfx and music manifests as committed: id records with no source and no
+    audio (audio is gitignored, so `git archive` never contains it; see
+    library/SOURCES.md)
   - fonts under the SIL OFL, the YuNet face model (MIT)
 and it drops:
-  - every `yt:` entry from the SFX kit and the manifest
   - library/memes/* (users add their own with meme_add.py, their rights)
   - examples that depend on ripped memes
 Code and docs are copied from the committed tree (git archive), so uncommitted
 local files never leak.
 """
-import json
 import os
 import re
 import shutil
@@ -55,11 +55,7 @@ def main():
     with tarfile.open(tar) as t:
         t.extractall(dest, filter="data")
 
-    # 1. SFX manifest: drop the YouTube rip entries (the records kept carry no audio)
-    man_p = os.path.join(dest, "library", "sfx", "manifest.json")
-    man = json.load(open(man_p))
-    kept = {k: v for k, v in man.items() if "Mixkit" in v.get("licence", "") or v.get("mixkit_id")}
-    json.dump(kept, open(man_p, "w"), indent=2)
+    # 1. (the sfx manifest ships as committed: every entry is an id record with no source)
     # 2. memes: none ship; users add their own
     mdir = os.path.join(dest, "library", "memes")
     shutil.rmtree(mdir, ignore_errors=True)
@@ -96,8 +92,7 @@ def main():
     open(sk, "w", encoding="utf8").write(t)
     # 5. mark the edition
     open(os.path.join(dest, ".public-edition"), "w").write("licensed-only export of meme-reel\n")
-    rips = len(man) - len(kept)
-    print(f"-> {dest}\n   sfx kept {len(kept)}, dropped {rips} rips; memes cleared; examples dropped: {', '.join(DROP_EXAMPLES)}")
+    print(f"-> {dest}\n   memes cleared; examples dropped: {', '.join(DROP_EXAMPLES)}")
     left = subprocess.run(["grep", "-rIl", "yt:", os.path.join(dest, "scripts"), os.path.join(dest, "library")], capture_output=True, text=True).stdout.strip()
     if left:
         print("   check these for leftover rip references:\n   " + left.replace("\n", "\n   "))

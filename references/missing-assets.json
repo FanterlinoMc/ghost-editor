@@ -44,8 +44,8 @@
   "sfx": {
    "referenced": 40,
    "catalogued_only": 17,
-   "missing": 48,
-   "dangling": 9
+   "missing": 56,
+   "dangling": 1
   }
  },
  "missing": [
@@ -620,14 +620,14 @@
     ],
     "engine": []
    },
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/comical.mp3",
    "kind": "music",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/cyberpunk-city.mp3",
@@ -641,7 +641,7 @@
     ],
     "engine": []
    },
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/deep-techno-ambience.mp3",
@@ -679,42 +679,42 @@
      "build.mjs music \"auto\" default"
     ]
    },
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/digital-clouds.mp3",
    "kind": "music",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/happy-times.mp3",
    "kind": "music",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/infinity.mp3",
    "kind": "music",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/keeping-fit.mp3",
    "kind": "music",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/life-is-a-dream.mp3",
    "kind": "music",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/lo-fi-02.mp3",
@@ -734,7 +734,7 @@
     ],
     "engine": []
    },
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/silent-descent.mp3",
@@ -765,21 +765,21 @@
     ],
     "engine": []
    },
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/vastness.mp3",
    "kind": "music",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "music/vocal-percussions.mp3",
    "kind": "music",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead"
+   "source": "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead"
   },
   {
    "path": "packs/editorsinventory/8mm-dust/",
@@ -915,7 +915,7 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/burn-whoosh-tunnel.wav",
@@ -940,7 +940,7 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/buzzer-1.wav",
@@ -952,7 +952,7 @@
      "build.mjs"
     ]
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/cinematic-cine-hit.wav",
@@ -964,7 +964,7 @@
      "build.mjs x2"
     ]
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/cinematic-deep-boom.wav",
@@ -977,14 +977,14 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/cinematic-drone-swell.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/cinematic-film-flash.wav",
@@ -996,14 +996,14 @@
      "build.mjs x2"
     ]
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/cinematic-heartbeat.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/cinematic-rumble-riser.wav",
@@ -1016,7 +1016,7 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/click-1.wav",
@@ -1032,7 +1032,7 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/ding-1.wav",
@@ -1045,7 +1045,7 @@
      "lib/motion.mjs x3"
     ]
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/impact-1.wav",
@@ -1059,7 +1059,7 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/impact-2.wav",
@@ -1072,7 +1072,7 @@
      "lib/motion.mjs x4"
     ]
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/kaching-1.wav",
@@ -1085,7 +1085,160 @@
      "lib/motion.mjs"
     ]
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
+  },
+  {
+   "path": "sfx/paper-crinkle.wav",
+   "kind": "sfx",
+   "uses": 6,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": []
+   },
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
+  },
+  {
+   "path": "sfx/paper-page-turn.wav",
+   "kind": "sfx",
+   "uses": 8,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "lib/motion.mjs x2"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
+  },
+  {
+   "path": "sfx/paper-pages.wav",
+   "kind": "sfx",
+   "uses": 7,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "lib/motion.mjs"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
+  },
+  {
+   "path": "sfx/paper-quick.wav",
+   "kind": "sfx",
+   "uses": 9,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "build.mjs x2",
+     "lib/motion.mjs"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
+  },
+  {
+   "path": "sfx/pen-letters.wav",
+   "kind": "sfx",
+   "uses": 7,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "lib/motion.mjs"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
+  },
+  {
+   "path": "sfx/pen-scribble.wav",
+   "kind": "sfx",
+   "uses": 8,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "build.mjs",
+     "lib/motion.mjs"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
+  },
+  {
+   "path": "sfx/pen-scribble-2.wav",
+   "kind": "sfx",
+   "uses": 7,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "lib/motion.mjs"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
+  },
+  {
+   "path": "sfx/pen-short.wav",
+   "kind": "sfx",
+   "uses": 9,
+   "for": {
+    "styles": [
+     "folio-2",
+     "folio-burgundy",
+     "folio-emerald",
+     "folio-gold",
+     "folio-plum",
+     "folio-royal"
+    ],
+    "engine": [
+     "build.mjs x2",
+     "lib/motion.mjs"
+    ]
+   },
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/pop-1.wav",
@@ -1115,7 +1268,7 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/pop-2.wav",
@@ -1132,7 +1285,7 @@
      "lib/motion.mjs x6"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/pop-3.wav",
@@ -1148,7 +1301,7 @@
      "lib/motion.mjs x6"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/pop-whoosh-light.wav",
@@ -1169,42 +1322,42 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-applause-short.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-boing.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-cartoon-pop.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-crowd-boo.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-crowd-laugh.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-ding-ding.wav",
@@ -1216,28 +1369,28 @@
     ],
     "engine": []
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-drum-roll.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-fail-trombone.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-gasp.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-rimshot.wav",
@@ -1249,21 +1402,21 @@
     ],
     "engine": []
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-slide-whistle.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/reaction-tape-rewind.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/riser-1.wav",
@@ -1277,14 +1430,14 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/shutter-1.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/tech-camera-flash.wav",
@@ -1296,7 +1449,7 @@
      "build.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/tech-digital-whoosh.wav",
@@ -1308,28 +1461,28 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/tech-glitch-1.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/tech-glitch-2.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/tech-keyboard-burst.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/tech-notification-2.wav",
@@ -1342,7 +1495,7 @@
      "lib/motion.mjs"
     ]
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/tech-ui-confirm.wav",
@@ -1355,14 +1508,14 @@
      "lib/motion.mjs"
     ]
    },
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/tech-ui-error.wav",
    "kind": "sfx",
    "uses": 0,
    "for": "catalogued in its manifest; nothing in the fork names it",
-   "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
+   "source": "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/tick-1.wav",
@@ -1384,7 +1537,7 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/typing-1.wav",
@@ -1397,7 +1550,7 @@
      "lib/motion.mjs x2"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/whoosh-1.wav",
@@ -1453,7 +1606,7 @@
      "lib/motion.mjs x12"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/whoosh-2.wav",
@@ -1515,7 +1668,7 @@
      "lib/motion.mjs x12"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/whoosh-3.wav",
@@ -1569,7 +1722,7 @@
      "lib/motion.mjs x12"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/whoosh-cine.wav",
@@ -1590,7 +1743,7 @@
      "lib/premium.mjs x2"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/zoom-sweep-short.wav",
@@ -1610,7 +1763,7 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   },
   {
    "path": "sfx/zoom-sweep-small.wav",
@@ -1630,7 +1783,7 @@
      "lib/premium.mjs"
     ]
    },
-   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
+   "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
   }
  ],
  "dangling": [
@@ -1712,159 +1865,6 @@
     "engine": []
    },
    "effect": "no manifest entry: buildMusic throws unless music.optional or a usable music.fallback is set"
-  },
-  {
-   "kind": "sfx",
-   "id": "paper-crinkle",
-   "uses": 6,
-   "for": {
-    "styles": [
-     "folio-2",
-     "folio-burgundy",
-     "folio-emerald",
-     "folio-gold",
-     "folio-plum",
-     "folio-royal"
-    ],
-    "engine": []
-   },
-   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
-  },
-  {
-   "kind": "sfx",
-   "id": "paper-page-turn",
-   "uses": 8,
-   "for": {
-    "styles": [
-     "folio-2",
-     "folio-burgundy",
-     "folio-emerald",
-     "folio-gold",
-     "folio-plum",
-     "folio-royal"
-    ],
-    "engine": [
-     "lib/motion.mjs x2"
-    ]
-   },
-   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
-  },
-  {
-   "kind": "sfx",
-   "id": "paper-pages",
-   "uses": 7,
-   "for": {
-    "styles": [
-     "folio-2",
-     "folio-burgundy",
-     "folio-emerald",
-     "folio-gold",
-     "folio-plum",
-     "folio-royal"
-    ],
-    "engine": [
-     "lib/motion.mjs"
-    ]
-   },
-   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
-  },
-  {
-   "kind": "sfx",
-   "id": "paper-quick",
-   "uses": 9,
-   "for": {
-    "styles": [
-     "folio-2",
-     "folio-burgundy",
-     "folio-emerald",
-     "folio-gold",
-     "folio-plum",
-     "folio-royal"
-    ],
-    "engine": [
-     "build.mjs x2",
-     "lib/motion.mjs"
-    ]
-   },
-   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
-  },
-  {
-   "kind": "sfx",
-   "id": "pen-letters",
-   "uses": 7,
-   "for": {
-    "styles": [
-     "folio-2",
-     "folio-burgundy",
-     "folio-emerald",
-     "folio-gold",
-     "folio-plum",
-     "folio-royal"
-    ],
-    "engine": [
-     "lib/motion.mjs"
-    ]
-   },
-   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
-  },
-  {
-   "kind": "sfx",
-   "id": "pen-scribble",
-   "uses": 8,
-   "for": {
-    "styles": [
-     "folio-2",
-     "folio-burgundy",
-     "folio-emerald",
-     "folio-gold",
-     "folio-plum",
-     "folio-royal"
-    ],
-    "engine": [
-     "build.mjs",
-     "lib/motion.mjs"
-    ]
-   },
-   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
-  },
-  {
-   "kind": "sfx",
-   "id": "pen-scribble-2",
-   "uses": 7,
-   "for": {
-    "styles": [
-     "folio-2",
-     "folio-burgundy",
-     "folio-emerald",
-     "folio-gold",
-     "folio-plum",
-     "folio-royal"
-    ],
-    "engine": [
-     "lib/motion.mjs"
-    ]
-   },
-   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
-  },
-  {
-   "kind": "sfx",
-   "id": "pen-short",
-   "uses": 9,
-   "for": {
-    "styles": [
-     "folio-2",
-     "folio-burgundy",
-     "folio-emerald",
-     "folio-gold",
-     "folio-plum",
-     "folio-royal"
-    ],
-    "engine": [
-     "build.mjs x2",
-     "lib/motion.mjs"
-    ]
-   },
-   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
   },
   {
    "kind": "sfx",

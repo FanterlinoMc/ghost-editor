@@ -6,8 +6,8 @@
 //   node scripts/sound_audit.mjs --coverage   every library/sfx and library/music manifest id, and whether its file is
 //                                             on disk (the "sounds still missing" list for a machine or a container)
 //
-// The library's audio is never in git: see library/SOURCES.md for where sounds may come from (and why the Mixkit
-// entries in the manifests are records only). PHANTASIC_LIB points at another library root, as in build.mjs.
+// The library's audio is never in git: see library/SOURCES.md for where sounds may come from (and why the manifest
+// entries are id records with no source). PHANTASIC_LIB points at another library root, as in build.mjs.
 // Node built-ins only; no npm packages.
 import fs from "node:fs";
 import path from "node:path";
