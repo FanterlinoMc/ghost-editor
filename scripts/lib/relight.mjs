@@ -117,7 +117,8 @@ export function ensureRelit(proj, src, media, params, { env = process.env, log =
 // the un-lit footage). Written through <name>.part.webm and renamed, like the matte itself.
 // win [f0, f1, fps] (a matteClip window cut-out, assets/talk-matte@<a>-<b>.webm): that matte holds only frames f0..f1-1 of the
 // recording, so the relit file is cut on the SAME frame indices (the same fps=..:start_time=0,trim as build.mjs cutWindow) first,
-// and the merge stops with the window cut-out (at the recording's end it can be a frame short of the trim).
+// and the merge ends with the window cut-out, frame for frame (shortest=1:repeatlast=0; shortest=1 alone drops the last frame
+// when both inputs end together, and at the recording's end the window cut-out can be a frame short of the trim).
 export function ensureRelitMatte(proj, src, matteRel, relitRel, { log = console.log, win = null } = {}) {
   const tag = md5([relitRel, fileHash(path.resolve(proj, matteRel)), ...(win ? [win.join(",")] : [])].join("|"));
   const rel = `assets/${baseOf(src)}-matte-relit-${tag}.webm`, abs = path.resolve(proj, rel);
@@ -127,7 +128,7 @@ export function ensureRelitMatte(proj, src, matteRel, relitRel, { log = console.
   const part = abs.replace(/\.webm$/i, "") + ".part.webm";
   try {
     execFileSync("ffmpeg", ["-v", "error", "-y", "-i", path.resolve(proj, relitRel), "-c:v", "libvpx-vp9", "-i", path.resolve(proj, matteRel),
-      "-filter_complex", `${win ? `[0:v]fps=${win[2]}:start_time=0,trim=start_frame=${win[0]}:end_frame=${win[1]},setpts=PTS-STARTPTS[c];` : ""}[1:v]alphaextract,scale=${w}:${h}[a];${win ? "[c][a]alphamerge=shortest=1" : "[0:v][a]alphamerge"},format=yuva420p[v]`, "-map", "[v]", "-an",
+      "-filter_complex", `${win ? `[0:v]fps=${win[2]}:start_time=0,trim=start_frame=${win[0]}:end_frame=${win[1]},setpts=PTS-STARTPTS[c];` : ""}[1:v]alphaextract,scale=${w}:${h}[a];${win ? "[c][a]alphamerge=shortest=1:repeatlast=0" : "[0:v][a]alphamerge"},format=yuva420p[v]`, "-map", "[v]", "-an",
       "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p", "-crf", "18", "-b:v", "0", "-deadline", "good", "-cpu-used", "4", "-row-mt", "1",
       "-threads", String(Math.min(8, os.cpus().length)), "-tile-columns", "2", "-auto-alt-ref", "0", part], { stdio: ["ignore", "ignore", "pipe"], maxBuffer: 1 << 26 });
   } catch (e) {

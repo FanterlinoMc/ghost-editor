@@ -221,13 +221,12 @@ if (!python) {
 
   // ---------- relight + a matteClip WINDOW cut-out (no whole-recording matte cached) ----------
   // Only recording 0.467-3.033 s (from frame 14) is cut out (assets/talk-matte@467-3033.webm); the cut-out must carry the relit
-  // colour of those SAME frames. A source whose grey steps 9 levels a frame (a 20-frame sawtooth) makes a one-frame slip visible. A fake npx writes a
-  // stub cut-out (the ellipse opaque over the window's own frames), like remove-background would for that window only.
+  // colour of those SAME frames. The source's grey steps 9 levels a frame (a 20-frame sawtooth), so every frame names its source
+  // frame (mod 20) and a one-frame slip is visible. A fake npx writes a stub cut-out that keeps the window's own pixels (the
+  // ellipse opaque), like remove-background would for that window only. The invariant: frame j of the RELIT window cut-out shows
+  // the same source frame as frame j of the un-lit window cut-out. Run twice: a source whose video starts at 0, and one whose
+  // video starts at 0.033 s with the audio at 0 (as prep.sh's and phone files do; every decoder then repeats frame 0).
   if (process.platform !== "win32") {
-    const wd = project({ relight: { strength: 1.2 }, matte: true, matteWindows: true, matteClip: true, takes: [{ a: 0, b: SEC }], beats: [{ type: "behind", text: "SIDE", at: 1.5, to: 2.0 }] });
-    fs.writeFileSync(path.join(wd, "build", "headtop.json"), JSON.stringify(Array.from({ length: 20 }, (_, i) => [+(i / 5).toFixed(2), 40])));
-    ff("-f", "lavfi", "-i", `color=c=black:size=${W}x${H}:rate=${FPS}:duration=${SEC},format=yuv420p,geq=lum='30+mod(N\\,20)*9':cb=128:cr=128`, "-f", "lavfi", "-i", `sine=frequency=200:duration=${SEC}`,
-      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-c:a", "aac", "-ac", "2", "-shortest", path.join(wd, "assets", "talk.mp4"));
     const wNpx = path.join(root, "win-npx"), wLog = path.join(root, "win-npx.log"); fs.mkdirSync(wNpx);
     fs.writeFileSync(path.join(wNpx, "npx"), `#!/bin/sh
 in=""; out=""; prev=""
@@ -236,25 +235,50 @@ echo "$in" >> "${wLog}"
 exec ffmpeg -v error -y -i "$in" -vf "format=yuva420p,geq=lum='p(X\\,Y)':cb='p(X\\,Y)':cr='p(X\\,Y)':a='if(lt(hypot((X-${W / 2})/32\\,(Y-${H * 0.55})/60)\\,1)\\,255\\,0)'" -fps_mode passthrough -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 "$out"
 `, { mode: 0o755 });
     const wEnv = { [pathKey]: wNpx + path.delimiter + SAFE_ENV[pathKey], MATTE_THREADS: "" };
-    build(wd, wEnv);
-    const wp = html(wd);
-    assert.equal(fs.readFileSync(wLog, "utf8").trim().split("\n").length, 1, "remove-background ran once, on the window");
-    assert.ok(fs.existsSync(path.join(wd, "assets", "talk-matte@467-3033.webm")) && !fs.existsSync(path.join(wd, "assets", "talk-matte.webm")), "window cut, no whole-recording matte");
-    const wm = wp.match(/<video id="matte-0" class="matte" src="(assets\/talk-matte-relit-[0-9a-f]{8}\.webm)" data-start="1\.48" data-duration="0\.54" data-media-start="1\.013"/);
-    assert.ok(wm, "the clipped cut-out reads the RELIT window file at the window offset: " + wp.match(/<video id="matte-0"[^>]*>/)?.[0]);
-    const wAbs = path.join(wd, wm[1]), relitW = path.join(wd, wp.match(/<video id="take-0" src="([^"]+)"/)[1]);
-    assert.equal(frames(wAbs), frames(path.join(wd, "assets", "talk-matte@467-3033.webm")), "the relit window cut-out has as many frames as the window cut-out");
-    // frame j of the relit window = frame 14 + j of the relit recording (subject centre luma), not a frame either side
-    const lumaAt = (f, idx, dec = []) => { const b = execFileSync("ffmpeg", ["-v", "error", ...dec, "-i", f, "-vf", `select=eq(n\\,${idx})`, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray", "-"]); return b[Math.round(H * 0.55) * W + W / 2]; };
-    for (const j of [10, 30, 50]) {
-      const got = lumaAt(wAbs, j, ["-c:v", "libvpx-vp9"]), want = lumaAt(relitW, 14 + j), prev = lumaAt(relitW, 13 + j), next = lumaAt(relitW, 15 + j);
-      assert.ok(Math.abs(got - want) < Math.abs(got - prev) && Math.abs(got - want) < Math.abs(got - next), `window frame ${j}: luma ${got} matches relit frame ${14 + j} (${want}), not ${13 + j} (${prev}) / ${15 + j} (${next})`);
+    const lumas = (f, dec = []) => { const N = W * H, b = execFileSync("ffmpeg", ["-v", "error", ...dec, "-i", f, "-f", "rawvideo", "-pix_fmt", "gray", "-"], { maxBuffer: 1 << 28 }); return Array.from({ length: Math.floor(b.length / N) }, (_, k) => b[k * N + Math.round(H * 0.55) * W + W / 2]); };
+    for (const start of [0, 0.033]) {
+      fs.writeFileSync(wLog, "");
+      const wd = project({ relight: { strength: 1.2 }, matte: true, matteWindows: true, matteClip: true, takes: [{ a: 0, b: SEC }], beats: [{ type: "behind", text: "SIDE", at: 1.5, to: 2.0 }] }, { depth: false });
+      fs.writeFileSync(path.join(wd, "build", "headtop.json"), JSON.stringify(Array.from({ length: 20 }, (_, i) => [+(i / 5).toFixed(2), 40])));
+      const talk = path.join(wd, "assets", "talk.mp4"), raw = path.join(root, `saw-${start}.mp4`);
+      ff("-f", "lavfi", "-i", `color=c=black:size=${W}x${H}:rate=${FPS}:duration=${SEC},format=yuv420p,geq=lum='30+mod(N\\,20)*9':cb=128:cr=128`, "-f", "lavfi", "-i", `sine=frequency=200:duration=${SEC}`,
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-c:a", "aac", "-ac", "2", "-shortest", raw);
+      if (start) ff("-itsoffset", String(start), "-i", raw, "-i", raw, "-map", "0:v", "-map", "1:a", "-c", "copy", talk);
+      else fs.copyFileSync(raw, talk);
+      const st = +execFileSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=start_time", "-of", "csv=p=0", talk]).toString().trim();
+      assert.ok(Math.abs(st - start) < 0.002, `talk.mp4 video starts at ${st}, wanted ${start}`);
+      // the stub depth with as many frames as relight.py decodes from the source (one more when frame 0 is repeated)
+      const nDec = lumas(talk).length;
+      ff("-i", path.join(root, "depth.mp4"), "-vf", `tpad=stop_mode=clone:stop=${nDec - 90},trim=end_frame=${nDec}`, "-c:v", "libx264", "-pix_fmt", "yuv420p", path.join(wd, "assets", "talk-depth.mp4"));
+      build(wd, wEnv);
+      const wp = html(wd);
+      assert.equal(fs.readFileSync(wLog, "utf8").trim().split("\n").length, 1, "remove-background ran once, on the window");
+      const winRaw = path.join(wd, "assets", "talk-matte@467-3033.webm");
+      assert.ok(fs.existsSync(winRaw) && !fs.existsSync(path.join(wd, "assets", "talk-matte.webm")), "window cut, no whole-recording matte");
+      const wm = wp.match(/<video id="matte-0" class="matte" src="(assets\/talk-matte-relit-[0-9a-f]{8}\.webm)" data-start="1\.48" data-duration="0\.54" data-media-start="1\.013"/);
+      assert.ok(wm, "the clipped cut-out reads the RELIT window file at the window offset: " + wp.match(/<video id="matte-0"[^>]*>/)?.[0]);
+      const wAbs = path.join(wd, wm[1]), relitW = path.join(wd, wp.match(/<video id="take-0" src="([^"]+)"/)[1]);
+      // source level (0..19) of each frame: the un-lit window from its own grey; the relit window by the nearest relit level
+      // (the relit recording's subject-centre lumas fall in 20 clusters, one per level, in order: the stub depth does not move)
+      const vp9 = ["-c:v", "libvpx-vp9"];
+      // level of a luma = the index of the nearest of the 20 clusters (sorted) of a reference file's lumas
+      const levels = (ref, what) => {
+        const sorted = [...ref].sort((p, q) => p - q), centres = [];
+        for (let i = 0, c = []; i <= sorted.length; i++) { if (i === sorted.length || (c.length && sorted[i] - c.at(-1) > 3)) { centres.push(c.reduce((x, y) => x + y, 0) / c.length); c = []; } if (i < sorted.length) c.push(sorted[i]); }
+        assert.equal(centres.length, 20, `20 ${what} levels (${centres.map((c) => c.toFixed(0))})`);
+        return (y) => centres.reduce((bi, c, k) => (Math.abs(c - y) < Math.abs(centres[bi] - y) ? k : bi), 0);
+      };
+      const rawL = lumas(winRaw, vp9), lvRaw = rawL.map(levels(rawL, "un-lit"));
+      const lvLit = lumas(wAbs, vp9).map(levels(lumas(relitW), "relit"));
+      const bad = lvLit.map((l, j) => [j, lvRaw[j], l]).filter(([, r, l]) => r !== l);
+      assert.equal(bad.length, 0, `start ${start}: relit window frame shows another source frame than the un-lit window at [j, unlit, relit] ${JSON.stringify(bad.slice(0, 5))}`);
+      assert.equal(lvLit.length, lvRaw.length, "the relit window cut-out has as many frames as the window cut-out");
+      // cached: a second build cuts and relights nothing, same page
+      const wl2 = build(wd, wEnv);
+      assert.ok(!/relit cut-out of/.test(wl2) && fs.readFileSync(wLog, "utf8").trim().split("\n").length === 1, "cached");
+      assert.equal(html(wd), wp, "same page twice");
+      check(`relight + matteClip window cut (video starts at ${start} s, ${nDec} frames decoded): ${wm[1]}, all ${lvLit.length} frames show the un-lit window's source frame, cached`);
     }
-    // cached: a second build cuts and relights nothing, same page
-    const wl2 = build(wd, wEnv);
-    assert.ok(!/relit cut-out of/.test(wl2) && fs.readFileSync(wLog, "utf8").trim().split("\n").length === 1, "cached");
-    assert.equal(html(wd), wp, "same page twice");
-    check(`relight + matteClip window cut: ${wm[1]} = relit frames from 14 under the window's alpha, cached`);
   }
 }
 console.log("build-relight: all checks passed");
