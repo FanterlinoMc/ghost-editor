@@ -782,7 +782,7 @@ reverse play, dotLottie (`.lottie`), image or text layers, expressions.
 
 ## Prompt Motion graphic (`kind: "graphic"` layer, `type: "graphic"` beat): spec (CP1), not built yet
 
-Status: **spec (CP1) v3.2.2 (v3.2.2 resolves the twelve points PM2 hit while building; CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found; v3.2.1 notes the G31 trade-off); not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
+Status: **spec (CP1) v3.2.3 (v3.2.3 adds what the PM5 fixtures measured: the streaming-encoder pin, the blob-worker R1 exclusion, authoring for determinism; v3.2.2 resolves the twelve points PM2 hit while building; CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found; v3.2.1 notes the G31 trade-off); not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
 `kind: "graphic"` dies with the existing `unknown kind "graphic"` error and a `graphic` beat is not placed. PM2
 (sandbox + render) and PM3 (in the reel) build it exactly as written here. The PC mirrors every **static** rule
 (G1 to G28) and every placement rule in the validator word for word, at the same time.
@@ -1028,6 +1028,24 @@ without running the file):
   - **Capture mode (v3.2.2): both renders run with `PRODUCER_EXPERIMENTAL_FAST_CAPTURE=false`** (screenshot
     capture). Measured in PM2: a one-worker render on macOS switches to drawElement capture (multi-worker
     renders fall back to screenshots), the two captures differ in pixels (frame 0 differed) and R6 failed.
+  - **Encoder (v3.2.3): both renders also run with `PRODUCER_ENABLE_STREAMING_ENCODE=false`.** Measured in PM5:
+    with `--workers 1` HyperFrames switches to a streaming encoder, and the decoded frames differ from the other
+    render even when the captured pixels are identical.
+
+### Authoring for determinism (v3.2.3; the writer prompt carries this list verbatim)
+
+Measured while building the PM5 fixtures: the two renders split frames across Chrome workers differently, and a
+worker that starts cold in the middle of a render can draw some things one level apart. R6 requires identical
+frames, so a graphic:
+
+- ends a transform at `none`, not `translateY(0px)` (or animates `top` / `left` instead);
+- draws small moving glyphs or cursors that pass over rounded DOM corners on a `<canvas>`, not as inline SVG;
+- does not slide full-screen panels inside a rounded `overflow: hidden` box (corner pixels differ by one level);
+- also puts any font it uses only on a canvas in a hidden DOM line (e.g. `<div style="position:absolute;
+  opacity:0">Aa</div>` in that family), so the font is loaded before the first frame;
+- keeps display text at or under about 150 px (measured: 168 px and up in Unbounded or Montserrat differ by one
+  level between workers);
+- measures text widths inside `seek(t)`, not at load (a webfont may not be loaded yet at load time).
 
 ### Fields (layer: `{ "kind": "graphic", ... }` in `layers[]`; beat: `{ "type": "graphic", ... }` in `beats[]`)
 
@@ -1229,7 +1247,10 @@ with an HTML entity (`<code>&#115;etTimeout</code>`), or inside a JS string with
 (`"setTimeout(cb)"`, `"Launch Date (Q3)"`); the scan does not match either and the page displays
 the same text. A function or method of your own must not be called `animate` (G13 `.animate(`), `open` or `click` (G25), and a
 variable must not be called `location`; `this[...]` in any form (including ``this[`x${i}`]``) is refused by
-G25, so the writer prompt must avoid it; CSS never contains a backslash (G31: write the character itself, e.g.
+G25, so the writer prompt must avoid it; visible text such as "animation:" or "transition:" (a UI or Code graphic showing CSS) goes in MARKUP, never in a
+CSS `content:` string: G13 scans `<style>` and `style=` (measured: `content:"transition: on"` is refused, the same
+words in `<p>` or `<pre>` pass, as does `anim&#97;tion:`; the entity form is the safe habit for any such word in
+markup); CSS never contains a backslash (G31: write the character itself, e.g.
 `content:"—"`, never `content:"\2014"`); and `anime`, `d3`, `THREE`,
 ... are reserved names (G19).
 
@@ -1331,7 +1352,7 @@ render wrapper reads the whole log of both renders; any of these deletes the out
 
 | # | detected by | `<reason>` (exact) |
 |---|---|---|
-| R1 | a log line containing `violates the following Content Security Policy directive` (Chrome), `vendor: blocked <url>` (the Node preload), or (v3.2.2) a `[Browser:...]` line with `net::ERR_PROXY_CONNECTION_FAILED`, `net::ERR_NAME_NOT_RESOLVED`, `net::ERR_BLOCKED_BY_CLIENT` or `net::ERR_ACCESS_DENIED` (a request or navigation the shim blocked; `<url>` is the line's URL, else `(net::ERR_<name>)`) | `graphic tried to load <url> (no network): render refused` |
+| R1 | a log line containing `violates the following Content Security Policy directive` (Chrome), `vendor: blocked <url>` (the Node preload), or (v3.2.2) a `[Browser:...]` line with `net::ERR_PROXY_CONNECTION_FAILED`, `net::ERR_NAME_NOT_RESOLVED`, `net::ERR_BLOCKED_BY_CLIENT` or `net::ERR_ACCESS_DENIED` (a request or navigation the shim blocked; `<url>` is the line's URL, else `(net::ERR_<name>)`); (v3.2.3) ONE exclusion: the CSP line HyperFrames itself causes on multi-worker MP4 renders, `Creating a worker from 'blob:http://localhost:<port>/...' violates the following Content Security Policy directive ...` (also `blob:http://127.0.0.1:<port>/`), where `<port>` is THIS render's server port, is not R1; any other blob, data or remote worker, and any other CSP line, still is | `graphic tried to load <url> (no network): render refused` |
 | R2 | a log line `[Browser:PAGEERROR] <message>` | `graphic page error: <message>` |
 | R3 | `GRAPHIC-REFUSED: window.seek is not a function` (bridge, at load) | `window.seek is not a function after the page loaded` |
 | R4 | `GRAPHIC-REFUSED: seek(<t>) threw: <message>` / `... returned a Promise` (bridge) | `seek(<t>) threw: <message>` / `seek(<t>) returned a Promise (it must be synchronous)` |
