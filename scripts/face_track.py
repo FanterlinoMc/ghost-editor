@@ -79,7 +79,9 @@ def ensure_model(path=MODEL, url=MODEL_URL, size=MODEL_SIZE, sha256=MODEL_SHA256
         bad = model_problem(part, size, sha256)
         if bad is not None:
             raise ModelError(f"face model download from {url} is not the pinned file ({bad}); deleted it")
-        os.chmod(part, 0o644)   # mkstemp made it owner-only
+        um = os.umask(0)
+        os.umask(um)
+        os.chmod(part, 0o666 & ~um)   # mkstemp made it owner-only; give it the mode a plain open() would have
         os.replace(part, path)
     finally:
         if os.path.exists(part):

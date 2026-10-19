@@ -10,12 +10,17 @@ redistribution-safe source:
     audio (audio is gitignored, so `git archive` never contains it; see
     library/SOURCES.md)
   - fonts under the SIL OFL, the YuNet face model (MIT)
-and it drops:
+and it refuses to export (exit 1, nothing written) when a committed manifest entry
+has any other source than "none (needs a licensed source)" or the licensed pack
+("licensed pack: <name>", library/SOURCES.md): a rip such as a `yt:` record or a
+third-party download URL must never reach the public edition.
+It drops:
   - library/memes/* (users add their own with meme_add.py, their rights)
   - examples that depend on ripped memes
 Code and docs are copied from the committed tree (git archive), so uncommitted
 local files never leak.
 """
+import json
 import os
 import re
 import shutil
@@ -35,12 +40,37 @@ PUBLIC_DESCRIPTION = ("AI video editor for talking-head reels. Turns a raw phone
     "style to their recording. Use when the user hands over a talking-head video and says \"edit this\", \"make a reel\", "
     "\"make it look like this video\", \"add captions/motion graphics/sound effects\", \"pick the best takes\", "
     "\"remove the pauses\", or asks for a re-cut. Not for landscape screen recordings.")
+NO_SOURCE = "none (needs a licensed source)"
+LICENSED = re.compile(r"^licensed pack: \S")   # library/SOURCES.md: a sound processed from the licensed pack names it
+MANIFESTS = ("library/sfx/manifest.json", "library/music/manifest.json")
+
+
+def source_ok(src):
+    return src == NO_SOURCE or (isinstance(src, str) and bool(LICENSED.match(src)))
+
+
+def manifest_problems(repo):
+    """Every committed (HEAD) manifest entry whose source is neither the no-source marker nor the licensed pack."""
+    bad = []
+    for rel in MANIFESTS:
+        r = subprocess.run(["git", "-C", repo, "show", f"HEAD:{rel}"], capture_output=True, text=True)
+        if r.returncode != 0:
+            bad.append(f"{rel}: not in HEAD")
+            continue
+        for k, v in json.loads(r.stdout).items():
+            if not source_ok(v.get("source")):
+                bad.append(f"{rel}: {k}: source {v.get('source')!r}")
+    return bad
 
 
 def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     dest = os.path.abspath(sys.argv[1])
+    bad = manifest_problems(REPO)
+    if bad:
+        sys.exit("refusing to export: manifest entries without a no-source or licensed-pack source "
+                 f"(library/SOURCES.md):\n  " + "\n  ".join(bad))
     if os.path.exists(dest) and os.listdir(dest) and not os.path.exists(os.path.join(dest, ".public-edition")):
         sys.exit(f"{dest} exists and is not a previous public export; refusing to overwrite")
     tmp = tempfile.mkdtemp()
