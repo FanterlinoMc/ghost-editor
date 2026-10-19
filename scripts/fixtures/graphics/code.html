@@ -1,0 +1,100 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Code: the seek function</title>
+<style>
+  #cd { position: relative; width: 1080px; height: 1080px; overflow: hidden; font-family: 'JetBrains Mono', monospace; }
+  #cd .win { position: absolute; left: 70px; top: 190px; width: 940px; height: 560px; border-radius: 26px; background: #131419;
+    box-shadow: 0 40px 80px rgba(0, 0, 0, 0.35), inset 0 0 0 2px #24262e; overflow: hidden; }
+  #cd .bar { position: absolute; left: 0; top: 0; width: 940px; height: 64px; border-bottom: 2px solid #1f2128; }
+  #cd .dot { position: absolute; top: 24px; width: 16px; height: 16px; border-radius: 8px; background: #3a3d47; }
+  #cd .file { position: absolute; left: 0; right: 0; top: 0; line-height: 64px; text-align: center; font-size: 20px; color: #8b8f9c; }
+  #cd .code { position: absolute; left: 0; top: 92px; font-size: 26px; line-height: 50px; color: #e6e4dc; }
+  #cd .row { position: relative; height: 50px; }
+  #cd .no { position: absolute; left: 0; width: 70px; text-align: right; color: #4a4d58; }
+  #cd .ln { position: absolute; left: 100px; top: 0; white-space: pre; overflow: hidden; width: 0; }
+  #cd .c { color: #6c7080; } #cd .k { color: #c39bff; } #cd .f { color: #7cc4ff; } #cd .n { color: #ffb86b; } #cd .p { color: #9da1ad; }
+  #cd .caret { position: absolute; top: 101px; width: 3px; height: 32px; background: #7cf29c; }
+  #cd .out { position: absolute; left: 70px; top: 790px; width: 940px; height: 140px; border-radius: 26px; background: #f4f1ea; overflow: hidden; }
+  #cd .out .v { position: absolute; left: 40px; top: 30px; font-size: 64px; font-weight: 700; color: #131419; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  #cd .out .l { position: absolute; right: 40px; top: 56px; font-size: 22px; color: #6c7080; }
+  #cd .out .ok { display: inline-block; width: 12px; height: 12px; border-radius: 6px; background: #1f9d6b; margin-right: 10px; }
+</style>
+</head>
+<body>
+<div id="cd">
+  <div class="win" id="win">
+    <div class="bar"><div class="dot" style="left: 28px"></div><div class="dot" style="left: 54px"></div><div class="dot" style="left: 80px"></div><div class="file">counter.html</div></div>
+    <div class="code" id="code">
+      <div class="row"><span class="no">1</span><span class="ln"><span class="c">// no &#115;etTimeout, no Math.&#114;andom: t is the clock</span></span></div>
+      <div class="row"><span class="no">2</span><span class="ln"><span class="k">const</span> <span class="f">ease</span> <span class="p">=</span> (p) <span class="p">=&gt;</span> <span class="n">1</span> <span class="p">-</span> (<span class="n">1</span> <span class="p">-</span> p) <span class="p">**</span> <span class="n">3</span>;</span></div>
+      <div class="row"><span class="no">3</span><span class="ln"> </span></div>
+      <div class="row"><span class="no">4</span><span class="ln">window.<span class="f">&#115;eek</span> <span class="p">=</span> (t) <span class="p">=&gt;</span> {</span></div>
+      <div class="row"><span class="no">5</span><span class="ln">  <span class="k">const</span> p <span class="p">=</span> <span class="f">ease</span>(Math.<span class="f">min</span>(<span class="n">1</span>, t <span class="p">/</span> <span class="n">1.2</span>));</span></div>
+      <div class="row"><span class="no">6</span><span class="ln">  count.textContent <span class="p">=</span> <span class="f">fmt</span>(<span class="n">10000</span> <span class="p">+</span> <span class="n">70000</span> <span class="p">*</span> p);</span></div>
+      <div class="row"><span class="no">7</span><span class="ln">  count.style.opacity <span class="p">=</span> p;</span></div>
+      <div class="row"><span class="no">8</span><span class="ln">};</span></div>
+    </div>
+    <div class="caret" id="caret"></div>
+  </div>
+  <div class="out" id="out"><div class="v" id="v">10,000</div><div class="l"><span class="ok"></span>preview &middot; 30 fps</div></div>
+</div>
+<script>
+  window.duration = 5;
+  window.size = { w: 1080, h: 1080 };
+  window.rng = window.rng || function (seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0; var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  function seg(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }
+  function outCubic(p) { return 1 - Math.pow(1 - p, 3); }
+  function outExpo(p) { return p >= 1 ? 1 : 1 - Math.pow(2, -10 * p); }
+  function inOut(p) { return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; }
+  function mix(a, b, p) { return a + (b - a) * p; }
+  function $(id) { return document.getElementById(id); }
+  // set a transform, or "none" at rest (a transform left at identity renders differently on a page that seeked there cold)
+  function tf(el, x, y, s, r) {
+    s = s === undefined ? 1 : s; r = r || 0;
+    el.style.transform = (x === 0 && y === 0 && s === 1 && r === 0) ? "none" : "translate(" + x + "px," + y + "px) scale(" + s + ") rotate(" + r + "deg)";
+  }
+  var lines = document.querySelectorAll("#cd .ln"), lens = [], total = 0;
+  for (var i = 0; i < lines.length; i++) { var n = lines[i].textContent.length; lens.push(n); total += n; }
+  // the monospace advance
+  // (read in seek, not at load: the webfont may still be loading when this script runs)
+  var probe = document.createElement("span"); probe.textContent = "0000000000";
+  probe.style.visibility = "hidden"; probe.style.whiteSpace = "pre"; probe.style.position = "absolute"; probe.style.left = "0px"; probe.style.top = "0px";
+  $("code").appendChild(probe);
+  var T0 = 0.6, T1 = 3.5;
+  window.seek = function (t) {
+    var CW = probe.getBoundingClientRect().width / 10;
+    var w = outExpo(seg(t, 0, 0.7));
+    $("win").style.opacity = w; tf($("win"), 0, Math.round(60 * (1 - w)));
+    // typing: characters revealed at a steady rate, each line clipped to its typed width
+    var typed = Math.floor(total * seg(t, T0, T1)), left = typed, row = 0, col = 0;
+    for (var i = 0; i < lines.length; i++) {
+      var n = Math.max(0, Math.min(lens[i], left)); left -= n;
+      lines[i].style.width = (n * CW + (n === lens[i] ? 4 : 0)) + "px";
+      if (n > 0 || i === 0) { row = i; col = n; }
+    }
+    if (typed >= total) { row = lines.length - 1; col = lens[row]; }
+    var c = $("caret");
+    c.style.left = (100 + col * CW + 2) + "px"; c.style.top = (101 + 50 * row) + "px";
+    var typing = t >= T0 && t < T1;
+    c.style.opacity = (typing || Math.floor(t * 2.4) % 2 === 0) && t > 0.3 ? 1 : 0;
+    // the result: a preview strip slides up and runs the code it shows
+    var o = outExpo(seg(t, 3.55, 4.15));
+    $("out").style.opacity = o; tf($("out"), 0, Math.round(50 * (1 - o)));
+    var p = 1 - Math.pow(1 - clamp((t - 3.7) / 1.2, 0, 1), 3);
+    $("v").textContent = (Math.round((10000 + 70000 * p) / 10) * 10).toLocaleString("en-US");
+  };
+  window.seek(0);
+</script>
+</body>
+</html>

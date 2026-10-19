@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Particles: waitlist counter</title>
+<style>
+  #pt { position: relative; width: 1080px; height: 1080px; overflow: hidden; font-family: Inter, sans-serif; }
+  #pt canvas { position: absolute; left: 0; top: 0; }
+  #pt .num { position: absolute; left: 0; width: 1080px; top: 440px; text-align: center; font-size: 150px; font-weight: 800; color: #fbf8f1;
+    letter-spacing: -0.05em; font-variant-numeric: tabular-nums; text-shadow: 0 4px 30px rgba(0, 0, 0, 0.45); }
+  #pt .lab { position: absolute; left: 0; width: 1080px; top: 620px; text-align: center; font-size: 34px; font-weight: 500; color: #fbf8f1;
+    letter-spacing: 0.01em; text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5); }
+</style>
+</head>
+<body>
+<div id="pt">
+  <canvas id="cv" width="1080" height="1080"></canvas>
+  <div class="num" id="num">10,000</div>
+  <div class="lab" id="lab">people on the waitlist</div>
+</div>
+<script>
+  window.duration = 4;
+  window.size = { w: 1080, h: 1080 };
+  window.rng = window.rng || function (seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0; var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  function seg(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }
+  function outCubic(p) { return 1 - Math.pow(1 - p, 3); }
+  function outExpo(p) { return p >= 1 ? 1 : 1 - Math.pow(2, -10 * p); }
+  function inOut(p) { return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; }
+  function mix(a, b, p) { return a + (b - a) * p; }
+  function $(id) { return document.getElementById(id); }
+  // set a transform, or "none" at rest (a transform left at identity renders differently on a page that seeked there cold)
+  function tf(el, x, y, s, r) {
+    s = s === undefined ? 1 : s; r = r || 0;
+    el.style.transform = (x === 0 && y === 0 && s === 1 && r === 0) ? "none" : "translate(" + x + "px," + y + "px) scale(" + s + ") rotate(" + r + "deg)";
+  }
+  var g = $("cv").getContext("2d");
+  var r = window.rng(7), P = [];
+  // every random number is drawn here, once: a start far outside the ring, a home on the ring, a delay, a size
+  for (var i = 0; i < 720; i++) {
+    var home = r() * Math.PI * 2, from = home - 1.6 - r() * 1.2;
+    P.push({ home: home, from: from, r0: 620 + r() * 380, r1: 330 + (r() - 0.5) * 70 * r(), d: r() * 0.9, s: 1.6 + r() * 2.8, gold: r() < 0.18, ph: r() * 6.283 });
+  }
+  window.seek = function (t) {
+    g.clearRect(0, 0, 1080, 1080);
+    for (var i = 0; i < P.length; i++) {
+      var q = P[i], p = outExpo(seg(t, 0.1 + q.d, 1.9 + q.d));
+      // a spiral in: the angle sweeps while the radius settles, then a slow orbit and a gentle breath
+      var ang = mix(q.from, q.home, p) + 0.12 * t;
+      var rad = mix(q.r0, q.r1, p) + 6 * Math.sin(2.1 * t + q.ph) * p;
+      var x = 540 + Math.cos(ang) * rad, y = 540 + Math.sin(ang) * rad;
+      g.globalAlpha = clamp(p * 1.6, 0, 1) * (q.gold ? 1 : 0.85);
+      g.fillStyle = q.gold ? "#ffc857" : "#fbf8f1";
+      g.beginPath(); g.arc(x, y, q.s, 0, 6.2832); g.fill();
+    }
+    g.globalAlpha = 1;
+    var c = outCubic(seg(t, 0.6, 3.0));
+    $("num").textContent = (Math.round((10000 + 70000 * c) / 10) * 10).toLocaleString("en-US");
+    var a = outExpo(seg(t, 0.4, 1.1));
+    $("num").style.opacity = a; tf($("num"), 0, Math.round(30 * (1 - a)));
+    var b = outExpo(seg(t, 0.8, 1.5));
+    $("lab").style.opacity = b; tf($("lab"), 0, Math.round(20 * (1 - b)));
+  };
+  window.seek(0);
+</script>
+</body>
+</html>

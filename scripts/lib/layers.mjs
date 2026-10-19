@@ -16,8 +16,10 @@
 // uses: both values given, force3D:false, ~0.3 s, so a frame is a pure function of time.
 
 import { DESIGNER_FONTS } from "./motion-graphics.mjs";
+import { reason, layerProblem, checkPlacement } from "./graphic.mjs";
+import { graphicTiming, cutFrames, ignoredWarnings, centredBox, MODES as GRAPHIC_MODES } from "./graphic-place.mjs";
 
-export const LAYER_KINDS = ["video", "image", "logo", "motion", "text"];
+export const LAYER_KINDS = ["video", "image", "logo", "motion", "text", "graphic"];
 export const ENTERS = ["fade", "slide-up", "pop", "none"];
 export const EXITS = ["fade", "none"];
 export const FITS = ["cover", "contain"];
@@ -47,11 +49,14 @@ export const logoBox = (W) => ({ x: W - 260, y: 96, w: 200, h: 200 });
  * holdFrames), `total` the reel's length, `fps` for the hold. Never throws: a bad layer is returned in
  * `errors` (build.mjs die()s on those - validate.py has the matching checks) and a layer that cannot be
  * shown (shorter than MIN_LAYER once clamped) in `warnings`.
- * @returns {{ layers: object[], errors: string[], warnings: string[] }}
+ * A `graphic` layer (Prompt Motion, references/reel-json.md) also needs `graphic(L)`: the static check of its file
+ * (inspectGraphic's { ok, reasons, meta }; build.mjs reads the file). Its G / P problems are returned in `problems`,
+ * worded exactly `layer <id>: graphic <html>: <reason>` (build.mjs die()s on the first).
+ * @returns {{ layers: object[], errors: string[], warnings: string[], problems: string[] }}
  */
-export function resolveLayers(raw, { takes, total, fps, W }) {
-  const errors = [], warnings = [], layers = [], seen = new Set();
-  if (!Array.isArray(raw)) return { layers, errors: ["layers must be an array"], warnings };
+export function resolveLayers(raw, { takes, total, fps, W, H, graphic }) {
+  const errors = [], warnings = [], layers = [], seen = new Set(), problems = [];
+  if (!Array.isArray(raw)) return { layers, errors: ["layers must be an array"], warnings, problems };
   raw.forEach((L, i) => {
     const bad = (m) => errors.push(`layers[${i}]${isObj(L) && L.id ? ` (${L.id})` : ""}: ${m}`);
     if (!isObj(L)) return bad("not an object");
@@ -78,18 +83,40 @@ export function resolveLayers(raw, { takes, total, fps, W }) {
       if (off > span + 1e-6) warnings.push(`layer ${L.id}: anchor.offset ${off}s is past the end of take ${a.take} (${r3(span)}s), clamped`);
       start = k.start + clamp(off, 0, span);
     }
-    // dur: required, except a logo may leave it out = "to the end of the reel"
+    // ---- graphic (Prompt Motion): the file's static check (G1-G35), then P1; its length defaults to the file's ----
+    let g = null;
+    const gp = (r) => { problems.push(layerProblem(L.id, L.html, r)); };
+    if (kind === "graphic") {
+      const insp = graphic ? graphic(L) : { ok: false, reasons: ["graphic layers need the build's file check"] };
+      if (!insp.ok) return gp(insp.reasons[0]);
+      const mode = L.mode ?? "overlay";
+      if (!GRAPHIC_MODES.includes(mode)) return gp(reason("P1", { v: mode }));
+      g = { mode, meta: insp.meta, tm: graphicTiming(insp.meta, L, fps) };
+      for (const w of g.tm.warnings) warnings.push(`layer ${L.id}: ${w}`);
+    }
+    // dur: required, except a logo may leave it out = "to the end of the reel" (a graphic: its own length from `in`)
     let dur = L.dur;
     if (dur === undefined && kind === "logo") dur = Math.max(0, total - start);
+    if (dur === undefined && g) dur = r3(g.tm.defaultWindow);
     if (!fin(dur) || dur <= 0) return bad(`dur must be a number > 0, got ${JSON.stringify(L.dur)}`);
+    if (g) { const p = checkPlacement({ mode: g.mode, window: dur }, { W, H }); if (p.length) return gp(p[0]); }
     // clamp to the reel's length
     const t0 = r3(clamp(start, 0, Math.max(0, total - MIN_LAYER)));
-    const t1 = r3(Math.min(t0 + dur, total));
+    let t1 = r3(Math.min(t0 + dur, total));
     if (t1 - t0 < MIN_LAYER - 1e-6) { warnings.push(`layer ${L.id}: ${r3(t1 - t0)}s long once clamped to the reel (${total}s), dropped`); return; }
     if (t0 !== r3(start) || t1 !== r3(start + dur)) warnings.push(`layer ${L.id}: clamped to the reel, now ${t0}..${t1}s`);
+    // a graphic's frame count L (after clamping; after "cut" shortens it to the graphic's length, GW2)
+    if (g) {
+      const Lf = Math.round((t1 - t0) * fps), cut = cutFrames(g.meta, g.tm, fps, Lf);
+      for (const w of cut.warnings) warnings.push(`layer ${L.id}: ${w}`);
+      t1 = r3(t0 + cut.L / fps);   // whole frames (and cut): the <video>'s data-duration is the rendered length L / fps
+      g.L = cut.L;
+    }
     // ---- geometry ----
     let box = L.box;
     if (kind === "logo" && box === undefined) box = logoBox(W);
+    if (g && g.mode === "insert") { if (box !== undefined) warnings.push(`layer ${L.id}: ${reason("GW4")}`); box = { x: 0, y: 0, w: W, h: H }; }
+    else if (g && box === undefined) box = centredBox(g.meta.size, W, H);
     if (kind !== "motion") {
       if (!isObj(box) || !["x", "y", "w", "h"].every((k) => fin(box[k])) || box.w <= 0 || box.h <= 0) return bad(`box must be { x, y, w, h } numbers with w, h > 0, got ${JSON.stringify(L.box)}`);
     }
@@ -100,24 +127,36 @@ export function resolveLayers(raw, { takes, total, fps, W }) {
     if (MEDIA_EXT[kind] && !MEDIA_EXT[kind].test(L.src)) return bad(`${kind} src ${JSON.stringify(L.src)} has the wrong extension (want ${kind === "video" ? "mp4/mov/webm/m4v" : "png/jpg/webp/gif/svg"})`);
     if (kind === "motion" && (!Array.isArray(L.elements) || !L.elements.length)) return bad("motion needs elements[]");
     if (kind === "text" && !cleanText(L.text)) return bad("text needs a non-empty text");
-    for (const [k, list] of [["enter", ENTERS], ["exit", EXITS], ["fit", FITS], ["audio", AUDIOS]]) {
+    // P3 replaces the generic "20% of the box inside the canvas" rule for a graphic (only P3 is reported)
+    if (g && g.mode === "overlay") { const p = checkPlacement({ mode: "overlay", box }, { W, H }); if (p.length) return gp(p[0]); }
+    for (const [k, list] of [["enter", ENTERS], ["exit", EXITS], ["fit", FITS], ...(g ? [] : [["audio", AUDIOS]])]) {
       if (L[k] !== undefined && !list.includes(L[k])) return bad(`${k} must be one of ${list.join("|")}, got ${JSON.stringify(L[k])}`);
     }
-    if (L.audio !== undefined && L.audio !== "off" && kind !== "video") warnings.push(`layer ${L.id}: audio only applies to a video layer, ignored`);
+    if (g) {
+      for (const w of ignoredWarnings(L)) warnings.push(`layer ${L.id}: ${w}`);
+      if (L.src !== undefined) warnings.push(`layer ${L.id}: ${reason("GW8")}`);
+    } else if (L.audio !== undefined && L.audio !== "off" && kind !== "video") warnings.push(`layer ${L.id}: audio only applies to a video layer, ignored`);
     layers.push({
       ...L, id: L.id, kind, index: i, t0, t1, dur: r3(t1 - t0), box: box ? { x: box.x, y: box.y, w: box.w, h: box.h } : undefined,
       pin: pinned, fit: L.fit ?? (kind === "logo" ? "contain" : "cover"), enter: L.enter ?? "fade", exit: L.exit ?? "fade",
       audio: kind === "video" ? L.audio ?? "off" : "off", z: Math.round(clamp(fin(L.z) ? L.z : 0, 0, MAX_Z)),
       opacity: fin(L.opacity) ? clamp(L.opacity, 0, 1) : 1, in: fin(L.in) && L.in > 0 ? L.in : 0, overCaptions: L.overCaptions === true,
+      ...(g ? {
+        fit: g.mode === "insert" ? "cover" : L.fit ?? "contain", enter: L.enter ?? "none", exit: L.exit ?? "none",
+        hideCaptions: typeof L.hideCaptions === "boolean" ? L.hideCaptions : g.mode === "insert",
+        // the placement the render needs; `file` and `key` are filled in by build.mjs's render pre-pass
+        graphic: { html: L.html, mode: g.mode, L: g.L, inF: g.tm.inF, D: g.tm.D, after: g.tm.after, size: g.meta.size, file: null, key: null },
+      } : {}),
     });
   });
-  return { layers, errors, warnings };
+  return { layers, errors, warnings, problems };
 }
 
 /** Where a layer was asked to start, for edit_truth.json: the facts a measurement needs, resolved. */
 export const layerTruth = (layers) => layers.map((l) => ({
   id: l.id, kind: l.kind, start: l.t0, end: l.t1, z: l.z, pin: l.pin, ...(l.overCaptions ? { overCaptions: true } : {}),
-  ...(l.hideCaptions === true && (l.kind === "motion" || l.kind === "text") ? { hideCaptions: true } : {}),
+  ...(l.kind === "graphic" ? { mode: l.graphic.mode } : {}),
+  ...(l.hideCaptions === true && (l.kind === "motion" || l.kind === "text" || l.kind === "graphic") ? { hideCaptions: true } : {}),
   ...(l.audio !== "off" ? { audio: l.audio } : {}),
 }));
 
@@ -153,6 +192,9 @@ export function takeVolumeLane(d, fps, start = 0, wins = []) {
   return JSON.stringify({ version: 1, lanes: [{ target: "volume", points: pts }] });
 }
 
+/** A graphic layer with no enter animation that starts at the (section's) 0: shown by its inline style from frame 0. */
+const graphicShownAtZero = (l, off = 0) => l.kind === "graphic" && l.enter === "none" && r3(l.t0 - off) <= 0;
+
 /** The enter + exit tween lines for a layer's box. Explicit from AND to on every tween, force3D:false. */
 export function layerTweens(l, off = 0) {
   const sel = `#ly-${l.id}_box`, op = r3(l.opacity), ed = r3(Math.min(ENTER_DUR, l.dur / 3));
@@ -165,6 +207,12 @@ export function layerTweens(l, off = 0) {
   // force3D:false tween that has none, so without it the box's DOM would read "transform: none" until the
   // playhead first reached it and "translate(0,0)" ever after - same pixels, but not a pure function of time
   // (motion-determinism --variant layers caught it). The baseline set at 0 now writes it up front.
+  else if (l.enter === "none" && l.kind === "graphic") {
+    // a graphic shows its own frame 0 AT t0: the 1 ms show tween ends at t0 instead of starting there (measured in a
+    // real render: starting at t0 left the first frame of the window empty). Graphic layers only (byte-identity).
+    // At t0 = 0 there is no tween: the box is visible by its own style (graphicShownAtZero, renderLayer).
+    if (!graphicShownAtZero(l, off)) lines.push(`ft("${sel}", ${JSON.stringify({ autoAlpha: 0, y: 0 })}, ${JSON.stringify({ autoAlpha: op, y: 0, duration: 0.001, ease: "none", force3D: false })}, ${r3(t0 - 0.001)});`);
+  }
   else if (l.enter === "none") ft({ autoAlpha: 0, y: 0 }, { autoAlpha: op, y: 0, duration: 0.001, ease: "none" });
   else ft({ autoAlpha: 0, y: 0 }, { autoAlpha: op, y: 0, duration: ed, ease: "power1.out" });
   const out = l.exit === "fade" ? ed : 0.001;
@@ -189,7 +237,7 @@ export function renderLayer(l, ctx, n = 0) {
   const { W, H, brand = {}, esc, compileMotion, resolveColor, resolveImage, off = 0 } = ctx;
   const warnings = [];
   const wid = `ly-${l.id}`, t0 = r3(l.t0 - off), dur = r3(l.dur);
-  const isVideo = l.kind === "video";
+  const isVideo = l.kind === "video" || l.kind === "graphic";   // a graphic is its rendered file in a <video>
   let content = "", boxCss, free = false, lines = [], audio = "";
   const fitCss = `width:100%;height:100%;object-fit:${l.fit};display:block`;
   if (l.kind === "motion") {
@@ -204,7 +252,10 @@ export function renderLayer(l, ctx, n = 0) {
   } else {
     const b = l.box;
     boxCss = `left:${r3(b.x)}px;top:${r3(b.y)}px;width:${r3(b.w)}px;height:${r3(b.h)}px`;
-    if (isVideo) {
+    if (l.kind === "graphic") {
+      // the pre-rendered file (in / after are baked into it: it starts at its frame 0), silent, no audio element
+      content = `<video id="${wid}_v" src="${esc(l.graphic.file)}" data-start="${t0}" data-duration="${dur}" data-media-start="0" data-track-index="${40 + n}" muted playsinline style="${fitCss}"></video>`;
+    } else if (isVideo) {
       content = `<video id="${wid}_v" src="${esc(l.src)}" data-start="${t0}" data-duration="${dur}" data-media-start="${r3(l.in)}" data-track-index="${40 + n}" muted playsinline style="${fitCss}"></video>`;
       if (l.audio !== "off" && l.hasAudio !== false) audio = `<audio id="${wid}_a" src="${esc(l.src)}" data-start="${t0}" data-duration="${dur}" data-media-start="${r3(l.in)}" data-track-index="${80 + n}" data-volume="1"></audio>`;
       else if (l.audio !== "off") warnings.push(`layer ${l.id}: ${l.src} has no audio stream, audio ${l.audio} ignored`);
@@ -222,7 +273,8 @@ export function renderLayer(l, ctx, n = 0) {
   const radius = fin(l.radius) && l.radius > 0 ? `border-radius:${r3(Math.min(l.radius, 2000))}px;` : "";
   const sh = l.shadow === true ? SHADOWS.soft : SHADOWS[l.shadow] ?? "";
   const shadowCss = sh ? `box-shadow:${sh};` : "";
-  const box = `<div id="${wid}_box" class="lyr-box${free ? " lyr-free" : ""}" data-layer-box="${esc(l.id)}" style="visibility:hidden;${boxCss};${radius}${shadowCss}">${content}</div>`;
+  const hidden = graphicShownAtZero(l, off) ? (l.opacity < 1 ? `opacity:${r3(l.opacity)};` : "") : "visibility:hidden;";
+  const box = `<div id="${wid}_box" class="lyr-box${free ? " lyr-free" : ""}" data-layer-box="${esc(l.id)}" style="${hidden}${boxCss};${radius}${shadowCss}">${content}</div>`;
   // a <video> must be timed itself (a timed wrapper around it breaks the media clock), so its wrapper is
   // untimed and the box's own autoAlpha tweens are what show and hide it; every other kind sits in a timed .clip
   // (the box starts visibility:hidden inline: GSAP's baseline set is not applied at seek(0) on a fresh paused timeline,

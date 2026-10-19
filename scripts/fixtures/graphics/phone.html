@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Phone: checkout</title>
+<style>
+  #ph { position: relative; width: 1080px; height: 1350px; overflow: hidden; font-family: Geist, sans-serif; color: #121316; }
+  #ph .phone { position: absolute; left: 270px; top: 120px; width: 540px; height: 1100px; border-radius: 84px; background: #111215;
+    box-shadow: 0 50px 90px rgba(0, 0, 0, 0.35), inset 0 0 0 3px #2a2c31; }
+  #ph .screen { position: absolute; left: 18px; top: 18px; width: 504px; height: 1064px; border-radius: 68px; background: #f6f5f1; overflow: hidden; }
+  #ph .island { position: absolute; left: 192px; top: 18px; width: 120px; height: 36px; border-radius: 18px; background: #111215; }
+  #ph .status { position: absolute; left: 44px; top: 22px; font-size: 22px; font-weight: 600; }
+  #ph .bars { position: absolute; right: 44px; top: 28px; width: 62px; height: 18px; }
+  #ph .bars i { position: absolute; bottom: 0; width: 8px; border-radius: 2px; background: #121316; }
+  #ph .title { position: absolute; left: 36px; top: 104px; font-size: 44px; font-weight: 700; letter-spacing: -0.03em; }
+  #ph .item { position: absolute; left: 36px; width: 432px; height: 120px; border-radius: 26px; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }
+  #ph .thumb { position: absolute; left: 16px; top: 16px; width: 88px; height: 88px; border-radius: 20px; }
+  #ph .nm { position: absolute; left: 124px; top: 28px; font-size: 24px; font-weight: 600; }
+  #ph .sub { position: absolute; left: 124px; top: 64px; font-size: 19px; color: #8a8c92; }
+  #ph .pr { position: absolute; right: 22px; top: 44px; font-size: 24px; font-weight: 600; }
+  #ph .line { position: absolute; left: 36px; width: 432px; font-size: 22px; color: #6f7177; display: flex; }
+  #ph .line b { margin-left: auto; font-weight: 600; color: #121316; }
+  #ph .tot { position: absolute; left: 36px; top: 634px; width: 432px; font-size: 30px; font-weight: 700; display: flex; border-top: 2px solid #e7e5df; padding-top: 22px; }
+  #ph .tot b { margin-left: auto; }
+  #ph .pay { position: absolute; left: 36px; top: 900px; width: 432px; height: 96px; border-radius: 30px; background: #121316; color: #fff; overflow: hidden; }
+  #ph .fill { position: absolute; left: 0; top: 0; height: 96px; width: 0; background: #2f6bff; }
+  #ph .pay span { position: absolute; left: 0; right: 0; top: 0; line-height: 96px; text-align: center; font-size: 28px; font-weight: 600; }
+  #ph .done { position: absolute; left: 0; top: 0; width: 504px; height: 1064px; }
+  #ph .ok { position: absolute; left: 152px; top: 300px; width: 200px; height: 200px; }
+  #ph .okc { position: absolute; border-radius: 50%; background: #1f9d6b; }
+  #ph .st { position: absolute; height: 14px; width: 0; border-radius: 7px; background: #fff; transform-origin: 7px 7px; }
+  #ph .dt { position: absolute; left: 0; right: 0; text-align: center; }
+</style>
+</head>
+<body>
+<div id="ph">
+  <div class="phone" id="phone">
+    <div class="screen">
+      <div class="status">9:41</div>
+      <div class="bars"><i style="left: 0; height: 6px"></i><i style="left: 12px; height: 9px"></i><i style="left: 24px; height: 12px"></i><i style="left: 36px; height: 15px"></i><i style="left: 50px; height: 18px; width: 12px; border-radius: 4px"></i></div>
+      <div class="island"></div>
+      <div class="title" id="title">Checkout</div>
+      <div class="item" id="i0" style="top: 196px"><div class="thumb" style="background: #ffcf5c"></div><div class="nm">Ceramic mug</div><div class="sub">Sand &middot; 350 ml</div><div class="pr">$24.00</div></div>
+      <div class="item" id="i1" style="top: 332px"><div class="thumb" style="background: #9db8ff"></div><div class="nm">Linen notebook</div><div class="sub">A5 &middot; dotted</div><div class="pr">$18.00</div></div>
+      <div class="line" id="l0" style="top: 498px">Subtotal<b>$42.00</b></div>
+      <div class="line" id="l1" style="top: 540px">Shipping<b>$6.00</b></div>
+      <div class="line" id="l2" style="top: 582px">Gift wrap<b>$16.00</b></div>
+      <div class="tot" id="tot">Total<b>$64.00</b></div>
+      <div class="pay" id="pay"><div class="fill" id="fill"></div><span id="payt">Pay $64.00</span></div>
+      <div class="done" id="done">
+        <div class="ok"><div class="okc" id="okc"></div><i class="st" id="s1" style="left: 51px; top: 95px; transform: rotate(45deg)"></i><i class="st" id="s2" style="left: 81px; top: 125px; transform: rotate(-46.97deg)"></i></div>
+        <div class="dt" id="d0" style="top: 540px; font-size: 44px; font-weight: 700; letter-spacing: -0.03em">Payment complete</div>
+        <div class="dt" id="d1" style="top: 604px; font-size: 24px; color: #6f7177">Order #2048 is on its way</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  window.duration = 4.5;
+  window.size = { w: 1080, h: 1350 };
+  window.rng = window.rng || function (seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0; var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  function seg(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }
+  function outCubic(p) { return 1 - Math.pow(1 - p, 3); }
+  function outExpo(p) { return p >= 1 ? 1 : 1 - Math.pow(2, -10 * p); }
+  function inOut(p) { return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; }
+  function mix(a, b, p) { return a + (b - a) * p; }
+  function $(id) { return document.getElementById(id); }
+  // set a transform, or "none" at rest (a transform left at identity renders differently on a page that seeked there cold)
+  function tf(el, x, y, s, r) {
+    s = s === undefined ? 1 : s; r = r || 0;
+    el.style.transform = (x === 0 && y === 0 && s === 1 && r === 0) ? "none" : "translate(" + x + "px," + y + "px) scale(" + s + ") rotate(" + r + "deg)";
+  }
+  function rise(el, t, a) { var p = outExpo(seg(t, a, a + 0.6)); el.style.opacity = p; tf(el, 0, Math.round(24 * (1 - p))); }
+  window.seek = function (t) {
+    var p = outExpo(seg(t, 0, 1.0));
+    $("phone").style.opacity = clamp(p * 1.5, 0, 1);
+    tf($("phone"), 0, Math.round(320 * (1 - p)), 1, -7 * (1 - p));
+    rise($("title"), t, 0.35); rise($("i0"), t, 0.5); rise($("i1"), t, 0.6);
+    rise($("l0"), t, 0.75); rise($("l1"), t, 0.82); rise($("l2"), t, 0.89); rise($("tot"), t, 0.96); rise($("pay"), t, 1.05);
+    // press at 1.9, progress 2.0..2.9, then the success screen
+    var press = clamp(1 - Math.abs(t - 1.95) / 0.12, 0, 1);
+    var pr = inOut(seg(t, 2.0, 2.9));
+    $("fill").style.width = (432 * pr) + "px";
+    $("payt").textContent = t < 2.0 ? "Pay $64.00" : "Processing…";
+    if (t >= 1.05 + 0.6) tf($("pay"), 0, 0, 1 - 0.04 * press);
+        // the checkout content lifts away, then the confirmation rises in its place (no full-screen layer slides over the
+    // clipped screen: a moving child under a rounded overflow clip rasterises its edge differently in a cold page)
+    var o = outCubic(seg(t, 2.92, 3.22)), old = ["title", "i0", "i1", "l0", "l1", "l2", "tot", "pay"];
+    for (var j = 0; j < old.length; j++) {
+      var e = $(old[j]);
+      if (o >= 1) { e.style.display = "none"; continue; }
+      e.style.display = "";
+      if (o > 0) { e.style.opacity = 1 - o; tf(e, 0, -Math.round(40 * o)); }
+    }
+    $("done").style.display = t >= 3.0 ? "block" : "none";
+    // success mark: a disc that grows, then the check's two strokes extend (layout sizes, no canvas inside the clipped screen)
+    var c = outExpo(seg(t, 3.0, 3.5)), k = outCubic(seg(t, 3.25, 3.75)), R = 96 * c;
+    var okc = $("okc"); okc.style.left = (100 - R) + "px"; okc.style.top = (100 - R) + "px"; okc.style.width = (2 * R) + "px"; okc.style.height = (2 * R) + "px";
+    var l1 = 42.43, l2 = 82.04, L = (l1 + l2) * k;
+    $("s1").style.width = (L > 0 ? 14 + Math.min(L, l1) : 0) + "px";
+    $("s2").style.width = (L > l1 ? 14 + (L - l1) : 0) + "px";
+    rise($("d0"), t, 3.35); rise($("d1"), t, 3.45);
+  };
+  window.seek(0);
+</script>
+</body>
+</html>

@@ -41,6 +41,8 @@ import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 import { matteThreads, cutMatteThreaded, writeAtomically } from "./lib/matte.mjs";
 import * as RL from "./lib/relight.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
+import { inspectPlaced, resolveGraphicBeat, prepareGraphics, testDeps, graphicBeatHtml, graphicBeatTweens, crossesUi, graphicLabel as _gl } from "./lib/graphic-place.mjs";
+import { layerProblem as graphicLayerProblem, beatProblem as graphicBeatProblem, reason as graphicReason } from "./lib/graphic.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = process.env.PHANTASIC_LIB ? path.resolve(process.env.PHANTASIC_LIB) : path.join(SKILL, "library");   // PHANTASIC_LIB: another library root (tests; a studio with its own sounds)
@@ -282,8 +284,9 @@ const OUTRO = spec.outro ?? 3;
 // this block runs and the build is byte-identical to before it existed.
 const LAYERS = [];
 if (spec.layers !== undefined) {
-  const lr = resolveLayers(spec.layers, { takes, total: +(SPEECH + OUTRO).toFixed(3), fps: FPS, W });
+  const lr = resolveLayers(spec.layers, { takes, total: +(SPEECH + OUTRO).toFixed(3), fps: FPS, W, H, graphic: (L) => inspectPlaced(L, { proj, W, H }) });
   if (lr.errors.length) die("layers: " + lr.errors.join("; "));
+  if (lr.problems.length) die(lr.problems[0]);   // a graphic layer's G / P problem, word for word (references/reel-json.md)
   for (const m of lr.warnings) warn.push(m);
   for (const l of lr.layers) {
     if (MEDIA_EXT[l.kind]) {
@@ -694,6 +697,41 @@ for (let i = motionBeats.length - 1; i >= 0; i--) {
     } catch (e) { why = String(e.message).split("\n")[0]; }
   }
   if (why) { warn.push(`motion beat ${b.id ?? i} dropped: ${why}`); motionBeats.splice(i, 1); }
+}
+
+// ---------- Prompt Motion graphics (references/reel-json.md "Prompt Motion graphic"; lib/graphic-place.mjs) ----------
+// A `graphic` beat is resolved here, before anything reads beat times (like the motion beats above): a G / P problem
+// drops it with a warning (spliced out, so edit_truth.json lists only built beats). Then every graphic the reel needs
+// (layers and beats) is rendered ONCE per cache key by PM2's renderGraphic, or found in assets/graphics/, in this one
+// awaited pre-pass, before the first byte of the page is written: the rest of the build stays synchronous and
+// deterministic. A render refusal kills the reel for a layer and drops a beat. No graphic layer or beat: nothing here runs.
+const graphicLayers = LAYERS.filter((l) => l.kind === "graphic");
+const graphicBeats = [];
+for (let i = motionBeats.length - 1; i >= 0; i--) {
+  const b = motionBeats[i];
+  if (!b || b.type !== "graphic") continue;
+  const g = resolveGraphicBeat(b, inspectPlaced(b, { proj, W, H }), { out: (t) => E(t, "graphic", beatRec(b)), fps: FPS, W, H });
+  if (g.problem) { warn.push(g.problem); motionBeats.splice(i, 1); continue; }
+  b._graphic = g;
+  graphicBeats.unshift(b);
+}
+if (graphicLayers.length || graphicBeats.length) {
+  let gdeps = {};
+  try { gdeps = await testDeps(); } catch (e) { die(e.message); }
+  const gopts = { proj, W, H, fps: FPS, deps: gdeps, log: (m) => console.log(m), done: new Map() };
+  // layers first, one at a time: the first layer that cannot be rendered kills the reel before any beat is rendered
+  for (const l of graphicLayers) {
+    const [r] = await prepareGraphics([l.graphic], gopts);
+    if (!r.ok) die(graphicLayerProblem(l.id, l.graphic.html, r.reasons[0]));
+    Object.assign(l.graphic, { file: r.file, key: r.key });
+  }
+  const res = await prepareGraphics(graphicBeats.map((b) => b._graphic), gopts);
+  graphicBeats.forEach((b, i) => {
+    const r = res[i];
+    if (r.ok) { Object.assign(b._graphic, { file: r.file, key: r.key }); for (const w of b._graphic.warnings) warn.push(w); return; }
+    warn.push(graphicBeatProblem(_gl(b), b.html, r.reasons[0]));
+    motionBeats.splice(motionBeats.indexOf(b), 1);
+  });
 }
 
 // ---------- motion hold: the camera stays still under a designer graphic ----------
@@ -1378,12 +1416,18 @@ const enter = (sel, t, kind = "pop") => kind === "slide"
 const exit = (sel, end) => `tl.to("${sel}", { autoAlpha: 0, scale: 0.9, duration: 0.18, ease: "power2.in" }, ${r3(end - 0.22)});`;
 const slotUsed = [];
 const hiddenCaps = [];
+const CAP_FADE = 0.08;   // the captions' hide fade (the #caps tween below); a graphic's window starts it this much early
+const CAP_BACK = 0.05;   // the re-show starts this much before a hidden window's end; a graphic's window ends this much late
 for (const r of rampsAt) hiddenCaps.push([r.t0, r.end]);   // ramped action takes (premium kit) carry no captions
 const uiRects = [];   // uicard rectangles (UI Story Ad #10), so podcast captions sit above them
 // reel.layers[]: a motion or text layer with hideCaptions:true hides the captions while it is up, the way a
 // beat's hideCaptions does. Layer times are output seconds, so a section build (which rebases takes)
 // rebases them with the same offset renderLayer() uses.
 for (const l of LAYERS) if (l.hideCaptions === true && (l.kind === "motion" || l.kind === "text")) hiddenCaps.push([r3(l.t0 - (SECTION_MODE ? SECTION_START : 0)), r3(l.t1 - (SECTION_MODE ? SECTION_START : 0))]);
+// a graphic's captions are already gone on its first frame and come back only after its last: the 0.08 s caption fade
+// ENDS at t0 and the re-show (which starts 0.05 s before a window's end) starts at t1. Measured in a real render: the
+// plain [t0, t1] window left the caption over the first and the last frames of a full-frame insert.
+for (const l of LAYERS) if (l.hideCaptions === true && l.kind === "graphic") hiddenCaps.push([r3(Math.max(0, l.t0 - CAP_FADE) - (SECTION_MODE ? SECTION_START : 0)), r3(l.t1 + CAP_BACK - (SECTION_MODE ? SECTION_START : 0))]);
 const behindHtml = [];
 const groundWins = [];   // [t0, t1] of every `ground` beat (edit seconds), for the post-loop look/matte handling
 const frontHtml = [];   // behind-the-head words promoted in front of the matte by the legibility gate (spec.legibility.behind)
@@ -1524,6 +1568,7 @@ for (const b of beatsList) {
   const t0 = EB(b, "at", `${b.type} at`);
   let t1 = b.to === undefined ? (b.type === "endcard" ? TOTAL : t0 + (b.type === "meme" ? 1.8 : 2.5)) : EB(b, "to", `${b.type} to`);
   if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(EB(o, "at") - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
+  if (b.type === "graphic") t1 = b._graphic.t1;   // its resolved end: the default window, or shortened by after "cut"
   beatSpans.push({ t0, t1 });
   const dur = r3(t1 - t0);
   if (["endcard", "scene", "motion", "ground", "headpage", "photostack", "starflash"].includes(b.type) && (b.type !== "starflash" || b.field) && t0 <= SPEECH + 1e-3 && t1 >= TOTAL - 0.5 / FPS) outroCovered = true;
@@ -2235,13 +2280,27 @@ for (const b of beatsList) {
       break;
     }
 
+    case "graphic": {
+      // Prompt Motion (lib/graphic-place.mjs): the pre-rendered file in a timed <video>, in its box (an insert: the
+      // whole canvas, above the other beats)
+      const g = b._graphic;
+      inner = graphicBeatHtml(id, g, { t0, dur, esc, rel: g.file });
+      for (const l of graphicBeatTweens(id, g, t0, t1)) tl.push(l);
+      if (g.hideCaptions) hiddenCaps.push([r3(Math.max(0, t0 - CAP_FADE)), r3(t1 + CAP_BACK)]);   // gone from t0 to t1 (see CAP_FADE)
+      if (g.mode === "overlay" && crossesUi(g.box, PLATFORMS[platform], W, H)) warn.push(`graphic ${_gl(b)}: ${graphicReason("GW7", { platform: PLATFORMS[platform].name })}`);
+      beatSfx(b, t0, "none", "graphic");
+      break;
+    }
+
     default:
       die(`unknown beat type '${b.type}'`);
   }
   if (b.type === "behind" || b.type === "ground") continue;
-  if (!["endcard", "scene", "motion", "headpage", "photostack", "whiteflash", "cover"].includes(b.type) && !(b.type === "meme" && memeLib(b.id).meta.clip) && !(b.type === "popcard" && (b.outFade ?? spec.popcard?.outFade))) tl.push(exit(`#${id}-in`, t1));
+  if (!["endcard", "scene", "motion", "headpage", "photostack", "whiteflash", "cover", "graphic"].includes(b.type) && !(b.type === "meme" && memeLib(b.id).meta.clip) && !(b.type === "popcard" && (b.outFade ?? spec.popcard?.outFade))) tl.push(exit(`#${id}-in`, t1));
   const clipMeme = b.type === "meme" && memeLib(b.id).meta.clip;
-  overlays.push({ html: clipMeme
+  overlays.push({ html: b.type === "graphic"
+    ? `<div id="${id}" class="layer"${b._graphic.mode === "insert" ? ' style="z-index:5"' : ""}>${inner}</div>` // untimed: its <video> is the timed element
+    : clipMeme
     ? `<div id="${id}" class="layer">${inner}</div>` // the <video> inside is the timed element; a timed wrapper would break it
     : `<div id="${id}" class="clip layer" data-start="${t0}" data-duration="${dur}" data-track-index="${b.type === "scene" ? 4 : inSlot ? 3 : 2}"${b.type === "endcard" && b.bg === "none" ? ' style="z-index:5"' : ""}>${inner}</div>` });   // an over-footage card sits above B-roll scenes (premium-iman 95eaa38)
 }
@@ -2983,6 +3042,7 @@ if (LAYERS.length) {
     const r = renderLayer(l, { W, H, brand, uiFont: UI_FONT, esc, compileMotion, resolveColor, resolveImage: resolveLayerImage, off: SECTION_MODE ? SECTION_START : 0 }, l.index);
     for (const m of r.warnings) warn.push(m);
     if (r.dropped) continue;
+    if (l.kind === "graphic" && l.graphic.mode === "overlay" && crossesUi(l.box, PLATFORMS[platform], W, H)) warn.push(`layer ${l.id}: ${graphicReason("GW7", { platform: PLATFORMS[platform].name })}`);
     for (const line of r.lines) tl.push(line);
     (l.overCaptions ? over : under).push(r.html);
     if (r.audio) layerAudioHtml += `
@@ -3858,7 +3918,7 @@ const editTruthTakes = takes.map((t, i) => ({ start: r3(t.start), dur: r3(t.dur)
 const editTruthBeats = (spec.beats || []).map((b) => ({
   type: b.type, kind: b.kind ?? null,
   at: r3(EB(b, "at", `${b.type} at`)),
-  to: b.to === undefined ? null : r3(EB(b, "to", `${b.type} to`)),
+  to: b.type === "graphic" ? b._graphic.t1 : b.to === undefined ? null : r3(EB(b, "to", `${b.type} to`)),
   in: b.in ?? null, out: b.out ?? null,
 }));
 fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
@@ -3903,7 +3963,9 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
 // them to accept a time origin, which is the real remaining surface, not a detail).
 {
   const sections = computeSections(TOTAL, takes, { beatSpans, pushes: pushesEdit, joins: takeJoins });
-  const manifest = buildSectionManifest(sections, { takes: editTruthTakes, beats: editTruthBeats, words, layers: LAYERS });
+  // a graphic beat's cache key is part of the hash of the section it starts in (a graphic layer's is in its layer object)
+  const graphicKeys = (spec.beats || []).filter((b) => b.type === "graphic").map((b) => ({ t0: b._graphic.t0, key: b._graphic.key }));
+  const manifest = buildSectionManifest(sections, { takes: editTruthTakes, beats: editTruthBeats, words, layers: LAYERS, ...(graphicKeys.length ? { graphics: graphicKeys } : {}) });
   fs.writeFileSync(path.join(proj, "build", "sections.json"), JSON.stringify({
     total: TOTAL, fps: FPS,
     // Settings that invalidate every section at once, kept separate from each section's own hash

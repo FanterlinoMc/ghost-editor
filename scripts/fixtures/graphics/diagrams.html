@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Diagrams: prompt to reel</title>
+<style>
+  #dg { position: relative; width: 1080px; height: 1080px; overflow: hidden; }
+  #dg canvas { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; opacity: 0; font-family: Geist; font-weight: 700">From prompt to reel</div>
+<div id="dg"><canvas id="cv" width="1080" height="1080"></canvas></div>
+<script>
+  window.duration = 5;
+  window.size = { w: 1080, h: 1080 };
+  window.rng = window.rng || function (seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0; var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  function seg(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }
+  function outCubic(p) { return 1 - Math.pow(1 - p, 3); }
+  function outExpo(p) { return p >= 1 ? 1 : 1 - Math.pow(2, -10 * p); }
+  function inOut(p) { return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; }
+  function mix(a, b, p) { return a + (b - a) * p; }
+  function $(id) { return document.getElementById(id); }
+  // set a transform, or "none" at rest (a transform left at identity renders differently on a page that seeked there cold)
+  function tf(el, x, y, s, r) {
+    s = s === undefined ? 1 : s; r = r || 0;
+    el.style.transform = (x === 0 && y === 0 && s === 1 && r === 0) ? "none" : "translate(" + x + "px," + y + "px) scale(" + s + ") rotate(" + r + "deg)";
+  }
+  // the hidden line in the markup makes the page load the canvas font before frame 0 (canvas text never triggers the load itself in time)
+  var g = $("cv").getContext("2d");
+  var INK = "#15161b", PAPER = "#fbfaf6", ACC = "#ff6a3d", MUTED = "#8b8d94";
+  // four steps on a U: top left, top right, bottom right, bottom left
+  var N = [
+    { x: 300, y: 440, t: "Prompt", s: "what you want", icon: "type" },
+    { x: 780, y: 440, t: "Write", s: "one HTML file", icon: "code" },
+    { x: 780, y: 800, t: "Render", s: "frame by frame", icon: "film" },
+    { x: 300, y: 800, t: "Reel", s: "on your footage", icon: "play" }
+  ];
+  var BW = 340, BH = 190, R = 30;
+  var EDGE = [[0, 1], [1, 2], [2, 3]];
+  function edgePts(e) { var a = N[e[0]], b = N[e[1]];
+    if (a.y === b.y) { var d = b.x > a.x ? 1 : -1; return [a.x + d * BW / 2 + d * 14, a.y, b.x - d * BW / 2 - d * 22, b.y]; }
+    return [a.x, a.y + BH / 2 + 14, b.x, b.y - BH / 2 - 22]; }
+  function icon(kind, x, y, c) {
+    g.strokeStyle = c; g.fillStyle = c; g.lineWidth = 5; g.lineCap = "round"; g.lineJoin = "round"; g.beginPath();
+    if (kind === "type") { g.moveTo(x - 16, y - 14); g.lineTo(x + 16, y - 14); g.moveTo(x, y - 14); g.lineTo(x, y + 16); g.stroke(); }
+    if (kind === "code") { g.moveTo(x - 8, y - 14); g.lineTo(x - 20, y); g.lineTo(x - 8, y + 14); g.moveTo(x + 8, y - 14); g.lineTo(x + 20, y); g.lineTo(x + 8, y + 14); g.stroke(); }
+    if (kind === "film") { g.roundRect(x - 20, y - 15, 40, 30, 6); g.stroke(); g.beginPath(); g.moveTo(x - 8, y - 15); g.lineTo(x - 8, y + 15); g.moveTo(x + 8, y - 15); g.lineTo(x + 8, y + 15); g.stroke(); }
+    if (kind === "play") { g.moveTo(x - 10, y - 15); g.lineTo(x + 16, y); g.lineTo(x - 10, y + 15); g.closePath(); g.fill(); }
+  }
+  window.seek = function (t) {
+    g.clearRect(0, 0, 1080, 1080);
+    // heading
+    var hp = outExpo(seg(t, 0, 0.7));
+    g.globalAlpha = hp; g.fillStyle = PAPER; g.font = "700 54px Geist"; g.textAlign = "center";
+    g.fillText("From prompt to reel", 540, 230 + 20 * (1 - hp));
+    g.globalAlpha = hp * 0.75; g.font = "400 28px Geist"; g.fillText("four steps, no timeline", 540, 280 + 20 * (1 - hp)); g.globalAlpha = 1;
+    // node i appears at 0.3 + 0.75 i; edge i draws between node i and node i+1
+    for (var i = 0; i < 3; i++) {
+      var a = 0.55 + 0.75 * i, p = inOut(seg(t, a, a + 0.5));
+      if (p <= 0) continue;
+      var q = edgePts(EDGE[i]), ex = mix(q[0], q[2], p), ey = mix(q[1], q[3], p);
+      g.strokeStyle = PAPER; g.lineWidth = 5; g.lineCap = "round"; g.setLineDash([2, 14]);
+      g.beginPath(); g.moveTo(q[0], q[1]); g.lineTo(ex, ey); g.stroke(); g.setLineDash([]);
+      if (p >= 1) { // arrow head
+        var ang = Math.atan2(q[3] - q[1], q[2] - q[0]);
+        g.fillStyle = PAPER; g.beginPath(); g.moveTo(q[2] + 14 * Math.cos(ang), q[3] + 14 * Math.sin(ang));
+        g.lineTo(q[2] + 14 * Math.cos(ang + 2.4), q[3] + 14 * Math.sin(ang + 2.4)); g.lineTo(q[2] + 14 * Math.cos(ang - 2.4), q[3] + 14 * Math.sin(ang - 2.4)); g.fill();
+      }
+    }
+    for (i = 0; i < 4; i++) {
+      var n = N[i], s = 0.3 + 0.75 * i, np = outExpo(seg(t, s, s + 0.6));
+      if (np <= 0) continue;
+      var active = i === Math.min(3, Math.floor(clamp((t - 0.3) / 0.75, 0, 3.99))) && t < 3.6;
+      g.save(); g.globalAlpha = np; g.translate(n.x, n.y + 30 * (1 - np)); var sc = mix(0.92, 1, np); g.scale(sc, sc);
+      g.fillStyle = "rgba(0, 0, 0, 0.22)"; g.beginPath(); g.roundRect(-BW / 2, -BH / 2 + 14, BW, BH, R); g.fill();
+      g.fillStyle = PAPER; g.beginPath(); g.roundRect(-BW / 2, -BH / 2, BW, BH, R); g.fill();
+      var on = active ? 1 : (i === 3 && t >= 3.6 ? 1 : 0);
+      g.fillStyle = on ? ACC : "#ecebe5"; g.beginPath(); g.roundRect(-BW / 2 + 28, -34, 68, 68, 20); g.fill();
+      icon(n.icon, -BW / 2 + 62, 0, on ? "#fff" : INK);
+      g.textAlign = "left"; g.fillStyle = INK; g.font = "700 40px Geist"; g.fillText(n.t, -BW / 2 + 120, -4);
+      g.fillStyle = MUTED; g.font = "400 24px Geist"; g.fillText(n.s, -BW / 2 + 120, 34);
+      if (!(i === 3 && t >= 4.3)) { g.fillStyle = MUTED; g.font = "600 20px Geist"; g.fillText("0" + (i + 1), BW / 2 - 52, -BH / 2 + 40); }
+      g.restore();
+    }
+    // a token travels the whole path once it is drawn
+    var tp = inOut(seg(t, 3.0, 4.4));
+    if (tp > 0 && tp < 1) {
+      var segs = EDGE.map(edgePts), lens = segs.map(function (q) { return Math.hypot(q[2] - q[0], q[3] - q[1]); });
+      var tot = lens[0] + lens[1] + lens[2], d = tp * tot, k = 0;
+      while (k < 2 && d > lens[k]) { d -= lens[k]; k++; }
+      var q = segs[k], f = clamp(d / lens[k], 0, 1);
+      g.fillStyle = ACC; g.beginPath(); g.arc(mix(q[0], q[2], f), mix(q[1], q[3], f), 13, 0, Math.PI * 2); g.fill();
+    }
+    // the last node gets a done tick
+    var dn = outExpo(seg(t, 4.3, 4.8));
+    if (dn > 0) {
+      var x = N[3].x + BW / 2 - 6, y = N[3].y - BH / 2 + 6;
+      g.fillStyle = ACC; g.beginPath(); g.arc(x, y, 30 * dn, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = "#fff"; g.lineWidth = 6; g.lineCap = "round"; g.globalAlpha = dn; g.beginPath(); g.moveTo(x - 12, y + 1); g.lineTo(x - 3, y + 10); g.lineTo(x + 13, y - 9); g.stroke(); g.globalAlpha = 1;
+    }
+  };
+  window.seek(0);
+</script>
+</body>
+</html>
