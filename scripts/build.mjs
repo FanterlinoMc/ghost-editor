@@ -40,6 +40,7 @@ import { createHash } from "node:crypto";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 import { matteThreads, cutMatteThreaded, writeAtomically } from "./lib/matte.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
+import { makeLottieResolver, lottieHead } from "./lib/lottie.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = process.env.PHANTASIC_LIB ? path.resolve(process.env.PHANTASIC_LIB) : path.join(SKILL, "library");   // PHANTASIC_LIB: another library root (tests; a studio with its own sounds)
@@ -1131,6 +1132,10 @@ if (OUTRO > 0 && spec.outroFade) tl.push(`tl.fromTo("#outro-still", { autoAlpha:
 // not catch that, since 440 > its 324px threshold - so this default is what
 // actually prevents it, not the warning.)
 const platform = spec.platform || (FORMAT === "16:9" ? "widescreen" : FORMAT === "9:16" ? "instagram" : "feed");
+// Lottie elements of motion beats and layers (lib/lottie.mjs; references/reel-json.md "Lottie element"): the files are
+// read and checked once, and the page inlines each one used (and loads the vendored player) only when there is one
+const resolveLottie = makeLottieResolver(proj, LIB), LOTTIE_FILES = new Map();
+const LOTTIE_SAFE = PLATFORMS[platform] ? { top: PLATFORMS[platform].top, bottom: PLATFORMS[platform].bottom, right: PLATFORMS[platform].right, name: PLATFORMS[platform].name } : null;
 const facePath = path.join(proj, spec.face || "build/face.json");
 const face = fs.existsSync(facePath) ? JSON.parse(fs.readFileSync(facePath, "utf8")) : null;
 // MULTIANGLE Gap 6: a face track per source, same convention as the transcripts - `spec.face`
@@ -2123,8 +2128,9 @@ for (const b of beatsList) {
         }
         return /^[a-z0-9-]{1,48}$/.test(src) && fs.existsSync(path.join(LIB, "art", `${src}.jpg`)) ? artAsset(src) : null;
       };
-      const mg = compileMotion(b, { id, t0, t1, W, H, brand, resolveImage, beatId: b.id });
+      const mg = compileMotion(b, { id, t0, t1, W, H, brand, resolveImage, beatId: b.id, resolveLottie, safe: LOTTIE_SAFE });
       for (const m of mg.warnings || []) warn.push(m);
+      if (mg.ok) for (const [k, j] of mg.lottie) LOTTIE_FILES.set(k, j);
       if (!mg.ok) { warn.push(`motion beat ${b.id ?? "?"} dropped: ${mg.reason}`); continue; }
       inner = mg.html;
       for (const l of mg.lines) tl.push(l);
@@ -2867,8 +2873,10 @@ if (LAYERS.length) {
   const under = [], over = [];
   for (const l of [...LAYERS].sort((x, y) => x.z - y.z || x.index - y.index)) {
     if (SECTION_MODE && !(l.t0 >= SECTION_START - 1e-6 && l.t0 < SECTION_END - 1e-6)) continue;   // another section's layer
-    const r = renderLayer(l, { W, H, brand, uiFont: UI_FONT, esc, compileMotion, resolveColor, resolveImage: resolveLayerImage, off: SECTION_MODE ? SECTION_START : 0 }, l.index);
+    const r = renderLayer(l, { W, H, brand, uiFont: UI_FONT, esc, compileMotion, resolveColor, resolveImage: resolveLayerImage, off: SECTION_MODE ? SECTION_START : 0, resolveLottie, safe: LOTTIE_SAFE }, l.index);
     for (const m of r.warnings) warn.push(m);
+    if (r.errors?.length) die(r.errors[0]);
+    if (r.lottie) for (const [k, j] of r.lottie) LOTTIE_FILES.set(k, j);
     if (r.dropped) continue;
     for (const line of r.lines) tl.push(line);
     (l.overCaptions ? over : under).push(r.html);
@@ -3506,7 +3514,7 @@ const html = `<!doctype html>
 <meta name="viewport" content="width=${W}, height=${H}" />
 <title>${esc(spec.title || "reel")}</title>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
-<style>
+${lottieHead(LOTTIE_FILES)}<style>
   @font-face { font-family: Geist; src: url(assets/fonts/geist-latin.woff2) format("woff2"); font-weight: 100 900; }
   @font-face { font-family: Geist; src: url(assets/fonts/geist-latin-ext.woff2) format("woff2"); font-weight: 100 900; unicode-range: ${RANGES["latin-ext"]}; }
   @font-face { font-family: GeistMono; src: url(assets/fonts/geist-mono-latin.woff2) format("woff2"); }

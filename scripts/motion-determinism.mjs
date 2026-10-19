@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Is every frame of a `motion` beat a pure function of time? (docs/MOTION-GRAPHICS-SPEC.md, hard rule 2)
 //
-//   node scripts/motion-determinism.mjs [--variant busy|blur|room|layers] [--seek render|plain] [--capture beginframe|screenshot] [--no-reset] [--passes 3]
+//   node scripts/motion-determinism.mjs [--variant busy|blur|room|layers|lottie] [--seek render|plain] [--capture beginframe|screenshot] [--no-reset] [--passes 3]
 //                                       [--dir <project dir>] [--keep]
 //
 // Builds a synthetic keynote-3 reel with a busy hand-written motion beat (scripts/lib/motion-fixture.mjs),
@@ -26,7 +26,8 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
-import { makeProject, BUSY_BEAT, BLUR_BEAT, ROOM_BEAT, ROOM_OVERLAP_BEATS, LAYERS_FIXTURE } from "./lib/motion-fixture.mjs";
+import { serveVendoredInPage } from "./lib/vendor.mjs";
+import { makeProject, BUSY_BEAT, BLUR_BEAT, ROOM_BEAT, ROOM_OVERLAP_BEATS, LAYERS_FIXTURE, LOTTIE_BEAT, LOTTIE_FIXTURE, LOTTIE_FILE, lottieFrameAt } from "./lib/motion-fixture.mjs";
 import { ROOM_SCALE, roomFrames, roomWindows, roomScaleAt, roomCardAt } from "./lib/room.mjs";
 
 const argv = process.argv.slice(2);
@@ -38,7 +39,11 @@ const keep = !!opt("keep", false);
 // every [data-layer-id] subtree, and there is no camera hold / making-room to assert. The PiP's <video> is taken out
 // of the picture like all footage here, so its box gets a flat colour to have pixels of its own.
 const isLayers = variant === "layers";
-const beat = isLayers ? { at: 2.0, to: 8.0, elements: [{ id: "head" }] } : variant === "blur" ? BLUR_BEAT : variant === "room" ? ROOM_BEAT : BUSY_BEAT;
+// --variant lottie: two Lottie elements of one hand-written file (motion-fixture.mjs LOTTIE_BEAT): play-once at 1.5x from
+// 0.5 s in (with a fade/scale tween on its box), and a 1x loop. Besides the usual comparisons, the frame each player
+// shows at every sample time is checked against the spec's formula (lottieFrameAt), so a consistent wrong frame fails.
+const isLottie = variant === "lottie";
+const beat = isLayers ? { at: 2.0, to: 8.0, elements: [{ id: "head" }] } : variant === "blur" ? BLUR_BEAT : variant === "room" ? ROOM_BEAT : isLottie ? LOTTIE_BEAT : BUSY_BEAT;
 const HOLD_EXIT = beat.room === "below" ? 0.55 : 0.2;
 const BEAT_AT = beat.at, BEAT_TO = beat.to, isRoom = variant === "room", FPS = 30;
 const dir = opt("dir", path.join(os.tmpdir(), `motion-determinism-${variant}`));
@@ -46,6 +51,8 @@ const dir = opt("dir", path.join(os.tmpdir(), `motion-determinism-${variant}`));
 // sample times, original = output seconds (one kept take): before, entrance, mid, exit, after
 const SAMPLES = isLayers
   ? [0.5, 1.0, 1.15, 1.5, 2.1, 2.4, 3.0, 3.15, 4.0, 4.9, 5.1, 5.3, 6.4, 6.5, 7.0, 7.9, 8.0, 8.9, 9.5]   // each layer's enter, middle and exit, and the gaps
+  : isLottie
+  ? [1.0, 2.0, 2.4, 2.5, 2.6, 2.75, 88 / 30, 3.0, 3.5, 3.8, 3.9, 4.0, 4.1, 5.0, 5.97, 6.0, 7.7, 7.9, 8.0, 9.0]   // before; loop start; once's start; mid-play; a reel frame on a loop frame boundary (88/30: GSAP's 1e-7 s rounding); once's last frame (3.811); the loop's wrap (4.0); after
   : isRoom
   ? [1.0, 1.9, 2.0, 2.1, 2.175, 2.25, 2.35, 3.2, 4.0, 6.1, 6.25, 6.3, 6.4, 6.5, 6.567, 6.9, 8.0]   // room: before, start, MID-EASE-IN (2.0-2.35), held (to 6.217), exit fade (6.0-6.2), MID-EASE-OUT (6.217-6.567), after
   : [1.0, BEAT_AT, 2.15, 2.4, 3.1, 4.05, 5.1, 7.7, 7.9, BEAT_TO, 9.0];
@@ -57,7 +64,7 @@ let seed = 0x9e3779b9;
 const rnd = () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const shuffle = (a) => { const r = [...a]; for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; } return r; };
 
-const proj = makeProject(dir, isLayers ? { layers: LAYERS_FIXTURE } : { beat });
+const proj = makeProject(dir, isLayers ? { layers: LAYERS_FIXTURE } : isLottie ? { beat, files: { [LOTTIE_FILE]: LOTTIE_FIXTURE } } : { beat });
 const warns = proj.log.split("\n").filter((l) => /motion/i.test(l) && /(dropped|ignored|clamped|only the first|not allowed)/i.test(l));
 if (warns.length) { console.error("the fixture beat produced compiler warnings (it should be clean):\n  " + warns.join("\n  ")); process.exit(2); }
 
@@ -124,6 +131,7 @@ async function grab(page, reset = false, after = null) {
 }
 async function open() {
   const page = await browser.newPage();
+  await serveVendoredInPage(page);   // GSAP from vendor/, not jsdelivr
   await page.evaluateOnNewDocument(() => { window.__timelines = {}; });   // the hyperframes runtime creates this registry; the composition only fills it
   await page.goto(pathToFileURL(proj.html).href, { waitUntil: "load", timeout: 60000 });
   await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 });
@@ -163,6 +171,7 @@ async function open() {
       }
       const root = document.getElementById(px + "-in");
       if (!root) return { "(missing)": "no root" };
+      for (const [k, a] of Object.entries(window.__geLottieAnims || {})) out["lottie:" + k] = String(a.currentFrame);   // the frame each player shows
       (function walk(e, p) {
         const cs = getComputedStyle(e);
         out[p + (e.id ? "#" + e.id : "")] = [cs.opacity, cs.transform, cs.filter, cs.clipPath, cs.visibility, cs.strokeDashoffset, e.children.length === 0 ? e.textContent : ""].join(" | ");
@@ -195,6 +204,17 @@ async function expectCounts() {
   const want = [[2.15, (r) => r.vis === "hidden"], [4.05, (r) => r.vis === "visible" && r.off > 0.8 && r.off < 0.95], [5.1, (r) => r.vis === "visible" && r.off === 0], [7.7, (r) => r.vis === "hidden"]];
   for (const [t, ok] of want) if (!ok(sw(t))) failures.push({ label: "expected", t, pixels: false, stateKeys: ["swoosh"], detail: [`swoosh at t=${t}: ${JSON.stringify(sw(t))}`] });
 }
+// lottie: each player's frame at every sample time is the spec's formula (whole frames, play-once holds, loop wraps)
+function expectLottieFrames() {
+  if (!isLottie) return;
+  for (const t of SAMPLES) {
+    const st = ref.get(t).state, want = lottieFrameAt(t);
+    for (const id of ["once", "loopy"]) {
+      const got = st[`lottie:${prefix}-${id}`];
+      if (got !== String(want[id])) failures.push({ label: "expected", t, pixels: false, stateKeys: [`lottie ${id}`], detail: [`lottie ${id} at t=${t}: want frame ${want[id]}, got ${got}`] });
+    }
+  }
+}
 const outDir = path.join(dir, "determinism-fail"); fs.rmSync(outDir, { recursive: true, force: true });
 function compare(label, t, ref, got) {
   if (ref.shot === got.shot && ref.stateHash === got.stateHash) return true;
@@ -210,6 +230,18 @@ const page = await open();
 const ref = new Map();
 for (const t of SAMPLES) ref.set(t, await at(page, t));                       // forward sweep
 await expectCounts();
+expectLottieFrames();
+// lottie: HyperFrames' own Lottie adapter finds animations through window.lottie (or window.bodymovin, the same player)
+// and would re-seek them to the composition time on every frame. This checks only that the page hides both globals:
+// there is no HyperFrames runtime here, so window.__hfLottie is always absent and proves nothing about the adapter.
+// scripts/lottie-render-check.mjs renders for real and is the check that sees the adapter. (A page-side throw is NOT used: a
+// throwing seek hangs the HyperFrames renderer instead of failing it - measured, 10 min with the render lock held.)
+if (isLottie) {
+  const g = await page.evaluate(() => ({ lottie: typeof window.lottie, bodymovin: typeof window.bodymovin, hf: Array.isArray(window.__hfLottie) ? window.__hfLottie.length : String(window.__hfLottie), mine: Object.keys(window.__geLottieAnims || {}).length }));
+  if (g.lottie !== "undefined" || g.bodymovin !== "undefined" || !(g.hf === "undefined" || g.hf === 0) || g.mine !== 2)
+    failures.push({ label: "expected", t: 0, pixels: false, stateKeys: ["globals"], detail: [`the player is visible to the HF runtime's Lottie adapter: ${JSON.stringify(g)}`] });
+  else console.log(`  lottie: window.lottie and window.bodymovin undefined, __hfLottie ${g.hf}, ${g.mine} players on window.__geLottieAnims`);
+}
 if (keep) { fs.mkdirSync(path.join(dir, "shots"), { recursive: true }); for (const [t, r] of ref) fs.writeFileSync(path.join(dir, "shots", `t${t}.png`), r.png); }   // --keep: look at them
 const distinct = new Set([...ref.values()].map((r) => r.shot)).size;
 
@@ -269,6 +301,7 @@ if (isRoom) {
   if (nTween !== 2) roomFailures.push(`overlapping beats made ${nTween} #room tweens, want 2 (one shrink, one return)`);
   if (JSON.stringify(ovTruth.room) !== JSON.stringify([{ start: 2, end: 6.567, scale: ROOM_SCALE }])) roomFailures.push(`overlap edit_truth.room: ${JSON.stringify(ovTruth.room)}`);
   const pg2 = await browser.newPage();
+  await serveVendoredInPage(pg2);   // GSAP from vendor/, not jsdelivr
   await pg2.evaluateOnNewDocument(() => { window.__timelines = {}; });
   await pg2.goto(pathToFileURL(ov.html).href, { waitUntil: "load", timeout: 60000 });
   await pg2.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 });
@@ -290,6 +323,7 @@ await browser.close();
 
 console.log(`motion determinism: variant=${variant} seek=${seekMode} samples=${SAMPLES.length} (${distinct} distinct images) comparisons=${checks}`);
 console.log(`  times: ${SAMPLES.join(", ")}   beat ${BEAT_AT}-${BEAT_TO}`);
+if (isLottie) console.log(`  lottie frames (once, loopy) per time: ${SAMPLES.map((t) => `${t}:${ref.get(t).state[`lottie:${prefix}-once`]}/${ref.get(t).state[`lottie:${prefix}-loopy`]}`).join(" ")}`);
 if (distinct < SAMPLES.length - (isRoom ? 6 : 3)) { console.log("  FAIL: sample frames are nearly all identical - the beat is not visible, the test proves nothing"); process.exitCode = 2; }
 if (roomFailures.length) { console.log(`  FAIL: making room\n   ${roomFailures.join("\n   ")}`); process.exitCode = 1; }
 if (holdFailures.length) { console.log(`  FAIL: camera hold\n   ${holdFailures.join("\n   ")}`); process.exitCode = 1; }

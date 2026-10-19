@@ -182,24 +182,28 @@ export const layersCss = () => `
 
 /**
  * Render one resolved layer.
- * ctx: { W, H, brand, uiFont, esc, compileMotion, resolveColor, resolveImage, off (section origin, default 0) }
- * @returns {{ html: string, lines: string[], audio: string, warnings: string[], mediaIndex }}
+ * ctx: { W, H, brand, uiFont, esc, compileMotion, resolveColor, resolveImage, off (section origin, default 0),
+ *        resolveLottie, safe (passed to compileMotion for a motion layer's lottie elements) }
+ * @returns {{ html: string, lines: string[], audio: string, warnings: string[], mediaIndex, errors?: string[], lottie?: Map }}
+ *   errors: a motion layer's lottie source problems; the caller die()s on the first (references/reel-json.md)
  */
 export function renderLayer(l, ctx, n = 0) {
   const { W, H, brand = {}, esc, compileMotion, resolveColor, resolveImage, off = 0 } = ctx;
   const warnings = [];
   const wid = `ly-${l.id}`, t0 = r3(l.t0 - off), dur = r3(l.dur);
   const isVideo = l.kind === "video";
-  let content = "", boxCss, free = false, lines = [], audio = "";
+  let content = "", boxCss, free = false, lines = [], audio = "", lottie = null;
   const fitCss = `width:100%;height:100%;object-fit:${l.fit};display:block`;
   if (l.kind === "motion") {
     // the SAME compiler as a motion beat; its own exit is turned off (the layer's exit runs on the box) and
     // its time window is the layer's, so the 0.6..8 s beat limit does not apply. room is never honoured.
     const mg = compileMotion({ id: l.id, elements: l.elements, tweens: l.tweens, dim: l.dim, exit: "none", room: "none" },
-      { id: `${wid}_m`, t0, t1: r3(t0 + dur), W, H, brand, resolveImage, minSpan: MIN_LAYER, maxSpan: Infinity, dataIds: true });
+      { id: `${wid}_m`, t0, t1: r3(t0 + dur), W, H, brand, resolveImage, minSpan: MIN_LAYER, maxSpan: Infinity, dataIds: true,
+        ...(ctx.resolveLottie ? { resolveLottie: ctx.resolveLottie, safe: ctx.safe, lottieFatal: true } : {}) });
     for (const m of mg.warnings || []) warnings.push(m);
+    if (mg.errors?.length) return { html: "", lines: [], audio: "", warnings, errors: mg.errors, dropped: true };
     if (!mg.ok) return { html: "", lines: [], audio: "", warnings: [...warnings, `layer ${l.id} dropped: ${mg.reason}`], dropped: true };
-    content = mg.html; lines = mg.lines; free = true;
+    content = mg.html; lines = mg.lines; free = true; lottie = mg.lottie;
     boxCss = `left:0;top:0;width:${W}px;height:${H}px`;
   } else {
     const b = l.box;
@@ -229,5 +233,5 @@ export function renderLayer(l, ctx, n = 0) {
   // so without it an empty card and its shadow show at 0:00; the enter tween's autoAlpha > 0 flips it to inherit)
   const timed = isVideo ? "" : ` clip" data-start="${t0}" data-duration="${dur}" data-track-index="${2}`;
   const html = `<div id="${wid}" class="lyr${timed}" data-layer-id="${esc(l.id)}" data-layer-kind="${l.kind}" style="z-index:${l.z}">${box}</div>`;
-  return { html, lines: [...lines, ...layerTweens(l, off)], audio, warnings };
+  return { html, lines: [...lines, ...layerTweens(l, off)], audio, warnings, ...(lottie?.size ? { lottie } : {}) };
 }

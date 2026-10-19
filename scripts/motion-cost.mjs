@@ -25,8 +25,8 @@
 //   blur     the blur limit case: 2 elements of 1000 x 1000 (48% of the canvas), blurred for the whole 6 s beat
 //
 // The copy is one 6 s beat at output 2.0..8.0 of a single take (the reel's last six takes merged into source
-// 10.15..22.42), so the beat is not split by a cut. `npx` is a .cmd shim on Windows: it is launched through
-// `cmd /c` (the trap that has bitten this repo).
+// 10.15..22.42), so the beat is not split by a cut. The render goes through runRender() (scripts/lib/vendor.mjs: GSAP from
+// vendor/, and `cmd /c npx` on Windows, where npx is a .cmd shim).
 
 import fs from "node:fs";
 import os from "node:os";
@@ -35,6 +35,7 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { makeProject, BUSY_BEAT, BLUR_BEAT, stripBlur, BEAT_AT, BEAT_TO, BUILD_MJS } from "./lib/motion-fixture.mjs";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
+import { runRender, serveVendoredInPage } from "./lib/vendor.mjs";
 
 const HYPERFRAMES = "0.8.81";   // engine/tests/common.py HYPERFRAMES_VERSION
 const argv = process.argv.slice(2);
@@ -55,7 +56,6 @@ const median = (a) => { const s = [...a].sort((x, y) => x - y), m = s.length >> 
 const pct = (a, p) => { const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p * s.length))]; };
 const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
 const run = (cmd, args, cwd) => spawnSync(cmd, args, { cwd, encoding: "utf8", maxBuffer: 1 << 26 });
-const npx = (args, cwd) => process.platform === "win32" ? run("cmd", ["/c", "npx", "-y", ...args], cwd) : run("npx", ["-y", ...args], cwd);
 
 // A copy of the reel with one beat (or none); returns { dir, html, seconds }.
 function makeCopy(dir, beat) {
@@ -95,9 +95,9 @@ if (!opt("skip-render", false)) {
     const out = `build/cost-${v}-${r}.mp4`;
     fs.rmSync(path.join(proj[v].dir, out), { force: true });
     const t0 = process.hrtime.bigint();
-    const p = npx([`hyperframes@${HYPERFRAMES}`, "render", "-o", out, "-w", workers, "--quiet"], proj[v].dir);
+    const p = runRender(["-o", out, "-w", workers, "--quiet"], { cwd: proj[v].dir, version: HYPERFRAMES });   // GSAP from vendor/
     const sec = Number(process.hrtime.bigint() - t0) / 1e9;
-    if (p.status !== 0 || !fs.existsSync(path.join(proj[v].dir, out))) { console.error(`${v}: render failed (${p.status})\n${p.stdout.slice(-1500)}\n${p.stderr.slice(-1500)}`); process.exit(1); }
+    if (p.status !== 0 || !fs.existsSync(path.join(proj[v].dir, out))) { console.error(`${v}: render failed (${p.status}) ${p.error}\n${p.stdout.slice(-1500)}\n${p.stderr.slice(-1500)}`); process.exit(1); }
     wall[v].push(sec);
     console.log(`  render ${v} round ${r + 1}: ${sec.toFixed(1)} s`);
   }
@@ -110,6 +110,7 @@ if (!opt("skip-frames", false)) {
   const browser = await puppeteer.launch({ executablePath: findChrome(), headless: "shell", args: ["--no-sandbox", "--force-device-scale-factor=1", "--hide-scrollbars", ...(capture === "beginframe" ? BEGINFRAME_ARGS : [])], defaultViewport: { width: 1080, height: 1920, deviceScaleFactor: 1 } });
   for (const v of variants) {
     const page = await browser.newPage();
+    await serveVendoredInPage(page);   // GSAP from vendor/, not jsdelivr
     await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
     await page.goto(pathToFileURL(proj[v].html).href, { waitUntil: "load", timeout: 60000 });
     await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 });

@@ -50,9 +50,9 @@ def render_sfx_stem(project):
     open(os.path.join(td, "index.html"), "w").write(html)
     out = os.path.abspath(os.path.join(project, "build", "sfx_stem.mp4"))
     print("rendering the SFX-only stem for the level check...")
-    # npx is a .cmd shim on Windows and CreateProcess will not launch it directly.
-    npx = ["cmd", "/c", "npx"] if os.name == "nt" else ["npx"]
-    r = subprocess.run([*npx, "hyperframes@0.8.81", "render", "-o", out, "--quiet"], cwd=td, capture_output=True, text=True)
+    # render.mjs = npx hyperframes@0.8.81 render with GSAP served from vendor/; it fails if the CDN would be used
+    here = os.path.dirname(os.path.abspath(__file__))
+    r = subprocess.run(["node", os.path.join(here, "render.mjs"), "-o", out, "--quiet"], cwd=td, capture_output=True, text=True)
     if r.returncode != 0:
         sys.exit("stem render failed: " + r.stderr[-500:])
     shutil.rmtree(td, ignore_errors=True)

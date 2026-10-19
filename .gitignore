@@ -29,3 +29,6 @@ library/packs/
 
 # face model: face_track.py downloads it on first use (opencv_zoo, MIT)
 library/models/*.onnx
+# Lottie animations: the manifest is committed, the files are restored by a deployment
+library/lottie/*.json
+!library/lottie/manifest.json
