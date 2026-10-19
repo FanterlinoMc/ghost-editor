@@ -1,5 +1,5 @@
 {
- "_about": "Files under library/ that the engine would resolve and a clean checkout lacks. Generated, do not hand-edit: node scripts/missing_assets.mjs > references/missing-assets.json. uses = styles, brand kits and example reels that name the asset (after `extends`) + engine code sites that name it. Styles named only through a family (whoosh/pop/impact) count for every variant. counts per kind: referenced = named by a style/reel/code (dangling ids included), catalogued_only = in a library manifest and named by nothing; dangling = named but no manifest entry, so no path.",
+ "_about": "Files under library/ that the engine would resolve and a clean checkout lacks. Generated, do not hand-edit: node scripts/missing_assets.mjs > references/missing-assets.json. uses = styles, brand kits and example reels that name the asset (after `extends`) + engine code sites that name it. Styles named only through a family (whoosh/pop/impact) count for every variant. counts per kind: referenced = named by a style/reel/code (dangling ids included), catalogued_only = in a library manifest and named by nothing; dangling = named but no manifest entry, so no path. The engine-code sound scan is a heuristic (a line regex plus an exclusion list), so the code-site lists and the dangling sfx list are a strong hint, not exact.",
  "resolution": {
   "root": "build.mjs:45 LIB = $PHANTASIC_LIB or library/",
   "sfx": "build.mjs:519 reads sfx/manifest.json; build.mjs:618-643 addSfx: id (a family pop/whoosh/impact picks its variants round-robin, :596-602) -> sfx/<manifest[id].file>; no entry or no file = skipped with a warning",
@@ -801,7 +801,7 @@
      "build.mjs packClip"
     ]
    },
-   "source": "licensed pack, synced at start"
+   "source": "licensed pack, not shipped"
   },
   {
    "path": "packs/editorsinventory/8mm-gate/",
@@ -823,7 +823,7 @@
      "build.mjs packClip"
     ]
    },
-   "source": "licensed pack, synced at start"
+   "source": "licensed pack, not shipped"
   },
   {
    "path": "packs/editorsinventory/burns/",
@@ -857,7 +857,7 @@
      "build.mjs packClip"
     ]
    },
-   "source": "licensed pack, synced at start"
+   "source": "licensed pack, not shipped"
   },
   {
    "path": "packs/editorsinventory/leaks/",
@@ -889,7 +889,7 @@
      "build.mjs packClip"
     ]
    },
-   "source": "licensed pack, synced at start"
+   "source": "licensed pack, not shipped"
   },
   {
    "path": "sfx/burn-whoosh-fast.wav",
@@ -2041,7 +2041,7 @@
      "build.mjs:1639"
     ]
    },
-   "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
+   "effect": "no manifest entry, but every code site checks the manifest first and uses another sound instead (meme beats: cinematic-deep-boom, else the impact family); nothing is skipped and no warning is printed"
   }
  ]
 }

@@ -64,6 +64,7 @@ function objectPopNames() {
 }
 // A literal that IS a manifest id or a family counts wherever it appears in code; a literal that is not one counts only
 // on a line that plays sound (an *Sfx( call, an sfx key, a sound map), minus the labels/names listed here.
+const guarded = new Map();   // sfx id -> code sites that check the manifest before using it
 const NOT_SOUNDS = new Set(["sfx-pack", "push-in", "gm-kinetic", "gm-flow", "gm-nodes"]);
 const SOUND_LINE = /Sfx\(|sfx|Sfx|riser:|boom:|tail:|PAPER_IN|penN|sfxManifest\[|: \["[a-z0-9-]+", (true|false)\]|^\s+(riser|hit|tail|soft|tick|swish|whip|ramp): \[/;
 const codeFiles = ["scripts/build.mjs", ...fs.readdirSync(path.join(ROOT, "scripts", "lib")).filter((f) => f.endsWith(".mjs") && !/test|fixture/.test(f)).sort().map((f) => `scripts/lib/${f}`)];
@@ -72,7 +73,10 @@ for (const f of codeFiles) fs.readFileSync(path.join(ROOT, f), "utf8").split("\n
   const site = `${f.replace(/^scripts\//, "")}:${i + 1}`;
   for (const [, id] of line.replace(/(role: |volFor\()"[a-z]+"/g, "").matchAll(/"([a-z][a-z0-9]*(?:-[a-z0-9]+)*)"/g)) {   // a mix role is not a sound
     if (SFX[id] || (FAMILIES[id] && SOUND_LINE.test(line))) ref("sfx", id, { site });
-    else if (SOUND_LINE.test(line) && id.includes("-") && !NOT_SOUNDS.has(id) && !MUSIC[id]) ref("sfx", id, { site });
+    else if (SOUND_LINE.test(line) && id.includes("-") && !NOT_SOUNDS.has(id) && !MUSIC[id]) {
+      ref("sfx", id, { site });
+      if (line.includes(`sfxManifest["${id}"]`)) guarded.set(id, (guarded.get(id) ?? new Set()).add(site));   // the code checks the manifest before it uses the id
+    }
   }
 });
 ref("music", "deep-techno-ambience", { site: "build.mjs music \"auto\" default" });
@@ -103,7 +107,7 @@ const sourceOf = (kind, id) => ({
   engraving: () => "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png",
   object: () => "CC0 (3dicons v1, see gm-objects/SOURCES.md)",
   meme: () => "user-supplied (scripts/meme_add.py)",
-  pack: () => "licensed pack, synced at start",
+  pack: () => "licensed pack, not shipped",
 }[kind]());
 const pathOf = (kind, id) => ({
   sfx: () => SFX[id] ? `sfx/${SFX[id].file}` : null,
@@ -134,6 +138,7 @@ for (const r of [...refs.values()].sort((a, b) => a.kind.localeCompare(b.kind) |
     c.dangling++;
     dangling.push({ kind: r.kind, id: r.id, uses, for: forWhat,
       effect: r.kind === "music" ? "no manifest entry: buildMusic throws unless music.optional or a usable music.fallback is set"
+        : guarded.get(r.id)?.size === r.engine.size && r.styles.size === 0 ? "no manifest entry, but every code site checks the manifest first and uses another sound instead (meme beats: cinematic-deep-boom, else the impact family); nothing is skipped and no warning is printed"
         : "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it" });
     continue;
   }
@@ -145,7 +150,7 @@ for (const r of [...refs.values()].sort((a, b) => a.kind.localeCompare(b.kind) |
 const out = {
   _about: "Files under library/ that the engine would resolve and a clean checkout lacks. Generated, do not hand-edit: node scripts/missing_assets.mjs > references/missing-assets.json. "
     + "uses = styles, brand kits and example reels that name the asset (after `extends`) + engine code sites that name it. Styles named only through a family (whoosh/pop/impact) count for every variant. "
-    + "counts per kind: referenced = named by a style/reel/code (dangling ids included), catalogued_only = in a library manifest and named by nothing; dangling = named but no manifest entry, so no path.",
+    + "counts per kind: referenced = named by a style/reel/code (dangling ids included), catalogued_only = in a library manifest and named by nothing; dangling = named but no manifest entry, so no path. The engine-code sound scan is a heuristic (a line regex plus an exclusion list), so the code-site lists and the dangling sfx list are a strong hint, not exact.",
   resolution: {
     root: "build.mjs:45 LIB = $PHANTASIC_LIB or library/",
     sfx: "build.mjs:519 reads sfx/manifest.json; build.mjs:618-643 addSfx: id (a family pop/whoosh/impact picks its variants round-robin, :596-602) -> sfx/<manifest[id].file>; no entry or no file = skipped with a warning",
