@@ -1,6 +1,6 @@
 """Depth map video of a recording with Depth Anything V2 Small, run locally (onnxruntime, CPU by default).
 
-    depth_map.py SRC.mp4 OUT.mp4 [--size 364] [--threads N] [--provider cpu|coreml] [--model PATH]
+    depth_map.py SRC.mp4 OUT.mp4 [--size 364] [--threads N] [--model PATH]
     depth_map.py --fetch          download the model once (checks sha256), then exit
 
 OUT is an 8-bit grey H.264 video, near = bright, with the SAME frame count and frame rate as SRC, at the model's working
@@ -15,8 +15,9 @@ the network.
 
 Needs: onnxruntime, numpy, opencv-python(-headless); ffmpeg and ffprobe on PATH.
 Env: DEPTH_THREADS (onnxruntime intra-op threads, default min(4, CPU count): on the M4 Mac mini 4 threads ran 0.21 s/frame
-and 10 threads 0.71 s/frame, the efficiency cores and spinning stall the pool; on a dedicated Linux box try its full quota), DEPTH_PROVIDER (cpu | coreml; coreml is an opt-in
-fast path on Apple Silicon, Linux is CPU only), DEPTH_SIZE (short side, default 364), PHANTASIC_MODELS (model folder).
+and 10 threads 0.71 s/frame, the efficiency cores and spinning stall the pool; on a dedicated Linux box try its full quota),
+PHANTASIC_MODELS (model folder). CPU only (onnxruntime's CPU provider): CoreML on the M4 measured slower (0.49 vs 0.21 s/frame).
+The model file's sha256 is checked against library/models.json before every run (about 0.3 s for 99 MB).
 
 Flicker: the model's output is relative (no fixed scale per frame), so each frame is normalised by its own 1st/99th
 percentiles, those bounds are smoothed over time, and the map itself is blended 30 % with the previous one.
@@ -67,8 +68,13 @@ def fetch():
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     part = dst + ".part"
     print(f"downloading {m['url']} ({m['bytes'] / 1e6:.0f} MB, {m['licence']}) -> {dst}")
-    with urllib.request.urlopen(m["url"]) as r, open(part, "wb") as f:
-        shutil.copyfileobj(r, f, 1 << 20)
+    try:
+        with urllib.request.urlopen(m["url"], timeout=60) as r, open(part, "wb") as f:
+            shutil.copyfileobj(r, f, 1 << 20)
+    except BaseException as e:
+        if os.path.exists(part):
+            os.remove(part)
+        die(f"download failed ({e}); nothing kept")
     got = sha256(part)
     if got != m["sha256"]:
         os.remove(part)
@@ -100,9 +106,8 @@ def main():
     ap.add_argument("out", nargs="?")
     ap.add_argument("--fetch", action="store_true", help="download the model (sha256-checked) and exit")
     ap.add_argument("--model", default=None, help="the .onnx file (default: PHANTASIC_MODELS/<manifest file>)")
-    ap.add_argument("--size", type=int, default=int(os.environ.get("DEPTH_SIZE", "364")), help="short side fed to the model")
+    ap.add_argument("--size", type=int, default=364, help="short side fed to the model (the build passes 364, part of its cache key)")
     ap.add_argument("--threads", type=int, default=int(os.environ.get("DEPTH_THREADS", "0") or 0) or min(4, os.cpu_count() or 4))
-    ap.add_argument("--provider", default=os.environ.get("DEPTH_PROVIDER", "cpu"), choices=["cpu", "coreml"])
     ap.add_argument("--frames", type=int, default=0, help="stop after this many frames (timing runs only)")
     a = ap.parse_args()
     if a.fetch:
@@ -117,6 +122,10 @@ def main():
     if not os.path.isfile(mp):
         die(f"no depth model at {mp}: run `python3 scripts/depth_map.py --fetch` once (Depth Anything V2 Small, Apache-2.0, "
             f"~{manifest()['bytes'] / 1e6:.0f} MB; never stored in the repo)")
+    # checked before the model is loaded, every run: a truncated or swapped file never produces a depth map
+    want = manifest()["sha256"]
+    if not a.model and sha256(mp) != want:
+        die(f"{mp} does not match the sha256 in library/models.json ({want}): delete it and run `python3 scripts/depth_map.py --fetch`")
     try:
         import numpy as np
         import cv2
@@ -130,8 +139,7 @@ def main():
     so.intra_op_num_threads = a.threads
     so.inter_op_num_threads = 1
     so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-    providers = ["CoreMLExecutionProvider", "CPUExecutionProvider"] if a.provider == "coreml" else ["CPUExecutionProvider"]
-    sess = ort.InferenceSession(mp, so, providers=providers)
+    sess = ort.InferenceSession(mp, so, providers=["CPUExecutionProvider"])
     cv2.setNumThreads(1)
     mean = np.array(MEAN, np.float32).reshape(3, 1, 1)
     std = np.array(STD, np.float32).reshape(3, 1, 1)
@@ -178,7 +186,7 @@ def main():
         die(f"no frames written (decoded {n}, encoder exit {enc.returncode})")
     os.replace(part, a.out)
     wall = time.time() - t0
-    print(f"depth: {n} frames in {wall:.1f} s ({wall / n:.3f} s/frame, model {t_inf / n:.3f} s/frame), provider {a.provider}, "
+    print(f"depth: {n} frames in {wall:.1f} s ({wall / n:.3f} s/frame, model {t_inf / n:.3f} s/frame), provider cpu, "
           f"{a.threads} threads, model input {ww}x{wh}, source {W}x{H} @ {rate} -> {a.out}", file=sys.stderr)
 
 

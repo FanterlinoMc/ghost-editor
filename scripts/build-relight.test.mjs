@@ -60,9 +60,9 @@ fs.writeFileSync(path.join(fakeBin, "npx"), "#!/bin/sh\necho 'npx is disabled in
 const noModels = path.join(root, "no-models"); fs.mkdirSync(noModels);
 const pathKey = Object.keys(process.env).find((k) => k.toLowerCase() === "path") ?? "PATH";
 const SAFE_ENV = { ...process.env, PHANTASIC_LIB: silentLibrary(), PHANTASIC_MODELS: noModels, [pathKey]: fakeBin + path.delimiter + process.env[pathKey] };
-const run = (dir) => spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: SAFE_ENV });
-const build = (dir) => { const r = run(dir); assert.equal(r.status, 0, r.stderr + r.stdout); return r.stdout + r.stderr; };
-const fails = (dir, re) => { const r = run(dir); assert.notEqual(r.status, 0, "should have failed"); assert.match(r.stdout + r.stderr, re); };
+const run = (dir, env = {}) => spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: { ...SAFE_ENV, ...env } });
+const build = (dir, env) => { const r = run(dir, env); assert.equal(r.status, 0, r.stderr + r.stdout); return r.stdout + r.stderr; };
+const fails = (dir, re, env) => { const r = run(dir, env); assert.notEqual(r.status, 0, "should have failed"); assert.match(r.stdout + r.stderr, re); return r.stdout + r.stderr; };
 const html = (dir) => fs.readFileSync(path.join(dir, "index.html"), "utf8");
 const check = (label) => console.log(`ok    ${label}`);
 const frames = (f) => +execFileSync("ffprobe", ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", f]).toString().trim();
@@ -95,7 +95,8 @@ const gainIn = (a, b, [x0, x1, y0, y1]) => {
   // ---------- die() through the build (no python needed: these fail before any is looked for) ----------
   fails(project({ relight: { look: "warm" } }), /ERROR: relight\.look must be "empire"/);
   fails(project({ relight: 1 }), /ERROR: relight must be true or an object/);
-  fails(project({ relight: {} }, { depth: false }), /ERROR: relight: no depth map at assets\/talk-depth\.mp4 and no depth model at .*no-models.*depth_map\.py --fetch/);
+  fails(project({ relight: {} }, { depth: false }), /ERROR: relight: no depth map at assets\/talk-depth-[0-9a-f]{8}\.mp4 and no depth model at .*no-models.*depth_map\.py --fetch/);
+  fails(project({ relight: {} }), /ERROR: relight: PHANTASIC_PYTHON=.*no-such-python cannot import numpy, cv2/, { PHANTASIC_PYTHON: path.join(root, "no-such-python") });
   check("build die(): bad relight, and no depth map + no model (the model is never fetched or run by the build)");
 }
 
@@ -107,7 +108,7 @@ const gainIn = (a, b, [x0, x1, y0, y1]) => {
   assert.ok(!fs.readdirSync(path.join(dir, "assets")).some((f) => /relit/.test(f)), "no relit file without the key");
   const off = project({ relight: false });
   build(off);
-  assert.equal(html(off), html(dir).replace(/\/p\d+\b/g, (m) => m), "relight: false is the same as no key");
+  assert.equal(html(off), html(dir), "relight: false is the same as no key");
   check("opt-in: no relight (or relight: false) -> assets/talk.mp4, no relit file");
 }
 
@@ -121,6 +122,15 @@ if (!python) {
   assert.equal(r.status, 0, r.stderr);
   assert.ok(fs.statSync(png).size > 1000, "relight.py --frame wrote the side-by-side");
   check("relight.py --look empire --frame on the stub depth");
+
+  // depth_map.py refuses a model file whose sha256 is not the manifest's, before loading it (a junk "model", never run)
+  const junk = path.join(root, "junk-models"); fs.mkdirSync(junk);
+  fs.writeFileSync(path.join(junk, "depth-anything-v2-small.onnx"), "not a model");
+  const dm = spawnSync(python, [path.join(HERE, "depth_map.py"), path.join(root, "talk.mp4"), path.join(root, "d.mp4")], { encoding: "utf8", env: { ...process.env, PHANTASIC_MODELS: junk } });
+  assert.notEqual(dm.status, 0);
+  assert.match(dm.stderr, /does not match the sha256 in library\/models\.json \(afb6a5c2/);
+  assert.ok(!fs.existsSync(path.join(root, "d.mp4")), "nothing written");
+  check("depth_map.py: a model file with the wrong sha256 is refused before it is loaded");
 
   // ---------- the build with a stub depth ----------
   const dir = project({ relight: { strength: 1.2 } });
@@ -174,5 +184,40 @@ if (!python) {
   const g = gainIn(lit2, mrgb, [0.40, 0.60, 0.45, 0.65]);
   assert.ok(g.every((v) => Math.abs(v - 1) < 0.06), `cut-out colour = relit colour on the subject (${g.map((v) => v.toFixed(3))})`);
   check(`matte: ${mm[1]} keeps the alpha and shows the relit subject`);
+
+  // ---------- the depth cache is keyed on the recording's content (not its name) ----------
+  const kd = project({ relight: {} }, { depth: false });
+  const k1 = RL.depthRelOf(kd, "assets/talk.mp4");
+  assert.equal(k1.override, false);
+  assert.match(k1.rel, /^assets\/talk-depth-[0-9a-f]{8}\.mp4$/);
+  fs.copyFileSync(path.join(root, "depth.mp4"), path.join(kd, k1.rel));      // stands in for depth_map.py's output under its key
+  const kl = build(kd);
+  assert.ok(!/depth map of/.test(kl), "keyed depth found, model not run");
+  const r1 = html(kd).match(/src="(assets\/talk-relit-[0-9a-f]{8}\.mp4)"/)[1];
+  // re-record: same name, same length, another picture -> a new depth key (the build asks for a new depth map instead of reusing
+  // the old one), and once that exists, a new relit file
+  ff("-f", "lavfi", "-i", `color=c=0x5a6a7a:size=${W}x${H}:rate=${FPS}:duration=${SEC}`, "-f", "lavfi", "-i", `sine=frequency=300:duration=${SEC}`,
+    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-c:a", "aac", "-ac", "2", "-shortest", path.join(kd, "assets", "talk.mp4"));
+  const k2 = RL.depthRelOf(kd, "assets/talk.mp4");
+  assert.notEqual(k2.rel, k1.rel, "new footage -> new depth key");
+  fails(kd, new RegExp(`no depth map at ${k2.rel.replace(/\./g, "\\.")} and no depth model`));
+  fs.copyFileSync(path.join(root, "depth.mp4"), path.join(kd, k2.rel));
+  const kl2 = build(kd);
+  const r2 = html(kd).match(/src="(assets\/talk-relit-[0-9a-f]{8}\.mp4)"/)[1];
+  assert.notEqual(r2, r1, "new footage -> new relit file");
+  assert.match(kl2, /relighting assets\/talk\.mp4/);
+  assert.ok([k1.rel, k2.rel, r1, r2].every((f) => fs.existsSync(path.join(kd, f))), "both depth and both relit files exist");
+  check(`depth keyed on content: re-recorded talk.mp4 -> ${k1.rel} becomes ${k2.rel}, relit ${r1} becomes ${r2}`);
+
+  // ---------- a depth video with the wrong frame count is refused, not padded ----------
+  const fc = project({ relight: {} }, { depth: false });
+  ff("-i", path.join(root, "depth.mp4"), "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p", path.join(fc, "assets", "talk-depth.mp4"));
+  fails(fc, /ERROR: relight: relight\.py failed on assets\/talk\.mp4: relight\.py: depth video .* has a different frame count than .*ran out after 60 frames/);
+  assert.ok(!fs.readdirSync(path.join(fc, "assets")).some((f) => /relit/.test(f)), "no relit file (nor .part) left behind");
+  const fc2 = project({ relight: {} }, { depth: false });
+  ff("-f", "lavfi", "-i", `color=c=gray:size=${DW}x${DH}:rate=${FPS}:duration=${SEC + 1}`, "-c:v", "libx264", "-pix_fmt", "yuv420p", path.join(fc2, "assets", "talk-depth.mp4"));
+  fails(fc2, /different frame count .*30 frames too many/);
+  check("depth frame count != source: refused both ways (shorter, longer), nothing cached");
+
 }
 console.log("build-relight: all checks passed");

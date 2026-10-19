@@ -18,7 +18,7 @@ Ported from Ahmed's phantasic engine/core (origin/main, template-premium-iman). 
   - Windows-safe: no shell, no Mac path.
 
 empire (reel.json `relight`, references/reel-json.md "Empire depth relight"):
-    relight.py src.mp4 depth.mp4 out.mp4 --look empire [--params '{"left": "#ff3a48", "right": "#5a78ff", "strength": 0.6,
+    relight.py src.mp4 depth.mp4 out.mp4 --look empire [--params '{"left": "#ff3a48", "right": "#5a78ff", "strength": 0.9,
                                                                    "room": 0.3, "roomDim": 0.15}'] [--frame]
   Coloured side light on the REAL footage: a left and a right light shade the depth surface (half-Lambert on normals from the
   smoothed depth), fade across the frame from their own side, and are weighted by depth (subject 1, far room `room`); the far
@@ -59,7 +59,7 @@ def empire(src, dep, out, prm, one):
             raise SystemExit(f"relight.py: {name} must be #rrggbb (got {h})")
         return (np.array([int(h[i:i + 2], 16) for i in (0, 2, 4)], np.float32) / 255) ** 2.2
     col_l, col_r = lin_hex(prm.get("left", "#ff3a48"), "left"), lin_hex(prm.get("right", "#5a78ff"), "right")
-    strength, room, room_dim = float(prm.get("strength", 0.6)), float(prm.get("room", 0.3)), float(prm.get("roomDim", 0.15))
+    strength, room, room_dim = float(prm.get("strength", 0.9)), float(prm.get("room", 0.3)), float(prm.get("roomDim", 0.15))
     nrm = lambda v: np.array(v, np.float32) / np.linalg.norm(np.array(v, np.float32))
     l_dir, r_dir = nrm([-0.9, -0.2, 0.45]), nrm([0.9, -0.2, 0.45])
     flat_l, flat_r = float(np.clip(l_dir[2] * 0.5 + 0.5, 0, 1) ** 3), float(np.clip(r_dir[2] * 0.5 + 0.5, 0, 1) ** 3)
@@ -138,16 +138,26 @@ def empire(src, dep, out, prm, one):
     part = out[:-4] + ".part.mp4" if out.lower().endswith(".mp4") else out + ".part.mp4"
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{SW}x{SH}", "-r", rate, "-i", "-",
                             "-c:v", "libx264", "-crf", "14", "-preset", "fast", "-pix_fmt", "yuv420p", part], stdin=subprocess.PIPE)
-    ds, d, nf = dep_frames(), None, 0
+    # the depth video must have exactly the source's frames: a shorter or longer one would put the light out of step with the
+    # subject (a stale depth map of another take, a hand-placed file at another rate), so it is refused, never padded
+    ds, nf, extra, short = dep_frames(), 0, 0, False
     for i in src_frames():
-        d = next(ds, d)
+        d = next(ds, None)
         if d is None:
-            enc.stdin.close(); enc.wait()
-            return f"relight.py: no frames in the depth video {dep}"
+            short = True
+            break
         enc.stdin.write(apply(i, d).tobytes())
         nf += 1
+    if not short:
+        extra = sum(1 for _ in ds)
     enc.stdin.close()
-    if enc.wait() != 0 or nf == 0:
+    enc.wait()
+    if short or extra:
+        if os.path.exists(part):
+            os.remove(part)
+        return (f"relight.py: depth video {dep} has a different frame count than {src} "
+                f"({f'it ran out after {nf} frames' if short else f'{extra} frames too many'}): make it again from this recording")
+    if enc.returncode != 0 or nf == 0:
         return f"relight.py: encoding failed ({nf} frames)"
     os.replace(part, out)
     wall = time.time() - t0
@@ -157,7 +167,7 @@ def empire(src, dep, out, prm, one):
 
 if look == "empire":
     import json as _json
-    cv2.setNumThreads(int(os.environ.get("RELIGHT_THREADS", "0") or 0) or min(4, os.cpu_count() or 4))
+    cv2.setNumThreads(min(4, os.cpu_count() or 4))
     sys.exit(empire(src, dep, out, _json.loads(sys.argv[sys.argv.index("--params") + 1]) if "--params" in sys.argv else {}, one))
 matte_path = sys.argv[sys.argv.index("--matte") + 1] if "--matte" in sys.argv else None
 W, H = 1080, 1920

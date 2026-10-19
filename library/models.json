@@ -1,5 +1,5 @@
 {
-  "_about": "Model weights the engine can run locally. NONE of them is stored in this repo: each is downloaded on the user's machine (scripts/depth_map.py --fetch) into PHANTASIC_MODELS (default ~/.cache/phantasic/models) and checked against sha256 before use.",
+  "_about": "Model weights the engine can run locally. NONE of them is stored in this repo: each is downloaded on the user's machine (scripts/depth_map.py --fetch) into PHANTASIC_MODELS (default ~/.cache/phantasic/models) and its sha256 is checked by depth_map.py on --fetch and again before every run.",
   "depth-anything-v2-small": {
     "file": "depth-anything-v2-small.onnx",
     "url": "https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/4472b7362082ad9968fee890ca0f1e5aca36b93d/onnx/model.onnx",

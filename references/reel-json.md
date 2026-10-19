@@ -262,7 +262,7 @@ take N has a ramp but contains speech; a ramped take can't be the last take or c
 | `noir_score.py` | `noir_score.py <project> <video.mp4> --pack DIR [--music f]` | `words.aligned.json` + reel -> `build/cues.json` | chapter-card swells, gold-word shimmer, final thud |
 | `signature_plan.py` | `signature_plan.py reel plan.json` / `score plan.json video.mp4 --pack DIR` | an art-direction plan -> `<project>/reel.json` (style premium-signature, hero-word zoom snaps, cut scenes, leaks, mood) and -> `build/cues.json` | pure transform, well under a second. The plan's `cuts[].src` are pictures / clips that already exist in the project |
 | `relight.py` | `relight.py src.mp4 depth.mp4 out.mp4 [--look neon\|warm\|empire] [--params JSON] [--frame]` | depth-based relight. `neon` / `warm` write `out.mp4` and `out-mask.mp4` (they black out or replace the room: CLI only); `empire` keeps the real room and writes `out.mp4` only (what `relight` in reel.json runs) | neon / warm: CPU numpy / OpenCV at 1080x1920, ~10-20 min per 60 s reel. **The depth map is an input**: `depth_map.py` makes one locally (Depth Anything V2 Small), or any depth video |
-| `depth_map.py` | `depth_map.py src.mp4 out.mp4 [--size 364] [--threads N] [--provider cpu\|coreml]` / `depth_map.py --fetch` | Depth Anything V2 Small (ONNX, Apache-2.0) over every frame -> 8-bit grey depth video, near = bright | needs onnxruntime (+ numpy, OpenCV). The model is downloaded by `--fetch` to `~/.cache/phantasic/models`, never into the repo; source URL and sha256 in `library/models.json` |
+| `depth_map.py` | `depth_map.py src.mp4 out.mp4 [--size 364] [--threads N]` / `depth_map.py --fetch` | Depth Anything V2 Small (ONNX, Apache-2.0) over every frame -> 8-bit grey depth video, near = bright | needs onnxruntime (+ numpy, OpenCV). The model is downloaded by `--fetch` to `~/.cache/phantasic/models`, never into the repo; source URL and sha256 in `library/models.json` |
 | `splice_matte.py` | `splice_matte.py orig-matte.webm relit.mp4 relit-mask.mp4 --takes takes.json out.webm` | splices the relit footage into the build's cut-out matte (person matte owns the edge, depth mask only removes far objects) | ~6-12 min per 60 s reel, CPU. Needs `libvpx-vp9` |
 | `empire_finish.py` | `empire_finish.py <project> <takes.mp4> <depth.mp4> <takes.json> <out.mp4> [--pack DIR --music f]` | relight -> splice -> rebuild -> render -> autoscore -> score -> vcheck -> contact sheet | the zsh `empire_finish.sh` rewritten (`cmd /c npx` on Windows, `master.py --from-json`). Renders, so it is not run in the tests |
 
@@ -281,7 +281,7 @@ smooth multiplicative field on the original pixels, so there is no cut edge and 
 builds byte-identically (`scripts/byte-identity.mjs`). Test: `scripts/build-relight.test.mjs` (stub depth map, the model never runs).
 
 ```json
-"relight": { "look": "empire", "left": "#ff3a48", "right": "#5a78ff", "strength": 0.6, "room": 0.3, "roomDim": 0.15 }
+"relight": { "look": "empire", "left": "#ff3a48", "right": "#5a78ff", "strength": 0.9, "room": 0.3, "roomDim": 0.15 }
 ```
 
 `relight: true` is the same as `{}` (every default). Fields (all optional; any other key fails the build):
@@ -291,40 +291,48 @@ builds byte-identically (`scripts/byte-identity.mjs`). Test: `scripts/build-reli
 | `look` | `"empire"` | `"empire"` | the only look the build runs (relight.py's older `neon` / `warm` looks black out or replace the room, so they stay CLI-only) |
 | `left` | `"#rrggbb"` | `"#ff3a48"` | colour of the light from the frame's left side |
 | `right` | `"#rrggbb"` | `"#5a78ff"` | colour of the light from the frame's right side |
-| `strength` | number 0..2 | `0.6` | gain of the coloured light on the subject (0 = no light, only `roomDim`) |
+| `strength` | number 0..2 | `0.9` | gain of the coloured light on the subject (0 = no light, only `roomDim`) |
 | `room` | number 0..1 | `0.3` | fraction of that light that reaches the far room (0 = subject only, 1 = no depth falloff) |
 | `roomDim` | number 0..0.6 | `0.15` | how much the far room is darkened (depth-weighted; the subject is never darkened) |
 
 What the build does, per recording that has a face track (the primary always; same rule as `stage`):
 
-1. **Depth** (`assets/<recording>-depth.mp4`, cached; for `assets/talk.mp4` that is `assets/talk-depth.mp4`): an 8-bit grey
-   video, near = bright, same frame count and rate as the recording, at the model's working size. If it is missing the build
-   runs `scripts/depth_map.py <recording> <depth.mp4>` (Depth Anything V2 Small, ONNX, onnxruntime on the CPU). The model is
-   **not** in this repo: `python3 scripts/depth_map.py --fetch` downloads it once into `PHANTASIC_MODELS` (default
-   `~/.cache/phantasic/models`) and checks its sha256 against `library/models.json`. The build never downloads anything.
-   A depth video made any other way (same frame count) can be placed under that name instead.
+1. **Depth** (`assets/<recording>-depth-<tag>.mp4`, cached): an 8-bit grey video, near = bright, same frame count and rate
+   as the recording, at the model's working size (short side 364, fixed). `<tag>` covers the recording's CONTENT (md5 of the
+   file), the model input size and the model's sha256, so a re-recorded file or another model never reuses an old depth map.
+   If it is missing the build runs `scripts/depth_map.py <recording> <out> --size 364` (Depth Anything V2 Small, ONNX,
+   onnxruntime on the CPU). The model is **not** in this repo: `python3 scripts/depth_map.py --fetch` downloads it once into
+   `PHANTASIC_MODELS` (default `~/.cache/phantasic/models`); depth_map.py checks the file's sha256 against
+   `library/models.json` on fetch AND before every run. The build never downloads anything.
+   **Hand-placed override:** `assets/<recording>-depth.mp4` (no tag), when present, is used instead, as is (a depth video made
+   some other way). It is not re-checked against the recording's content, only its frame count (step 2).
 2. **Relight** (`assets/<recording>-relit-<hash>.mp4`, cached): `scripts/relight.py <media> <depth> <out> --look empire
    --params '<json>'`. `<media>` is the `sourceGrade`d file when that is set, else the recording. The hash covers the params,
-   the media file name and size, the depth file size and relight.py itself. Only the `<video>` tags, hold and outro stills read
+   the media file's name and content, the depth file's key (or the override's content) and relight.py itself. relight.py
+   **refuses** a depth video whose frame count differs from the media's (never pads or drops frames). Only the `<video>` tags, hold and outro stills read
    the relit file (like `sourceGrade`); audio, words, faces and `edit_truth.json` keep the recording's own name.
 3. **With `matte` / `stage`**: the cut-out must show the relit subject too, so its colour is replaced by the relit footage and
    its alpha kept (`assets/<recording>-matte-relit-<hash>.webm`, ffmpeg `alphamerge`, cached). The occluder then matches the
    plate pixel for pixel and only the caption layer between them shows that it is there.
 
-Environment (all optional): `PHANTASIC_PYTHON` (the interpreter; else `.venv`, then `python3` / `python` / `py`, the first that
-imports numpy and cv2, plus onnxruntime when the depth step has to run), `PHANTASIC_MODELS` (model folder), `DEPTH_THREADS`
-(onnxruntime intra-op threads, default min(4, CPU count)), `DEPTH_PROVIDER` (`cpu` default; `coreml` is opt-in on a Mac but measured SLOWER
-here, 0.49 vs 0.21 s/frame; Linux is CPU only), `DEPTH_SIZE` (the short side fed to the model, a multiple of 14, default 364).
+Environment (all optional, nothing else): `PHANTASIC_PYTHON` (the interpreter to use; when set it MUST import the modules, else
+the build fails naming it; unset: `.venv`, then `python3` / `python` / `py`, the first that imports numpy and cv2, plus
+onnxruntime when the depth step has to run), `PHANTASIC_MODELS` (model folder), `DEPTH_THREADS` (onnxruntime intra-op threads
+for the depth step, default min(4, CPU count); a speed knob, not part of the depth key: other thread counts can move the
+float sums in the last bits, which does not matter after the 8-bit quantisation). Depth runs on onnxruntime's CPU provider
+only (CoreML on the M4 measured slower, 0.49 vs 0.21 s/frame); relight.py uses min(4, CPU count) OpenCV threads.
 
 `sections.json`'s `globalHash` includes `relight` (the resolved params) only when it is set. `edit_truth.json`: shape unchanged.
 
 What the build refuses (`die()`): `relight must be true or an object`; `relight: unknown key '<k>'`; `relight.look must be
 "empire" (got <x>)`; `relight.left must be a #rrggbb colour (got <x>)` (and `.right`); `relight.strength must be a number 0..2
 (got <x>)`; `relight.room must be a number 0..1 (got <x>)`; `relight.roomDim must be a number 0..0.6 (got <x>)`;
-`relight: no depth map at <assets/..-depth.mp4> and no depth model at <path>: run python3 scripts/depth_map.py --fetch, or place a
-depth video there`; `relight: no python with numpy and OpenCV found (set PHANTASIC_PYTHON)`; `relight: no python with onnxruntime,
+`relight: no depth map at <assets/..-depth-<tag>.mp4> and no depth model at <path>: run python3 scripts/depth_map.py --fetch, or
+place a depth video at assets/<recording>-depth.mp4`; `relight: PHANTASIC_PYTHON=<path> cannot import <modules>: <last line>`; `relight: no python with numpy and OpenCV found (set PHANTASIC_PYTHON)`; `relight: no python with onnxruntime,
 numpy and OpenCV found for the depth step (set PHANTASIC_PYTHON)`; `relight: depth_map.py failed on <recording>: <last line>`;
-`relight: relight.py failed on <recording>: <last line>`; `relight: could not merge the relit footage into the cut-out of
+`relight: relight.py failed on <recording>: <last line>` (including `relight.py: depth video <d> has a different frame count
+than <media> (...): make it again from this recording`); `relight: depth_map.py failed on <recording>: depth_map.py: <model> does
+not match the sha256 in library/models.json (...)`; `relight: could not merge the relit footage into the cut-out of
 <recording>: <last line>`.
 
 Cost, measured 19 Oct 2026 on the Mac mini (Apple M4, 4 performance + 6 efficiency cores, 16 GB; other sessions running, load
@@ -333,12 +341,12 @@ recording and are cached; a rebuild with everything cached takes the same < 1 s 
 
 | step | time per 10 s | per frame | notes |
 |---|---|---|---|
-| depth (`depth_map.py`, CPU, 4 threads, model input 364x644) | 67 s | 0.22 s | 10 threads: 0.71 s/frame (the efficiency cores stall the pool); 518 short side: 0.50 s/frame; CoreML: 0.49 s/frame |
+| depth (`depth_map.py`, CPU, 4 threads, model input 364x644) | 55-67 s | 0.18-0.22 s | 10 threads: 0.71 s/frame (the efficiency cores stall the pool); 518 short side: 0.50 s/frame; CoreML (dropped): 0.49 s/frame |
 | relight (`relight.py --look empire`) | 16-20 s | 0.055-0.065 s | numpy / OpenCV, 4 threads; the gain field at half size |
-| relit cut-out (VP9 + alpha, only with `matte` / `stage`) | 15 s | 0.05 s | libvpx with 8 threads + 2 tile columns (single-threaded it took ~95 s) |
+| relit cut-out (VP9 + alpha, only with `matte` / `stage`) | 13-15 s | 0.05 s | libvpx with 8 threads + 2 tile columns (single-threaded it took ~95 s) |
 
-The render itself (`hyperframes render`, same reel with `matte` + 2 `behind` beats) took 36 s with `relight` and 30 s without, one
-run each on the loaded machine: the page plays the same number of videos either way, so treat the 6 s as noise until re-measured.
+The render itself (`hyperframes render`, same reel with `matte` + 2 `behind` beats) took 36 s and 27 s with `relight` (two runs)
+and 30 s without (one run) on the loaded machine: the page plays the same number of videos either way, so treat the 6 s as noise until re-measured.
 
 To estimate a Linux CPU box: run `depth_map.py` on any 10 s clip there with `DEPTH_THREADS` set to its CPU quota (it prints
 s/frame), and `relight.py --look empire` likewise; both costs are linear in frames.
