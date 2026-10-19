@@ -28,7 +28,7 @@ python scripts/focus_director.py <project> --style hormozi|gadzhi-motion|gadzhi-
   points: "number one / first / step two", or 2+ points the AI review found within 8 s of each other).
 - Chrome Motion plans 2-4 `scene` beats (`gm-object`, `gm-flow`, `gm-counter`, `gm-nodes`), at least 3 s apart, each 0.8-3.5 s,
   `captions: false`. Concept words choose the 3D object: money / cost / ROI / return / goal / result -> `target` (Ahmed's f1d4b0a),
-  time -> `stopwatch`, AI / system / tools -> `gears`, growth -> `rocket`, idea / strategy -> `lightbulb`, think / value -> `brain`.
+  time -> `stopwatch`, AI / system / tools -> `gears`, growth -> `rocket`, idea / strategy -> `lightbulb`, think / value -> `puzzle`.
   A spoken number (`$6,000`, `80%`) becomes a `gm-counter` (it can lose to a higher-scoring beat under the 3 s spacing rule).
 - `podcast-glow` is not planned here: use `scripts/glow_plan.py` (headlines); the cut-out set windows are not planned.
 
