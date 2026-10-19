@@ -37,7 +37,6 @@ MUSIC = os.path.abspath(os.path.expanduser(MUSIC)) if MUSIC else None
 MSTART = opt("--music-start", os.environ.get("MUSIC_START", "7.25"))   # a house track whose drop is at 7.28 s starts on the drop
 PACK = opt("--pack") or os.environ.get("PHANTASIC_SFX_PACK")
 PY = sys.executable
-NPX = ["cmd", "/c", "npx"] if os.name == "nt" else ["npx"]            # npx is a .cmd shim on Windows
 
 for label, path in (("project", os.path.join(P, "reel.json")), ("takes video", TK), ("depth video", DP), ("takes.json", TJ),
                     ("first-build matte", os.path.join(P, "assets", "talk-matte.webm"))):
@@ -80,7 +79,8 @@ b = run(["node", os.path.join(HERE, "build.mjs"), P], cwd=P)
 open(os.path.join(build, "build-finish.log"), "w", encoding="utf-8").write(b.stdout + b.stderr)
 final = os.path.join(build, "reel-final.mp4")
 if "--no-render" not in A:
-    run([*NPX, "hyperframes@0.8.81", "render", "-o", final, "--quiet"], cwd=P)
+    # render.mjs = npx hyperframes@0.8.81 render with GSAP served from vendor/; it fails if the CDN would be used
+    run(["node", os.path.join(HERE, "render.mjs"), "-o", final, "--quiet"], cwd=P)
     mj = os.path.join(build, "master.json")
     if os.path.isfile(mj):
         run([PY, os.path.join(HERE, "master.py"), final, final + ".mastered.mp4", "--from-json", mj])
