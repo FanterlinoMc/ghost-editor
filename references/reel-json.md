@@ -120,8 +120,7 @@ existed (`scripts/byte-identity.mjs`).
     `box` is ignored. `room` is never honoured and a layer's own `exit` runs on the whole graphic.
     `hideCaptions: true` (`motion` and `text` layers) hides the captions while the layer is up, as it does on a
     beat; edit_truth.json's layer entry carries `hideCaptions: true` then.
-  - `graphic`: **spec (CP1), not built yet** - a Prompt Motion HTML graphic pre-rendered to its own video; see
-    "Prompt Motion graphic" below.
+  - `graphic`: a Prompt Motion HTML graphic pre-rendered to its own video (PM3); see "Prompt Motion graphic" below.
 - **Where it sits.** Above the footage and the beats' `.layer` band (z 3), below the captions (z 8), unless
   `overCaptions: true` (then above them). Within one band, ordered by `z` (0 to 99), ties by array order.
 - **Enter and exit** are explicit `fromTo` tweens with `force3D: false`, 0.3 s (a third of the layer if it is
@@ -782,9 +781,9 @@ reverse play, dotLottie (`.lottie`), image or text layers, expressions.
 
 ## Prompt Motion graphic (`kind: "graphic"` layer, `type: "graphic"` beat): spec (CP1), not built yet
 
-Status: **spec (CP1) v3.2.2 (v3.2.2 resolves the twelve points PM2 hit while building; CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found; v3.2.1 notes the G31 trade-off); not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
-`kind: "graphic"` dies with the existing `unknown kind "graphic"` error and a `graphic` beat is not placed. PM2
-(sandbox + render) and PM3 (in the reel) build it exactly as written here. The PC mirrors every **static** rule
+Status: **spec (CP1) v3.2.5 (v3.2.5 records PM3's placement as built, `mac/graphic-place` @ 5b3aa1d; v3.2.4 records PM2's security hardening, `mac/graphic-render` @ 4cbdc73; v3.2.3 adds what the PM5 fixtures measured: the streaming-encoder pin, the blob-worker R1 exclusion, authoring for determinism; v3.2.2 resolves the twelve points PM2 hit while building; CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found; v3.2.1 notes the G31 trade-off); PM3 (in the reel) built on `mac/graphic-place`, see "Placement as built (PM3)".**
+`build.mjs` and `layers.mjs` place a graphic layer (`kind: "graphic"`) and a `graphic` beat as written here, through PM2's
+`renderGraphic` (sandbox + render). The PC mirrors every **static** rule
 (G1 to G28) and every placement rule in the validator word for word, at the same time.
 
 A user types a prompt ("a counter from 10k to 80k with sparks"); Claude writes ONE self-contained HTML file;
@@ -1028,6 +1027,59 @@ without running the file):
   - **Capture mode (v3.2.2): both renders run with `PRODUCER_EXPERIMENTAL_FAST_CAPTURE=false`** (screenshot
     capture). Measured in PM2: a one-worker render on macOS switches to drawElement capture (multi-worker
     renders fall back to screenshots), the two captures differ in pixels (frame 0 differed) and R6 failed.
+  - **Encoder (v3.2.3): both renders also run with `PRODUCER_ENABLE_STREAMING_ENCODE=false`.** Measured in PM5:
+    with `--workers 1` HyperFrames switches to a streaming encoder, and the decoded frames differ from the other
+    render even when the captured pixels are identical.
+- **Render hardening (v3.2.4; built in PM2, `mac/graphic-render` @ 4cbdc73).**
+  1. **Flag order.** The shim execs Chrome with HyperFrames' arguments FIRST and the network flags LAST
+     (`exec <chrome> "$@" <CHROME_FLAGS> "--proxy-bypass-list=$BYPASS"`): Chrome keeps the last copy of a
+     switch, so nothing HyperFrames (or anything upstream) passes can override a lock flag.
+  2. **Environment.** `GRAPHIC_RENDER_ORIGINS` and `GRAPHIC_SHIM_MARK` are stripped from the environment of every
+     child the renderer starts (probe, versions, renders); only the preload inside THIS render's HyperFrames sets
+     `GRAPHIC_RENDER_ORIGINS`. The shim keeps only entries matching `^(localhost|127\.0\.0\.1):[0-9]{1,5}$`
+     (`;`-separated); anything else (`*`, a host, a wildcard) is dropped, and with none left the bypass list is
+     `<-loopback>` alone (nothing on loopback loads, the render fails: R10).
+  3. **Shim marker (R13).** The renderer sets `GRAPHIC_SHIM_MARK` to an empty file; the shim appends its PID
+     (Chrome's, after `exec`) to it. After the render, an EMPTY marker (Chrome was not launched through the shim)
+     or a missing `Browser launched (HeadlessChrome/<v>, ...` log line refuses the render with R13 (`<v>` is then
+     `(no 'Browser launched' line)` or `<v> (not launched through the shim)`). The PIDs are also the ones killed
+     when a render is stopped.
+  4. **Probe.** Only a `TypeError` counts as blocked, in the Chrome half and the Node half; a timeout or any other
+     error means the probe could not decide: R12's "could not run" text. The Chrome half also opens a listener on
+     a SECOND `localhost` port (not the render server's) and fetches it: it must see 0 connections, else R12
+     with that URL.
+  5. **Integrity pre-script.** The bridge's first part runs BEFORE any graphic script (placed ahead of the
+     graphic's `<head>` content). It keeps the page's own `console.error`, `EventTarget.prototype.addEventListener`,
+     `Math.round` and `Math.min` in a closure, installs the `navigate` trap and the `hf-seek` listener first,
+     and exposes the refusal function as a non-writable, non-configurable `window.__graphicRefuse` for the
+     post-script (the load-time R3 / R5 checks). So a graphic cannot silence refusals by stubbing
+     `console.error`, register a `navigate` listener ahead of the trap, or navigate before the trap exists. A
+     browser without `window.navigation` refuses: `GRAPHIC-REFUSED: navigation trap unavailable (no
+     window.navigation)`, reported as R2 (`graphic page error: navigation trap unavailable (no window.navigation)`).
+  6. **Hangs.** Each render runs as its own process group (detached) with a timeout of the R7 budget + 60 s;
+     on timeout the whole group and the shim-recorded Chrome PIDs (with their groups) are killed with SIGKILL, and
+     the render is refused (R10, the log ends `killed after <s> s (render timeout)`). The probe children have
+     60 s / 30 s timeouts, also SIGKILL.
+  7. **The blob-worker exclusion (R1), exactly.** A log line is skipped only when it matches
+     `^\[Browser:ERROR\] Creating a worker from 'blob:http:\/\/localhost:(\d{1,5})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' violates the following Content Security Policy directive: "script-src 'unsafe-inline'"\. Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback\. The action has been blocked\.$`
+     AND its port is one the preload recorded for this render's server (the log line
+     `graphic-offline: render server localhost:<port>`). Any other CSP line, this text on another port, or a
+     `127.0.0.1` origin, still refuses (R1). (This replaces v3.2.3's looser wording, which also named `127.0.0.1`.)
+
+### Authoring for determinism (v3.2.3; the writer prompt carries this list verbatim)
+
+Measured while building the PM5 fixtures: the two renders split frames across Chrome workers differently, and a
+worker that starts cold in the middle of a render can draw some things one level apart. R6 requires identical
+frames, so a graphic:
+
+- ends a transform at `none`, not `translateY(0px)` (or animates `top` / `left` instead);
+- draws small moving glyphs or cursors that pass over rounded DOM corners on a `<canvas>`, not as inline SVG;
+- does not slide full-screen panels inside a rounded `overflow: hidden` box (corner pixels differ by one level);
+- also puts any font it uses only on a canvas in a hidden DOM line (e.g. `<div style="position:absolute;
+  opacity:0">Aa</div>` in that family), so the font is loaded before the first frame;
+- keeps display text at or under about 150 px (measured: 168 px and up in Unbounded or Montserrat differ by one
+  level between workers);
+- measures text widths inside `seek(t)`, not at load (a webfont may not be loaded yet at load time).
 
 ### Fields (layer: `{ "kind": "graphic", ... }` in `layers[]`; beat: `{ "type": "graphic", ... }` in `beats[]`)
 
@@ -1088,6 +1140,63 @@ no face or UI-zone check (they are full frame by design).
 **Sections, edit_truth.** A graphic counts like a layer / beat for section boundaries; the cache key (below)
 is part of the hash of the section it starts in. `edit_truth.json`: a graphic layer is recorded by the existing
 `layerTruth` (`kind: "graphic"`), plus `mode`; a graphic beat as every beat. Nothing else changes.
+
+### Placement as built (PM3, `scripts/lib/graphic-place.mjs`)
+
+- **Async render, synchronous build.** `build.mjs` resolves every graphic layer (with the other layers) and every
+  graphic beat (before the beat loop, like the motion-beat pre-pass), then awaits ONE top-level pre-pass
+  (`prepareGraphics`) that renders each missing file through `renderGraphic`, one at a time, once per distinct
+  placement (`html`, `mode`, `L`, `in`, `after`); an existing `assets/graphics/<name>-<key16>.<ext>` is used as is.
+  Nothing is written before the pre-pass ends, so the page is the same bytes for the same reel and cached files. A reel
+  with no graphic never reaches the pre-pass. The build does not take the Mac render lock itself: run a build that
+  may render graphics under `lockf -k /tmp/phantasic-render.lock`, like any render.
+- **Order of checks (layer).** The existing `id`, kind and timing dies, then G1..G35 (the file), P1, the `dur` die,
+  P2 (on `dur` as asked, before clamping to the reel), clamping, `after: "cut"` (GW2), the box die, P3, the
+  `enter` / `exit` / `fit` dies. Beat: G1..G35, P1, P2 (on `to - at` in source seconds), the time mapping (a
+  failure drops the beat: `graphic <id or at>: <html>: <the E() message>, dropped`), P3, then `box must be { x, y, w,
+  h } numbers with w, h > 0, got <json>` and `fit must be one of cover|contain, got <json>` (the layer texts, as a
+  dropped beat). A render refusal: the first R text, as a layer die / dropped beat.
+- **Markup.** A layer: the `video` layer's markup (`data-layer-kind="graphic"`, `data-media-start="0"`: `in` and
+  `after` are baked into the file, which starts at the placement's frame 0; no `<audio>`); `enter`/`exit` default
+  `none`, `fit` `contain` (an insert: box = the canvas, `fit` cover). A beat: an untimed `<div class="layer">` (an
+  insert: `style="z-index:5"`, above the other beats and the under-captions layers, below grain and captions)
+  holding `<div id="<id>-in" class="graphic" data-graphic="<name>" data-graphic-mode="<mode>">` in its box and the
+  timed `<video>`. The 1 ms show tween ENDS at `t0` (measured: starting it at `t0` left the window's first frame
+  empty) and the hide tween ends at `t1`, so the window shows exactly frames `[t0, t1)`.
+- **Captions.** `hideCaptions` (default `true` for an insert) hides them from `t0 - 0.08` to `t1 + 0.05`, so the
+  0.08 s fade has ended on the graphic's first frame and the re-show starts on its end (measured: a plain `[t0, t1]`
+  window left the caption over the first and last frames of an insert).
+- **edit_truth.json.** Layer: `layerTruth` + `mode`, and `hideCaptions: true` when resolved true. Beat: as every
+  beat, except `to` is the resolved end (the default window, or shortened by `cut`). sections.json: a graphic layer's
+  file and key are in its layer object; a graphic beat's key is added to its section's payload (`graphics`).
+- **Check order, as one list (v3.2.5).** Layer: (1) the existing `id`, `kind` and timing dies; (2) G1..G35; (3) P1;
+  (4) the `dur` die; (5) P2 on `dur` as written, BEFORE clamping to the reel; (6) clamping (existing warnings);
+  (7) `after: "cut"` (GW2); (8) the `box` die; (9) P3; (10) the `enter` / `exit` / `fit` dies. Beat: (1) G1..G35;
+  (2) P1; (3) P2 on the window in SOURCE seconds (`to - at`, or the default window below); (4) the time mapping
+  (`E()`); (5) P2 again if the mapped window is under one frame; (6) `after: "cut"`; (7) the `box` problem;
+  (8) P3; (9) the `fit` problem. The first failure is the one reported.
+- **A beat's default `to` (v3.2.5).** Left out, `to` = `at` + the graphic's own length from `in`
+  (`(D_f - in_f) / fps`), in SOURCE seconds. If that end falls past the end of the take that holds `at` (or in
+  cut material), `E()` fails and the beat is DROPPED (current behaviour; whether to clamp to the take instead is
+  pending a PC decision).
+- **Drop texts for a beat (v3.2.5).** An unmappable time: `graphic <id or at>: <html>: <the E() message, first
+  line>, dropped`. A bad box or fit reuses the layer texts in the dropped form: `graphic <id or at>: <html>: box must
+  be { x, y, w, h } numbers with w, h > 0, got <json>, dropped` and `graphic <id or at>: <html>: fit must be one of
+  cover|contain, got <json>, dropped`.
+- **Unknown kind (v3.2.5).** `LAYER_KINDS` gains `graphic`, so the existing die reads `layers[<i>] (<id>): unknown
+  kind <json>; have: video, image, logo, motion, text, graphic`.
+- **sections.json (v3.2.5).** The per-section `graphics` key list is written ONLY when the reel has graphic beats
+  (and then only on the sections that hold one); a reel without them keeps the manifest's old shape. Graphic layers
+  carry their file and key inside their layer object.
+- **Face (v3.2.5, proposed for the validator; the build does not check it).** A director- or planner-placed overlay
+  beat must keep off the speaker's face. The validator samples the face track at 10 fps over the beat's window;
+  if the overlay box intersects the face box in more than 50 % of the samples, the beat is dropped with
+  **GW9** `graphic <id or at>: <html>: box covers the speaker's face for <p>% of its window, dropped` (`<p>` a
+  whole percent). A user layer (`"by": "user"`) gets the same text without `, dropped`, as a warning. Inserts are
+  exempt (full frame by design).
+- **Tests.** `GRAPHIC_TEST_DEPS=<module>` (tests only) replaces renderGraphic's external steps with the module's
+  `deps`; `scripts/fixtures/graphic-stub-deps.mjs` writes a small ffmpeg clip and reports Chrome `0.0.0-stub`, so a
+  stubbed file never shares a key with a real render.
 
 ### Cache key
 
@@ -1229,7 +1338,10 @@ with an HTML entity (`<code>&#115;etTimeout</code>`), or inside a JS string with
 (`"setTimeout(cb)"`, `"Launch Date (Q3)"`); the scan does not match either and the page displays
 the same text. A function or method of your own must not be called `animate` (G13 `.animate(`), `open` or `click` (G25), and a
 variable must not be called `location`; `this[...]` in any form (including ``this[`x${i}`]``) is refused by
-G25, so the writer prompt must avoid it; CSS never contains a backslash (G31: write the character itself, e.g.
+G25, so the writer prompt must avoid it; visible text such as "animation:" or "transition:" (a UI or Code graphic showing CSS) goes in MARKUP, never in a
+CSS `content:` string: G13 scans `<style>` and `style=` (measured: `content:"transition: on"` is refused, the same
+words in `<p>` or `<pre>` pass, as does `anim&#97;tion:`; the entity form is the safe habit for any such word in
+markup); CSS never contains a backslash (G31: write the character itself, e.g.
 `content:"—"`, never `content:"\2014"`); and `anime`, `d3`, `THREE`,
 ... are reserved names (G19).
 
@@ -1331,7 +1443,7 @@ render wrapper reads the whole log of both renders; any of these deletes the out
 
 | # | detected by | `<reason>` (exact) |
 |---|---|---|
-| R1 | a log line containing `violates the following Content Security Policy directive` (Chrome), `vendor: blocked <url>` (the Node preload), or (v3.2.2) a `[Browser:...]` line with `net::ERR_PROXY_CONNECTION_FAILED`, `net::ERR_NAME_NOT_RESOLVED`, `net::ERR_BLOCKED_BY_CLIENT` or `net::ERR_ACCESS_DENIED` (a request or navigation the shim blocked; `<url>` is the line's URL, else `(net::ERR_<name>)`) | `graphic tried to load <url> (no network): render refused` |
+| R1 | a log line containing `violates the following Content Security Policy directive` (Chrome), `vendor: blocked <url>` (the Node preload), or (v3.2.2) a `[Browser:...]` line with `net::ERR_PROXY_CONNECTION_FAILED`, `net::ERR_NAME_NOT_RESOLVED`, `net::ERR_BLOCKED_BY_CLIENT` or `net::ERR_ACCESS_DENIED` (a request or navigation the shim blocked; `<url>` is the line's URL, else `(net::ERR_<name>)`); (v3.2.4) ONE exclusion: HyperFrames' own blob-worker CSP line, exactly as in "Render hardening" item 7, on this render's recorded server port only | `graphic tried to load <url> (no network): render refused` |
 | R2 | a log line `[Browser:PAGEERROR] <message>` | `graphic page error: <message>` |
 | R3 | `GRAPHIC-REFUSED: window.seek is not a function` (bridge, at load) | `window.seek is not a function after the page loaded` |
 | R4 | `GRAPHIC-REFUSED: seek(<t>) threw: <message>` / `... returned a Promise` (bridge) | `seek(<t>) threw: <message>` / `seek(<t>) returned a Promise (it must be synchronous)` |
@@ -1342,8 +1454,8 @@ render wrapper reads the whole log of both renders; any of these deletes the out
 | R9 | overlay: every decoded frame has alpha 0 everywhere | `every frame is fully transparent` |
 | R10 | `hyperframes render` exits non-zero, or writes no file | `hyperframes render failed (exit <code>): <last log line>` |
 | R11 (v2) | a log line containing `GRAPHIC-REFUSED: navigated` (v3.2.2: the bridge's Navigation API `navigate` trap, which also cancels the navigation) | `graphic navigated away from its page: render refused` |
-| R12 (v2) | the network probe (above, v3.2.2: Chrome over its debugging pipe on `about:blank`, plus the Node half) loaded `http://1.1.1.1/` or `http://169.254.169.254/`; or the probe could not run (no shim, e.g. Windows; Chrome did not start; the Chrome or ffmpeg version could not be read) | `network lock is not in place (<url> was reachable from the render browser): graphic renders refused` / `network lock probe could not run: <message>` |
-| R13 (v2) | the render log's `Browser launched (HeadlessChrome/<v>, ...` differs from the key's `chrome` | `the render used Chrome <v>, the cache key says <k>: nothing cached` |
+| R12 (v2) | the network probe (above, v3.2.2: Chrome over its debugging pipe on `about:blank`, plus the Node half) loaded `http://1.1.1.1/` or `http://169.254.169.254/`; or (v3.2.4) the second-`localhost` listener saw a connection (`<url>` = its URL); or the probe could not run (only a `TypeError` counts as blocked: a timeout or other error, no shim, e.g. Windows; Chrome did not start; the Chrome or ffmpeg version could not be read) | `network lock is not in place (<url> was reachable from the render browser): graphic renders refused` / `network lock probe could not run: <message>` |
+| R13 (v2) | the render log's `Browser launched (HeadlessChrome/<v>, ...` differs from the key's `chrome`; (v3.2.4) or that line is missing (`<v>` = `(no 'Browser launched' line)`), or the shim marker file is empty (`<v>` = `<v> (not launched through the shim)`) | `the render used Chrome <v>, the cache key says <k>: nothing cached` |
 
 **Warnings (never fatal; layer and beat alike, prefixed `layer <id>:` / `graphic <id>:`).** The e79b4d3 texts,
 confirmed; GW7's `<platform name>` and GW8 are v3.1.
