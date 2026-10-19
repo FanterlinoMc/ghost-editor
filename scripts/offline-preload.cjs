@@ -4,8 +4,14 @@
 // The render wrapper reads that line as R1 ("graphic tried to load <url> (no network): render refused").
 // Why: HyperFrames' compiler runs in Node before Chrome and downloads remote <img src>, CSS url(), media and
 // Google Fonts itself (global fetch, and https.get for its downloader). Chrome's side is closed by the wrapper's CSP.
-// Covered: globalThis.fetch, http/https request+get, net.connect/createConnection, tls.connect (named ESM imports of
-// the builtins are re-synced with syncBuiltinESMExports). Loopback (127.0.0.0/8, ::1, localhost) and unix sockets stay
+// Covered: globalThis.fetch, http/https request+get, net.connect/createConnection, net.Socket.prototype.connect (the
+// path every TCP client takes, http.ClientRequest's agent sockets included), tls.connect (named ESM imports of the
+// builtins are re-synced with syncBuiltinESMExports).
+// NOT covered, and why the render path does not need it: dgram (UDP; hyperframes' render opens none), dns lookups
+// (resolve only, no payload leaves except the query; Chrome's own DNS is closed by the shim's resolver rule),
+// child_process (hyperframes spawns ffmpeg/ffprobe and Chrome: ffmpeg only reads local frames; Chrome is locked by
+// the shim; a child node process inherits NODE_OPTIONS and so this preload), worker_threads (inherit the preload via
+// NODE_OPTIONS execArgv). The graphic itself never runs in Node: only in Chrome, behind the shim and the CSP. Loopback (127.0.0.0/8, ::1, localhost) and unix sockets stay
 // open: HyperFrames serves the page and talks to Chrome over them. GSAP-free: no vendor/ manifest is read.
 // npm/npx themselves (package resolution, not render content) are not armed: the preload only arms in the process
 // that is not npm's CLI (npx spawns hyperframes as a child node process, which inherits NODE_OPTIONS).
@@ -79,6 +85,18 @@ if (!globalThis.__graphicOffline && !isNpm) {
       return real.apply(this, arguments);
     };
   }
+  // the socket prototype: catches clients that build a Socket themselves (new net.Socket().connect(...))
+  const realSockConnect = net.Socket.prototype.connect;
+  net.Socket.prototype.connect = function (...args) {
+    let o = args[0];
+    if (Array.isArray(o)) o = o[0];
+    let host = "localhost", port, isPath = false;
+    if (o && typeof o === "object") { if (o.path) isPath = true; else { host = o.host || "localhost"; port = o.port; } }
+    else if (typeof o === "string" && !/^\d+$/.test(o)) isPath = true;
+    else { port = o; if (typeof args[1] === "string") host = args[1]; }
+    if (!isPath && !LOOP_HOST.test(host)) { process.nextTick(() => this.destroy(refuse(`tcp://${host}:${port}`))); return this; }
+    return realSockConnect.apply(this, args);
+  };
   const tls = require("tls");
   const realTls = tls.connect;
   tls.connect = function (a, b) {

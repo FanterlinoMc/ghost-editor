@@ -31,7 +31,7 @@ const htmlPath = inProject ? rel : `assets/graphics/${path.basename(abs).toLower
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-determinism-"));
 const outDir = opt("--out", path.join(work, "out"));
 const t0 = Date.now();
-const r = renderGraphic({
+const r = await renderGraphic({
   content: fs.readFileSync(abs), html: htmlPath, projectDir, mediaRoot: projectDir ? null : path.dirname(abs), mode, W, H, fps,
   outDir, buildDir: path.join(work, "build"), log: (l) => console.log(l),
 });

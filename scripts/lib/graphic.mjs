@@ -69,6 +69,7 @@ export const REASONS = {
   R5: ({ a, b }) => `window.duration / window.size changed at load (static ${a}, at load ${b})`,
   R6: ({ i, t }) => `frame ${i} (t=${t}s) differs between two renders (not deterministic)`,
   R6n: ({ a, b }) => `the two renders have ${a} and ${b} frames`,
+  R6L: ({ a, L }) => `the two renders have ${a} and ${L} frames`,
   R7: ({ s, L, b }) => `render took ${s}s for ${L} frames (budget ${b}s)`,
   R8: ({ bytes }) => `rendered file is ${bytes} bytes (max 52428800)`,
   R9: () => `every frame is fully transparent`,
@@ -331,34 +332,45 @@ export const RNG_SNIPPET = `window.rng = function (seed) {
 };`;
 export const REFUSED = "GRAPHIC-REFUSED: ";
 const fmtT = (t) => String(+t.toFixed(3));
-// the bridge: HyperFrames dispatches window "hf-seek" with detail.time = j / fps; map j to the graphic's frame k and call
-// window.seek(k / fps). Problems go to console.error (HyperFrames prints them as [Browser:ERROR] ...), once per page.
-export function bridgeScript({ fps, L, inF, D, after, duration, size }) {
+// The bridge, in two parts around the graphic. preScript runs BEFORE any graphic script (it is placed ahead of the
+// graphic's <head>): it keeps the page's own console.error, addEventListener and Math functions in a closure, installs
+// the navigate trap and the hf-seek listener first (so a graphic can neither silence the refusals by stubbing
+// console.error, nor register a navigate listener ahead of the trap, nor navigate before it exists), and exposes the
+// refusal function as a non-writable, non-configurable window.__graphicRefuse for postScript. HyperFrames dispatches
+// window "hf-seek" with detail.time = j / fps; the listener maps j to the graphic's frame k and calls window.seek(k / fps).
+// Problems go to the saved console.error (HyperFrames prints them as [Browser:ERROR] ...), once per page.
+export function preScript({ fps, L, inF, D, after }) {
   return `(function () {
-  var FPS = ${fps}, L = ${L}, IN = ${inF}, D = ${D}, AFTER = ${JSON.stringify(after)}, said = false;
-  function refuse(m) { if (!said) { said = true; console.error(${JSON.stringify(REFUSED)} + m); } }
+  var err = console.error.bind(console), add = EventTarget.prototype.addEventListener, round = Math.round, min = Math.min;
+  var FPS = ${fps}, L = ${L}, IN = ${inF}, D = ${D}, AFTER = ${JSON.stringify(after)}, said = false, R = ${JSON.stringify(REFUSED)};
+  function refuse(m) { if (!said) { said = true; err(R + m); } }
   function fmt(t) { return String(+t.toFixed(3)); }
-  var sz = window.size && typeof window.size === "object" ? window.size.w + "x" + window.size.h : "${size.w}x${size.h}";
-  var a = "${duration}s ${size.w}x${size.h}", b = window.duration + "s " + sz;
-  if (a !== b) refuse("window.duration / window.size changed at load (static " + a + ", at load " + b + ")");
-  if (typeof window.seek !== "function") refuse("window.seek is not a function");
+  Object.defineProperty(window, "__graphicRefuse", { value: refuse, writable: false, configurable: false, enumerable: false });
   // R11 navigation trap. Not pagehide/beforeunload: measured, pagehide also fires when HyperFrames closes the page at
-  // the end of a NORMAL render (every graphic would be refused). The Navigation API's navigate event fires only for
-  // navigations the page starts (location =, link clicks, form submits, refreshes) and is cancelled here.
-  if (window.navigation) window.navigation.addEventListener("navigate", function (e) {
-    console.error(${JSON.stringify(REFUSED)} + "navigated");
-    if (e.cancelable) e.preventDefault();
-  });
-  window.addEventListener("hf-seek", function (e) {
-    var j = Math.round(e.detail.time * FPS); if (j < 0) j = 0; if (j > L - 1) j = L - 1;
-    var k = IN + j; k = AFTER === "loop" ? k % D : Math.min(k, D - 1);
+  // the end of a NORMAL render. The Navigation API's navigate event fires only for navigations the page starts
+  // (location =, link clicks, form submits, refreshes) and is cancelled here.
+  if (window.navigation) add.call(window.navigation, "navigate", function (e) { err(R + "navigated"); if (e.cancelable) e.preventDefault(); });
+  else refuse("navigation trap unavailable (no window.navigation)");
+  add.call(window, "hf-seek", function (e) {
+    var j = round(e.detail.time * FPS); if (j < 0) j = 0; if (j > L - 1) j = L - 1;
+    var k = IN + j; k = AFTER === "loop" ? k % D : min(k, D - 1);
     var t = k / FPS;
     if (typeof window.seek !== "function") { refuse("window.seek is not a function"); return; }
     try {
       var r = window.seek(t);
       if (r && typeof r.then === "function") refuse("seek(" + fmt(t) + ") returned a Promise");
-    } catch (err) { refuse("seek(" + fmt(t) + ") threw: " + String(err && err.message !== undefined ? err.message : err).split("\\n")[0]); }
+    } catch (x) { refuse("seek(" + fmt(t) + ") threw: " + String(x && x.message !== undefined ? x.message : x).split("\\n")[0]); }
   });
+})();`;
+}
+// postScript runs after the graphic's body: the load-time checks (R5 duration/size, R3 seek), through __graphicRefuse
+export function postScript({ duration, size }) {
+  return `(function () {
+  var refuse = window.__graphicRefuse;
+  var sz = window.size && typeof window.size === "object" ? window.size.w + "x" + window.size.h : "${size.w}x${size.h}";
+  var a = "${duration}s ${size.w}x${size.h}", b = window.duration + "s " + sz;
+  if (a !== b) refuse("window.duration / window.size changed at load (static " + a + ", at load " + b + ")");
+  if (typeof window.seek !== "function") refuse("window.seek is not a function");
 })();`;
 }
 const headOf = (html) => (/<head\b[^>]*>([\s\S]*?)<\/head\s*>/i.exec(html) || [, ""])[1];
@@ -391,6 +403,7 @@ html, body { margin: 0; padding: 0; width: ${w}px; height: ${h}px; overflow: hid
 #graphic-root { position: relative; width: ${w}px; height: ${h}px; overflow: hidden; background: ${bg}; }
 </style>
 <script>
+${preScript({ fps, L, inF, D, after })}
 ${RNG_SNIPPET}
 </script>
 ${headOf(src)}
@@ -400,7 +413,7 @@ ${headOf(src)}
 ${bodyOf(src)}
 </div>
 <script>
-${bridgeScript({ fps, L, inF, D, after, duration: meta.duration, size: meta.size })}
+${postScript({ duration: meta.duration, size: meta.size })}
 </script>
 </body></html>
 `;

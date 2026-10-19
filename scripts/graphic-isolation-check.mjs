@@ -104,10 +104,10 @@ for (const [name, code, markup] of ROUTES) {
     fs.mkdirSync(dir, { recursive: true });
     let page = wrapperHtml({ html: graphic(code, markup), meta, mode: "overlay", fps, L: fr.L, inF: 0, D: fr.D, after: "hold", W: 320, H: 320 });
     // --no-trap: without the bridge's navigation trap (which cancels page-started navigations), so the shim alone is measured
-    if (args.includes("--no-trap")) page = page.replace("if (window.navigation) window.navigation", "if (false) window.navigation");
+    if (args.includes("--no-trap")) page = page.replace(`add.call(window.navigation, "navigate"`, `(function () {})(window.navigation, "navigate"`);
     fs.writeFileSync(path.join(dir, "index.html"), page);
     hits.length = 0;
-    const r = runRender({ dir, out: path.join(dir, "out.webm"), mode: "overlay", fps, workers: null, launcher, shim: variant === "shim" ? shim : null, logFile: path.join(dir, "render.log") });
+    const r = await runRender({ dir, out: path.join(dir, "out.webm"), mode: "overlay", fps, workers: null, launcher, shim: variant === "shim" ? shim : null, logFile: path.join(dir, "render.log") });
     await settle();
     const refused = scanLog(r.log).map((x) => x.code);
     row[variant] = { hits: [...hits], exit: r.status, refused: [...new Set(refused)] };
