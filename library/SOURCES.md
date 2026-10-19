@@ -17,8 +17,9 @@ A licence check on 19 Oct 2026 concluded:
 - **Mixkit sound effects:** unresolved. The licence forbids redistributing the files "in a tool or
   template" and scripted mass downloads, which needs a lawyer's reading before any use.
 
-So do not run `scripts/sfx_fetch.py` or `scripts/library_restore.py`: both still download from Mixkit,
-and both rewrite `manifest.json`. They are kept only until the engine retires them.
+Mixkit is not used for anything (decided 19 Oct 2026). The script that downloaded its sound effects
+(`scripts/sfx_fetch.py`) was removed, and `scripts/library_restore.py` no longer fetches sound effects or
+music; it restores memes only. `scripts/no-mixkit-fetch.test.mjs` fails if a download path comes back.
 
 ## What may ship
 
