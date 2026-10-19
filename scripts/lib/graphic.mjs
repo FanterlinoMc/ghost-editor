@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { scopes } from "../graphic-rules/rules.mjs";
 
 export const RENDERER = "hyperframes@0.8.81";
-export const KEY_VERSION = 2; // bumped when the wrapper / bridge / CSP / lock changes (it is in the cache key)
+export const KEY_VERSION = 3; // bumped when the wrapper / bridge / CSP / lock changes (it is in the cache key)
 export const QUALITY = "looks";
 export const LIMITS = {
   htmlBytes: 2097152, mediaBytes: 4194304, mediaFiles: 8, fileBytes: 52428800,
@@ -70,6 +70,7 @@ export const REASONS = {
   R6: ({ i, t }) => `frame ${i} (t=${t}s) differs between two renders (not deterministic)`,
   R6n: ({ a, b }) => `the two renders have ${a} and ${b} frames`,
   R6L: ({ a, L }) => `the two renders have ${a} and ${L} frames`,
+  R6o: ({ k, t }) => `frame ${k} (t=${t}s) depends on the seeks before it (not deterministic)`,
   R7: ({ s, L, b }) => `render took ${s}s for ${L} frames (budget ${b}s)`,
   R8: ({ bytes }) => `rendered file is ${bytes} bytes (max 52428800)`,
   R9: () => `every frame is fully transparent`,

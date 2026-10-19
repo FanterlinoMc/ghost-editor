@@ -212,7 +212,7 @@ export function scanLog(log) {
       else if ((x = /^seek\(([^)]*)\) threw: (.*)$/.exec(r))) add("R4", reason("R4", { t: x[1], message: x[2] }));
       else if ((x = /^seek\(([^)]*)\) returned a Promise/.exec(r))) add("R4", reason("R4p", { t: x[1] }));
       else if ((x = /^window\.duration \/ window\.size changed at load \(static (.*), at load (.*)\)$/.exec(r))) add("R5", reason("R5", { a: x[1], b: x[2] }));
-      else if ((x = /^seek order: frame (\d+) \(t=([^)]*)s\)/.exec(r))) add("R6", reason("R6", { i: x[1], t: x[2] }));
+      else if ((x = /^seek order: frame (\d+) \(t=([^)]*)s\)/.exec(r))) add("R6", reason("R6o", { k: x[1], t: x[2] }));
       else if (r.startsWith("navigated")) add("R11", reason("R11"));
       else add("R2", reason("R2", { message: r }));
     }
