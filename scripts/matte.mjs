@@ -81,18 +81,30 @@ async function* frames(stream, size) {
   if (buf.length) throw new Error(`matte: stream ended mid-frame (${buf.length} of ${size} bytes)`);
 }
 
+const made = new Set();   // temp folder / .part file to remove if we are stopped by a signal (finally does not run then)
 const live = new Set();   // every child still running, so a failure can stop the rest (by their own handles, never by name)
-// tree: the child starts its own children (npx -> node -> ffmpeg): it gets its own process group on POSIX, so stopping
-// it stops the whole group (measured on staging: killing npx alone left its node + ffmpeg running), and on Windows
-// taskkill /T by its PID. Never by name.
+// tree: the child starts its own children (npx -> node -> ffmpeg), and killing npx alone left its node + ffmpeg running
+// (measured on staging). stop() then kills the whole tree by PID: taskkill /T on Windows, else every descendant found
+// through ps, deepest first. The children stay in the caller's process group on purpose: the studio cancels a build by
+// SIGKILLing its group, which must keep reaching the tool. Never by name.
+const descendants = (pid) => {
+  try {
+    const kids = new Map();
+    for (const l of execFileSync("ps", ["-A", "-o", "pid=,ppid="]).toString().trim().split("\n")) {
+      const [c, par] = l.trim().split(/\s+/).map(Number);
+      kids.set(par, [...(kids.get(par) || []), c]);
+    }
+    const out = [], walk = (q) => (kids.get(q) || []).forEach((c) => { walk(c); out.push(c); });
+    walk(pid);
+    return out;
+  } catch { return []; }
+};
 function run(cmd, args, { stdin = "ignore", stdout = "ignore", env, tree = false } = {}) {
-  const p = spawn(cmd, args, { stdio: [stdin, stdout, "pipe"], windowsHide: true, detached: tree && process.platform !== "win32", ...(env ? { env } : {}) });
+  const p = spawn(cmd, args, { stdio: [stdin, stdout, "pipe"], windowsHide: true, ...(env ? { env } : {}) });
   p.stop = () => {
-    try {
-      if (!tree) p.kill();
-      else if (process.platform === "win32") spawn("taskkill", ["/PID", String(p.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
-      else process.kill(-p.pid, "SIGKILL");   // SIGTERM left a tool node + its decoder running on staging
-    } catch { /* already gone */ }
+    if (tree && process.platform === "win32") { try { execFileSync("taskkill", ["/PID", String(p.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }); } catch { /* gone */ } return; }
+    for (const d of tree ? descendants(p.pid) : []) { try { process.kill(d, "SIGKILL"); } catch { /* gone */ } }
+    try { p.kill("SIGKILL"); } catch { /* gone */ }
   };
   live.add(p); p.on("exit", () => live.delete(p));
   let err = "";
@@ -154,6 +166,7 @@ export async function cutMatte(src, out, { jobs = 2, threads = 0, tool = TOOL, t
   if (jobs <= 1) {
     const t = Date.now();
     const part = out.replace(/\.webm$/i, "") + `.part-${process.pid}.webm`;   // a failed run leaves no cached half-matte
+    made.add(part);
     try { await run(tool[0], [...tool[1], src, "-o", part], { env, tree: true }).done; fs.renameSync(part, out); }
     finally { fs.rmSync(part, { force: true }); }
     log(`matte: one remove-background process${threads > 0 ? `, ${threads} onnxruntime threads` : ""}, ${((Date.now() - t) / 1000).toFixed(1)} s`);
@@ -162,6 +175,7 @@ export async function cutMatte(src, out, { jobs = 2, threads = 0, tool = TOOL, t
   const { w, h, fps, rateArg, estFrames } = probe(src);
   const plan = planChunks(Math.max(1, estFrames), jobs);
   const dir = fs.mkdtempSync(path.join(tmp, "matte-"));
+  made.add(dir);
   const rgbSize = w * h * 3, movSize = w * h * 8, plane = w * h * 6;
   try {
     const t0 = Date.now(), secs = (t) => ((Date.now() - t) / 1000).toFixed(1) + " s";
@@ -200,6 +214,7 @@ export async function cutMatte(src, out, { jobs = 2, threads = 0, tool = TOOL, t
     const prov = { renderer: tags.hyperframes_renderer || "hyperframes", version: tags.hyperframes_version || "0.8.81" };
     // 3. one encode: the source's own rgb24 frames + each chunk's mask, in order, into the tool's encoder
     const part = out.replace(/\.webm$/i, "") + `.part-${process.pid}.webm`;
+    made.add(part);
     const venc = run("ffmpeg", encoderArgs("webm", w, h, fps, part, prov), { stdin: "pipe" });
     const rgb = run("ffmpeg", decoderArgs(src), { stdout: "pipe" });
     const rgbIt = frames(rgb.stdout, rgbSize)[Symbol.asyncIterator]();
@@ -243,7 +258,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const jobs = Math.max(1, parseInt(process.env.MATTE_JOBS || "1", 10) || 1);
   const threads = Math.max(0, parseInt(process.env.MATTE_THREADS || "0", 10) || 0);
   // stopped from outside (the build killed, Ctrl-C): take the tool processes down with us
-  for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { for (const p of live) p.stop(); process.exit(130); });
+  for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => {
+    for (const p of live) p.stop();
+    for (const f of made) fs.rmSync(f, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    process.exit(130);
+  });
   cutMatte(path.resolve(src), path.resolve(out), { jobs, threads, log: (m) => console.log(m) })
     .then(({ frames: n, chunks }) => console.log(`matte: ${n} frames, ${chunks} chunks -> ${out}`))
     .catch((e) => { console.error(e.message); process.exit(1); });

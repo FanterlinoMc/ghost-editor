@@ -8,17 +8,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { cutMatte, planChunks, encoderArgs, decoderArgs } from "./matte.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "matte-test-"));
 const p = (f) => path.join(root, f);
-const MATTE = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "matte.mjs");
+const MATTE = path.join(path.dirname(fileURLToPath(import.meta.url)), "matte.mjs");
 
 // The stub tool: STUB IN -o OUT. DROP=1 makes it lose the last frame (a broken tool the chunked path must catch).
 const STUB = p("stub.mjs");
 fs.writeFileSync(STUB, `
 import { spawn, execFileSync } from "node:child_process";
-import { encoderArgs, decoderArgs, probe } from ${JSON.stringify("file:///" + MATTE.split(path.sep).join("/"))};
+import { encoderArgs, decoderArgs, probe } from ${JSON.stringify(pathToFileURL(MATTE).href)};
 const [src, , out] = process.argv.slice(2);
 const { w, h, fps } = probe(src);
 const fmt = out.endsWith(".webm") ? "webm" : "mov";
