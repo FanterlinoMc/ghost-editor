@@ -193,12 +193,18 @@ const DENSITY = {
 };
 
 // ev: { majors:[t], transitions:[{t, kind}], joins:[t], textIns:[{t, why}], punches:[t], pops:[t], ramps:[{t, peak}] }
-export function sfxDesign(cfg, ev, { addSfx, sfxEvents, timing, words, voiceP95, ROLE_DB, TOTAL, log }) {
+export function sfxDesign(cfg, ev, { addSfx, sfxEvents, timing, words, voiceP95, ROLE_DB, TOTAL, log, has = () => true }) {
   const D = { ...DENSITY[cfg.density ?? "med"], ...(cfg.rules || {}) };
   if (!DENSITY[cfg.density ?? "med"]) throw new Error(`sfxDesign.density must be low, med or high (got ${cfg.density})`);
   const lvl = { riser: cfg.riserDb ?? 0, hit: cfg.hitDb ?? 2, tail: cfg.tailDb ?? -4, soft: cfg.softDb ?? 0, tick: cfg.tickDb ?? -8, swish: cfg.swishDb ?? -2, whip: cfg.whipDb ?? 0, ramp: cfg.rampDb ?? 0 };
   const rr = {};
-  const nextOf = (fam) => { rr[fam] = ((rr[fam] ?? -1) + 1) % FAM[fam].length; return FAM[fam][rr[fam]]; };
+  // round robin; when the turn's id is not playable (no manifest entry or no file: a library that holds only part of the pack),
+  // the next family member that is plays instead. None playable: the turn's id, which addSfx reports as skipped.
+  const nextOf = (fam) => {
+    const L = FAM[fam]; rr[fam] = ((rr[fam] ?? -1) + 1) % L.length;
+    for (let k = 0; k < L.length; k++) { const id = L[(rr[fam] + k) % L.length]; if (has(id)) return id; }
+    return L[rr[fam]];
+  };
   const placed = [];
   const busy = (t, gap) => placed.some((p) => Math.abs(p - t) < gap);
   // place a family sound so its PEAK lands on t; cut = truncate (with a fade) so nothing rings past `until`
