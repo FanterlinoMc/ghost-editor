@@ -124,23 +124,45 @@ test("runRender preloads the vendor hook and fails a render the preload did not 
   r = runRender(["-o", "out.mp4", "--quiet"], { cwd: dir, spawn: stub("[INFO] [Compiler] Inlined CDN script: " + GSAP.url) });
   assert.equal(r.status, 1);
   assert.match(r.error, /render used the network for https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@3\.14\.2/);
+  // no page (cwd/index.html, or the -c file): an error, and nothing is run
+  let ran = false;
+  for (const [args, cwd] of [[["-o", "out.mp4"], root], [["-c", "missing.html", "-o", "out.mp4"], dir], [["-o", "out.mp4", "-c"], dir]]) {
+    r = runRender(args, { cwd, spawn: () => { ran = true; return { status: 0, stdout: "", stderr: "" }; } });
+    assert.equal(r.status, 1);
+    assert.match(r.error, /no page to render/);
+  }
+  assert.equal(ran, false);
   // a failed render keeps its own status
   r = runRender(["-o", "out.mp4"], { cwd: dir, spawn: () => ({ status: 3, stdout: "", stderr: "boom" }) });
   assert.equal(r.status, 3);
   assert.ok(PRELOAD.endsWith("scripts/vendor-offline.cjs") && !PRELOAD.includes("\\"));
 });
 
-test("every hyperframes render invocation under scripts/ goes through runRender (scripts/lib/vendor.mjs)", () => {
-  const lines = execFileSync("git", ["grep", "-n", "-i", "-E", "hyperframes", "--", "scripts"], { cwd: path.join(HERE, ".."), encoding: "utf8" }).split("\n").filter(Boolean);
-  const calls = lines.filter((l) => {
-    const [file, , ...rest] = l.split(":"), code = rest.join(":").trim();
-    if (file === "scripts/lib/vendor.mjs" || file === "scripts/vendor.test.mjs") return false;
-    if (/^(\/\/|#|\*)/.test(code)) return false;                       // a comment
-    return /["'`]render["'`]|hyperframes[^"'`\s]*\s+render\b/i.test(code);   // "render" next to hyperframes: an invocation
-  });
-  assert.deepEqual(calls, [], "render through runRender() / scripts/render.mjs so GSAP comes from vendor/ and a CDN fetch fails the render");
-  // the detector catches the shapes this repo has used
-  for (const s of ['r = subprocess.run([*npx, "hyperframes@0.8.81", "render", "-o", out, "--quiet"], cwd=td)',
-    'const p = npx([`hyperframes@${HYPERFRAMES}`, "render", "-o", out], dir);', 'execSync("npx hyperframes@0.8.81 render -o x.mp4")'])
-    assert.match(s, /["'`]render["'`]|hyperframes[^"'`\s]*\s+render\b/i);
+// Per FILE, not per line (a call can be split across lines or built from variables): a file under scripts/ whose code
+// (comments stripped) names hyperframes anywhere AND has a "render" token is a render caller, and must go through
+// runRender() / scripts/render.mjs. Exempt: the helper itself and this test (it holds the shapes as strings).
+const RENDER_TOKEN = /["'`]render["'`]|(^|[\s;|&(])render\s+-/m;
+const stripComments = (src) => src.split("\n").filter((l) => !/^\s*(\/\/|#|\*|\/\*)/.test(l)).map((l) => l.replace(/\s(\/\/|#)\s.*$/, "")).join("\n");
+function rawRenderCallers(dir) {
+  const bad = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { if (e.name !== "__pycache__" && e.name !== "node_modules") walk(p); continue; }
+      const rel = path.relative(path.join(HERE, ".."), p).split(path.sep).join("/");
+      if (rel === "scripts/lib/vendor.mjs" || rel === "scripts/vendor.test.mjs") continue;
+      const buf = fs.readFileSync(p);
+      if (buf.includes(0)) continue;                                   // binary
+      const code = stripComments(buf.toString("utf8"));
+      if (!/hyperframes/i.test(code) || !RENDER_TOKEN.test(code)) continue;
+      if (/\brunRender\b|render\.mjs/.test(code)) continue;            // goes through the helper
+      bad.push(rel);
+    }
+  };
+  walk(dir);
+  return bad.sort();
+}
+
+test("every hyperframes render call under scripts/ goes through runRender (scripts/lib/vendor.mjs)", () => {
+  assert.deepEqual(rawRenderCallers(HERE), [], "render through runRender() / scripts/render.mjs so GSAP comes from vendor/ and a CDN fetch fails the render");
 });
