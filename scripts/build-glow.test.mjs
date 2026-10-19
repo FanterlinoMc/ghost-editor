@@ -284,14 +284,28 @@ echo "$in" >> "${npxLog}"; ffprobe -v error -show_entries format=duration -of cs
     h = html(dir);
     const nl = fs.readFileSync(npxLog, "utf8").trim().split("\n");
     assert.equal(nl.length, 2, "remove-background ran once, on the window only");
-    assert.ok(nl[0].endsWith(path.join("build", "matte-src@0-4000.mp4")) && Math.abs(+nl[1] - 4) < 0.05, `the window source is 0-4 s (${nl.join(" ")})`);
-    assert.ok(fs.existsSync(path.join(dir, "assets", "talk-matte@0-4000.webm")) && !fs.existsSync(path.join(dir, "assets", "talk-matte.webm")), "no whole-recording matte");
-    assert.ok(!fs.existsSync(path.join(dir, "build", "matte-src@0-4000.mp4")), "the trimmed source is removed");
-    assert.ok(h.includes('<video id="matte-0" class="matte" src="assets/talk-matte@0-4000.webm" data-start="0.98" data-duration="2.04" data-media-start="0.98"'));
+    assert.ok(nl[0].endsWith(path.join("build", "matte-src@0-4033.mp4")) && Math.abs(+nl[1] - 4.033) < 0.05, `the window source is 0-4.033 s (${nl.join(" ")})`);
+    assert.ok(fs.existsSync(path.join(dir, "assets", "talk-matte@0-4033.webm")) && !fs.existsSync(path.join(dir, "assets", "talk-matte.webm")), "no whole-recording matte");
+    assert.ok(!fs.existsSync(path.join(dir, "build", "matte-src@0-4033.mp4")), "the trimmed source is removed");
+    assert.ok(h.includes('<video id="matte-0" class="matte" src="assets/talk-matte@0-4033.webm" data-start="0.98" data-duration="2.04" data-media-start="0.98"'));
     // a second build reuses the cached window matte (npx not run again)
     build(dir, { PATH: fakeNpx + path.delimiter + process.env.PATH, MATTE_THREADS: "" });
     assert.equal(fs.readFileSync(npxLog, "utf8").trim().split("\n").length, 2, "cached");
     check("matteClip window cut: only the hook +-1 s of the recording is cut out, cached, and read at its offset");
+    // two takes (take 1 starts at recording 6 s but at 5 s on the reel), a ground into take 1 to "end": the windows come from
+    // the clipped pieces in RECORDING seconds; no whole-recording cut runs
+    fs.writeFileSync(npxLog, "");
+    dir = project({ style: "clean", matte: true, matteWindows: true, matteClip: true, takes: [{ a: 0, b: 5 }, { a: 6, b: SEC }],
+      beats: [{ type: "ground", at: 4.5, to: 6.5, color: "#111111" }, { type: "ground", at: 9, to: "end", color: "#111111" }] });
+    build(dir, { PATH: fakeNpx + path.delimiter + process.env.PATH, MATTE_THREADS: "" });
+    h = html(dir);
+    const nl2 = fs.readFileSync(npxLog, "utf8").trim().split("\n").filter((x, i) => i % 2 === 0);
+    assert.ok(!fs.existsSync(path.join(dir, "assets", "talk-matte.webm")) && !nl2.some((x) => x.endsWith("talk.mp4")), `no whole-recording cut (${nl2.join(" ")})`);
+    assert.deepEqual(nl2.map((x) => path.basename(x)), ["matte-src@3467-7533.mp4", "matte-src@7967-13000.mp4"], "one window per merged group of pieces, in recording seconds");
+    assert.ok(h.includes('id="matte-0" class="matte" src="assets/talk-matte@3467-7533.webm" data-start="4.48" data-duration="0.52" data-media-start="1.013"'));
+    assert.ok(h.includes('id="matte-1" class="matte" src="assets/talk-matte@3467-7533.webm" data-start="5" data-duration="0.52" data-media-start="2.533"'));
+    assert.ok(h.includes('id="matte-1-1" class="matte" src="assets/talk-matte@7967-13000.webm" data-start="7.98" data-duration="3.02" data-media-start="1.013"'), h.match(/id="matte-1-1"[^>]*/)?.[0]);
+    check("matteClip window cut, two takes (a != start) and a \"to\": \"end\" beat: windows from the pieces in recording seconds, no whole-recording cut");
   }
 
   // ---- glow.keepLow (style podcast-glow): a low headline on a close-up stays in the lower frame ----
