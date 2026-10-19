@@ -55,9 +55,10 @@ const PROBE = `
   const crypto = require("node:crypto");
   (async () => {
     let ok = false, h = "", err = "", blocked = "";
-    try { const r = await fetch(${JSON.stringify(GSAP.url)}, { signal: AbortSignal.timeout(15000) }); ok = r.ok; h = crypto.createHash("sha256").update(Buffer.from(await r.arrayBuffer())).digest("hex"); } catch (e) { err = String(e.message); }
+    let body = "";
+    try { const r = await fetch(${JSON.stringify(GSAP.url)}, { signal: AbortSignal.timeout(15000) }); ok = r.ok; const b = Buffer.from(await r.arrayBuffer()); h = crypto.createHash("sha256").update(b).digest("hex"); body = b.length < 2000 ? b.toString() : ""; } catch (e) { err = String(e.message); }
     try { await fetch("https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"); } catch (e) { blocked = String(e.message); }
-    console.log(JSON.stringify({ ok, sha: h, err, blocked }));
+    console.log(JSON.stringify({ ok, sha: h, err, blocked, body }));
   })();`;
 const probe = (preload) => {
   const r = spawnSync(process.execPath, ["-e", PROBE], { cwd: root, encoding: "utf8", env: { ...process.env, NODE_OPTIONS: `--require "${preload}"`, VENDOR_OFFLINE: "1" } });
@@ -102,13 +103,16 @@ test("the preload fails closed when the vendored copy is missing or altered", ()
   fs.copyFileSync(path.join(VENDOR, "manifest.json"), path.join(fake, "vendor", "manifest.json"));
   fs.writeFileSync(path.join(fake, "vendor", GSAP.file), fs.readFileSync(path.join(VENDOR, GSAP.file), "utf8") + "\n// altered");
   const preload = path.join(fake, "scripts", "vendor-offline.cjs").split(path.sep).join("/");
-  let out = probe(preload);
-  assert.equal(out.ok, false);
-  assert.match(out.err, /fail closed/);
-  assert.ok(!out.stderr.includes(MARK), out.stderr);
+  // refused: the page gets a script that throws (so Chrome never loads the tag from the CDN either), and no MARK
+  const refused = (out) => {
+    assert.notEqual(out.sha, GSAP.sha256);
+    assert.match(out.body, /^\/\* vendor: REFUSED https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@3\.14\.2\S* \*\/\nthrow new Error\(/);
+    assert.match(out.body, /fail closed/);
+    assert.ok(!out.stderr.includes(MARK) && out.stderr.includes("vendor: REFUSED"), out.stderr);
+  };
+  refused(probe(preload));
   fs.rmSync(path.join(fake, "vendor", GSAP.file));
-  out = probe(preload);
-  assert.match(out.err, /fail closed/);
+  refused(probe(preload));
 });
 
 test("runRender preloads the vendor hook and fails a render the preload did not serve", () => {
@@ -120,10 +124,22 @@ test("runRender preloads the vendor hook and fails a render the preload did not 
   assert.ok(seen.opts.env.NODE_OPTIONS.includes(`--require "${PRELOAD}"`));
   assert.deepEqual(seen.args.slice(-6), ["-y", "hyperframes@0.8.81", "render", "-o", "out.mp4", "--quiet"]);
   assert.equal(seen.opts.cwd, dir);
-  // the same render with no MARK on stderr: hyperframes fetched GSAP itself (or the preload never loaded)
-  r = runRender(["-o", "out.mp4", "--quiet"], { cwd: dir, spawn: stub("[INFO] [Compiler] Inlined CDN script: " + GSAP.url) });
-  assert.equal(r.status, 1);
-  assert.match(r.error, /render used the network for https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@3\.14\.2/);
+  // the same render with no MARK on stderr (hyperframes fetched GSAP itself, the preload never loaded, or it refused an
+  // altered copy and Chrome loaded the tag): status 1 and the finished output is deleted
+  const writes = (stderr) => (cmd, args, opts) => { fs.writeFileSync(path.join(opts.cwd, args[args.indexOf("-o") + 1]), "a complete reel"); return { status: 0, stdout: "", stderr }; };
+  for (const stderr of ["[INFO] [Compiler] Inlined CDN script: " + GSAP.url, `vendor: REFUSED ${GSAP.url}: altered`]) {
+    r = runRender(["-o", "out.mp4", "--quiet"], { cwd: dir, spawn: writes(stderr) });
+    assert.equal(r.status, 1);
+    assert.match(r.error, /not served from vendor\/: https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@3\.14\.2/);
+    assert.match(r.error, stderr.startsWith("vendor: REFUSED") ? /missing or altered/ : /the CDN was used/);
+    assert.match(r.error, /the output .*out\.mp4 was removed/);
+    assert.equal(fs.existsSync(path.join(dir, "out.mp4")), false, "a CDN-GSAP reel was left at the output path");
+  }
+  // a served render keeps its output
+  r = runRender(["-o", "out.mp4"], { cwd: dir, spawn: writes(`${MARK} ${GSAP.url} from vendor/${GSAP.file}`) });
+  assert.equal(r.status, 0, r.error);
+  assert.ok(fs.existsSync(path.join(dir, "out.mp4")));
+  fs.rmSync(path.join(dir, "out.mp4"));
   // no page (cwd/index.html, or the -c file): an error, and nothing is run
   let ran = false;
   for (const [args, cwd] of [[["-o", "out.mp4"], root], [["-c", "missing.html", "-o", "out.mp4"], dir], [["-o", "out.mp4", "-c"], dir]]) {
