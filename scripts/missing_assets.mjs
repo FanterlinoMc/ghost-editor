@@ -3,7 +3,7 @@
 //
 // Every library/ file the engine would look for (named by a style, brand kit, example reel, a library manifest or the
 // engine's own code) that is not on disk, one entry per path, plus the sound/music ids that resolve to no path at all.
-// The resolution rules mirror build.mjs and scripts/lib/*.mjs; the "resolution" block of the output cites the lines.
+// The resolution rules mirror build.mjs and scripts/lib/*.mjs; the "resolution" block of the output describes them.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -132,7 +132,11 @@ for (const r of [...refs.values()].sort((a, b) => a.kind.localeCompare(b.kind) |
   const named = r.styles.size + r.engine.size > 0;
   const c = (counts[r.kind] ??= { referenced: 0, catalogued_only: 0, missing: 0, dangling: 0 });
   if (named) c.referenced++; else c.catalogued_only++;
-  const forWhat = { styles: styleList(r.styles), engine: [...r.engine].sort() };
+  // engine code sites without line numbers ("build.mjs x3"): a line number moves with every edit above it, which made
+  // the staleness test fail on unrelated engine changes; a site count changes only when a reference is added or removed
+  const byFile = new Map();
+  for (const s of r.engine) { const f = s.replace(/:\d+$/, ""); byFile.set(f, (byFile.get(f) ?? 0) + 1); }
+  const forWhat = { styles: styleList(r.styles), engine: [...byFile].sort(([a], [b]) => a.localeCompare(b)).map(([f, n]) => (n > 1 ? `${f} x${n}` : f)) };
   const uses = r.styles.size + r.engine.size;
   if (p === null) {
     c.dangling++;
@@ -149,17 +153,17 @@ for (const r of [...refs.values()].sort((a, b) => a.kind.localeCompare(b.kind) |
 
 const out = {
   _about: "Files under library/ that the engine would resolve and a clean checkout lacks. Generated, do not hand-edit: node scripts/missing_assets.mjs > references/missing-assets.json. "
-    + "uses = styles, brand kits and example reels that name the asset (after `extends`) + engine code sites that name it. Styles named only through a family (whoosh/pop/impact) count for every variant. "
+    + "uses = styles, brand kits and example reels that name the asset (after `extends`) + engine code sites that name it (listed per file with a count, no line numbers, so the list only changes when a reference is added or removed). Styles named only through a family (whoosh/pop/impact) count for every variant. "
     + "counts per kind: referenced = named by a style/reel/code (dangling ids included), catalogued_only = in a library manifest and named by nothing; dangling = named but no manifest entry, so no path. The engine-code sound scan is a heuristic (a line regex plus an exclusion list), so the code-site lists and the dangling sfx list are a strong hint, not exact.",
   resolution: {
-    root: "build.mjs:45 LIB = $PHANTASIC_LIB or library/",
-    sfx: "build.mjs:519 reads sfx/manifest.json; build.mjs:618-643 addSfx: id (a family pop/whoosh/impact picks its variants round-robin, :596-602) -> sfx/<manifest[id].file>; no entry or no file = skipped with a warning",
-    music: "build.mjs:3292-3306 (auto, fallback) and lib/motion.mjs:1242-1255 buildMusic: id -> music/<manifest[id].file>; missing = fatal unless music.optional",
-    art: "build.mjs:528-535 artAsset: key -> art/<key>.jpg (fatal when missing); layer images build.mjs:2124,2865 (skipped when missing)",
-    engraving: "build.mjs:3170,3201 objectPops and lib/motion.mjs:281,622,760,866,999: key -> engravings/png/<key>.png; lib/motion.mjs:664 engravings/bulge.png",
-    object: "lib/gadzhi.mjs:28,129: name -> gm-objects/<name>.png (brain -> puzzle)",
-    meme: "build.mjs:520-525 memeLib: id -> memes/<id>/meta.json (fatal when missing)",
-    pack: "build.mjs:2824-2837 packClip: style `packs` on -> packs/<pack>/<kind>/*.mp4 (leaks, burns, 8mm-gate, 8mm-dust); build.mjs:3037 openFlash.clip -> packs/<pack>/burns/<clip>. Absent = asset-free fallback",
+    root: "build.mjs LIB = $PHANTASIC_LIB or library/",
+    sfx: "build.mjs reads sfx/manifest.json; addSfx: id (a family pop/whoosh/impact picks its variants round-robin, VARIANTS) -> sfx/<manifest[id].file>; no entry or no file = skipped with a warning",
+    music: "build.mjs music (auto, fallback) and lib/motion.mjs buildMusic: id -> music/<manifest[id].file>; missing = fatal unless music.optional",
+    art: "build.mjs artAsset: key -> art/<key>.jpg (fatal when missing); resolveLayerImage for layer images (skipped when missing)",
+    engraving: "build.mjs objectPops (CONCEPTS) and lib/motion.mjs page scenes (paper / pageToCollage, collage, concept, stack icon, cutout): key -> engravings/png/<key>.png; lib/motion.mjs collage: engravings/bulge.png",
+    object: "lib/gadzhi.mjs gm-object / gm-nodes: name -> gm-objects/<name>.png (brain -> puzzle)",
+    meme: "build.mjs memeLib: id -> memes/<id>/meta.json (fatal when missing)",
+    pack: "build.mjs packClip: style `packs` on -> packs/<pack>/<kind>/*.mp4 (leaks, burns, 8mm-gate, 8mm-dust); pickBurn: openFlash.clip -> packs/<pack>/burns/<clip>. Absent = asset-free fallback",
   },
   counts,
   missing,

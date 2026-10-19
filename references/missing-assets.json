@@ -1,14 +1,14 @@
 {
- "_about": "Files under library/ that the engine would resolve and a clean checkout lacks. Generated, do not hand-edit: node scripts/missing_assets.mjs > references/missing-assets.json. uses = styles, brand kits and example reels that name the asset (after `extends`) + engine code sites that name it. Styles named only through a family (whoosh/pop/impact) count for every variant. counts per kind: referenced = named by a style/reel/code (dangling ids included), catalogued_only = in a library manifest and named by nothing; dangling = named but no manifest entry, so no path. The engine-code sound scan is a heuristic (a line regex plus an exclusion list), so the code-site lists and the dangling sfx list are a strong hint, not exact.",
+ "_about": "Files under library/ that the engine would resolve and a clean checkout lacks. Generated, do not hand-edit: node scripts/missing_assets.mjs > references/missing-assets.json. uses = styles, brand kits and example reels that name the asset (after `extends`) + engine code sites that name it (listed per file with a count, no line numbers, so the list only changes when a reference is added or removed). Styles named only through a family (whoosh/pop/impact) count for every variant. counts per kind: referenced = named by a style/reel/code (dangling ids included), catalogued_only = in a library manifest and named by nothing; dangling = named but no manifest entry, so no path. The engine-code sound scan is a heuristic (a line regex plus an exclusion list), so the code-site lists and the dangling sfx list are a strong hint, not exact.",
  "resolution": {
-  "root": "build.mjs:45 LIB = $PHANTASIC_LIB or library/",
-  "sfx": "build.mjs:519 reads sfx/manifest.json; build.mjs:618-643 addSfx: id (a family pop/whoosh/impact picks its variants round-robin, :596-602) -> sfx/<manifest[id].file>; no entry or no file = skipped with a warning",
-  "music": "build.mjs:3292-3306 (auto, fallback) and lib/motion.mjs:1242-1255 buildMusic: id -> music/<manifest[id].file>; missing = fatal unless music.optional",
-  "art": "build.mjs:528-535 artAsset: key -> art/<key>.jpg (fatal when missing); layer images build.mjs:2124,2865 (skipped when missing)",
-  "engraving": "build.mjs:3170,3201 objectPops and lib/motion.mjs:281,622,760,866,999: key -> engravings/png/<key>.png; lib/motion.mjs:664 engravings/bulge.png",
-  "object": "lib/gadzhi.mjs:28,129: name -> gm-objects/<name>.png (brain -> puzzle)",
-  "meme": "build.mjs:520-525 memeLib: id -> memes/<id>/meta.json (fatal when missing)",
-  "pack": "build.mjs:2824-2837 packClip: style `packs` on -> packs/<pack>/<kind>/*.mp4 (leaks, burns, 8mm-gate, 8mm-dust); build.mjs:3037 openFlash.clip -> packs/<pack>/burns/<clip>. Absent = asset-free fallback"
+  "root": "build.mjs LIB = $PHANTASIC_LIB or library/",
+  "sfx": "build.mjs reads sfx/manifest.json; addSfx: id (a family pop/whoosh/impact picks its variants round-robin, VARIANTS) -> sfx/<manifest[id].file>; no entry or no file = skipped with a warning",
+  "music": "build.mjs music (auto, fallback) and lib/motion.mjs buildMusic: id -> music/<manifest[id].file>; missing = fatal unless music.optional",
+  "art": "build.mjs artAsset: key -> art/<key>.jpg (fatal when missing); resolveLayerImage for layer images (skipped when missing)",
+  "engraving": "build.mjs objectPops (CONCEPTS) and lib/motion.mjs page scenes (paper / pageToCollage, collage, concept, stack icon, cutout): key -> engravings/png/<key>.png; lib/motion.mjs collage: engravings/bulge.png",
+  "object": "lib/gadzhi.mjs gm-object / gm-nodes: name -> gm-objects/<name>.png (brain -> puzzle)",
+  "meme": "build.mjs memeLib: id -> memes/<id>/meta.json (fatal when missing)",
+  "pack": "build.mjs packClip: style `packs` on -> packs/<pack>/<kind>/*.mp4 (leaks, burns, 8mm-gate, 8mm-dust); pickBurn: openFlash.clip -> packs/<pack>/burns/<clip>. Absent = asset-free fallback"
  },
  "counts": {
   "art": {
@@ -911,8 +911,8 @@
      "library/grid-paper-editorial--* (9)"
     ],
     "engine": [
-     "build.mjs:1555",
-     "lib/premium.mjs:186"
+     "build.mjs",
+     "lib/premium.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -937,7 +937,7 @@
      "library/grid-paper-editorial--* (9)"
     ],
     "engine": [
-     "lib/premium.mjs:187"
+     "lib/premium.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -949,7 +949,7 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:1529"
+     "build.mjs"
     ]
    },
    "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
@@ -961,8 +961,7 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:2701",
-     "build.mjs:3352"
+     "build.mjs x2"
     ]
    },
    "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
@@ -974,9 +973,8 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:1405",
-     "build.mjs:1639",
-     "lib/premium.mjs:181"
+     "build.mjs x2",
+     "lib/premium.mjs"
     ]
    },
    "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
@@ -995,8 +993,7 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:3019",
-     "build.mjs:3051"
+     "build.mjs x2"
     ]
    },
    "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
@@ -1015,8 +1012,8 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:1405",
-     "lib/premium.mjs:180"
+     "build.mjs",
+     "lib/premium.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1028,16 +1025,11 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:2067",
-     "build.mjs:3142",
-     "lib/gadzhi.mjs:221",
-     "lib/hormozi.mjs:49",
-     "lib/motion.mjs:231",
-     "lib/motion.mjs:337",
-     "lib/motion.mjs:707",
-     "lib/motion.mjs:728",
-     "lib/motion.mjs:838",
-     "lib/premium.mjs:184"
+     "build.mjs x2",
+     "lib/gadzhi.mjs",
+     "lib/hormozi.mjs",
+     "lib/motion.mjs x5",
+     "lib/premium.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1049,13 +1041,8 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:1604",
-     "build.mjs:1673",
-     "build.mjs:3141",
-     "build.mjs:3142",
-     "lib/motion.mjs:230",
-     "lib/motion.mjs:233",
-     "lib/motion.mjs:468"
+     "build.mjs x4",
+     "lib/motion.mjs x3"
     ]
    },
    "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
@@ -1067,19 +1054,9 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:1480",
-     "build.mjs:1508",
-     "build.mjs:1529",
-     "build.mjs:1639",
-     "build.mjs:1733",
-     "build.mjs:1734",
-     "build.mjs:1775",
-     "build.mjs:2054",
-     "lib/motion.mjs:1208",
-     "lib/motion.mjs:1215",
-     "lib/motion.mjs:441",
-     "lib/motion.mjs:985",
-     "lib/premium.mjs:181"
+     "build.mjs x8",
+     "lib/motion.mjs x4",
+     "lib/premium.mjs"
     ]
    },
    "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
@@ -1091,17 +1068,8 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:1480",
-     "build.mjs:1508",
-     "build.mjs:1529",
-     "build.mjs:1639",
-     "build.mjs:1775",
-     "build.mjs:2090",
-     "build.mjs:3140",
-     "lib/motion.mjs:1208",
-     "lib/motion.mjs:1215",
-     "lib/motion.mjs:233",
-     "lib/motion.mjs:441"
+     "build.mjs x7",
+     "lib/motion.mjs x4"
     ]
    },
    "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
@@ -1113,8 +1081,8 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:3139",
-     "lib/motion.mjs:228"
+     "build.mjs",
+     "lib/motion.mjs"
     ]
    },
    "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
@@ -1142,21 +1110,9 @@
      "mono-rust"
     ],
     "engine": [
-     "build.mjs:1489",
-     "build.mjs:1520",
-     "build.mjs:1537",
-     "build.mjs:1611",
-     "build.mjs:1892",
-     "build.mjs:1934",
-     "build.mjs:1966",
-     "build.mjs:2702",
-     "lib/motion.mjs:327",
-     "lib/motion.mjs:487",
-     "lib/motion.mjs:558",
-     "lib/motion.mjs:626",
-     "lib/motion.mjs:641",
-     "lib/motion.mjs:646",
-     "lib/premium.mjs:184"
+     "build.mjs x8",
+     "lib/motion.mjs x6",
+     "lib/premium.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1171,23 +1127,9 @@
      "library/ui-story-ad--* (1)"
     ],
     "engine": [
-     "build.mjs:1489",
-     "build.mjs:1520",
-     "build.mjs:1537",
-     "build.mjs:1611",
-     "build.mjs:1892",
-     "build.mjs:1934",
-     "build.mjs:1966",
-     "build.mjs:2702",
-     "lib/gadzhi.mjs:156",
-     "lib/gadzhi.mjs:221",
-     "lib/gadzhi.mjs:267",
-     "lib/motion.mjs:327",
-     "lib/motion.mjs:487",
-     "lib/motion.mjs:558",
-     "lib/motion.mjs:626",
-     "lib/motion.mjs:641",
-     "lib/motion.mjs:646"
+     "build.mjs x8",
+     "lib/gadzhi.mjs x3",
+     "lib/motion.mjs x6"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1202,19 +1144,8 @@
      "library/ui-story-ad--* (1)"
     ],
     "engine": [
-     "build.mjs:1489",
-     "build.mjs:1520",
-     "build.mjs:1537",
-     "build.mjs:1611",
-     "build.mjs:1892",
-     "build.mjs:1934",
-     "build.mjs:1966",
-     "lib/motion.mjs:327",
-     "lib/motion.mjs:487",
-     "lib/motion.mjs:558",
-     "lib/motion.mjs:626",
-     "lib/motion.mjs:641",
-     "lib/motion.mjs:646"
+     "build.mjs x7",
+     "lib/motion.mjs x6"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1233,13 +1164,9 @@
      "folio-royal"
     ],
     "engine": [
-     "build.mjs:1875",
-     "build.mjs:1918",
-     "build.mjs:1948",
-     "build.mjs:3134",
-     "build.mjs:3140",
-     "lib/motion.mjs:870",
-     "lib/premium.mjs:183"
+     "build.mjs x5",
+     "lib/motion.mjs",
+     "lib/premium.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1345,13 +1272,9 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:3140",
-     "build.mjs:3141",
-     "build.mjs:3351",
-     "lib/motion.mjs:233",
-     "lib/motion.mjs:234",
-     "lib/motion.mjs:382",
-     "lib/premium.mjs:180"
+     "build.mjs x3",
+     "lib/motion.mjs x3",
+     "lib/premium.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1370,7 +1293,7 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:1405"
+     "build.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1382,7 +1305,7 @@
    "for": {
     "styles": [],
     "engine": [
-     "lib/premium.mjs:186"
+     "lib/premium.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1415,9 +1338,8 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:3139",
-     "build.mjs:3141",
-     "lib/motion.mjs:234"
+     "build.mjs x2",
+     "lib/motion.mjs"
     ]
    },
    "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
@@ -1429,8 +1351,8 @@
    "for": {
     "styles": [],
     "engine": [
-     "lib/gadzhi.mjs:234",
-     "lib/motion.mjs:231"
+     "lib/gadzhi.mjs",
+     "lib/motion.mjs"
     ]
    },
    "source": "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved"
@@ -1456,17 +1378,10 @@
      "folio-royal"
     ],
     "engine": [
-     "build.mjs:1673",
-     "build.mjs:2704",
-     "build.mjs:3139",
-     "build.mjs:3141",
-     "lib/gadzhi.mjs:156",
-     "lib/gadzhi.mjs:255",
-     "lib/motion.mjs:229",
-     "lib/motion.mjs:234",
-     "lib/motion.mjs:431",
-     "lib/motion.mjs:578",
-     "lib/premium.mjs:184"
+     "build.mjs x4",
+     "lib/gadzhi.mjs x2",
+     "lib/motion.mjs x4",
+     "lib/premium.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1478,10 +1393,8 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:1851",
-     "build.mjs:2080",
-     "lib/motion.mjs:231",
-     "lib/motion.mjs:475"
+     "build.mjs x2",
+     "lib/motion.mjs x2"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1534,33 +1447,10 @@
      "premium-signature"
     ],
     "engine": [
-     "build.mjs:1501",
-     "build.mjs:1571",
-     "build.mjs:1588",
-     "build.mjs:1679",
-     "build.mjs:1814",
-     "build.mjs:1840",
-     "build.mjs:1995",
-     "build.mjs:2014",
-     "build.mjs:2098",
-     "build.mjs:2133",
-     "build.mjs:2595",
-     "build.mjs:3140",
-     "build.mjs:793",
-     "lib/hormozi.mjs:42",
-     "lib/motion-graphics.mjs:407",
-     "lib/motion.mjs:1047",
-     "lib/motion.mjs:1203",
-     "lib/motion.mjs:232",
-     "lib/motion.mjs:351",
-     "lib/motion.mjs:383",
-     "lib/motion.mjs:452",
-     "lib/motion.mjs:494",
-     "lib/motion.mjs:527",
-     "lib/motion.mjs:558",
-     "lib/motion.mjs:632",
-     "lib/motion.mjs:646",
-     "lib/motion.mjs:969"
+     "build.mjs x13",
+     "lib/hormozi.mjs",
+     "lib/motion-graphics.mjs",
+     "lib/motion.mjs x12"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1618,37 +1508,11 @@
      "premium-signature"
     ],
     "engine": [
-     "build.mjs:1501",
-     "build.mjs:1571",
-     "build.mjs:1588",
-     "build.mjs:1679",
-     "build.mjs:1733",
-     "build.mjs:1814",
-     "build.mjs:1840",
-     "build.mjs:1995",
-     "build.mjs:2014",
-     "build.mjs:2098",
-     "build.mjs:2133",
-     "build.mjs:2595",
-     "build.mjs:3142",
-     "build.mjs:793",
-     "lib/gadzhi.mjs:165",
-     "lib/gadzhi.mjs:194",
-     "lib/gadzhi.mjs:233",
-     "lib/hormozi.mjs:36",
-     "lib/motion-graphics.mjs:407",
-     "lib/motion.mjs:1047",
-     "lib/motion.mjs:1203",
-     "lib/motion.mjs:232",
-     "lib/motion.mjs:351",
-     "lib/motion.mjs:383",
-     "lib/motion.mjs:452",
-     "lib/motion.mjs:494",
-     "lib/motion.mjs:527",
-     "lib/motion.mjs:558",
-     "lib/motion.mjs:632",
-     "lib/motion.mjs:646",
-     "lib/motion.mjs:969"
+     "build.mjs x14",
+     "lib/gadzhi.mjs x3",
+     "lib/hormozi.mjs",
+     "lib/motion-graphics.mjs",
+     "lib/motion.mjs x12"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1700,31 +1564,9 @@
      "premium-signature"
     ],
     "engine": [
-     "build.mjs:1501",
-     "build.mjs:1571",
-     "build.mjs:1588",
-     "build.mjs:1679",
-     "build.mjs:1814",
-     "build.mjs:1840",
-     "build.mjs:1995",
-     "build.mjs:2014",
-     "build.mjs:2098",
-     "build.mjs:2133",
-     "build.mjs:2595",
-     "build.mjs:793",
-     "lib/motion-graphics.mjs:407",
-     "lib/motion.mjs:1047",
-     "lib/motion.mjs:1203",
-     "lib/motion.mjs:232",
-     "lib/motion.mjs:351",
-     "lib/motion.mjs:383",
-     "lib/motion.mjs:452",
-     "lib/motion.mjs:494",
-     "lib/motion.mjs:527",
-     "lib/motion.mjs:558",
-     "lib/motion.mjs:632",
-     "lib/motion.mjs:646",
-     "lib/motion.mjs:969"
+     "build.mjs x12",
+     "lib/motion-graphics.mjs",
+     "lib/motion.mjs x12"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1744,11 +1586,8 @@
      "folio-royal"
     ],
     "engine": [
-     "build.mjs:1405",
-     "build.mjs:1480",
-     "build.mjs:2971",
-     "lib/premium.mjs:182",
-     "lib/premium.mjs:183"
+     "build.mjs x3",
+     "lib/premium.mjs x2"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1767,9 +1606,8 @@
      "folio-royal"
     ],
     "engine": [
-     "build.mjs:3287",
-     "build.mjs:3498",
-     "lib/premium.mjs:185"
+     "build.mjs x2",
+     "lib/premium.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1788,8 +1626,8 @@
      "folio-royal"
     ],
     "engine": [
-     "build.mjs:3287",
-     "lib/premium.mjs:185"
+     "build.mjs",
+     "lib/premium.mjs"
     ]
    },
    "source": "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
@@ -1906,8 +1744,7 @@
      "folio-royal"
     ],
     "engine": [
-     "lib/motion.mjs:1030",
-     "lib/motion.mjs:253"
+     "lib/motion.mjs x2"
     ]
    },
    "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
@@ -1926,7 +1763,7 @@
      "folio-royal"
     ],
     "engine": [
-     "lib/motion.mjs:253"
+     "lib/motion.mjs"
     ]
    },
    "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
@@ -1945,9 +1782,8 @@
      "folio-royal"
     ],
     "engine": [
-     "build.mjs:3093",
-     "build.mjs:3212",
-     "lib/motion.mjs:253"
+     "build.mjs x2",
+     "lib/motion.mjs"
     ]
    },
    "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
@@ -1966,7 +1802,7 @@
      "folio-royal"
     ],
     "engine": [
-     "lib/motion.mjs:258"
+     "lib/motion.mjs"
     ]
    },
    "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
@@ -1985,8 +1821,8 @@
      "folio-royal"
     ],
     "engine": [
-     "build.mjs:3094",
-     "lib/motion.mjs:258"
+     "build.mjs",
+     "lib/motion.mjs"
     ]
    },
    "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
@@ -2005,7 +1841,7 @@
      "folio-royal"
     ],
     "engine": [
-     "lib/motion.mjs:258"
+     "lib/motion.mjs"
     ]
    },
    "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
@@ -2024,9 +1860,8 @@
      "folio-royal"
     ],
     "engine": [
-     "build.mjs:1733",
-     "build.mjs:3139",
-     "lib/motion.mjs:258"
+     "build.mjs x2",
+     "lib/motion.mjs"
     ]
    },
    "effect": "no manifest entry: addSfx skips it with a warning (or plays the style's sfxFallback); a file alone will not fix it"
@@ -2038,7 +1873,7 @@
    "for": {
     "styles": [],
     "engine": [
-     "build.mjs:1639"
+     "build.mjs"
     ]
    },
    "effect": "no manifest entry, but every code site checks the manifest first and uses another sound instead (meme beats: cinematic-deep-boom, else the impact family); nothing is skipped and no warning is printed"
