@@ -1,17 +1,13 @@
 {
-  "_": "Prompt Motion graphic static rules, spec v3 (references/reel-json.md, 'Prompt Motion graphic'). JavaScript regex sources; flags 'i' or ''. Python mirrors compile the same source with re.ASCII (+ re.IGNORECASE for 'i').",
+  "_": "Prompt Motion graphic static rules, spec v3.2 (references/reel-json.md, 'Prompt Motion graphic'). JavaScript regex sources; flags 'i' or ''. Python mirrors compile the same source with re.ASCII (+ re.IGNORECASE for 'i').",
   "unicodeSpaces": "[\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff]",
   "newlines": [
     "\\r\\n?",
     "\n"
   ],
   "scopes": {
-    "script": [
-      "<script\\b[^>]*>([\\s\\S]*?)</script\\s*>",
-      "i"
-    ],
-    "style": [
-      "<style\\b[^>]*>([\\s\\S]*?)</style\\s*>",
+    "tokens": [
+      "<script(?![\\w-])[^>]*>([\\s\\S]*?)(?:</script>|(?![\\s\\S]))|<style(?![\\w-])[^>]*>([\\s\\S]*?)(?:</style>|(?![\\s\\S]))|<title(?![\\w-])[^>]*>[\\s\\S]*?(?:</title>|(?![\\s\\S]))",
       "i"
     ],
     "styleAttr": [
@@ -26,7 +22,7 @@
         "WHOLE"
       ],
       "i",
-      "<script\\b[^>]*\\b(src\\s*=|type\\s*=\\s*[\"']?module)"
+      "<script\\b[^>]*[\\s/](src|href|xlink:href|type)\\s*="
     ],
     [
       "G6",
@@ -171,7 +167,7 @@
         "MARKUP"
       ],
       "i",
-      "<(a|area)(?![\\w-])[^>]*\\shref\\s*=\\s*(?![\"']?#)|\\sping\\s*="
+      "<(a|area)(?![\\w-])[^>]*[\\s/](xlink:)?href\\s*=\\s*(?![\"']?#)|[\\s/]ping\\s*=|[\\s/]formaction\\s*="
     ],
     [
       "G28",
@@ -180,6 +176,62 @@
       ],
       "",
       "[\\w$\\])]\\s*\\[\\s*(['\"`])[^'\"`]*\\1\\s*\\+|[\\w$\\])]\\s*\\[\\s*`[^`]*\\$\\{"
+    ],
+    [
+      "G29",
+      [
+        "MARKUP"
+      ],
+      "i",
+      "<[^>]*[\\s/\"']on[a-z]+\\s*="
+    ],
+    [
+      "G30",
+      [
+        "WHOLE"
+      ],
+      "",
+      "<!--"
+    ],
+    [
+      "G31",
+      [
+        "STYLE"
+      ],
+      "",
+      "\\\\[\\s\\S]?"
+    ],
+    [
+      "G32",
+      [
+        "WHOLE"
+      ],
+      "i",
+      "</(script|style|title)(?=[\\s/])"
+    ],
+    [
+      "G33",
+      [
+        "MARKUP"
+      ],
+      "i",
+      "=\\s*[\"']?\\s*(java|vb)script\\s*:|=\\s*[\"']?\\s*data\\s*:\\s*text/html"
+    ],
+    [
+      "G33",
+      [
+        "STYLE"
+      ],
+      "i",
+      "(java|vb)script\\s*:"
+    ],
+    [
+      "G34",
+      [
+        "WHOLE"
+      ],
+      "i",
+      "<(math|noscript|xmp|noembed|noframes|plaintext|textarea|template)(?![\\w-])|<svg(?![\\w-])(?:(?!</svg\\s*>)[\\s\\S])*?<(script|style)(?![\\w-])"
     ]
   ],
   "meta": {

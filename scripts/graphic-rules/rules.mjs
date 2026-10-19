@@ -1,6 +1,6 @@
 // Prompt Motion graphic static rules (spec: references/reel-json.md, "Prompt Motion graphic"), node side.
 // The regex sources live in rules.json, shared with rules.py (the Python mirror); parity.mjs checks both agree.
-// Covers the regex rules (G5-G28), G18 (fonts) and G21/G22/G23/G26 (literal assignments). G1-G4, G15-G17, G24
+// Covers the regex rules (G5-G34), G35 (a raw-text element starting inside another tag), G18 (fonts) and G21/G22/G23/G26 (literal assignments). G1-G4, G15-G17, G24
 // and P1-P3 need the file system or the placement and are not here.
 import fs from "node:fs";
 import path from "node:path";
@@ -14,11 +14,21 @@ const dec = (v) => v.replace(/&quot;|&#34;/g, '"').replace(/&apos;|&#39;/g, "'")
 
 export function scopes(raw) {
   const html = raw.replace(NEWLINES, J.newlines[1]).replace(SPACES, " ");
-  const SCRIPT = [...html.matchAll(re(J.scopes.script, true))].map((m) => m[1]).join("\n");
-  const styleEls = [...html.matchAll(re(J.scopes.style, true))].map((m) => m[1]);
-  const MARKUP = html.replace(re(J.scopes.script, true), "").replace(re(J.scopes.style, true), "");
+  // one left-to-right pass, as the browser's tokenizer reads raw-text elements: <script>, <style> and <title>
+  // bodies end at the first exact end tag (G32 makes that the only end), or at the end of the file
+  const scripts = [], styleEls = [];
+  let MARKUP = "", last = 0, insideTag = null;
+  for (const m of html.matchAll(re(J.scopes.tokens, true))) {
+    const before = html.slice(0, m.index);
+    if (insideTag === null && before.lastIndexOf("<") > before.lastIndexOf(">")) insideTag = m[0].match(/^<[a-z]+/i)[0];
+    if (m[1] !== undefined) scripts.push(m[1]);
+    if (m[2] !== undefined) styleEls.push(m[2]);
+    MARKUP += html.slice(last, m.index);
+    last = m.index + m[0].length;
+  }
+  MARKUP += html.slice(last);
   const attrs = [...MARKUP.matchAll(re(J.scopes.styleAttr, true))].map((m) => dec(m[1] ?? m[2]));
-  return { WHOLE: html, SCRIPT, STYLE: [...styleEls, ...attrs].join("\n"), MARKUP };
+  return { WHOLE: html, SCRIPT: scripts.join("\n"), STYLE: [...styleEls, ...attrs].join("\n"), MARKUP, insideTag };
 }
 
 const fams = (v) => v.replace(/!important/i, "").split(",").map((x) => x.trim().replace(/^(['"])([\s\S]*)\1$/, "$2").trim()).filter(Boolean);
@@ -59,7 +69,8 @@ export function firstFail(html, { W = 1080, H = 1920 } = {}) {
       return all <= 1 && all === lit.length && lit.every((m) => !(+m[1] % 2) && !(+m[2] % 2) && +m[1] >= 16 && +m[1] <= W && +m[2] >= 16 && +m[2] <= H) ? null : "G23"; },
     () => regexHit(25, 25),
     () => (re(M.G26).test(s) ? "G26" : null),
-    () => regexHit(27, 28),
+    () => regexHit(27, 34),
+    () => (S.insideTag ? `G35:${JSON.stringify(S.insideTag)}` : null),
   ];
   for (const c of checks) { const r = c(); if (r) return r; }
   return null;
