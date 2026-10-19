@@ -109,6 +109,30 @@ if (kitId) {
 const spec = deepMerge(preset, rawSpec);
 // stage (premium, opt-in): the speaker is cut out (matte) and composited on a designed set; the plate is hidden
 if (spec.stage) spec.matte = true;
+// glow.hookGround (opt-in, Podcast Glow; references/reel-json.md): the hook (the earliest pos "top" headline) gets the speaker cut
+// out over a dark grid page for its window, as in the approved sample. Only when there is such a headline, no ground already on
+// it and no stage: then the matte is cut, and shown (and extracted) only while the page is up (matteWindows + matteClip, unless the reel sets them).
+if (spec.glow?.hookGround && !spec.stage && Array.isArray(spec.beats)) {
+  const isNum = (x) => typeof x === "number" && Number.isFinite(x);
+  const hook = spec.beats.filter((b) => b && b.type === "headline" && b.pos === "top" && isNum(b.at) && isNum(b.to) && b.to > b.at).sort((p, q) => p.at - q.at)[0];
+  if (hook && !spec.beats.some((b) => b && b.type === "ground" && !(isNum(b.at) && isNum(b.to) && (b.to <= hook.at || b.at >= hook.to)))) {
+    // the cut-out cannot follow a speed curve (take.ramp dies with a matte), and an explicit "matte": false is the reel's call
+    if ((spec.takes || []).some((k) => k && k.ramp)) styleWarnings.push(`glow.hookGround: the reel has a ramped take, so the hook at ${hook.at}s gets no grid ground (a cut-out cannot follow a speed curve)`);
+    else if (spec.matte === false) styleWarnings.push(`glow.hookGround: the reel sets "matte": false, so the hook at ${hook.at}s gets no grid ground`);
+    else {
+      const hg = spec.glow.hookGround, over = hg && typeof hg === "object" && !Array.isArray(hg) ? hg : {};
+      const ground = { gradient: ["#141414", "#050505"], paper: "grid", gridColor: "rgba(255,255,255,.09)", gridSize: 64, grain: false, ...over, at: hook.at, to: hook.to, type: "ground" };
+      const k = spec.beats.indexOf(hook);
+      spec.beats = [...spec.beats.slice(0, k), ground, ...spec.beats.slice(k)];
+      // a reel that already cut its matte for its own reasons (behind words...) keeps showing it as before
+      if (spec.matte !== true) {
+        spec.matte = true;
+        if (spec.matteWindows === undefined) spec.matteWindows = true;
+        if (spec.matteClip === undefined) spec.matteClip = true;
+      }
+    }
+  }
+}
 
 const FPS = spec.fps ?? 30;
 // brand kit: one accent (60/30/10), ink for text on light scenes, caption size
@@ -986,25 +1010,50 @@ if (spec.matte && SOURCES.length > 1 && !perSrcMatte) {
 const matteRelOf = (s) => (s === SRC ? "assets/talk-matte.webm" : `assets/${path.basename(s).replace(/\.[^.]+$/, "")}-matte.webm`);
 // stage: a recording is cut out only when it has a face track (a screen recording or a photo has no person to cut out)
 const stageMatted = (s) => s === SRC || fs.existsSync(path.join(proj, facePathFor(s)));
-if (spec.matte) {
-  for (const s of perSrcMatte ? SOURCES.filter(stageMatted) : [SRC]) {
-    const mp = path.resolve(proj, matteRelOf(s));
-    if (!fs.existsSync(mp)) {
-      console.log(`cutting the speaker out of ${s} (hyperframes remove-background, ~4 fps; cached in ${matteRelOf(s)})...`);
-      // npx is a .cmd shim on Windows and CreateProcess cannot launch it directly, so this
-      // threw ENOENT and took every `behind` beat with it (they die() without a matte).
-      const npx = process.platform === "win32" ? ["cmd", ["/c", "npx"]] : ["npx", []];
-      // MATTE_THREADS=T (opt-in, integer >= 1): the same matte, onnxruntime held to T threads (lib/matte.mjs); unset: as before
-      const threads = matteThreads();
-      // written to <name>.part.webm and renamed when done: a killed build never leaves a truncated matte that the next
-      // build would take as cached (the tool picks its format from the extension, so the name ends in .webm)
-      writeAtomically(mp, (out) => {
-        if (threads) cutMatteThreaded([npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background"]], path.resolve(proj, s), out, { cwd: proj, threads, warn: (m) => { console.warn(m); warn.push(m); } });
-        else execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", out], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 });
-      });
-      console.log("  matte done");
-    }
+// cut the speaker out of recording `s` (project-relative or absolute) into `mp` (hyperframes remove-background), unless cached
+const cutMatte = (s, mp, label) => {
+  if (fs.existsSync(mp)) return;
+  console.log(`cutting the speaker out of ${label} (hyperframes remove-background, ~4 fps; cached in ${path.relative(proj, mp).split(path.sep).join("/")})...`);
+  // npx is a .cmd shim on Windows and CreateProcess cannot launch it directly, so this
+  // threw ENOENT and took every `behind` beat with it (they die() without a matte).
+  const npx = process.platform === "win32" ? ["cmd", ["/c", "npx"]] : ["npx", []];
+  // MATTE_THREADS=T (opt-in, integer >= 1): the same matte, onnxruntime held to T threads (lib/matte.mjs); unset: as before
+  const threads = matteThreads();
+  // written to <name>.part.webm and renamed when done: a killed build never leaves a truncated matte that the next
+  // build would take as cached (the tool picks its format from the extension, so the name ends in .webm)
+  writeAtomically(mp, (out) => {
+    if (threads) cutMatteThreaded([npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background"]], path.resolve(proj, s), out, { cwd: proj, threads, warn: (m) => { console.warn(m); warn.push(m); } });
+    else execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", out], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 });
+  });
+  console.log("  matte done");
+};
+// matteClip window cut (opt-in, single recording, no take transitions, no cached whole-recording matte): only the recording
+// around each behind/ground beat (+-1 s, frame-aligned) is cut out, into assets/talk-matte@<startMs>-<endMs>.webm; the clipped
+// cut-out videos below read those files at the offset into them. Any beat time that is not a plain number: the whole recording.
+let matteWins = null;
+if (spec.matte && spec.matteClip && spec.matteWindows && !spec.stage && SOURCES.length === 1 && !takeJoins.length && !fs.existsSync(path.resolve(proj, matteRelOf(SRC)))) {
+  const mb = (spec.beats || []).filter((b) => b && ["behind", "ground"].includes(b.type));
+  if (mb.length && mb.every((b) => typeof b.at === "number" && typeof b.to === "number" && b.to > b.at)) {
+    const ws = mb.map((b) => [Math.max(0, Math.floor((b.at - 1) * FPS) / FPS), Math.ceil((b.to + 1) * FPS) / FPS]).sort((p, q) => p[0] - q[0]);
+    matteWins = [];
+    for (const w of ws) { const m = matteWins.at(-1); if (m && w[0] <= m[1]) m[1] = Math.max(m[1], w[1]); else matteWins.push([...w]); }
+    matteWins = matteWins.map(([a, b]) => ({ a, b, rel: `assets/talk-matte@${Math.round(a * 1000)}-${Math.round(b * 1000)}.webm` }));
   }
+}
+if (spec.matte) {
+  if (matteWins) for (const w of matteWins) {
+    const mp = path.resolve(proj, w.rel);
+    if (fs.existsSync(mp)) continue;
+    const cut = path.join(proj, "build", `matte-src@${Math.round(w.a * 1000)}-${Math.round(w.b * 1000)}.mp4`);
+    // cut by FRAME INDEX on a constant-rate timeline that starts at 0 (fps=FPS:start_time=0), not by a time seek: frame j of the
+    // window file is then frame round(a * FPS) + j of the whole-recording matte, which (like the plate) fills a video stream
+    // that starts after 0 (prep.sh's talk.mp4 starts at 0.033 s) with its first frame. A time seek was one frame early.
+    const f0 = Math.round(w.a * FPS), f1 = Math.round(w.b * FPS);
+    execFileSync("ffmpeg", ["-v", "error", "-y", "-i", path.resolve(proj, SRC), "-vf", `fps=${FPS}:start_time=0,trim=start_frame=${f0}:end_frame=${f1},setpts=PTS-STARTPTS`, "-fps_mode", "passthrough", "-an", "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p", cut]);
+    cutMatte(cut, mp, `${SRC} ${w.a}-${w.b}s`);
+    fs.rmSync(cut, { force: true });
+  }
+  else for (const s of perSrcMatte ? SOURCES.filter(stageMatted) : [SRC]) cutMatte(path.resolve(proj, s), path.resolve(proj, matteRelOf(s)), s);
   matteHtml = takes.map((k, i) => (perSrcMatte && !stageMatted(k.src)) ? "" : `
       <video id="matte-${i}" class="matte" src="${matteRelOf(k.src)}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="2" muted playsinline></video>`).join("");
   // the cut-out layer mirrors the plate's join transition so a `behind` beat never shows the
@@ -1711,6 +1760,18 @@ for (const b of beatsList) {
           const smallH = SMALL ? ssz * 1.05 : 0;
           if (room >= smallH + bsz * 0.98) y = Math.round(Math.max(under, 980 * hk));
           else if (room >= smallH + 170 * hk) { bsz = Math.floor((room - smallH) / 0.98); y = Math.round(Math.max(under, 980 * hk)); }
+          else if (spec.glow?.keepLow) {
+            // glow.keepLow (opt-in): a low headline never jumps to the top band; it sits as low as the safe area allows, over the
+            // chest (the approved Podcast Glow sample), shrinking the big word only if the block would not fit, and with no arrow
+            const floorY = 980 * hk, bottom = placer.safeBottom + 40, fitB = Math.floor((bottom - floorY - smallH) / 0.98);
+            const ky = Math.round(Math.max(floorY, bottom - (smallH + Math.min(bsz, fitB) * 0.98)));
+            // never over the mouth (face track, through the punch-ins): the block's top stays 60 px under the mouth line
+            const mouthClear = !(sp && sp.seen) || ky >= sp.mouth + 60 * hk;
+            if (fitB < Math.min(bsz, 170 * hk) || !mouthClear) {   // no readable big word fits, or it would cover the mouth: the old top band
+              warn.push(`headline "${BIG}" at ${b.at}: glow.keepLow ${mouthClear ? `has no room for a big word >= ${Math.round(170 * hk)}px in the lower frame` : "would cover the mouth"}, so it goes to the top band`);
+              y = placer.safeTop + 40 * hk; arrowOn = undefined;
+            } else { bsz = Math.min(bsz, fitB); y = ky; arrowOn = undefined; }
+          }
           else { y = placer.safeTop + 40 * hk; arrowOn = undefined; }   // a close-up with no room under the chin: the headline goes to the top band (no arrow)
         }
       }
@@ -3487,6 +3548,26 @@ if (spec.matte && spec.matteWindows && !spec.stage) {
   // never two sets on the same instant (a hide and a show both at 0 left the cut-out hidden in the render)
   if (!merged.length || merged[0][0] > 0.05) tl.push(`tl.set(".matte", { autoAlpha: 0 }, 0);`);
   for (const [a, b] of merged) { if (a > 0.05) tl.push(`tl.set(".matte", { autoAlpha: 1 }, ${r3(a - 0.02)});`); tl.push(`tl.set(".matte", { autoAlpha: 0 }, ${r3(b + 0.02)});`); }
+  // matteClip (opt-in; glow.hookGround sets it): the cut-out <video> covers only those windows instead of every whole take, so the
+  // renderer extracts (alpha, so PNG: ~1.4 MB a 1080x1920 frame) and pushes into Chrome only the frames that are shown. A take
+  // transition tweens #matte-<i> as a whole, so a reel with one keeps the full-length cut-out.
+  if (spec.matteClip) {
+    if (takeJoins.length) warn.push("matteClip: this reel has take transitions (blur/whip), so the cut-out stays on its full takes");
+    else {
+      // a piece reads the window file that holds it (matteWins), else the whole-recording matte (cut now if it is not there)
+      const srcOf = (k, m0, d) => {
+        const w = matteWins && matteWins.find((x) => x.a <= m0 + 1e-3 && m0 + d <= x.b + 1e-3);
+        if (w) return [w.rel, r3(m0 - w.a)];
+        cutMatte(path.resolve(proj, k.src), path.resolve(proj, matteRelOf(k.src)), k.src);
+        return [matteRelOf(k.src), r3(m0)];
+      };
+      matteHtml = takes.map((k, i) => (perSrcMatte && !stageMatted(k.src)) ? "" : merged.map(([a, b]) => [Math.max(k.start, a > 0.05 ? a - 0.02 : 0), Math.min(k.start + k.dur, b + 0.02)]).filter(([s, e]) => e - s > 0.5 / FPS).map(([s, e], j) => {
+        const [src, ms] = srcOf(k, k.a + (s - k.start), e - s);
+        return `
+      <video id="matte-${i}${j ? `-${j}` : ""}" class="matte" src="${src}" data-start="${r3(s)}" data-duration="${r3(e - s)}" data-media-start="${ms}" data-track-index="2" muted playsinline></video>`;
+      }).join("")).join("");
+    }
+  }
 }
 // ground pages (flat colour/paper behind the cut-out speaker) always skip the brand tint, so white stays white
 for (const [a, b] of groundFlat) { tl.push(`tl.set(".look-ov", { visibility: "hidden" }, ${r3(a)});`); tl.push(`tl.set(".look-ov", { visibility: "visible" }, ${r3(b)});`); }

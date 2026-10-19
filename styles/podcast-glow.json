@@ -1,5 +1,5 @@
 {
-  "_about": "Podcast Glow (studied from @kayzee.edits 'boring podcast to dope reels', 11 Oct 2026, ~/reels/focus-refs/STUDY.md): warm orange podcast grade, punch-ins between two framings, ONE word at a time in heavy yellow caps with a soft glow at chest height; about every 5 s a HEADLINE takes over: the 1-3 words before the strongest word in white, the word itself HUGE in condensed yellow (Anton) slamming in with a whoosh + impact, sometimes with a hand-drawn arrow; the opening sentence sits at the top as a title on a dark shade (grid ground behind a cut-out when the reel sets matte); a low tense bed.",
+  "_about": "Podcast Glow (studied from @kayzee.edits 'boring podcast to dope reels', 11 Oct 2026, ~/reels/focus-refs/STUDY.md): warm orange podcast grade, punch-ins between two framings, ONE word at a time in heavy yellow caps with a soft glow at chest height; about every 5 s a HEADLINE takes over: the 1-3 words before the strongest word in white, the word itself HUGE in condensed yellow (Anton) slamming in with a whoosh + impact, sometimes with a hand-drawn arrow; the opening sentence sits at the top as a title on a dark shade (the speaker cut out over a dark grid ground: glow.hookGround); a low tense bed.",
   "brand": {
     "accent": "#FFD21E",
     "accentDark": "#E0B500",
@@ -65,6 +65,10 @@
     }
   },
   "outro": 0.15,
+  "glow": {
+    "hookGround": true,
+    "keepLow": true
+  },
   "director": {
     "plan": "core/scripts/glow_plan.py <project> writes the hook title (top, over a dark grid ground) and a headline about every 5 s.",
     "rules": "Everything on screen is spoken. One headline at a time, never two within ~4 s. Footage stays in colour, warm."
