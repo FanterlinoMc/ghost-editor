@@ -53,6 +53,11 @@ try {
   assert.ok(fxOpen > 0 && take > fxOpen, "the footage is inside #fx, so its blur reaches the speaker");
   check("style with look.fx (library/ui-story-ad--11): #fx written, the popcard blur / leak bloom tweens target it");
 
+  // 1b. the opt-out: a pitch child (refocus false) that sets look.fx: false overrides the inherited true (deep merge) and gets NO #fx
+  const optOut = build({ style: "library/ui-story-ad--11", look: { fx: false, refocus: false } });
+  assert.ok(!optOut.includes('id="fx"') && !optOut.includes("#fx {"), "look.fx: false on a pitch child removes #fx");
+  check("pitch child with look.fx: false and refocus false: no #fx (the opt-out)");
+
   // 2. the key itself, on a style that never had #fx: clean + reel look.fx true
   const cleanOn = build({ style: "clean", look: { fx: true } });
   assert.ok(hasFx(cleanOn), "look.fx: true writes #fx on clean");
