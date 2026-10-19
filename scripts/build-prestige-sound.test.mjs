@@ -11,6 +11,8 @@
 //     back to the ids that are there, and nothing is reported skipped
 //   - the silent library: the same reel builds, the drop still cuts, no sound event and no sfx tag, the skipped-sound warning
 //   - the new die(): drop.<sound field> not an id / list of ids / false / "none"
+//   - opt-in: premium-belmar reels without the new fields (no drop, a placed drop) build the same sections.json, sfx_events.json and
+//     index.html as the base engine (git archive of PRESTIGE_BASE_REF, default origin/engine/release-1019b; skipped without it)
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -88,7 +90,8 @@ const PRESTIGE = {
   style: "premium-belmar",
   takes: [{ a: 0, b: 3.6 }, { a: 4, b: 5.8 }, { a: 6, b: 14 }],
   captions: { emph: ["idea"] },
-  drop: { at: 9, shots: [{ self: 1 }, { self: 3 }] },
+  // the lists a deployment or a reel may set (the style keeps the single default ids): the first id on disk plays
+  drop: { at: 9, shots: [{ self: 1 }, { self: 3 }], riser: ["cinematic-rumble-riser", "riser-1"], boom: ["cinematic-deep-boom", "impact-1"], tail: ["whoosh-cine"], cutSfx: ["tech-camera-flash", "click-1"] },
   outro: 1,
   beats: [{ type: "scene", kind: "image", self: 2, at: 1.5, to: 2.6 }],
 };
@@ -163,11 +166,16 @@ test("Prestige against a partial library: the drop's id lists and the design fam
   assert.equal(ev.find((e) => e.why === "drop boom").id, "impact-1", "boom: the list's second id");
   assert.ok(ev.filter((e) => e.why === "drop flash cut").every((e) => e.id === "click-1"), "flash cut: the list's second id");
   assert.equal(ev.filter((e) => e.why === "drop flash cut").length, ev0.filter((e) => e.why === "drop flash cut").length);
-  const ticks = ev.filter((e) => e.design === "tick"), ticks0 = ev0.filter((e) => e.design === "tick");
-  assert.ok(ticks0.some((e) => e.id === "pop-1"), "the full library's round robin plays pop-1");
-  assert.ok(!ticks.some((e) => e.id === "pop-1") && ticks.length === ticks0.length, "pop-1 missing: its turns go to the next tick on disk, none lost");
-  assert.ok(ev.filter((e) => e.design === "whip").every((e) => e.id === "tech-digital-whoosh"));
-  assert.equal(ev.filter((e) => e.design === "whip").length, ev0.filter((e) => e.design === "whip").length);
+  // turn by turn against the full-library run: a missing id's turn goes to the next member of its group, every other turn is unchanged
+  const SUB = { "pop-1": "tick-1", "burn-whoosh-fast": "tech-digital-whoosh", "cinematic-deep-boom": "impact-1", "tech-camera-flash": "click-1" };
+  const turns = (xs) => xs.filter((e) => e.design || e.why.startsWith("drop "));
+  const got = turns(ev), want = turns(ev0);
+  assert.ok(want.some((e) => e.id === "pop-1") && want.some((e) => e.id === "burn-whoosh-fast") && want.some((e) => e.design === "hit"), "the full run uses the ids the partial library lacks");
+  assert.equal(got.length, want.length, "no turn lost");
+  for (let i = 0; i < want.length; i++) {
+    assert.equal(got[i].why, want[i].why, `turn ${i}`);
+    assert.equal(got[i].id, SUB[want[i].id] ?? want[i].id, `turn ${i} (${want[i].why} at ${want[i].t}): ${want[i].id} -> its fallback`);
+  }
 });
 
 test("Prestige against the silent library: builds, the drop still cuts, no sound at all, one skipped-sound warning", () => {
@@ -193,5 +201,38 @@ test("drop sound fields: false / \"none\" silence one sound; anything but an id,
     const r = run(project({ ...PRESTIGE, drop: { ...PRESTIGE.drop, [k]: v } }, SPANS), FULL.lib);
     assert.notEqual(r.status, 0, `drop.${k}: ${JSON.stringify(v)} should fail`);
     assert.ok((r.stdout + r.stderr).includes(`drop.${k} must be a sound id, a non-empty list of sound ids, false or "none" (got ${JSON.stringify(v)})`), r.stdout + r.stderr);
+  }
+});
+
+// Opt-in proof for the style itself: premium-belmar reels that use none of the new fields build the same bytes as the base engine
+// (sections.json carries a globalHash over spec.drop, so even a style-only change to the drop block would show here). The base engine
+// is `git archive` of PRESTIGE_BASE_REF (default origin/engine/release-1019b, the branch this work started from); without git or the
+// ref the check is skipped and says so.
+const BASE_REF = process.env.PRESTIGE_BASE_REF || "origin/engine/release-1019b";
+const baseEngine = (() => {
+  const dir = path.join(root, "base-engine");
+  try {
+    const repo = path.join(HERE, "..");
+    execFileSync("git", ["-C", repo, "rev-parse", "--verify", "--quiet", `${BASE_REF}^{commit}`], { stdio: "pipe" });
+    const tar = execFileSync("git", ["-C", repo, "archive", "--format=tar", BASE_REF, "scripts", "styles", "presets", "templates", "brands", "templates-registry.json"], { maxBuffer: 1 << 28 });
+    fs.mkdirSync(dir); execFileSync("tar", ["-xf", "-", "-C", dir], { input: tar });
+    return dir;
+  } catch { return null; }
+})();
+test(`premium-belmar without the new fields builds byte-identically to ${BASE_REF} (no drop; a placed drop; silent and stub library)`, { skip: baseEngine ? false : `${BASE_REF} not available` }, () => {
+  const runWith = (engine, dir, lib) => {
+    const r = spawnSync(process.execPath, [path.join(engine, "scripts", "build.mjs"), "."], { cwd: dir, encoding: "utf8", env: { ...process.env, PHANTASIC_LIB: lib, [pathKey]: fakeBin + path.delimiter + process.env[pathKey] } });
+    assert.equal(r.status, 0, r.stderr + r.stdout);
+  };
+  const plain = { ...PRESTIGE, drop: undefined, beats: PRESTIGE.beats };
+  const dropped = { ...PRESTIGE, drop: { at: 9, shots: [{ self: 1 }, { self: 3 }] } };
+  for (const [label, reel] of [["no drop", plain], ["placed drop", dropped]]) for (const lib of [silentLibrary(), FULL.lib]) {
+    const mine = project(reel, SPANS), base = project(reel, SPANS);
+    runWith(path.join(HERE, ".."), mine, lib); runWith(baseEngine, base, lib);
+    for (const f of ["build/sections.json", "build/sfx_events.json", "index.html"]) {
+      // the project folder name differs (p<N>); the bytes may name it, so compare with it masked
+      const read = (d) => fs.readFileSync(path.join(d, f), "utf8").split(path.basename(d)).join("<proj>");
+      assert.ok(read(mine) === read(base), `${label}, ${lib === FULL.lib ? "stub" : "silent"} library: ${f} differs from ${BASE_REF}`);
+    }
   }
 });
