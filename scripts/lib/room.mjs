@@ -29,6 +29,7 @@
 //                  one ease in, one ease out, no fight between tweens on #room.
 //   captions        hidden over [tA, tB] of each merged window.
 
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -153,4 +154,7 @@ export function roomSpecJson(W = 1080, H = 1920) {
   };
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) console.log(JSON.stringify(roomSpecJson(), null, 2));
+// run directly (the planner's test reads this JSON): compare real paths, so a checkout under a symlinked folder
+// (macOS /tmp -> /private/tmp) still prints; path.resolve() alone kept the link and printed nothing
+const realOf = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+if (process.argv[1] && realOf(process.argv[1]) === realOf(fileURLToPath(import.meta.url))) console.log(JSON.stringify(roomSpecJson(), null, 2));
