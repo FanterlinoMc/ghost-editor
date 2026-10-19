@@ -907,7 +907,17 @@ without running the file):
     `--force-webrtc-ip-handling-policy=disable_non_proxied_udp` and
     `--webrtc-ip-handling-policy=disable_non_proxied_udp` (no STUN/UDP), and `--disable-quic`. The shim passes
     `--version` straight through to the binary (so the cache key's `chrome` and R13 read the same build).
-    **Final flag list: `<PM2 fills this in from its measurements>`.**
+    **Final flag list (PM2, measured; `CHROME_FLAGS` in `scripts/lib/graphic-render.mjs`):**
+    `--proxy-server=http://127.0.0.1:9`, `"--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE localhost"`,
+    `--disable-quic`, `--force-webrtc-ip-handling-policy=disable_non_proxied_udp`,
+    `--webrtc-ip-handling-policy=disable_non_proxied_udp`, `--disable-background-networking`, `--no-pings`, and
+    `--proxy-bypass-list=<-loopback>;localhost:<port>;127.0.0.1:<port>` where `<port>` is the render server's
+    ephemeral port: the Node preload (`scripts/offline-preload.cjs`, in hyperframes' own process) records every
+    port that process listens on into `GRAPHIC_RENDER_ORIGINS` before Chrome is launched, and the shim, which
+    inherits that environment, builds the bypass list from it (no origin known: `<-loopback>` alone, so nothing
+    on loopback loads and the render fails, R10). Measured through `hyperframes render` (scripts/graphic-isolation-check.mjs,
+    navigation trap disabled so the shim alone is measured): 0 of 34 routes reached a listener on this Mac's LAN IP or
+    on another `localhost` port; without the shim 14 of 34 did (navigations, `open()`, meta refresh, STUN, TURN over UDP and TCP).
   - Measured on this Mac with the flags above minus `--proxy-bypass-list` (puppeteer on the same Chrome, the
     page served from `http://localhost:<port>`, the target the Mac's own non-loopback IPv4 address, the v2 CSP
     below): **0 of 22** routes reached the listener, every page having run (fetch, `new Image`, image-set,
