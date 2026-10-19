@@ -472,17 +472,32 @@ time. The A3 elements that follow (chart, icon, mockup, particles) take the same
 Tweens: a Lottie element takes the node keys an `image` takes, under the existing tween rules: `x y scale
 scaleX scaleY rotate opacity blur reveal` (`blur` under the existing two-element / half-canvas limits).
 `draw` and `count` are ignored with the existing warnings. Tweens move the box; the animation's own frames
-are driven only by `start`, `speed`, `loop` and `frames`. Limit: **3 Lottie elements per beat or layer**
-(they count toward the 12 elements); the rest are dropped with a warning.
+are driven only by `start`, `speed`, `loop` and `frames`. Limit: **3 valid Lottie elements per beat or layer**
+(they count toward the 12 elements). The cap counts only Lottie elements that passed every check below: an
+invalid one is dropped (beat) or dies (layer) and does not use up a place. Once 3 are kept, every later
+`shape: "lottie"` element in that beat or layer is dropped unchecked with W6 (in a layer too: it does not die).
 
 ### The file (checked by the build at compile time; the validator runs the same checks)
 
-- Size at most **2 097 152 bytes** (2 MiB): it is inlined into `index.html`.
-- Valid JSON whose top level has numbers `fr` (1..120), `ip`, `op` (`op > ip`, `op - ip <= 10000`),
-  `w`, `h` (1..8192) and an array `layers`.
+- Size at most **2 097 152 bytes** (2 MiB): it is inlined into `index.html`. The size is read from the file
+  system before the file is read.
+- For a project path, the file's **real path** (symlinks resolved) must lie inside the project's real `assets/`
+  folder: a symlinked file or folder that leads out of it is L1.
+- Valid JSON whose top level has numbers `fr` (1..120), `ip`, `op`, `w`, `h` (1..8192) and an array `layers`.
+- **`ip` and `op` are made whole when the file is read:** a value within 0.001 of a whole number is rounded
+  to it (Bodymovin writes `op` as `60.0000024`); otherwise `ip` is rounded up and `op` down, so every frame
+  the driver shows lies inside the file. After that `op > ip` and `op - ip <= 10000` must hold (else L9).
+  The whole values are what `frames` is checked against (W5), what the driver uses, and what the inlined
+  copy carries (its `ip`/`op` are rewritten), so the player's own first frame and frame count agree.
 - **Vector only.** Every layer, at the top level and inside every precomp in `assets[].layers`, has
   `ty` 0 (precomp), 1 (solid), 3 (null) or 4 (shape). No image (2), text (5), audio (6), camera (13) or
   other types: image and font loads are asynchronous and would race the first frame.
+- **Nothing to load** (L13). `lottie_light` loads every `assets[]` entry that has no `layers` array (an image,
+  or `t: 3` footage) whether a layer uses it or not, adds a `<link>`/`@font-face` for every `fonts.list`
+  entry, and `chars` are those fonts' glyphs. So: every `assets[]` entry must be a precomp (an object with a
+  `layers` array), `fonts.list` must be absent or empty, and `chars` must be absent or empty.
+- **At most 256 levels of nesting** (L14): the player walks shape groups and precomps recursively; real files
+  stay well under 40.
 - **No expressions**: no property object carrying a string `x` (After Effects expression). The bundled
   player is `lottie_light`, which does not evaluate them, so the file would render differently from
   what was authored.
@@ -498,13 +513,19 @@ are driven only by `start`, `speed`, `loop` and `frames`. Limit: **3 Lottie elem
   (`vendor: served ...lottie_light.min.js`), failing the render if it did not, so nothing is fetched. The `<script>` and the data are
   written **only when the reel compiles at least one Lottie element**, so every existing reel builds byte-identically.
 - **Off `window.lottie`.** Right after the player loads, the page moves it to `window.__geLottie` and deletes
-  `window.lottie`. HyperFrames 0.8.81 has its own Lottie adapter: it finds `window.lottie.getRegisteredAnimations()`
+  `window.lottie` and `window.bodymovin` (the same player, set by the UMD tail). HyperFrames 0.8.81 has its own Lottie adapter: it finds `window.lottie.getRegisteredAnimations()`
   and, on every frame it renders, seeks each animation to the composition time, after our timeline has run, ignoring
   `start`, `speed` and `frames`. Left in place, a real render showed both fixture players on frame 59 at 4.1 s
   (want 59 and 3). Each player is also kept in `window.__geLottieAnims[<beat>-<element id>]` (the determinism check
   and the studio read `currentFrame` there).
+  **Risk:** a later HyperFrames that finds players another way (a DOM scan, a hook in `loadAnimation`) would put
+  the second clock back silently. Guard: `motion-determinism.mjs --variant lottie` fails unless, after the first
+  seek, `window.lottie` and `window.bodymovin` are undefined and `window.__hfLottie` (the adapter's list) is
+  empty or absent; and the CP4 render check compares rendered frames with the formula. The guard is NOT a
+  page-side `throw`: a throwing seek did not fail a HyperFrames render, it hung it (measured: 10 min, render
+  lock held, until killed). Re-run both when the HyperFrames pin moves.
 - **Data inlined**, not fetched: each distinct file is written once into the page as
-  `<script type="application/json" id="lottie-<sha8>">` (minified) and passed as `animationData`, so the
+  `<script type="application/json" id="lottie-<first 12 hex of the sha256 of the minified JSON>">` and passed as `animationData`, so the
   load is synchronous and there is no XHR or `file://` fetch.
 - `__geLottie.loadAnimation({ container: #<uid>-l (inside #<uid>-a), renderer: "svg", loop: false, autoplay: false,
   animationData, rendererSettings: { preserveAspectRatio, progressiveLoad: false, hideOnTransparent: true } })`,
@@ -556,23 +577,28 @@ vanish silently). Same reason text in both:
 | L4 | `lottie library file <src>.json is missing (restore the library)` |
 | L5 | `lottie library file <src>.json does not match its manifest sha256` |
 | L6 | `lottie file <src> is <bytes> bytes (max 2097152)` |
-| L7 | `lottie file <src> is not valid JSON` |
+| L7 | `lottie file <src> is not valid JSON` (also any error while reading it back, as a safety net) |
 | L8 | `lottie file <src> is not a Lottie animation (needs numbers fr, ip, op, w, h and a layers array)` |
 | L9 | `lottie file <src> is out of range (fr 1..120, op > ip, op - ip <= 10000, w and h 1..8192)` |
 | L10 | `lottie file <src> has a layer of type <ty> (only 0 precomp, 1 solid, 3 null and 4 shape are supported)` |
 | L11 | `lottie file <src> uses expressions (not supported)` |
 | L12 | `lottie box shows less than 20% inside the <W>x<H> canvas` |
+| L13 | `lottie file <src> has <what>: only vector shapes are supported, nothing may be loaded`, `<what>` one of `an asset without layers (an image or footage)`, `fonts`, `glyphs (chars)` (checked in that order) |
+| L14 | `lottie file <src> is nested more than 256 levels deep` |
+
+Order of the checks (the first failing one is reported): a project path L1 (the text), L2, L1 (the real path),
+L6; a library id L3, L4, L6, L5; then for both L7, L8, L9, L10, L13, L14, L11; L12 (the box) after the file.
 
 **Warnings** (both places, never fatal; the element is kept with the value named):
 
 | # | text (exact) |
 |---|---|
 | W1 | `motion <id>: element <el id>: lottie fit '<v>' is not contain, cover or fill, using contain` |
-| W2 | `motion <id>: element <el id>: lottie start <v>s is outside 0..<max>s, clamped` |
+| W2 | `motion <id>: element <el id>: lottie start <v>s is outside 0..<max>s, clamped` (not a number: `... lottie start '<v>' is not a number, using 0`) |
 | W3 | `motion <id>: element <el id>: lottie speed <v> is outside 0.25..4, clamped` (not a number: `... lottie speed '<v>' is not a number, using 1`) |
 | W4 | `motion <id>: element <el id>: lottie loop must be true or false, using false` |
 | W5 | `motion <id>: element <el id>: lottie frames must be [first, last] whole frames with <ip> <= first < last <= <op>, using [<ip>, <op>]` |
-| W6 | `motion <id>: only the first 3 lottie elements are used` |
+| W6 | `motion <id>: only the first 3 lottie elements are used` (printed once; counts valid elements, see the limit above) |
 | W7 | `motion <id>: element <el id>: lottie box crosses the <platform name> UI zone` (any part of the box above `top`, below `H - bottom` or right of `W - right` of `safezone.mjs` `PLATFORMS[platform]`; the face and caption checks stay the validator's, as for every element) |
 
 In a layer the `motion <id>` prefix is the layer's id, as for the existing motion-layer warnings.

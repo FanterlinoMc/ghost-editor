@@ -54,7 +54,7 @@ test("a reel with Lottie elements: player tag, one inlined file, two drivers, a 
   assert.ok(html.indexOf(LOTTIE_URL) < html.indexOf("const tl = gsap.timeline"), "the player loads before the timeline script");
   // HyperFrames' own Lottie adapter drives whatever window.lottie has registered from the composition time: the page
   // moves the player off that global right after loading it, so the timeline stays the only clock
-  assert.ok(html.includes(`<script src="${LOTTIE_URL}"></script>\n<script>window.__geLottie = window.lottie; delete window.lottie;</script>`));
+  assert.ok(html.includes(`<script src="${LOTTIE_URL}"></script>\n<script>window.__geLottie = window.lottie; delete window.lottie; delete window.bodymovin;</script>`));
   assert.ok(!/[^_.]lottie\.loadAnimation/.test(html), "nothing registers through window.lottie");
   for (const id of ["once", "loopy"]) {
     assert.match(html, new RegExp(`<div id="b0-${id}-l" style="position:absolute;left:0;top:0;width:100%;height:100%"></div>`));
@@ -137,6 +137,11 @@ const bad = {
   "range.json": { ...clone(), fr: 0 },
   "image.json": (() => { const d = clone(); d.layers.push({ ty: 2, ind: 2, refId: "img_0" }); return d; })(),
   "text.json": (() => { const d = clone(); d.assets = [{ id: "pc", layers: [{ ty: 5, ind: 1 }] }]; return d; })(),
+  "img-asset.json": (() => { const d = clone(); d.assets = [{ id: "img_0", w: 10, h: 10, u: "https://example.com/", p: "a.png", e: 0 }]; return d; })(),
+  "footage.json": (() => { const d = clone(); d.assets = [{ id: "data_0", t: 3, u: "", p: "data.json", e: 0 }]; return d; })(),
+  "fonts.json": (() => { const d = clone(); d.fonts = { list: [{ fName: "Roboto", fFamily: "Roboto", fStyle: "Regular", fPath: "https://fonts.googleapis.com/css?family=Roboto", origin: 1 }] }; return d; })(),
+  "chars.json": (() => { const d = clone(); d.chars = [{ ch: "A", size: 12, style: "Regular", w: 50, data: {}, fFamily: "Roboto" }]; return d; })(),
+  "precomp.json": (() => { const d = clone(); d.assets = [{ id: "comp_0", layers: [clone().layers[0]] }]; d.fonts = { list: [] }; d.chars = []; return d; })(),
   "expr.json": (() => { const d = clone(); d.layers[0].ks.r = { a: 0, k: 0, x: "var $bm_rt = time * 360;" }; return d; })(),
   "move.json": LOTTIE_FIXTURE,
 };
@@ -150,6 +155,10 @@ const CASES = [
   ["L9", { src: "assets/lottie/range.json" }, "lottie file assets/lottie/range.json is out of range (fr 1..120, op > ip, op - ip <= 10000, w and h 1..8192)"],
   ["L10", { src: "assets/lottie/image.json" }, "lottie file assets/lottie/image.json has a layer of type 2 (only 0 precomp, 1 solid, 3 null and 4 shape are supported)"],
   ["L10", { src: "assets/lottie/text.json" }, "lottie file assets/lottie/text.json has a layer of type 5 (only 0 precomp, 1 solid, 3 null and 4 shape are supported)"],
+  ["L13", { src: "assets/lottie/img-asset.json" }, "lottie file assets/lottie/img-asset.json has an asset without layers (an image or footage): only vector shapes are supported, nothing may be loaded"],
+  ["L13", { src: "assets/lottie/footage.json" }, "lottie file assets/lottie/footage.json has an asset without layers (an image or footage): only vector shapes are supported, nothing may be loaded"],
+  ["L13", { src: "assets/lottie/fonts.json" }, "lottie file assets/lottie/fonts.json has fonts: only vector shapes are supported, nothing may be loaded"],
+  ["L13", { src: "assets/lottie/chars.json" }, "lottie file assets/lottie/chars.json has glyphs (chars): only vector shapes are supported, nothing may be loaded"],
   ["L11", { src: "assets/lottie/expr.json" }, "lottie file assets/lottie/expr.json uses expressions (not supported)"],
   ["L12", { x: 1010, y: 300 }, "lottie box shows less than 20% inside the 1080x1920 canvas"],
 ];
@@ -192,6 +201,59 @@ test("a real build dies on a motion layer's bad Lottie (L7), and names it", () =
   assert.ok(!/lottie/i.test(fs.readFileSync(p.html, "utf8")), "nothing of the dropped element reaches the page");
 });
 
+test("a precomp asset (with layers) and empty fonts/chars are vector data: accepted", () => {
+  const dir = proj(bad);
+  const r = makeLottieResolver(dir, path.join(dir, "lib"))("assets/lottie/precomp.json");
+  assert.ok(r.ok, r.reason);
+});
+
+test("ip/op are made whole: Bodymovin's op 60.0000024 loops 58, 59, 0 (never frame 60); far-off values go inward", () => {
+  const frac = (ip, op) => { const d = clone(); d.ip = ip; d.op = op; return d; };
+  const dir = proj({ "frac.json": frac(0, 60.0000024), "inward.json": frac(0.5, 59.5), "tiny.json": frac(0.0004, 59.9996), "empty.json": frac(0.4, 0.6) });
+  const res = makeLottieResolver(dir, path.join(dir, "lib"));
+  const a = res("assets/lottie/frac.json");
+  assert.deepEqual([a.meta.ip, a.meta.op], [0, 60]);
+  assert.deepEqual([JSON.parse(a.json).ip, JSON.parse(a.json).op], [0, 60], "the inlined copy carries the whole values");
+  const b = res("assets/lottie/inward.json"); assert.deepEqual([b.meta.ip, b.meta.op], [1, 59]);
+  const c = res("assets/lottie/tiny.json"); assert.deepEqual([c.meta.ip, c.meta.op], [0, 60]);
+  assert.equal(res("assets/lottie/empty.json").reason, "lottie file assets/lottie/empty.json is out of range (fr 1..120, op > ip, op - ip <= 10000, w and h 1..8192)", "0.4..0.6 has no whole frame");
+  // the loop driver over the fractional-op file
+  const r = compileMotion(beat([el({ src: "assets/lottie/frac.json", loop: true })]), ctxFor(dir));
+  assert.ok(r.ok, r.reason);
+  const { anims, tweens } = drive(r);
+  const at = (e) => { anims[0].frames.length = 0; tweens[0].to.modifiers.e(e); return anims[0].frames[0][0]; };
+  assert.deepEqual([58, 59, 60, 61].map((f) => at(f / 30)), [58, 59, 0, 1]);
+  // and a fractional ip: frames are counted from the whole ip, goToAndStop gets f - ip
+  const r2 = compileMotion(beat([el({ src: "assets/lottie/inward.json", loop: true })]), ctxFor(dir));
+  const d2 = drive(r2);
+  d2.anims[0].frames.length = 0; d2.tweens[0].to.modifiers.e(58 / 30);
+  assert.deepEqual(d2.anims[0].frames[0], [0, true], "58 frames into a 1..59 loop wraps to frame 1 = offset 0");
+});
+
+test("symlinks may not lead out of assets/ (L1)", () => {
+  const dir = proj({ "move.json": LOTTIE_FIXTURE });
+  const outside = fs.mkdtempSync(path.join(tmp, "outside-"));
+  fs.writeFileSync(path.join(outside, "x.json"), FIX);
+  fs.symlinkSync(path.join(outside, "x.json"), path.join(dir, "assets", "lottie", "link.json"));
+  fs.symlinkSync(outside, path.join(dir, "assets", "linkdir"));
+  fs.symlinkSync(path.join(dir, "assets", "lottie", "move.json"), path.join(dir, "assets", "lottie", "inside.json"));
+  const res = makeLottieResolver(dir, path.join(dir, "lib"));
+  assert.equal(res("assets/lottie/link.json").reason, "lottie src 'assets/lottie/link.json' is not an assets/ .json path inside the project or a library/lottie id");
+  assert.equal(res("assets/linkdir/x.json").reason, "lottie src 'assets/linkdir/x.json' is not an assets/ .json path inside the project or a library/lottie id");
+  assert.ok(res("assets/lottie/inside.json").ok, "a link that stays inside assets/ is fine");
+});
+
+test("a deeply nested file is refused (L14), never an uncaught RangeError", () => {
+  const n = 300000, deep = "[".repeat(n) + "]".repeat(n);
+  const text = `{"fr":30,"ip":0,"op":60,"w":10,"h":10,"layers":[],"meta":${deep}}`;
+  assert.ok(text.length < LOTTIE_MAX_BYTES);
+  let r;
+  assert.doesNotThrow(() => { r = inspectLottie(Buffer.from(text), "assets/lottie/deep.json"); });   // CP2 threw RangeError here
+  assert.equal(r.reason, "lottie file assets/lottie/deep.json is nested more than 256 levels deep");
+  const ok = clone(); let node = ok.layers[0].shapes; for (let i = 0; i < 60; i++) { const g = { ty: "gr", it: [] }; node.push(g); node = g.it; }
+  assert.ok(inspectLottie(Buffer.from(JSON.stringify(ok)), "x").ok, "60 nested shape groups (deeper than real files) pass");
+});
+
 test("library ids: L3, L4, L5 and a good one", () => {
   const dir = proj({});
   const lib = path.join(dir, "lib");
@@ -224,6 +286,8 @@ test("field warnings W1..W7 keep the element with the named fallback", () => {
   r = w({ start: 9 }, "motion m1: element anim: lottie start 9s is outside 0..5.95s, clamped");
   assert.ok(r.lines.join("\n").includes("}, 7.95);"), "clamped to 5.95 s after t0 = 2");
   w({ start: -1 }, "motion m1: element anim: lottie start -1s is outside 0..5.95s, clamped");
+  r = w({ start: "soon" }, "motion m1: element anim: lottie start 'soon' is not a number, using 0");
+  assert.ok(r.lines.join("\n").includes("}, 2);"), "start 0 = the beat's t0");
   r = w({ speed: 10 }, "motion m1: element anim: lottie speed 10 is outside 0.25..4, clamped");
   assert.ok(r.lines.join("\n").includes("Math.max(0, e) * 120 + 1e-3"), "30 fps x 4");
   r = w({ speed: "fast" }, "motion m1: element anim: lottie speed 'fast' is not a number, using 1");
@@ -243,6 +307,10 @@ test("field warnings W1..W7 keep the element with the named fallback", () => {
   assert.ok(r.warnings.includes("motion m1: only the first 3 lottie elements are used"));
   assert.ok(r.html.includes("b0-a3-l") && !r.html.includes("b0-a4-l"));
   assert.equal(r.lottie.size, 1, "one file, inlined once");
+  // the cap counts VALID elements: an invalid one first does not use up a place
+  r = compileMotion(beat([el({ id: "bad", src: "assets/lottie/nope.json" }), ...[1, 2, 3].map((i) => el({ id: `a${i}`, y: 230 + i * 300, h: 200 }))]), ctxFor(dir));
+  assert.ok(!r.warnings.includes("motion m1: only the first 3 lottie elements are used"), JSON.stringify(r.warnings));
+  assert.ok(["a1", "a2", "a3"].every((i) => r.html.includes(`b0-${i}-l`)));
 });
 
 test("tweens on a Lottie box: node keys apply, draw and count are refused", () => {

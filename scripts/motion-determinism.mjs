@@ -231,6 +231,16 @@ const ref = new Map();
 for (const t of SAMPLES) ref.set(t, await at(page, t));                       // forward sweep
 await expectCounts();
 expectLottieFrames();
+// lottie: HyperFrames' own Lottie adapter finds animations through window.lottie (or window.bodymovin, the same player)
+// and would re-seek them to the composition time on every frame. After the first seek the page must expose neither
+// global and the adapter's list (window.__hfLottie) must be empty or absent. (A page-side throw is NOT used: a
+// throwing seek hangs the HyperFrames renderer instead of failing it - measured, 10 min with the render lock held.)
+if (isLottie) {
+  const g = await page.evaluate(() => ({ lottie: typeof window.lottie, bodymovin: typeof window.bodymovin, hf: Array.isArray(window.__hfLottie) ? window.__hfLottie.length : String(window.__hfLottie), mine: Object.keys(window.__geLottieAnims || {}).length }));
+  if (g.lottie !== "undefined" || g.bodymovin !== "undefined" || !(g.hf === "undefined" || g.hf === 0) || g.mine !== 2)
+    failures.push({ label: "expected", t: 0, pixels: false, stateKeys: ["globals"], detail: [`the player is visible to the HF runtime's Lottie adapter: ${JSON.stringify(g)}`] });
+  else console.log(`  lottie: window.lottie and window.bodymovin undefined, __hfLottie ${g.hf}, ${g.mine} players on window.__geLottieAnims`);
+}
 if (keep) { fs.mkdirSync(path.join(dir, "shots"), { recursive: true }); for (const [t, r] of ref) fs.writeFileSync(path.join(dir, "shots", `t${t}.png`), r.png); }   // --keep: look at them
 const distinct = new Set([...ref.values()].map((r) => r.shot)).size;
 

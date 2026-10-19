@@ -162,8 +162,8 @@ export function compileMotion(b, ctx) {
         split: e.split === "words" || e.split === "chars" ? e.split : "none",
       });
     } else if (e.shape === "lottie") {
+      // the cap counts VALID Lottie elements: once 3 are kept, every later one is dropped unchecked (W6)
       if (nLottie >= LOTTIE_PER_GRAPHIC) { if (!lottieCapped) { lottieCapped = true; warn(`only the first ${LOTTIE_PER_GRAPHIC} lottie elements are used`); } continue; }
-      nLottie++;
       const r = ctx.resolveLottie ? ctx.resolveLottie(e.src) : { ok: false, reason: "lottie is not available here" };
       if (!r.ok) { lottieProblem(e.id, r.reason); continue; }
       const ix = Math.max(0, Math.min(el.x + el.w, W) - Math.max(el.x, 0)), iy = Math.max(0, Math.min(el.y + el.h, H) - Math.max(el.y, 0));
@@ -176,8 +176,9 @@ export function compileMotion(b, ctx) {
       const maxStart = r3(len - 0.05);
       let start = 0;
       if (e.start !== undefined) {
-        if (fin(e.start) && e.start >= 0 && e.start <= maxStart) start = e.start;
-        else { start = fin(e.start) ? r3(clamp(e.start, 0, maxStart)) : 0; lw(`lottie start ${typeof e.start === "string" ? `'${e.start.slice(0, 40)}'` : e.start}s is outside 0..${maxStart}s, clamped`); }
+        if (!fin(e.start)) lw(`lottie start '${String(e.start).slice(0, 40)}' is not a number, using 0`);
+        else if (e.start >= 0 && e.start <= maxStart) start = e.start;
+        else { start = r3(clamp(e.start, 0, maxStart)); lw(`lottie start ${e.start}s is outside 0..${maxStart}s, clamped`); }
       }
       let speed = 1;
       if (e.speed !== undefined) {
@@ -195,6 +196,7 @@ export function compileMotion(b, ctx) {
       }
       const sz = ctx.safe;
       if (sz && (el.y < sz.top || el.y + el.h > H - sz.bottom || el.x + el.w > W - sz.right)) lw(`lottie box crosses the ${sz.name} UI zone`);
+      nLottie++;
       lottieFiles.set(r.key, r.json);
       Object.assign(el, { key: r.key, fit, start, speed, loop, first, last, fr, ip });
     } else if (e.shape === "image") {
