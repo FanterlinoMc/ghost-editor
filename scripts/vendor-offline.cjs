@@ -4,7 +4,7 @@
 // global fetch() and inlines it into the page Chrome renders. This preload answers fetch() for every URL in
 // vendor/manifest.json with the fork's vendor/ copy, sha256-checked, and prints MARK + the URL on stderr; runRender()
 // fails the render when the page uses such a URL and MARK is missing. A manifest URL whose local copy is missing or
-// altered is refused (fail closed), never fetched from the network.
+// altered is refused (fail closed): it is answered with a script that throws, so neither Node nor Chrome fetches it.
 //   VENDOR_OFFLINE=1  also refuse every other non-loopback fetch() in this Node process (tests, diagnosis). It covers
 //                     Node only: a script tag hyperframes failed to inline would still be loaded by Chrome itself.
 // Otherwise an unvendored CDN script URL still goes to the network, with a warning on stderr.
@@ -13,6 +13,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 
 const MARK = "vendor: served";
+const REFUSED = "vendor: REFUSED";
 const VENDOR = path.join(__dirname, "..", "vendor");
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(VENDOR, "manifest.json"), "utf8")).libraries;
 const BY_URL = new Map(MANIFEST.map((e) => [e.url, e]));
@@ -33,8 +34,12 @@ if (typeof real === "function" && !real.__vendorOffline) {
       let b = null;
       try { b = fs.readFileSync(p); } catch {}
       if (!b || sha(b) !== entry.sha256) {
-        process.stderr.write(`vendor: REFUSED ${url}: ${p} is missing or does not match its sha256 in vendor/manifest.json\n`);
-        throw new TypeError(`vendor: no valid local copy of ${url} (fail closed, not fetched from the network)`);
+        process.stderr.write(`${REFUSED} ${url}: ${p} is missing or does not match its sha256 in vendor/manifest.json\n`);
+        // Fail closed. Throwing here is not enough: hyperframes would keep the <script src> and Chrome would load it
+        // from the CDN itself. So the page gets a script that cannot be satisfied: it throws, the library never loads,
+        // and runRender() (no MARK) fails the render and removes its output.
+        return new Response(`/* ${REFUSED} ${url} */\nthrow new Error(${JSON.stringify(`${REFUSED} ${url}: no valid local copy (fail closed)`)});\n`,
+          { status: 200, headers: { "content-type": "application/javascript; charset=utf-8" } });
       }
       process.stderr.write(`${MARK} ${url} from vendor/${entry.file}\n`);
       return new Response(b, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8" } });
