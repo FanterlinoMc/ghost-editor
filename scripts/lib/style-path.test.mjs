@@ -15,6 +15,9 @@ const deepMerge = (a, b) => {
   }
   return b;
 };
+// resolveStylePath falls back to process.env.USER_STYLES_DIR when the option is undefined; the studio container sets it
+// (/data/templates), which made "missing USER_STYLES_DIR dies" fail on Linux. These tests pass the folder explicitly.
+delete process.env.USER_STYLES_DIR;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "style-path-"));
 const stylesDir = path.join(tmp, "styles"), userDir = path.join(tmp, "user");
 fs.mkdirSync(stylesDir); fs.mkdirSync(userDir);

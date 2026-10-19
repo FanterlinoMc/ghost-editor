@@ -17,7 +17,9 @@ echo "$out" | grep -q "identical to the golden" || fail=1
 echo "== tests"
 for t in scripts/*.test.mjs scripts/lib/*.test.mjs; do
   [ -e "$t" ] || continue
-  out=$(run 600 node --test "$t" 2>&1); f=$(echo "$out" | grep -E "ℹ fail " | awk '{print $3}')
+  # --test-reporter=spec: older node (22, the PC and the Linux images) picks the TAP reporter when stdout is not a
+  # TTY, which prints "# fail N", not "ℹ fail N"; the count was never read and every test file counted as failed
+  out=$(run 600 node --test --test-reporter=spec "$t" 2>&1); f=$(echo "$out" | grep -E "ℹ fail " | awk '{print $3}')
   [ "$f" = "0" ] || { echo "FAIL $t"; echo "$out" | tail -20; fail=1; }
 done
 echo "== fork-only tokens in build.mjs (must not drop below baseline)"
