@@ -1,0 +1,88 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Charts: weekly signups</title>
+<style>
+  #ch { position: relative; width: 1080px; height: 1080px; overflow: hidden; font-family: Inter, sans-serif; }
+  #ch .card { position: absolute; left: 90px; top: 150px; width: 900px; height: 780px; border-radius: 36px; background: #111216; }
+  #ch .k { position: absolute; left: 150px; top: 206px; font-size: 24px; font-weight: 500; color: #8d9099; letter-spacing: 0.01em; }
+  #ch .big { position: absolute; left: 146px; top: 244px; font-size: 104px; font-weight: 700; color: #f4f3ef; letter-spacing: -0.045em; font-variant-numeric: tabular-nums; }
+  #ch .pct { position: absolute; left: 150px; top: 378px; font-size: 26px; font-weight: 600; color: #7cf29c; }
+  #ch canvas { position: absolute; left: 90px; top: 150px; }
+</style>
+</head>
+<body>
+<div id="ch">
+  <div class="card" id="card"></div>
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; opacity: 0; font-family: Inter; font-weight: 700">Best day</div>
+  <canvas id="cv" width="900" height="780"></canvas>
+  <div class="k" id="k">Weekly signups</div>
+  <div class="big" id="big">0</div>
+  <div class="pct" id="pct">+38% week over week</div>
+</div>
+<script>
+  window.duration = 4;
+  window.size = { w: 1080, h: 1080 };
+  window.rng = window.rng || function (seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0; var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  function seg(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }
+  function outCubic(p) { return 1 - Math.pow(1 - p, 3); }
+  function outExpo(p) { return p >= 1 ? 1 : 1 - Math.pow(2, -10 * p); }
+  function inOut(p) { return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; }
+  function mix(a, b, p) { return a + (b - a) * p; }
+  function $(id) { return document.getElementById(id); }
+  // set a transform, or "none" at rest (a transform left at identity renders differently on a page that seeked there cold)
+  function tf(el, x, y, s, r) {
+    s = s === undefined ? 1 : s; r = r || 0;
+    el.style.transform = (x === 0 && y === 0 && s === 1 && r === 0) ? "none" : "translate(" + x + "px," + y + "px) scale(" + s + ") rotate(" + r + "deg)";
+  }
+  // the hidden line in the markup makes the page load the canvas font before frame 0 (canvas text never triggers the load itself in time)
+  var DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], VAL = [1240, 1580, 1410, 1960, 2310, 2080, 2870], MAX = 3000;
+  var g = $("cv").getContext("2d");
+  var X0 = 70, Y0 = 690, CH = 330, BW = 74, GAP = 38;
+  function rise(el, t, a) { var p = outExpo(seg(t, a, a + 0.7)); el.style.opacity = p; tf(el, 0, Math.round(20 * (1 - p))); }
+  window.seek = function (t) {
+    var c = outExpo(seg(t, 0, 0.8));
+    $("card").style.opacity = c; $("cv").style.opacity = c;
+    tf($("card"), 0, Math.round(60 * (1 - c))); tf($("cv"), 0, Math.round(60 * (1 - c)));
+    rise($("k"), t, 0.25); rise($("big"), t, 0.32); rise($("pct"), t, 2.2);
+    var total = 0; for (var i = 0; i < 7; i++) total += VAL[i];
+    $("big").textContent = Math.round(total * outCubic(seg(t, 0.5, 2.4))).toLocaleString("en-US");
+    g.clearRect(0, 0, 900, 780);
+    // gridlines wipe in from the left
+    var gp = inOut(seg(t, 0.4, 1.2));
+    g.lineWidth = 2; g.strokeStyle = "rgba(244, 243, 239, 0.08)";
+    for (var j = 0; j <= 3; j++) { var y = Y0 - CH * j / 3; g.beginPath(); g.moveTo(X0, y); g.lineTo(X0 + 760 * gp, y); g.stroke(); }
+    g.font = "500 22px Inter"; g.textAlign = "center";
+    for (i = 0; i < 7; i++) {
+      var a = 0.7 + 0.11 * i, p = outExpo(seg(t, a, a + 0.9)), h = CH * VAL[i] / MAX * p;
+      var x = X0 + 20 + i * (BW + GAP), last = i === 6;
+      g.fillStyle = last ? "#7cf29c" : "rgba(244, 243, 239, " + (0.16 + 0.05 * i) + ")";
+      if (h > 0.5) { g.beginPath(); g.roundRect(x, Y0 - h, BW, h, [14, 14, 4, 4]); g.fill(); }
+      g.fillStyle = "rgba(244, 243, 239, " + (0.5 * seg(t, a, a + 0.4)) + ")";
+      g.fillText(DAYS[i], x + BW / 2, Y0 + 40);
+      var lv = seg(t, a + 0.5, a + 0.9);
+      if (lv > 0) { g.fillStyle = last ? "rgba(124, 242, 156, " + lv + ")" : "rgba(244, 243, 239, " + (0.7 * lv) + ")"; g.fillText((Math.round(VAL[i] * p / 10) * 10).toLocaleString("en-US"), x + BW / 2, Y0 - h - 18); }
+    }
+    // a callout on the best day
+    var cp = outExpo(seg(t, 2.5, 3.1));
+    if (cp > 0) {
+      var cx = X0 + 20 + 6 * (BW + GAP) + BW / 2, cy = Y0 - CH * VAL[6] / MAX - 72;
+      g.globalAlpha = cp; g.fillStyle = "#7cf29c"; g.beginPath(); var by = cy - 30 + 16 * (1 - cp); g.roundRect(cx - 66, by - 30, 132, 44, 22); g.fill();
+      g.beginPath(); g.moveTo(cx - 9, by + 13); g.lineTo(cx + 9, by + 13); g.lineTo(cx, by + 22); g.fill();
+      g.fillStyle = "#111216"; g.font = "700 20px Inter"; g.fillText("Best day", cx, by - 1); g.globalAlpha = 1;
+    }
+  };
+  window.seek(0);
+</script>
+</body>
+</html>
