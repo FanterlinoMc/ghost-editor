@@ -1010,6 +1010,19 @@ if (spec.matte && SOURCES.length > 1 && !perSrcMatte) {
 const matteRelOf = (s) => (s === SRC ? "assets/talk-matte.webm" : `assets/${path.basename(s).replace(/\.[^.]+$/, "")}-matte.webm`);
 // stage: a recording is cut out only when it has a face track (a screen recording or a photo has no person to cut out)
 const stageMatted = (s) => s === SRC || fs.existsSync(path.join(proj, facePathFor(s)));
+// cut the window file for recording seconds [w.a, w.b] (cached by name)
+const cutWindow = (w) => {
+  const mp = path.resolve(proj, w.rel);
+  if (fs.existsSync(mp)) return;
+  const cut = path.join(proj, "build", `matte-src@${Math.round(w.a * 1000)}-${Math.round(w.b * 1000)}.mp4`);
+  // cut by FRAME INDEX on a constant-rate timeline that starts at 0 (fps=FPS:start_time=0), not by a time seek: frame j of the
+  // window file is then frame round(a * FPS) + j of the whole-recording matte, which (like the plate) fills a video stream
+  // that starts after 0 (prep.sh's talk.mp4 starts at 0.033 s) with its first frame. A time seek was one frame early.
+  const f0 = Math.round(w.a * FPS), f1 = Math.round(w.b * FPS);
+  execFileSync("ffmpeg", ["-v", "error", "-y", "-i", path.resolve(proj, SRC), "-vf", `fps=${FPS}:start_time=0,trim=start_frame=${f0}:end_frame=${f1},setpts=PTS-STARTPTS`, "-fps_mode", "passthrough", "-an", "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p", cut]);
+  cutMatte(cut, mp, `${SRC} ${r3(w.a)}-${r3(w.b)}s`);
+  fs.rmSync(cut, { force: true });
+};
 // cut the speaker out of recording `s` (project-relative or absolute) into `mp` (hyperframes remove-background), unless cached
 const cutMatte = (s, mp, label) => {
   if (fs.existsSync(mp)) return;
@@ -1028,32 +1041,12 @@ const cutMatte = (s, mp, label) => {
   console.log("  matte done");
 };
 // matteClip window cut (opt-in, single recording, no take transitions, no cached whole-recording matte): only the recording
-// around each behind/ground beat (+-1 s, frame-aligned) is cut out, into assets/talk-matte@<startMs>-<endMs>.webm; the clipped
-// cut-out videos below read those files at the offset into them. Any beat time that is not a plain number: the whole recording.
-let matteWins = null;
-if (spec.matte && spec.matteClip && spec.matteWindows && !spec.stage && SOURCES.length === 1 && !takeJoins.length && !fs.existsSync(path.resolve(proj, matteRelOf(SRC)))) {
-  const mb = (spec.beats || []).filter((b) => b && ["behind", "ground"].includes(b.type));
-  if (mb.length && mb.every((b) => typeof b.at === "number" && typeof b.to === "number" && b.to > b.at)) {
-    const ws = mb.map((b) => [Math.max(0, Math.floor((b.at - 1) * FPS) / FPS), Math.ceil((b.to + 1) * FPS) / FPS]).sort((p, q) => p[0] - q[0]);
-    matteWins = [];
-    for (const w of ws) { const m = matteWins.at(-1); if (m && w[0] <= m[1]) m[1] = Math.max(m[1], w[1]); else matteWins.push([...w]); }
-    matteWins = matteWins.map(([a, b]) => ({ a, b, rel: `assets/talk-matte@${Math.round(a * 1000)}-${Math.round(b * 1000)}.webm` }));
-  }
-}
+// around each clipped cut-out piece (+-1 s, frame-aligned, in recording seconds) is cut out, into
+// assets/talk-matte@<startMs>-<endMs>.webm. The pieces are known only after the beats are laid out, so the cut waits for the
+// matteClip block below (windowCut); the whole-recording cut here is skipped.
+const windowCut = !!(spec.matte && spec.matteClip && spec.matteWindows && !spec.stage && SOURCES.length === 1 && !takeJoins.length && !fs.existsSync(path.resolve(proj, matteRelOf(SRC))));
 if (spec.matte) {
-  if (matteWins) for (const w of matteWins) {
-    const mp = path.resolve(proj, w.rel);
-    if (fs.existsSync(mp)) continue;
-    const cut = path.join(proj, "build", `matte-src@${Math.round(w.a * 1000)}-${Math.round(w.b * 1000)}.mp4`);
-    // cut by FRAME INDEX on a constant-rate timeline that starts at 0 (fps=FPS:start_time=0), not by a time seek: frame j of the
-    // window file is then frame round(a * FPS) + j of the whole-recording matte, which (like the plate) fills a video stream
-    // that starts after 0 (prep.sh's talk.mp4 starts at 0.033 s) with its first frame. A time seek was one frame early.
-    const f0 = Math.round(w.a * FPS), f1 = Math.round(w.b * FPS);
-    execFileSync("ffmpeg", ["-v", "error", "-y", "-i", path.resolve(proj, SRC), "-vf", `fps=${FPS}:start_time=0,trim=start_frame=${f0}:end_frame=${f1},setpts=PTS-STARTPTS`, "-fps_mode", "passthrough", "-an", "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p", cut]);
-    cutMatte(cut, mp, `${SRC} ${w.a}-${w.b}s`);
-    fs.rmSync(cut, { force: true });
-  }
-  else for (const s of perSrcMatte ? SOURCES.filter(stageMatted) : [SRC]) cutMatte(path.resolve(proj, s), path.resolve(proj, matteRelOf(s)), s);
+  if (!windowCut) for (const s of perSrcMatte ? SOURCES.filter(stageMatted) : [SRC]) cutMatte(path.resolve(proj, s), path.resolve(proj, matteRelOf(s)), s);
   matteHtml = takes.map((k, i) => (perSrcMatte && !stageMatted(k.src)) ? "" : `
       <video id="matte-${i}" class="matte" src="${matteRelOf(k.src)}" data-start="${r3(k.start)}" data-duration="${r3(k.dur)}" data-media-start="${k.a}" data-track-index="2" muted playsinline></video>`).join("");
   // the cut-out layer mirrors the plate's join transition so a `behind` beat never shows the
@@ -3547,18 +3540,27 @@ if (spec.matte && spec.matteWindows && !spec.stage) {
   if (spec.matteClip) {
     if (takeJoins.length) warn.push("matteClip: this reel has take transitions (blur/whip), so the cut-out stays on its full takes");
     else {
-      // a piece reads the window file that holds it (matteWins), else the whole-recording matte (cut now if it is not there)
+      // the clipped pieces: [take, piece index, edit start, edit end, recording second at the start]
+      const pieces = takes.flatMap((k, i) => (perSrcMatte && !stageMatted(k.src)) ? [] : merged.map(([a, b]) => [Math.max(k.start, a > 0.05 ? a - 0.02 : 0), Math.min(k.start + k.dur, b + 0.02)]).filter(([s, e]) => e - s > 0.5 / FPS).map(([s, e], j) => [k, i, j, s, e, k.a + (s - k.start)]));
+      // window cut: the recording around every piece (+-1 s, frame-aligned, overlapping ones merged), in recording seconds
+      let wins = [];
+      if (windowCut) {
+        for (const w of pieces.map(([, , , s, e, m0]) => [Math.max(0, Math.floor((m0 - 1) * FPS) / FPS), Math.ceil((m0 + (e - s) + 1) * FPS) / FPS]).sort((p, q) => p[0] - q[0])) { const m = wins.at(-1); if (m && w[0] <= m[1]) m[1] = Math.max(m[1], w[1]); else wins.push([...w]); }
+        wins = wins.map(([a, b]) => ({ a, b, rel: `assets/talk-matte@${Math.round(a * 1000)}-${Math.round(b * 1000)}.webm` }));
+        wins.forEach(cutWindow);
+      }
+      // a piece reads the window file that holds it, else the whole-recording matte (cut now if it is not there)
       const srcOf = (k, m0, d) => {
-        const w = matteWins && matteWins.find((x) => x.a <= m0 + 1e-3 && m0 + d <= x.b + 1e-3);
+        const w = wins.find((x) => x.a <= m0 + 1e-3 && m0 + d <= x.b + 1e-3);
         if (w) return [w.rel, r3(m0 - w.a)];
         cutMatte(path.resolve(proj, k.src), path.resolve(proj, matteRelOf(k.src)), k.src);
         return [matteRelOf(k.src), r3(m0)];
       };
-      matteHtml = takes.map((k, i) => (perSrcMatte && !stageMatted(k.src)) ? "" : merged.map(([a, b]) => [Math.max(k.start, a > 0.05 ? a - 0.02 : 0), Math.min(k.start + k.dur, b + 0.02)]).filter(([s, e]) => e - s > 0.5 / FPS).map(([s, e], j) => {
-        const [src, ms] = srcOf(k, k.a + (s - k.start), e - s);
+      matteHtml = pieces.map(([k, i, j, s, e, m0]) => {
+        const [src, ms] = srcOf(k, m0, e - s);
         return `
       <video id="matte-${i}${j ? `-${j}` : ""}" class="matte" src="${src}" data-start="${r3(s)}" data-duration="${r3(e - s)}" data-media-start="${ms}" data-track-index="2" muted playsinline></video>`;
-      }).join("")).join("");
+      }).join("");
     }
   }
 }
