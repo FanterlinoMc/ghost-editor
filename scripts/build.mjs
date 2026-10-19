@@ -3589,10 +3589,11 @@ const HL_CSS = (spec.beats || []).some((b) => b.type === "headline") ? `
   .hl-b { font-family: Anton, Oswald, sans-serif; font-weight: 400; line-height: .92; letter-spacing: 0.005em; white-space: nowrap; transform-origin: 50% 60%; text-shadow: 0 0 26px ${rgbaOf(cap.color ?? brand.accent, 0.55)}, 0 0 70px ${rgbaOf(cap.color ?? brand.accent, 0.35)}, 0 8px 22px rgba(0,0,0,.55); }
   .hl-ar { position: absolute; width: 170px; height: 215px; overflow: visible; filter: drop-shadow(0 0 10px ${rgbaOf(cap.color ?? brand.accent, 0.5)}); }` : "";
 const look = spec.look || {};
-// #fx is the optional blur / punch layer between #push and the footage (look.refocus, captions.energyPunch). It is emitted ONLY when one of
-// them is on. (The popcard defocus and the leak bloom also tween "#fx"; on a reel that has none of these keys they find no element and do
-// nothing - as before.)
-const FX_ON = !!look.refocus || (cap.style === "duo" && !!cap.energyPunch);
+// #fx is the optional blur / punch layer between #push and the footage (look.refocus, captions.energyPunch, look.fx). It is emitted ONLY
+// when one of them is on. (The popcard defocus and the leak bloom also tween "#fx"; on a reel that has none of these keys they find no
+// element and do nothing - as before.) look.fx === true (opt-in style key, set only in styles whose approved sample shows the popcard
+// defocus / leak bloom) turns the layer on by itself, so those two tweens land.
+const FX_ON = look.fx === true || !!look.refocus || (cap.style === "duo" && !!cap.energyPunch);
 if (look.exposure && look.exposure !== 1) tl.push(`tl.set("#pip", { filter: "brightness(${look.exposure}) contrast(${look.contrast ?? 1.04})" }, 0);`);
 const grainHtml = look.grain ? `<div id="grain" class="look-grain${OV}" style="opacity:${look.grain}"></div>` : "";
 // spec.letterbox { h }: black cinema bars top + bottom (h px each, 9:16 pixels scaled to the format), above the picture and

@@ -15,6 +15,7 @@
     "fixedY": 1060
   },
   "look": {
+    "fx": false,
     "grade": "contrast(1.06) saturate(0.86) brightness(0.93)",
     "vignette": 0.2,
     "grain": 0,

@@ -69,6 +69,7 @@
     "payoff": false
   },
   "look": {
+    "fx": true,
     "grade": "contrast(1.1) saturate(1.32) brightness(1.02)",
     "tint": {
       "color": "#1d5f63",

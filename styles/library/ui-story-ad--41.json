@@ -12,6 +12,7 @@
     "keySize": 120
   },
   "look": {
+    "fx": false,
     "grade": "contrast(1.06) saturate(0.76) brightness(1.29)",
     "vignette": 0.2,
     "grain": 0,

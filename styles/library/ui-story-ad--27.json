@@ -24,6 +24,7 @@
     "heroColor": "#FFFFFF"
   },
   "look": {
+    "fx": false,
     "grade": "contrast(1.12) saturate(1.64) brightness(1.29) sepia(0.06)",
     "tint": {
       "color": "#7a4a1f",

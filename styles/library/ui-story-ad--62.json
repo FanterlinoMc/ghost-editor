@@ -12,6 +12,7 @@
     "keySize": 112
   },
   "look": {
+    "fx": false,
     "grade": "contrast(1.12) saturate(1.54) brightness(0.59)",
     "tint": {
       "color": "#14243a",
