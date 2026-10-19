@@ -120,6 +120,8 @@ existed (`scripts/byte-identity.mjs`).
     `box` is ignored. `room` is never honoured and a layer's own `exit` runs on the whole graphic.
     `hideCaptions: true` (`motion` and `text` layers) hides the captions while the layer is up, as it does on a
     beat; edit_truth.json's layer entry carries `hideCaptions: true` then.
+  - `graphic`: **spec (CP1), not built yet** - a Prompt Motion HTML graphic pre-rendered to its own video; see
+    "Prompt Motion graphic" below.
 - **Where it sits.** Above the footage and the beats' `.layer` band (z 3), below the captions (z 8), unless
   `overCaptions: true` (then above them). Within one band, ordered by `z` (0 to 99), ties by array order.
 - **Enter and exit** are explicit `fromTo` tweens with `force3D: false`, 0.3 s (a third of the layer if it is
@@ -777,6 +779,324 @@ Sections: a section build inlines only the Lottie files its own beats and layers
 
 Not in this version: colour replacement (tinting a file to the brand), named markers as segments,
 reverse play, dotLottie (`.lottie`), image or text layers, expressions.
+
+## Prompt Motion graphic (`kind: "graphic"` layer, `type: "graphic"` beat): spec (CP1), not built yet
+
+Status: **spec (CP1), not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
+`kind: "graphic"` dies with the existing `unknown kind "graphic"` error and a `graphic` beat is not placed. PM2
+(sandbox + render) and PM3 (in the reel) build it exactly as written here. The PC mirrors every **static** rule
+(G1 to G26) and every placement rule in the validator word for word, at the same time.
+
+A user types a prompt ("a counter from 10k to 80k with sparks"); Claude writes ONE self-contained HTML file;
+the engine renders that file on its own, deterministically, to a video; the video drops into the reel as an
+overlay with alpha or as a full-frame insert. Categories: Product UI, Phone, Charts, Diagrams, Kinetic type,
+Shapes, Particles, Characters, Photos, Music (visualisers), Code. Every one of them is plain HTML, CSS, SVG and
+canvas 2d whose every style is computed from `t` inside `window.seek(t)`.
+
+### Design decisions
+
+**1. How a graphic gets into a reel: pre-rendered to its own video, composited as a video layer.** The HTML is
+rendered alone (`hyperframes@0.8.81 render` of an engine-written wrapper page, below) to an alpha WebM (overlay)
+or an MP4 (insert), cached as `assets/graphics/<id>-<key16>.<webm|mp4>`, and the reel shows that file in a
+`<video>` exactly like a `video` layer. Isolation: the graphic's CSS selectors, globals and DOM never meet the
+reel page's (a sub-composition, `data-composition-src`, inlines its `<template>` into the reel's DOM, so a
+graphic's `.title {}` or `window.x` would collide with the reel's, and its script would run inside every reel
+and section render). Sandbox: the network lock-down (a CSP meta) and the checks for page errors apply to the
+graphic's own render, not to a reel page that legitimately loads media. Cache: the key is a pure content hash
+(the HTML, its media, the renderer, the placement's frame count), so an unchanged graphic is never re-rendered
+when the reel around it changes, and the studio preview IS the file that goes into the reel. An `<iframe>` was
+also rejected: the renderer would have to forward each seek across a frame boundary asynchronously, and the
+capture path through an iframe is unverified. The cost: the reel render extracts the overlay's frames as PNG
+(alpha), so an overlay box smaller than the canvas is cheaper.
+
+**2. Where it lives in reel.json: a `layers[]` kind and a beat type, one element, the same fields.** The
+studio writes the user's choice as a **layer** (`kind: "graphic"`, `"by": "user"`): output seconds, pinned or
+anchored to a take, the existing layer machinery (timing, clamping, z bands, `overCaptions`, `hideCaptions`,
+sections, `edit_truth.json`) unchanged, and the `<video>` it renders is the existing `video` layer's markup.
+A planner/designer-placed graphic is a **beat** (`type: "graphic"`): source seconds, so it moves with its words
+when a take is cut. Both carry the same graphic fields (`src`, `mode`, `box`, `fit`, `after`, ...) and both
+cover `mode: "overlay"` and `mode: "insert"`; an insert is a mode, not a separate kind, because the render path
+is the same and only the box (the whole canvas) and the background differ. As for Lottie, a problem **dies** in
+a layer (user-placed: it must not vanish silently) and **drops the beat with a warning** in a beat (hard rule 5:
+a bad graphic is dropped, never fatal), with the same reason text in both.
+
+**3. The seek contract: `window.seek(t)`, driven by HyperFrames' `hf-seek` event.** HyperFrames 0.8.81's
+runtime dispatches `window` event `hf-seek` with `detail.time` (seconds, the frame time `j / fps`) on every frame
+it captures; it does not call a global `seek` itself. The engine's wrapper page listens to `hf-seek`, maps the
+reel frame to the graphic frame (`in`, `after`) and calls the graphic's `window.seek(t)`. The wrapper's root
+carries `data-no-timeline`: without it the render waits 45 s for a GSAP timeline that never registers and warns
+`sub_timeline_readiness_timeout` (measured). Randomness comes only from `window.rng(seed)`, a mulberry32 the
+wrapper defines before the graphic's scripts (the prompt templates carry the same snippet, so a graphic opened
+in a plain browser looks the same).
+
+### The file: `assets/graphics/<id>.html`
+
+A complete HTML document with one `<head>` and one `<body>`, UTF-8, at most 2 097 152 bytes. Inline `<style>`
+and inline classic `<script>` only. What it must define, as literal assignments (the validator reads them
+without running the file):
+
+```html
+<script>
+  window.duration = 3.5;                 // REQUIRED: seconds, a number literal 0.5..30
+  window.size = { w: 1080, h: 1080 };    // optional: design size in px, even integers; default the reel canvas (W x H)
+  // the engine's seeded random (the wrapper defines the same function first; copy it as is)
+  window.rng = window.rng || function (seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0; var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  var r = window.rng(42), sparks = [];   // draw every random number ONCE, at load
+  for (var i = 0; i < 40; i++) sparks.push({ x: r() * 1080, v: 0.5 + r() });
+  window.seek = function (t) {           // REQUIRED: every style computed from t alone
+    var p = Math.min(1, t / 1.2), n = Math.round(10000 + 70000 * (1 - Math.pow(1 - p, 3)));
+    document.getElementById("count").textContent = n.toLocaleString("en-US");
+    /* ... position each spark from sparks[i] and t ... */
+  };
+</script>
+```
+
+**The seek contract, exactly:**
+
+- `window.seek(t)`: `t` is seconds since the graphic's frame 0, always a whole frame `k / fps` (`fps` = the
+  reel's fps; the render of a preview uses 30). It is called synchronously, any number of times, in **any
+  order** (each render worker is a separate Chrome loading the page fresh, and the determinism check renders
+  twice), so the pixels for `t` must depend on `t` alone: no state carried from one call to the next, nothing
+  read from the previous frame, no Promise returned. It must not throw.
+- `t` covers `0 <= t < duration`. The wrapper never passes `t >= duration` (see `after`).
+- Top-level code may build the DOM and draw random numbers at load, synchronously; it must not start anything
+  that runs later (no timers, no events, no async).
+- `window.duration` (required) and `window.size` (optional) are read statically (G22, G23) and again at render.
+- `window.rng(seed)`: `seed` an integer; returns a function giving floats in `[0, 1)`, the same sequence for the
+  same seed on every machine. A stream used inside `seek` must be re-created from its seed inside that call
+  (or drawn at load), never advanced across calls.
+- There is no `window.transparent`: overlay or insert is the placement's `mode`, not the file's. The same file
+  can be placed either way; an insert gets an opaque black stage under it (below).
+- Fonts: the engine's families (`Inter`, `Geist`, `Montserrat`, `Oswald`, `Unbounded`, `Gloock`,
+  `Instrument Serif`, `EB Garamond`, `Playfair Display`, `Caveat Brush`, `Yellowtail`, `JetBrains Mono`:
+  `DESIGNER_FONTS` in `motion-graphics.mjs`), generic families, or an `@font-face` whose `src` is a `data:` URI.
+  The wrapper inlines the bundled `templates/fonts/*.woff2` the file names, as `data:` URIs.
+- Images: a `data:image/...` URI, or `assets/graphics/media/<name>.<png|jpg|jpeg|webp>` in a markup attribute
+  (the Photos category: the studio copies the user's photo there). The renderer inlines each such file as a
+  `data:` URI before rendering, and its bytes enter the cache key.
+
+### How it renders (PM2; deterministic, no network)
+
+- The engine writes `build/graphics/<id>-<key16>/index.html`: a CSP meta (`default-src 'none'; script-src
+  'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src
+  'none'`), the font `@font-face` rules, the `rng` definition, the graphic's `<head>` content, then
+  `<div id="graphic-root" data-composition-id="graphic" data-width="<w>" data-height="<h>" data-start="0"
+  data-duration="<L / fps>" data-no-timeline>` holding the graphic's `<body>` content, then the bridge:
+  `window.addEventListener("hf-seek", e => { k = Math.round(e.detail.time * fps); window.seek(map(k) / fps) })`,
+  catching and reporting (`console.error("GRAPHIC-REFUSED: ...")`) a throw, a missing `seek` or a Promise.
+  For `mode: "insert"` the root's background is `#000` (opaque); for `overlay` it is `transparent`.
+- Measured (HyperFrames 0.8.81, this Mac): a CSP-blocked image and `fetch()` print
+  `[Browser:ERROR] ... violates the following Content Security Policy directive ...` and are not loaded; `eval`
+  is blocked by the same CSP; a `console.error` from the page prints `[Browser:ERROR] <text>`; an uncaught
+  exception prints `[Browser:PAGEERROR] <message>`; and the render still **exits 0**. So the render wrapper reads
+  the log and fails closed (deletes the output) on any of those lines.
+- HyperFrames' own compiler (Node, before Chrome) downloads remote `<img src>` / `<script src>` URLs itself
+  (measured: `[WARN] [Compiler] Remote image download failed`). The render runs with the vendor preload
+  (`scripts/vendor-offline.cjs` from `origin/mac/bundle-gsap`, which PM2 brings in, run with `VENDOR_OFFLINE=1`) so every non-loopback Node `fetch()` is refused too.
+- Frames: `L` = the placement's frame count (below). Wrapper frame `j` (`0 <= j < L`) shows graphic frame
+  `k = in_f + j` (`in_f = round(in * fps)`, `D_f = round(duration * fps)`), mapped by `after`: `hold`: `min(k,
+  D_f - 1)`; `loop`: `k mod D_f`; `cut`: `k` (the placement is shortened so `k < D_f`).
+- Output, verified with `hyperframes@0.8.81 render --format webm` / `--format mp4` on this Mac:
+  - **overlay**: WebM, VP9 (`libvpx-vp9`), tag `ALPHA_MODE=1`, alpha in the VP9 side channel. `ffprobe` shows
+    `pix_fmt=yuv420p` (the native decoder sees the colour layer only); decoded with `-c:v libvpx-vp9` it is
+    `yuva420p`. Chrome plays it with alpha in a `<video>` (the reel's `talk-matte.webm` cut-out is the same
+    format). Measured: transparent pixels alpha 0, a box at opacity 0.75 alpha 192.
+  - **insert**: MP4, H.264 High, `yuv420p`, no alpha. A transparent page renders WHITE in MP4 (measured
+    `#fdfdfd`), hence the forced black root.
+  - Render command: `npx -y hyperframes@0.8.81 render --format <webm|mp4> -f <fps> -q looks -o <out> <dir>`.
+
+### Fields (layer: `{ "kind": "graphic", ... }` in `layers[]`; beat: `{ "type": "graphic", ... }` in `beats[]`)
+
+```jsonc
+// layer (output seconds; the studio writes this)
+{ "id": "counter", "kind": "graphic", "src": "assets/graphics/counter.html",
+  "mode": "overlay",                         // overlay | insert
+  "anchor": { "take": 2, "offset": 0.4 },    // OR "pin": true, "at": 12.5  (the layer rules, unchanged)
+  "dur": 3.5,                                // optional: default the file's window.duration minus in
+  "in": 0, "after": "hold",                  // hold | loop | cut
+  "box": { "x": 140, "y": 260, "w": 800, "h": 800 }, "fit": "contain",
+  "z": 2, "opacity": 1, "enter": "none", "exit": "none",
+  "overCaptions": false, "hideCaptions": false, "by": "user" }
+// beat (source seconds; the planner/designer writes this)
+{ "type": "graphic", "id": "counter", "src": "assets/graphics/counter.html", "at": 41.2, "to": 44.7,
+  "mode": "overlay", "in": 0, "after": "hold", "box": { ... }, "fit": "contain", "opacity": 1, "hideCaptions": false }
+```
+
+| field | type | default | rule (out of rule = a G/P problem, or a warning GW) |
+|---|---|---|---|
+| `id` | string | | layer: the layer rule (`[a-z0-9-]{1,24}`, unique). Beat: optional, the same pattern |
+| `kind` / `type` | `"graphic"` | | literal |
+| `src` | string | | `assets/graphics/<name>.html`, `<name>` `[a-z0-9-]{1,48}`, lowercase `.html`, no `..`, no URL, no absolute path, the resolved file inside `<project>/assets/graphics/` (G1, G2) |
+| `mode` | string | `"overlay"` | `overlay` (alpha WebM in `box`) or `insert` (opaque MP4 over the whole canvas). Else P1 |
+| timing (layer) | | | exactly the layer rules: `pin` + `at`, or `anchor {take, offset}`; clamped to the reel; under 0.1 s once clamped: dropped (existing warnings and dies) |
+| timing (beat) | `at`, `to` | `to` = `at` + the graphic's window | source seconds, the beat rules (`src` for multi-source); `to - at` 0.1..60 s (P2) |
+| `dur` (layer) | number s | `duration - in` | > 0 (existing die); the placement's length. 0.1..60 s (P2) |
+| `in` | number s | `0` | seek offset into the graphic: `0 <= in < duration`. Else GW1, clamped |
+| `after` | string | `"hold"` | what plays when the placement is longer than `duration - in`: `hold` (the last frame), `loop` (back to frame 0; for loopable graphics), `cut` (the placement is shortened to `duration - in`, GW2). Else GW3, `hold` |
+| `box` | `{x, y, w, h}` px | centred at the design size: `{x: (W-w)/2, y: (H-h)/2, w, h}` | overlay only: the layer box rule (numbers, `w, h > 0`); at least 20 % inside the canvas (P3). Ignored for an insert (GW4) |
+| `fit` | string | `"contain"` | overlay only, when the box's aspect differs from `window.size`: `contain` / `cover` (the layer's `FITS`). Else P1-style layer die / beat drop (existing `fit must be one of cover|contain`) |
+| `z`, `opacity`, `enter`, `exit`, `radius`, `shadow`, `overCaptions` | | `0`, `1`, `"none"`, `"none"`, none, none, `false` | layer: the existing layer rules. `enter`/`exit` default `none` here (the graphic animates itself). Beat: `opacity` only; z is the beats' `.layer` band |
+| `hideCaptions` | boolean | `false` overlay, `true` insert | hides the captions while the graphic is up (the existing layer/beat behaviour; `edit_truth.json` carries it) |
+| `audio` | | | graphics are silent: any value other than `"off"` is ignored with GW5 |
+| `fps` | | | not a field: the render uses the reel's `fps`. A `fps` key is ignored (GW6) |
+| `sfx` (beat) | | `"none"` | the beat rule; a graphic has no default sound |
+
+**Size and duration limits.**
+
+| | overlay | insert |
+|---|---|---|
+| design size (`window.size`) | even integers, `16 <= w <= W`, `16 <= h <= H` (1080 x 1920 on 9:16); default W x H | exactly W x H (or left out) |
+| rendered size | the design size (scaled into `box` by `fit` at composite time) | W x H |
+| graphic `window.duration` | 0.5..30 s | 0.5..30 s |
+| placement length (`dur`, or `to - at`) | 0.1..60 s | 0.1..60 s |
+| rendered file | at most 52 428 800 bytes (50 MiB) | at most 52 428 800 bytes |
+| HTML file | at most 2 097 152 bytes | same |
+| media files | at most 8, each at most 4 194 304 bytes | same |
+
+**Captions, face, safe zones.** An overlay sits in the layer bands (under the captions, or over them with
+`overCaptions`); a beat in the beats' `.layer` band. An insert covers the canvas above the footage and the beats,
+under the captions band, and hides the captions by default. The build warns when an overlay box crosses the
+platform UI zone (GW7, the Lottie W7 rule). The face check stays the validator's: an overlay box that covers
+the tracked face for more than half of its window is a validator warning, never a build problem. Inserts get
+no face or UI-zone check (they are full frame by design).
+
+**Sections, edit_truth.** A graphic counts like a layer / beat for section boundaries; the cache key (below)
+is part of the hash of the section it starts in. `edit_truth.json`: a graphic layer is recorded by the existing
+`layerTruth` (`kind: "graphic"`), plus `mode`; a graphic beat as every beat. Nothing else changes.
+
+### Cache key
+
+`key = sha256` of the canonical JSON (keys sorted, no spaces) of:
+
+```jsonc
+{ "v": 1,                                  // bumped when the wrapper/bridge/CSP changes
+  "html": "<sha256 of the HTML file bytes>",
+  "media": [["assets/graphics/media/a.jpg", "<sha256>"], ...],   // sorted by path; [] when none
+  "fonts": ["Inter", ...],                 // the bundled families inlined, sorted
+  "renderer": "hyperframes@0.8.81",
+  "fps": 30, "w": 1080, "h": 1080,         // the RENDERED size (W x H for an insert)
+  "mode": "overlay",                       // overlay | insert
+  "frames": 105, "in": 0, "after": "hold"  // L, in_f, after: which frames the file holds
+}
+```
+
+File: `assets/graphics/<name>-<first 16 hex of key>.webm` (overlay) or `.mp4` (insert). A file with that name
+is used as is (no re-render); it is written only after the render passed every R rule and the determinism
+check (written to `<name>.part.<ext>` and renamed, as the matte is). The key never includes the reel, the
+placement time or the box, so moving or resizing a graphic re-uses its file; changing `dur`, `in` or `after`
+re-renders it. The studio preview renders with `frames = round(duration * fps)`, `in 0`, `after "hold"`, which
+is the same key as a placement that keeps the default `dur`.
+
+### Determinism check
+
+Two **independent** renders of the same wrapper page (two separate `hyperframes render` processes, cold, the
+second with `--workers 1` so the frame-to-worker split differs), then each output is decoded and hashed per
+frame: `ffmpeg -v error -c:v libvpx-vp9 -i <out.webm> -pix_fmt yuva420p -f framemd5 -` (overlay; the
+`-c:v libvpx-vp9` before `-i` is what decodes the alpha) or `ffmpeg -v error -i <out.mp4> -pix_fmt yuv420p -f
+framemd5 -` (insert). The `#` header lines are dropped; the remaining lines must be **exactly equal**, frame for
+frame, with the same frame count `L`. No tolerance: a graphic has no footage, nothing is decoded from a source
+video, so the only inputs are the HTML and `t`, and any difference is the graphic's fault (a clock, unseeded
+randomness, state carried between seeks). The **file bytes are not compared**: measured, two renders of the
+same page gave files that differ at byte 283 (container metadata) while all 60 decoded frame md5s were equal.
+Live screenshots are not used either (on this Mac the default beginframe capture of `motion-determinism.mjs`
+crashes Chrome and `--capture screenshot` has a ~5 % pixel race with an identical DOM); the check reads only the
+rendered files. First data point (this spec): one 2 s 540x960 seek(t) page, two renders, `framemd5` equal on
+60 of 60 frames. That it holds on this Mac for every category is to be proven in PM2 (one fixture per category,
+PM5 harness).
+
+### Problems, word for word (the validator mirrors G1 to G26 and P1 to P3)
+
+- layer (`die()`): `layer <layer id>: graphic <src>: <reason>`
+- beat (warning, the beat is dropped): `graphic <beat id or at>: <src>: <reason>, dropped`
+
+**Refused before render (static: on the file text, the WHOLE file including comments, so a forbidden word in a
+comment fails too; regexes are JavaScript syntax, case-sensitive unless marked `i`; `\|` in the table is a
+plain `|` in the regex; `<match>` is the matched text). A Code graphic that SHOWS such a word as text writes it
+with an HTML entity (`&#115;etTimeout`), which the scan does not match and the page displays the same.**
+
+| # | check | `<reason>` (exact) |
+|---|---|---|
+| G1 | `src` matches `^assets/graphics/[a-z0-9-]{1,48}\.html$` and resolves inside `<project>/assets/graphics/` | `graphic src '<src>' is not assets/graphics/<name>.html inside the project` |
+| G2 | the file exists | `graphic file <src> does not exist` |
+| G3 | size <= 2097152 bytes | `graphic file <src> is <bytes> bytes (max 2097152)` |
+| G4 | valid UTF-8; exactly one `<head\b` and one `<body\b` (i) | `graphic file <src> is not a UTF-8 HTML document with one <head> and one <body>` |
+| G5 | `<script\b[^>]*\b(src\s*=\|type\s*=\s*["']?module)` (i) | `graphic file <src> loads a script file or a module (<script src> / type=module): only inline classic scripts are allowed` |
+| G6 | `<link\b` (i) | `graphic file <src> has a <link> tag: put styles inline in <style>` |
+| G7 | `@import\b` (i), or `url\(\s*(?!['"]?(data:\|#))` (i) | `graphic file <src> uses @import or url(...) with something other than a data: URI or a #fragment` |
+| G8 | `\bfetch\s*\(\|\bXMLHttpRequest\b\|\bWebSocket\b\|\bEventSource\b\|\bsendBeacon\b\|\bimport\s*\(\|\bWorker\s*\(\|\bSharedWorker\b\|\bimportScripts\b\|\bRTCPeerConnection\b` | `graphic file <src> uses <match> (no network: fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, import(), workers)` |
+| G9 | `\beval\s*\(\|\bnew\s+Function\b\|\bFunction\s*\(` | `graphic file <src> uses <match> (no eval or new Function)` |
+| G10 | `\b(setTimeout\|setInterval\|requestAnimationFrame\|requestIdleCallback\|queueMicrotask)\b` | `graphic file <src> uses <match> (no timers: seek(t) is the only clock)` |
+| G11 | `\bnew\s+Date\b\|\bDate\s*\(\|\bDate\s*\.\s*(now\|parse\|UTC)\b\|\bperformance\s*\.\|\bdocument\s*\.\s*timeline\b` | `graphic file <src> reads the clock (<match>): use the t passed to seek(t)` |
+| G12 | `\bMath\s*\.\s*random\b` | `graphic file <src> calls Math.random: use window.rng(seed)` |
+| G13 | `@keyframes\b\|\banimation(-name)?\s*:\|\btransition(-property)?\s*:\|\.(animation\|transition)\s*=\|\.animate\s*\(\|\bgetAnimations\b`, or `<(animate\|animateTransform\|animateMotion\|set)\b` (i) | `graphic file <src> uses <match> (no CSS animations, transitions, Web Animations or SVG animation: compute every style in seek(t))` |
+| G14 | `<(video\|audio\|iframe\|frame\|frameset\|object\|embed\|base\|form\|portal)\b` (i), or `<meta\b[^>]*http-equiv\s*=\s*["']?refresh` (i) | `graphic file <src> has a <<tag>> element (no video, audio, iframe, object, embed, base, form or meta refresh)` |
+| G15 | every value of `src=`, `srcset=`, `poster=` and of `href=` / `xlink:href=` on `<image` and `<use` (i) is a `data:image/(png\|jpeg\|webp\|gif\|svg+xml)` URI, `#fragment` (`<use>` only) or matches `^assets/graphics/media/[a-z0-9-]{1,48}\.(png\|jpe?g\|webp)$` | `graphic file <src> refers to '<value>' (images must be data: URIs or assets/graphics/media/ files)` |
+| G16 | each `assets/graphics/media/...` file it names exists inside the project | `graphic media <path> does not exist` |
+| G17 | at most 8 media files, each <= 4194304 bytes | `graphic media <path> is <bytes> bytes (max 4194304)` / `graphic file <src> uses <n> media files (max 8)` |
+| G18 | every font family (read from `font-family:` up to `;` `}` `<` or a newline, inside a `style="..."` up to its closing quote; `.fontFamily = '<v>'`; and the families after the size token of a CSS `font:` shorthand or a canvas `.font = '<v>'`), trimmed of quotes and spaces, compared case-insensitively, is an engine family, a family the file's own `@font-face` declares, or `serif`, `sans-serif`, `monospace`, `system-ui`, `cursive`, `ui-sans-serif`, `ui-serif`, `ui-monospace`, `inherit`, `initial`, `unset` | `graphic file <src> uses font family '<name>' (only the engine's fonts, a data: @font-face, or a generic family)` |
+| G19 | `\b(gsap\|TweenMax\|TweenLite\|TimelineMax\|TimelineLite\|ScrollTrigger\|anime\|THREE\|lottie\|bodymovin\|d3\|p5\|PIXI\|Matter\|Konva\|BABYLON\|Phaser\|mojs\|createjs\|React\|ReactDOM\|Vue\|Velocity\|popmotion)\s*[.(]`, or `GreenSock` (i) | `graphic file <src> uses a library (<match>): no GSAP or any other animation, 3D, chart or UI library; write plain seek(t) code` |
+| G20 | `getContext\s*\(\s*['"](webgl2?\|experimental-webgl\|webgpu)['"]` | `graphic file <src> asks for a WebGL/WebGPU context (only canvas 2d)` |
+| G21 | `\bwindow\s*\.\s*seek\s*=` present | `graphic file <src> does not define window.seek(t)` |
+| G22 | `\bwindow\s*\.\s*duration\s*=\s*(\d+(\.\d+)?)\s*;` present exactly once, value 0.5..30 | `graphic file <src> does not set window.duration to a number literal from 0.5 to 30` |
+| G23 | `\bwindow\s*\.\s*size\s*=` absent, or present exactly once as `\bwindow\s*\.\s*size\s*=\s*\{\s*w\s*:\s*(\d+)\s*,\s*h\s*:\s*(\d+)\s*\}`, both even, `16 <= w <= W`, `16 <= h <= H` | `graphic size must be window.size = { w: <even int>, h: <even int> } within 16..<W> x 16..<H>` |
+| G24 | `mode: "insert"` and a `window.size` other than W x H | `an insert graphic must be <W>x<H> (window.size is <w>x<h>)` |
+| G25 | `\b(localStorage\|sessionStorage\|indexedDB\|caches\|navigator\|location\|history\|crypto)\.[A-Za-z_$]\|\bdocument\s*\.\s*(cookie\|referrer\|domain)\b\|\bwindow\s*\.\s*(open\|parent\|top\|opener)\b\|\bpostMessage\s*\(` | `graphic file <src> uses <match> (no storage, navigation or environment reads)` |
+| G26 | `\bwindow\s*\.\s*rng\s*=` absent, or followed by `window.rng \|\|` (the template snippet) | `graphic file <src> redefines window.rng (copy the engine snippet as is)` |
+
+**Placement problems (static, on the reel.json entry).**
+
+| # | `<reason>` (exact) |
+|---|---|
+| P1 | `graphic mode '<v>' is not overlay or insert` |
+| P2 | `graphic window <s>s is outside 0.1..60s` |
+| P3 | `graphic box shows less than 20% inside the <W>x<H> canvas` |
+
+(The layer's existing `id`, timing, `dur`, `box`, `fit`, `enter`, `exit` dies apply unchanged to a graphic layer.)
+
+**Refused at render (PM2: the build or the studio renders the graphic when its cache file is missing).** The
+render wrapper reads the whole log of both renders; any of these deletes the output and is the problem.
+
+| # | detected by | `<reason>` (exact) |
+|---|---|---|
+| R1 | a log line containing `violates the following Content Security Policy directive` (Chrome), or `vendor: blocked` (the Node preload) | `graphic tried to load <url> (no network): render refused` |
+| R2 | a log line `[Browser:PAGEERROR] <message>` | `graphic page error: <message>` |
+| R3 | `GRAPHIC-REFUSED: window.seek is not a function` (bridge, at load) | `window.seek is not a function after the page loaded` |
+| R4 | `GRAPHIC-REFUSED: seek(<t>) threw: <message>` / `... returned a Promise` (bridge) | `seek(<t>) threw: <message>` / `seek(<t>) returned a Promise (it must be synchronous)` |
+| R5 | `window.duration` / `window.size` at load differ from the static values | `window.duration / window.size changed at load (static <a>, at load <b>)` |
+| R6 | the determinism check | `frame <i> (t=<t>s) differs between two renders (not deterministic)` / `the two renders have <a> and <b> frames` |
+| R7 | wall time of one render over `20 s + 0.25 s x L` (provisional; PM2 measures and may tighten) | `render took <s>s for <L> frames (budget <b>s)` |
+| R8 | rendered file over 52428800 bytes | `rendered file is <bytes> bytes (max 52428800)` |
+| R9 | overlay: every decoded frame has alpha 0 everywhere | `every frame is fully transparent` |
+| R10 | `hyperframes render` exits non-zero, or writes no file | `hyperframes render failed (exit <code>): <last log line>` |
+
+Why some rules are only render-time: HyperFrames' runtime shares the page and itself uses timers, `Math.random`
+and `performance`, so the wrapper cannot replace those globals with traps. Static G10 to G12 plus the
+determinism check R6 cover them; a dynamic load the static scan cannot see (a `.src =` assigned in script) is
+blocked by the CSP and refused by R1.
+
+**Warnings (never fatal; layer and beat alike, prefixed `layer <id>:` / `graphic <id>:`).**
+
+| # | text (exact) |
+|---|---|
+| GW1 | `graphic in <v>s is outside 0..<duration>s, clamped` |
+| GW2 | `graphic after cut: shortened from <a>s to <b>s (the graphic's length)` |
+| GW3 | `graphic after '<v>' is not hold, loop or cut, using hold` |
+| GW4 | `graphic box is ignored for an insert (full frame)` |
+| GW5 | `graphic audio is ignored (graphics are silent)` |
+| GW6 | `graphic fps is ignored (the reel's fps is used)` |
+| GW7 | `graphic box crosses the <platform name> UI zone` (the Lottie W7 rule, `safezone.mjs` `PLATFORMS[platform]`) |
+
+Not in this version: sound inside a graphic, audio-reactive visualisers (Music graphics draw from seeded data),
+WebGL / three.js, GSAP or any library (owner's pause, licence question), variables passed in at render
+(`--variables`; a template's fields are filled into the HTML by the writer instead), dotLottie inside a graphic.
 
 ## What the build enforces (warnings, printed after the SFX table)
 
