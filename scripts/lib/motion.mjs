@@ -1051,6 +1051,19 @@ export function buildScene(b, id, t0, t1, ctx) {
   return `<div id="${sid}" class="scene" style="background:${customBg ?? bg};background-size:${b.kind.startsWith("gm-") ? "auto" : "220% 220%"}">${body}</div>`;
 }
 
+// fitWipe: a handwritten write-on (clip-path wipe) that would still be drawing when its caption block ends is cut
+// mid-word ("manually" left at "man" when the next block starts). The approved Keynote sample writes an end-of-block
+// script word on WITH the spoken word, fast, and holds it whole until the block changes. So, only when the wipe would
+// end within `pad` of the block end: shorten it to the time left (never under `floor`), and only if even the floor does
+// not fit, start it earlier (never before the block starts). A wipe that already fits is returned untouched, so its
+// markup is byte-identical. Returns [start, duration] in edit seconds.
+export function fitWipe(t, dur, end, { floor = 0.2, pad = 0.05, min = -Infinity } = {}) {
+  const lim = end - pad;
+  if (t + dur <= lim + 1e-6) return [t, dur];
+  const d = Math.max(floor, Math.min(dur, lim - t));
+  return [Math.max(min, Math.min(t, lim - d)), d];
+}
+
 // editorial captions ------------------------------------------------------------
 // Lines of <= group words (or up to punctuation); a block holds two lines. The
 // word being spoken resolves out of blur in bold white; when the next line
@@ -1201,7 +1214,9 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
           // normally; mirrored for rtl scripts so the reveal still tracks how the word is read)
           const clipFrom = rtl ? "inset(0% 0% 0% 100%)" : "inset(0% 100% 0% 0%)";
           const clipTo = rtl ? "inset(0% 0% 0% -10%)" : "inset(0% -10% 0% 0%)";
-          tl.push(`ft("#${wid}", { clipPath: "${clipFrom}" }, { clipPath: "${clipTo}", duration: ${r3(cap.scriptDur ?? Math.max(0.35, Math.min(0.7, w.end - w.start + 0.2)))}, ease: "power1.inOut" }, ${r3(w.start - (cap.scriptDur ? 0.12 : 0.02))});`);
+          // fitWipe: the write-on always finishes before this block ends (it was cut mid-word at the end of a block)
+          const [wt, wd] = fitWipe(w.start - (cap.scriptDur ? 0.12 : 0.02), cap.scriptDur ?? Math.max(0.35, Math.min(0.7, w.end - w.start + 0.2)), e, { min: Math.max(0, s) });
+          tl.push(`ft("#${wid}", { clipPath: "${clipFrom}" }, { clipPath: "${clipTo}", duration: ${r3(wd)}, ease: "power1.inOut" }, ${r3(wt)});`);
           if (cap.keywordSfx !== false && ctx.addSfx) ctx.addSfx(w.start, "whoosh", "keyword script", { db: -8 });
           return `<span id="${wid}" class="ew eser">${esc(txt)}</span>`;
         }

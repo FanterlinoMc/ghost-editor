@@ -24,7 +24,7 @@ import path from "node:path";
 import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard, isLightColor } from "./lib/motion.mjs";
+import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard, isLightColor, fitWipe } from "./lib/motion.mjs";
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { wordOwners } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
@@ -2675,7 +2675,8 @@ const clusterHtml = cap.style !== "cluster" ? "" : (() => {
     const wspan = (w, k, cls, size) => {
       const isScript = script.has(bareOf(w.word));
       const t = r3(Math.max(s, w.start - 0.03));
-      if (isScript) tl.push(`ft("#${id}w${k}", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% -10% 0% 0%)", duration: ${r3(Math.max(0.35, Math.min(0.7, w.end - w.start + 0.25)))}, ease: "power1.inOut" }, ${t});`);
+      // fitWipe (motion.mjs): the write-on finishes before the phrase ends instead of being cut mid-word
+      if (isScript) { const [wt, wd] = fitWipe(t, Math.max(0.35, Math.min(0.7, w.end - w.start + 0.25)), e, { min: s }); tl.push(`ft("#${id}w${k}", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% -10% 0% 0%)", duration: ${r3(wd)}, ease: "power1.inOut" }, ${r3(wt)});`); }
       // 3-frame land with a light blur: a longer, heavier blur reads as a ghosted double on a still frame
       else tl.push(`ft("#${id}w${k}", { autoAlpha: 0, filter: "blur(4px)", y: 6 }, { autoAlpha: 1, filter: "blur(0px)", y: 0, duration: 0.1, ease: "power2.out" }, ${t});`);
       const isGlow = glowSet.has(bareOf(w.word));   // captions.glowWords: the one or two words that get the accent colour + glow
