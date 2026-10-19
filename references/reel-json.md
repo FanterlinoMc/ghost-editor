@@ -538,7 +538,7 @@ Top-level `conceptCenter: true` keeps the engravings centred while they scale (s
 |---|---|---|---|
 | `text` | string | required | the line; each word joins the line as it is spoken (matched forward through the speech), so a line grows from its centre |
 | `role` | `"s"` \| `"m"` \| `"k"` \| `"t"` | `"s"` (any non-`k` value other than `m`/`t` is a lead) | `s` small regular lead, `m` bold mid line (`brand.midSize`, 96), `k` HUGE key, `t` small italic tail (`brand.tailSize`, 46) |
-| `size` | number (px) | `brand.leadSize` (54) for leads; automatic for a key (see `keyMax`) | this line's size |
+| `size` | number (px) | leads: the stylesheet's `max(brand.leadSize ?? 54, brand.minLead ?? (brand.leadSerif ? 62 : 50))`, so 54 unless `brand.minLead` or `brand.leadSerif` raises the floor; automatic for a key (see `keyMax`) | this line's size |
 | `say` | string | `text` | `k` only: the spoken words the key is timed to (when the key is shown differently from how it is said) |
 | `at` | source seconds | the first `say` word's start | `k` only: when the key appears |
 | `color` | CSS colour | the ink | `k` only: the key's colour |
@@ -553,7 +553,7 @@ Grounds:
 - `accent` (default): the brand-accent page, white words, column `y` default `max(260, 900 - height / 2)`.
 - `paper`: `brand.paper` (`#FEFEFE`), accent words, same `y` default.
 - `footage`: a transparent page over the speaker's picture (`brand.film`, e.g. grayscale), white words with a shadow (`brand.footKey` for the key), column `y` default `max(760, min(1080, 1460 - height))`; `brand.footScrim` (0-1) adds a dark gradient behind the words.
-- `card`: the speaker's footage in a rounded card on the accent page, words under it (`y` default `330 + cardH - 60`). On a light accent the words take a dark ink and the key's ghost stays at 60 %.
+- `card`: the speaker's footage in a rounded card on the accent page, words under it (`y` default `330 + cardH - 60`, where `cardH` is always the automatic card height: a known quirk, an explicit `cardH` resizes the card but does not move the words, so set `y` with it). On a light accent the words take a dark ink and the key's ghost stays at 60 %.
 - `phone`: the footage in a phone with a reels UI on the accent page; the icon sits in a tile on the phone and the lines from the first key on start at `y` (default `1480`).
 
 The word column never starts above the platform's safe top. Brand keys read by the stack's stylesheet: `brand.leadSize`, `brand.minLead`, `brand.leadSerif`, `brand.midSize`, `brand.tailSize`, `brand.keyFont`, `brand.footKey`, `brand.film`, `brand.paper`, `brand.leadColor`, `brand.iconSfx`, `brand.footScrim`.
