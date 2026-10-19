@@ -946,7 +946,10 @@ without running the file):
     call site; no option or env pins it), and the browser shim does not receive the page URL. PM2 finds a way
     and measures it, for example: the shim runs a tiny local proxy as `--proxy-server` (with `<-loopback>` and
     no bypass) that forwards only to the first origin requested (the render page) or only to a port the parent
-    hyperframes process listens on, and refuses everything else.
+    hyperframes process listens on, and refuses everything else. **PM5 / gate requirement (CP3 re-review):** a
+    fixture aimed at a SECOND listener on `localhost` (another port than the render server's); the gate passes
+    only when that listener sees zero connections during a real `hyperframes render` under the final shim
+    (with a control run without the shim that proves the listener is reachable).
   - **Residual risk if the exact-origin bypass is not possible** (documented fallback, accepted by the PC):
     loopback stays open to the NAME `localhost` (IP literals are closed by the resolver rule). The PC measured
     the staging container (same image as production) from `/proc/net/tcp` and `tcp6`: exactly ONE listening
@@ -1138,7 +1141,9 @@ check is the one reported, and for a regex its LEFTMOST match in the first scope
 
 **Regex dialect.** Each regex below is the exact source, JavaScript syntax; flags column `i` = case-insensitive,
 `-` = case-sensitive. The Python mirror compiles the same source with `re.ASCII` (plus `re.IGNORECASE` for `i`)
-and uses `search`. The sources are also in `scripts/graphic-rules/rules.json`, read by a node implementation
+and uses `search`. **`scripts/graphic-rules/rules.json` is the SINGLE source of truth for the regex sources**:
+the listing below is informative, and if the two ever differ, `rules.json` wins. The PC validator loads
+`rules.json` at run time rather than retyping the regexes. It is read by a node implementation
 (`rules.mjs`) and a Python one (`rules.py`, `re.ASCII`); `node scripts/graphic-rules/parity.mjs` runs both on
 `cases.json` (139 cases: the CP3 reviewer's 41 bypasses and 54 false positives, 29 font / literal-assignment
 cases, 15 from the re-review) and prints `PARITY: PASS` only when node == Python == the recorded expectation
@@ -1173,7 +1178,8 @@ G28  SCRIPT        -  [\w$\])]\s*\[\s*(['"`])[^'"`]*\1\s*\+|[\w$\])]\s*\[\s*`[^`
 with an HTML entity (`<code>&#115;etTimeout</code>`), or inside a JS string with a `\uXXXX` escape
 (`"setTimeout(cb)"`, `"Launch Date (Q3)"`); the scan does not match either and the page displays
 the same text. A function or method of your own must not be called `animate` (G13 `.animate(`), `open` or `click` (G25), and a
-variable must not be called `location`; and `anime`, `d3`, `THREE`,
+variable must not be called `location`; `this[...]` in any form (including ``this[`x${i}`]``) is refused by
+G25, so the writer prompt must avoid it; and `anime`, `d3`, `THREE`,
 ... are reserved names (G19).
 
 | # | check | `<reason>` (exact) |
