@@ -2732,6 +2732,7 @@ const OCCLUDE = !!(cap.style === "type" && cap.behind && spec.matte && !spec.sta
 if (OCCLUDE && FORMAT !== "9:16") warn.push(`captions.behind is tuned for 9:16 (the head-top track and the type sizes); ${FORMAT} may look off`);
 if (OCCLUDE && spec.matteWindows) warn.push("captions.behind: matteWindows shows the cut-out only during behind / ground beats, so type cards behind the head are not covered outside them");
 const occMatted = (src) => perSrcMatte ? stageMatted(src) : src === SRC;
+if (OCCLUDE && cap.maxHidden !== undefined && !(typeof cap.maxHidden === "number" && cap.maxHidden >= 0 && cap.maxHidden <= 1)) die(`captions.maxHidden must be a number 0..1 (got ${JSON.stringify(cap.maxHidden)})`);
 let typeBehindHtml = "";
 const typeHtml = cap.style !== "type" ? "" : (() => {
   const bareOf = (w) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
@@ -2760,7 +2761,7 @@ const typeHtml = cap.style !== "type" ? "" : (() => {
   groupsT.forEach((g, gi) => {
     const s = Math.max(0, g[0].start - 0.05);
     const nextS = gi + 1 < groupsT.length ? groupsT[gi + 1][0].start - 0.05 : SPEECH;
-    const e = Math.min(g.at(-1).end + (cap.tail ?? 0.3), nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99), takeEndAt(takes, FPS, g.at(-1).start, SPEECH));
+    let e = Math.min(g.at(-1).end + (cap.tail ?? 0.3), nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99), takeEndAt(takes, FPS, g.at(-1).start, SPEECH));
     // transcript quote marks ("What is...") are speech punctuation, not caption text
     const ws = g.map((w) => ({ text: caseOf(w.word.trim().replace(/["\u201C\u201D]/g, "")), red: isRedWord(w.word), w }));
     const isRed = ws.some((x) => x.red);
@@ -2779,20 +2780,25 @@ const typeHtml = cap.style !== "type" ? "" : (() => {
     let lineH = size * 1.06 * (isRed ? RS : 1);
     let pl, behindCard = false;
     const occTake = OCCLUDE ? locateTake(takes, s, FPS) : null;
-    if (occTake && occMatted(occTake.src)) {
+    // a take's hold is a still with no cut-out over it: a behind card ends where a hold starts; one that starts in a hold goes in front
+    const occHold = occTake ? takes.find((k) => k.holdFrames && s < k.holdStart + k.holdFrames / FPS && e > k.holdStart) : null;
+    const eB = occHold ? occHold.holdStart : e;
+    if (occTake && occMatted(occTake.src) && eB - s >= 1 / FPS) {
       // behind the head over the real footage: shrink to the room above the crown (down to minSize); hang the block there only if it fits
-      const q0 = occTake.a + (s - occTake.start), q1 = occTake.a + (Math.min(e, occTake.start + occTake.dur) - occTake.start);
-      const crown = headTopOf(occTake.src, q0, q1), ov = cap.overlap ?? 0.3;
+      const q0 = occTake.a + (s - occTake.start), q1 = occTake.a + (Math.min(eB, occTake.start + occTake.dur) - occTake.start);
+      const crown = headTopOf(occTake.src, q0, q1), ov0 = cap.overlap ?? 0.3;
       const room = crown === null ? 0 : crown - (cap.safeTop ?? 200), MIN = cap.minSize ?? 54;
       // one line first when the whole phrase fits the width at >= minSize (a single line needs the least room), then the card's own lines
       const one = lines.length > 1 ? Math.min(S0, Math.floor((isRed ? (cap.redMaxWidth ?? MAXW) : MAXW) / (width1 * (isRed ? CHW * (cap.redCharW ?? 1.14) : CHW)))) : 0;
       for (const [ls, sz0] of [...(one >= MIN ? [[[ws], one]] : []), [lines, size]]) {
         if (room <= 0) break;
+        // captions.maxHidden: at most this fraction of the card's height may sit under the crown (the tuck shrinks for that card)
+        const ov = cap.maxHidden === undefined ? ov0 : Math.min(ov0, cap.maxHidden * ls.length);
         const needOf = (lh) => ls.length * lh - lh * ov;
         let sz = sz0, lh = sz * 1.06 * (isRed ? RS : 1);
         if (needOf(lh) > room) { sz = Math.max(MIN, Math.floor(sz * room / needOf(lh))); lh = sz * 1.06 * (isRed ? RS : 1); }
         if (needOf(lh) > room) continue;
-        lines = ls; size = sz; lineH = lh;
+        lines = ls; size = sz; lineH = lh; e = eB;
         pl = { y: Math.round(crown + lineH * ov - lines.length * lineH), mode: "behind" }; behindCard = true;
         placer.log.push({ t0: r3(s), t1: r3(e), y: pl.y, h: Math.round(lines.length * lineH), mode: "behind", scale: 1, face: null });
         break;
@@ -2859,6 +2865,15 @@ const typeHtml = cap.style !== "type" ? "" : (() => {
   });
   return html;
 })();
+// a take join with a blur / whip transition: the behind cards blur / fade (and whip) with the takes and the cut-out around them
+if (OCCLUDE && takeJoins.length) {
+  tl.push(`tl.set("#capsb", { autoAlpha: 1, filter: "blur(0px)", xPercent: 0 }, 0);`);
+  for (const { kind, T, outDur, inDur } of takeJoins) {
+    const b = kind === "whip" ? 40 : 28, x = kind === "whip" ? 8 : 0, ein = kind === "whip" ? "power1" : "power2";
+    tl.push(`tl.fromTo("#capsb", { autoAlpha: 1, filter: "blur(0px)", xPercent: 0 }, { autoAlpha: 0, filter: "blur(${b}px)", xPercent: ${-x}, duration: ${outDur}, ease: "${ein}.in", immediateRender: false }, ${r3(T - outDur)});`);
+    tl.push(`tl.fromTo("#capsb", { autoAlpha: 0, filter: "blur(${b}px)", xPercent: ${x} }, { autoAlpha: 1, filter: "blur(0px)", xPercent: 0, duration: ${inDur}, ease: "${ein}.out", immediateRender: false }, ${T});`);
+  }
+}
 const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podcastHtml : cap.style === "cluster" ? clusterHtml : cap.style === "duo" ? duoHtml : cap.style === "glow" ? glowHtml : cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
   const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.05 : SPEECH;

@@ -8,6 +8,7 @@
 //   - no neon set / plate / props markup, the plate is not hidden, the takes play the real footage (relit), the cut-out is relit
 //   - the type cards sit inside the camera wrappers between the takes and the cut-out (#capsb), hung from the head-top track so
 //     the last line dips `overlap` under the crown; none are in the front caption layer
+//   - captions.maxHidden caps the tuck; a hold ends a behind card; a whip / blur join tweens #capsb with the takes
 //   - a tight close-up (crown near the top of the frame) gets its cards in front, placed by the placer, and #capsb stays empty
 //   - relight from the style degrades (no depth model / no python -> a warning, an unrelit build); set in reel.json it still dies
 //   - opt-in: captions.behind false, or no matte, writes no #capsb; a reel that sets `stage` itself still gets the old set path
@@ -114,6 +115,39 @@ try {
     assert.ok(b.y + b.h > 640 && b.y + b.h < 640 + b.h, `the block's last line dips under the crown (y ${b.y}, h ${b.h})`);
   }
   check(`premium-iman: ${nb} type cards inside the camera wrappers between the takes and the cut-out occluder, hung under the crown`);
+  // captions.maxHidden 0.45 (the style): no card has more than 45% of its height under the crown; without the cap a one-line card tucks 0.8
+  const hidden = (b, crown = 640) => (b.y + b.h - crown) / b.h;
+  for (const b of blocks) assert.ok(hidden(b) > 0 && hidden(b) <= 0.45 + 0.01, `hidden ${hidden(b).toFixed(3)} of block at ${b.t0}`);
+  assert.ok(blocks.some((b) => Math.abs(hidden(b) - 0.45) < 0.01), "the cap is what sets the tuck");
+  const unc = project({ ...RL, captions: { reds: ["real"], maxHidden: 1 } }); build(unc);
+  const ub = layout(unc).map((b) => hidden(b));   // overlap 0.8 of one line: 0.8 of a one-line card, 0.4 of a two-line card
+  assert.ok(ub.every((x) => Math.abs(x - 0.8) < 0.01 || Math.abs(x - 0.4) < 0.01) && ub.some((x) => Math.abs(x - 0.8) < 0.01), "maxHidden 1: one-line cards tuck the full overlap 0.8: " + ub.map((x) => x.toFixed(3)));
+  fails(project({ ...RL, captions: { maxHidden: 2 } }), /ERROR: captions\.maxHidden must be a number 0\.\.1 \(got 2\)/);
+  check("captions.maxHidden: at most 45% of each card under the crown (overlap 0.8 otherwise), bad value refused");
+
+  // a hold: the cut-out stops on the still, so a behind card ends where the hold starts, and a card starting in it goes in front
+  dir = project({ ...RL, takes: [{ a: 0, b: 2.9, hold: 0.5 }, { a: 3.1, b: SEC }] });
+  build(dir); h = html(dir);
+  const HS = 2.9, HE = 3.4, lb = layout(dir);
+  assert.ok(lb.some((b) => b.mode === "behind" && Math.abs(b.t1 - HS) < 0.002), "a behind card is cut at the hold");
+  for (const b of lb.filter((b) => b.mode === "behind")) assert.ok(b.t1 <= HS + 0.001 || b.t0 >= HE - 0.001, `behind card ${b.t0}-${b.t1} does not cover the hold ${HS}-${HE}`);
+  for (const m of capsbOf(h).matchAll(/data-start="([\d.]+)" data-duration="([\d.]+)"/g)) { const a = +m[1], d = +m[2]; assert.ok(a + d <= HS + 0.001 || a >= HE - 0.001, `#capsb card ${a}+${d} stays off the hold`); }
+  check("hold: behind cards end where the hold starts (no card over the still without its cut-out)");
+
+  // a whip join: #capsb whips / blurs out and in with the takes and the cut-out; a blur join likewise; no join, no tween
+  dir = project({ ...RL, takes: [{ a: 0, b: 2.9 }, { a: 3.1, b: SEC, transition: "whip" }] });
+  build(dir); h = html(dir);
+  assert.match(h, /tl\.set\("#capsb", \{ autoAlpha: 1, filter: "blur\(0px\)", xPercent: 0 \}, 0\);/);
+  const whipT = h.match(/tl\.to\("#take-0", \{ autoAlpha: 0, xPercent: -8, filter: "blur\(40px\)", duration: ([\d.]+), ease: "power1\.in" \}, ([\d.]+)\);/);
+  assert.ok(whipT, "the take whips");
+  assert.ok(h.includes(`tl.fromTo("#capsb", { autoAlpha: 1, filter: "blur(0px)", xPercent: 0 }, { autoAlpha: 0, filter: "blur(40px)", xPercent: -8, duration: ${whipT[1]}, ease: "power1.in", immediateRender: false }, ${whipT[2]});`), "#capsb whips out with the take, same time and length");
+  assert.match(h, /tl\.fromTo\("#capsb", \{ autoAlpha: 0, filter: "blur\(40px\)", xPercent: 8 \}, \{ autoAlpha: 1, filter: "blur\(0px\)", xPercent: 0, duration: [\d.]+, ease: "power1\.out", immediateRender: false \}, 2\.9\);/, "and back in on the join");
+  dir = project({ ...RL, takes: [{ a: 0, b: 2.9 }, { a: 3.1, b: SEC, transition: "blur" }] });
+  build(dir); h = html(dir);
+  assert.match(h, /tl\.fromTo\("#capsb", \{ autoAlpha: 1, filter: "blur\(0px\)", xPercent: 0 \}, \{ autoAlpha: 0, filter: "blur\(28px\)", xPercent: 0,/);
+  dir = project({ ...RL }); build(dir);
+  assert.ok(!/"#capsb"/.test(html(dir)), "no join transition: no #capsb tween");
+  check("whip / blur join: #capsb blurs, fades (and whips) with the takes and the cut-out");
 
   // ---------- a tight close-up: no room above the crown -> the cards go in front, as without behind ----------
   dir = project({ ...RL }, { crown: 120 });
