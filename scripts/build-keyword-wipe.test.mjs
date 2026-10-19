@@ -68,8 +68,13 @@ test("cluster: a captions.script word at the end of a phrase finishes its write-
   const [bs, be] = [+ph[2], +ph[2] + +ph[3]];
   const wid = ph[4].match(/<span id="(cl\d+w\d+)" class="cw [^"]*scr/)[1];
   const [t, d] = wipeOf(html, wid);
+  // fixture guard: the unfitted wipe (build.mjs: max(0.35, min(0.7, end - start + 0.25)) from max(phrase start, start - 0.03))
+  // really would run past the phrase end
+  const base = Math.max(0.35, Math.min(0.7, 1.8 - 1.55 + 0.25)), t0 = Math.max(bs, 1.55 - 0.03);
+  assert.ok(t0 + base > be, `fixture no longer puts the script word at a phrase end with too little time (phrase ends ${be})`);
   assert.ok(t + d <= be - 0.03, `the write-on runs ${t}..${r(t + d)} s but its phrase ends at ${be} s`);
   assert.ok(t >= bs - 1e-9, `the write-on starts at ${t} s, before its phrase appears at ${bs} s`);
+  assert.ok(d >= 0.2 - 1e-9, `the write-on was squeezed to ${d} s (floor 0.2)`);
 });
 
 test("fitWipe leaves a wipe that already fits untouched (byte-identical markup for every other keyword)", async () => {
@@ -80,6 +85,12 @@ test("fitWipe leaves a wipe that already fits untouched (byte-identical markup f
   // even the floor does not fit after the word: start earlier, never before the block
   const [t2, d2] = fitWipe(1.7, 0.45, 1.79, { min: 1.25 });
   assert.equal(d2, 0.2); assert.ok(Math.abs(t2 + d2 - 1.74) < 1e-9);
+  // a block too short for the floor after `min`: the wipe runs from min to the limit (faster than 0.2 s) and still completes
+  const [t3, d3] = fitWipe(1.0, 0.45, 1.1, { min: 1.0 });
+  assert.equal(t3, 1.0); assert.ok(Math.abs(t3 + d3 - 1.05) < 1e-9, `ends at ${t3 + d3}, block limit 1.05`);
+  // a start before `min` (a scriptDur lead-in before the word is visible) is moved to min and still ends by the limit
+  const [t4, d4] = fitWipe(1.5, 0.28, 1.79, { min: 1.52 });
+  assert.equal(t4, 1.52); assert.ok(t4 + d4 <= 1.74 + 1e-9, `ends at ${t4 + d4}, block limit 1.74`);
 });
 
 const r = (x) => Math.round(x * 1000) / 1000;
