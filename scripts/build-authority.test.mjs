@@ -144,6 +144,20 @@ try {
     assert.ok(pn.beats.some((b) => b.kind === "gm-counter" && b.value === 6000 && b.prefix === "$"), "a spoken $6,000 becomes a counter: " + JSON.stringify(pn.beats.map((b) => b.kind)));
     for (let i = 1; i < p.beats.length; i++) assert.ok(p.beats[i].at >= p.beats[i - 1].to + 3 - 1e-6, "graphics at least 3 s apart");
     check("focus_director gadzhi-motion (offline): <= 4 graphics 3 s apart, ROI -> target, a spoken $6,000 -> counter");
+    // an AI review that names an object outside library/gm-objects (or the dropped "brain") falls back to the concept words
+    const wAt = (word) => w2.find((w) => w.word.replace(/[^\w$]/g, "").toLowerCase() === word).start;
+    const rvFile = path.join(dirN, "build", "review.json");
+    fs.writeFileSync(rvFile, JSON.stringify({ moments: [
+      { kind: "gm-object", at: wAt("pay") - 0.1, to: wAt("pay") + 1.5, object: "spaceship", text: "We pay" },
+      { kind: "gm-nodes", at: wAt("today") - 0.1, to: wAt("today") + 1.5, object: "brain", pill: "measure" },
+      { kind: "gm-object", at: wAt("simple") - 0.1, to: wAt("simple") + 1.5, object: "rocket", text: "simple" },
+    ] }));
+    const pr = plan(dirN, "gadzhi-motion", ["--dry", "--review-file", rvFile]);
+    const objs = pr.beats.filter((b) => b.object).map((b) => b.object);
+    assert.ok(objs.length >= 2 && objs.every((o) => ["chart", "gears", "lightbulb", "puzzle", "rocket", "stopwatch", "target"].includes(o)), "every object is in the pack: " + objs);
+    assert.ok(pr.beats.some((b) => b.kind === "gm-object" && Math.abs(b.at - (wAt("pay") - 0.1)) < 0.01 && b.object === "target"), "unknown 'spaceship' -> concept of 'We pay' (target): " + JSON.stringify(pr.beats));
+    assert.ok(pr.beats.some((b) => b.object === "rocket"), "a pack name from the review is kept");
+    check("focus_director: an AI-review object outside the pack falls back to the concept words");
     // its output builds
     for (const style of ["hormozi", "gadzhi-motion"]) {
       dir = project({ style });

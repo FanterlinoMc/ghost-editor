@@ -17,11 +17,13 @@ import { fileURLToPath } from "node:url";
 
 // the object's real (alpha) bounding box as fractions of its image: library/gm-objects/bounds.json, written by scripts/gm_bounds.mjs;
 // a project path or an object not in the file is the whole image
+// legacy name: the pack had a brain until 19 Oct 2026 (replaced by the CC0 puzzle); saved reels that name it keep rendering
+const gmObj = (o) => (o === "brain" ? "puzzle" : o);
 const objBounds = (o) => {
   try { return JSON.parse(fs.readFileSync(path.join(OBJ_DIR, "bounds.json"), "utf8"))[o]; } catch { return null; }
 };
-const edgeOf = (o) => { const bb = (o.includes("/") ? null : objBounds(o)) ?? { top: 0, bottom: 1 }; return { top: bb.top, bottom: bb.bottom }; };
-const objAspect = (o) => { try { const f = o.includes("/") ? o : path.join(OBJ_DIR, `${o}.png`); const b = fs.readFileSync(f); return b.readUInt32BE(20) / b.readUInt32BE(16); } catch { return 1; } };
+const edgeOf = (o) => { const bb = (o.includes("/") ? null : objBounds(gmObj(o))) ?? { top: 0, bottom: 1 }; return { top: bb.top, bottom: bb.bottom }; };
+const objAspect = (o) => { try { const f = o.includes("/") ? o : path.join(OBJ_DIR, `${gmObj(o)}.png`); const b = fs.readFileSync(f); return b.readUInt32BE(20) / b.readUInt32BE(16); } catch { return 1; } };
 // the pack: 3dicons v1 (CC0), premium style desaturated to graphite + chrome (neutral in every colour theme); see library/gm-objects/SOURCES.md
 const OBJ_DIR = process.env.PHANTASIC_GM_OBJECTS || path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "library", "gm-objects");
 // colour themes: one preset per accent (gadzhi-purple, -blue, -yellow, -red, -green). ink = big serif type on paper,
@@ -124,7 +126,7 @@ function rowsOf(spec, words, a, b) {
 export function gmScene(b, id, t0, t1, ctx) {
   const { tl, E, r3, esc, addSfx, userAsset, words } = ctx;
   const T = GM_THEMES[b.theme ?? ctx.gmTheme ?? "purple"] ?? GM_THEMES.purple;
-  const objSrc = (o) => userAsset(o.includes("/") ? o : path.join(OBJ_DIR, `${o}.png`));
+  const objSrc = (o) => userAsset(o.includes("/") ? o : path.join(OBJ_DIR, `${gmObj(o)}.png`));
   const landWord = (sel, at, cls) => {
     const big = cls !== "s";
     tl.push(`ft("${sel}", { autoAlpha: 0, y: ${big ? 40 : 18}, filter: "blur(${big ? 14 : 8}px)", scale: ${big ? 1.12 : 1} }, { autoAlpha: 1, y: 0, filter: "blur(0px)", scale: 1, duration: ${big ? 0.32 : 0.22}, ease: "power3.out" }, ${at});`);

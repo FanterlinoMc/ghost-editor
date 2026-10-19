@@ -16,6 +16,9 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.join(HERE, "build.mjs");
+// the object pack and its measured bounds (written by scripts/gm_bounds.mjs)
+const LIB = path.join(HERE, "..", "library", "gm-objects");
+const BOUNDS = JSON.parse(fs.readFileSync(path.join(LIB, "bounds.json"), "utf8"));
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "build-chrome-"));
 const ff = (...a) => execFileSync("ffmpeg", ["-v", "error", "-y", ...a], { stdio: "pipe" });
 const SEC = 12, FPS = 30;
@@ -67,13 +70,20 @@ try {
   assert.ok(h.includes("--gm-ink:#4B1F7A"), "purple theme from gm.theme");
   assert.ok(fs.existsSync(path.join(dir, "assets", "target.png")) && fs.existsSync(path.join(dir, "assets", "puzzle.png")), "objects copied from library/gm-objects");
   // the pack and bounds.json agree, and it is the CC0 set (library/gm-objects/SOURCES.md): no brain, a puzzle instead
-  const LIB = path.join(HERE, "..", "library", "gm-objects");
   const pngs = fs.readdirSync(LIB).filter((f) => f.endsWith(".png")).map((f) => f.replace(/\.png$/, "")).sort();
   assert.deepEqual(pngs, ["chart", "gears", "lightbulb", "puzzle", "rocket", "stopwatch", "target"], "the seven CC0 objects");
-  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(LIB, "bounds.json"), "utf8"))).sort(), pngs, "bounds.json covers exactly the PNGs");
+  assert.deepEqual(Object.keys(BOUNDS).sort(), pngs, "bounds.json covers exactly the PNGs");
   assert.ok(/3dicons/.test(fs.readFileSync(path.join(LIB, "SOURCES.md"), "utf8")), "SOURCES.md records where the objects come from");
   assert.ok(/return|investment/.test(h) && h.includes('class="gm-t k"'), "typed rows with a serif keyword");
   check("gm-object / kinetic / flow / counter / nodes build; GM_CSS only here; library objects copied");
+  // legacy name: a saved reel with object "brain" (dropped 19 Oct 2026) renders the puzzle, laid out with the puzzle's own size
+  const legacy = (o) => { const d = project({ style: "gadzhi-motion", beats: [{ ...SCENES[0], object: o }, { ...SCENES[4], object: o }] }); build(d); return { d, h: html(d) }; };
+  const lb = legacy("brain"), lp = legacy("puzzle");
+  assert.ok(fs.existsSync(path.join(lb.d, "assets", "puzzle.png")) && !fs.existsSync(path.join(lb.d, "assets", "brain.png")), "brain resolves to puzzle.png");
+  const boxes = (hh) => [...hh.matchAll(/class="gm-(?:objwrap|obj|pill)" style="top:(\d+)px(?:;width:(\d+)px)?/g)].map((m) => m.slice(1).join("x"));
+  assert.ok(boxes(lb.h).length >= 3, "the object boxes were found: " + boxes(lb.h));
+  assert.deepEqual(boxes(lb.h), boxes(lp.h), "same object and pill layout as an explicit puzzle");
+  check("legacy object name brain renders the puzzle");
   dir = project({ style: "gadzhi-blue", beats: [SCENES[1]] });
   build(dir);
   assert.ok(html(dir).includes("--gm-ink:#123E9C"), "blue theme");
@@ -141,7 +151,7 @@ try {
   // ---- gm layout from the object's measured edges ----
   const layoutOf = (beat) => { const d = project({ style: "gadzhi-motion", beats: [beat] }); build(d); const hh = html(d); return { objTop: +hh.match(/class="gm-objwrap" style="top:(\d+)px;width:(\d+)px/)[1], objW: +hh.match(/class="gm-objwrap" style="top:(\d+)px;width:(\d+)px/)[2], rows: [...hh.matchAll(/class="gm-row" style="top:(\d+)px/g)].map((m) => +m[1]) }; };
   // aspect (h / w) of a library object, from bounds.json; stopwatch is the tallest object in the pack
-  const asp = (o) => { const bb = JSON.parse(fs.readFileSync(path.join(HERE, "..", "library", "gm-objects", "bounds.json"), "utf8"))[o]; return bb.h / bb.w; };
+  const asp = (o) => BOUNDS[o].h / BOUNDS[o].w;
   const tall = layoutOf({ type: "scene", kind: "gm-object", object: "stopwatch", text: "IG|*Outreach* Pro", textBelow: "^tool", objY: 520, objW: 740, textY: 300, at: 1.5, to: 4 });
   assert.ok(tall.objTop >= tall.rows[1] + 190, `the object clears the second text row: object top ${tall.objTop}, rows ${tall.rows}`);
   assert.ok(tall.objTop + tall.objW * asp("stopwatch") <= 1601, "and still ends above the bottom limit (shrunk if needed)");

@@ -75,6 +75,8 @@ ICON_WORDS = [(r"recurring|monthly|repeat|every (month|week)", "repeat"), (r"yea
               (r"cost|price|money|\$|revenue|fee", "dollar"), (r"time|hour|minute|second", "clock"), (r"team|employee|people|staff|hire", "users"),
               (r"email|inbox|message", "mail"), (r"sale|growth|grow|revenue up", "trend"), (r"data|report|number|metric", "chart"), (r"customer|client|buy", "cart"),
               (r"document|contract|sop", "doc"), (r"goal|target|outcome", "target")]
+# the objects in library/gm-objects (scripts/lib/gadzhi.mjs); a name the AI review returns outside it falls back to concept()
+GM_OBJECTS = {"chart", "gears", "lightbulb", "puzzle", "rocket", "stopwatch", "target"}
 NUMWORD = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "ten": 10, "twenty": 20, "fifty": 50, "hundred": 100}
 
 
@@ -344,7 +346,7 @@ def plan_gadzhi(ws, args):
             return r3(hit["start"]) if hit else None
         b = {"type": "scene", "kind": m.kind, "at": r3(m.at), "to": r3(m.to), "captions": False}
         if m.kind == "gm-object":
-            b.update(object=m.object or concept(m.text)[0], text=m.text, objW=700, objY=540, **({"textBelow": m.textBelow} if m.textBelow else {}))
+            b.update(object=m.object if m.object in GM_OBJECTS else concept(m.text)[0], text=m.text, objW=700, objY=540, **({"textBelow": m.textBelow} if m.textBelow else {}))
         elif m.kind == "gm-flow":
             its = [{"icon": icon_for(l), "label": l.lower(), "at": said_at(l, m.at, m.to)} for l in m.labels]
             if any(i["at"] is None for i in its) or len(its) < 2:
@@ -354,7 +356,7 @@ def plan_gadzhi(ws, args):
             b.update(value=m.value, prefix=m.prefix, suffix=m.suffix, label=m.label, icon=icon_for(m.label or "money"), countAt=r3(m.at + 0.4), countDur=0.5)
         elif m.kind == "gm-nodes":
             pa = said_at(m.pill, m.at, m.to) if m.pill else None
-            b.update(nodes=[{"n": k + 1, "at": r3(m.at + 0.1 + 0.25 * k)} for k in range(3)], object=m.object or "puzzle", **({"pill": {"text": m.pill.lower(), "at": pa}} if pa else {}))
+            b.update(nodes=[{"n": k + 1, "at": r3(m.at + 0.1 + 0.25 * k)} for k in range(3)], object=m.object if m.object in GM_OBJECTS else concept(m.text or m.pill)[0], **({"pill": {"text": m.pill.lower(), "at": pa}} if pa else {}))
         else:
             continue
         cand.append({"score": 20, "beat": b})
