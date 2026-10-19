@@ -23,8 +23,8 @@ import argparse
 import hashlib
 import json
 import os
+import secrets
 import sys
-import tempfile
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -69,8 +69,8 @@ def ensure_model(path=MODEL, url=MODEL_URL, size=MODEL_SIZE, sha256=MODEL_SHA256
         print(f"face model {path} is not the pinned file ({bad}); downloading it again", file=sys.stderr)
         os.remove(path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    fd, part = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix=os.path.basename(path) + ".", suffix=".part")
-    os.close(fd)
+    part = f"{path}.{secrets.token_hex(4)}.part"
+    os.close(os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666))   # a fresh name; the umask sets its mode, as for open()
     try:
         try:
             _download(url, part)
@@ -79,9 +79,6 @@ def ensure_model(path=MODEL, url=MODEL_URL, size=MODEL_SIZE, sha256=MODEL_SHA256
         bad = model_problem(part, size, sha256)
         if bad is not None:
             raise ModelError(f"face model download from {url} is not the pinned file ({bad}); deleted it")
-        um = os.umask(0)
-        os.umask(um)
-        os.chmod(part, 0o666 & ~um)   # mkstemp made it owner-only; give it the mode a plain open() would have
         os.replace(part, path)
     finally:
         if os.path.exists(part):

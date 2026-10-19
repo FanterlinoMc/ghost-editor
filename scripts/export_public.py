@@ -12,7 +12,7 @@ redistribution-safe source:
   - fonts under the SIL OFL, the YuNet face model (MIT)
 and it refuses to export (exit 1, nothing written) when a committed manifest entry
 has any other source than "none (needs a licensed source)" or the licensed pack
-("licensed pack: <name>", library/SOURCES.md): a rip such as a `yt:` record or a
+("licensed pack: <name>", the name lower-case letters, digits and hyphens; library/SOURCES.md): a rip such as a `yt:` record or a
 third-party download URL must never reach the public edition.
 It drops:
   - library/memes/* (users add their own with meme_add.py, their rights)
@@ -41,7 +41,7 @@ PUBLIC_DESCRIPTION = ("AI video editor for talking-head reels. Turns a raw phone
     "\"make it look like this video\", \"add captions/motion graphics/sound effects\", \"pick the best takes\", "
     "\"remove the pauses\", or asks for a re-cut. Not for landscape screen recordings.")
 NO_SOURCE = "none (needs a licensed source)"
-LICENSED = re.compile(r"^licensed pack: \S")   # library/SOURCES.md: a sound processed from the licensed pack names it
+LICENSED = re.compile(r"^licensed pack: [a-z0-9][a-z0-9-]*$")   # library/SOURCES.md: the pack's name, nothing else (no URL, no rip id)
 MANIFESTS = ("library/sfx/manifest.json", "library/music/manifest.json")
 
 

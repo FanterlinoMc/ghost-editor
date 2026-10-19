@@ -44,6 +44,8 @@ test("export_public.py refuses a manifest entry that is not no-source or the lic
     [{ a: { file: "a.wav", source: "yt:abc123" } }, {}, "sfx a yt: rip"],
     [{ a: { file: "a.wav", source: NONE } }, { bed: { file: "bed.mp3", source: "https://example.com/bed.mp3" } }, "music download URL"],
     [{ a: { file: "a.wav" } }, {}, "no source field"],
+    [{ a: { file: "a.wav", source: "licensed pack: yt:abc123" } }, {}, "a rip id dressed as a pack name"],
+    [{ a: { file: "a.wav", source: NONE } }, { bed: { file: "bed.mp3", source: "licensed pack: https://example.com/bed.mp3" } }, "a URL dressed as a pack name"],
   ];
   for (const [sfx, music, label] of cases) {
     const d = repo(sfx, music), dest = path.join(d, "..", path.basename(d) + "-out");
