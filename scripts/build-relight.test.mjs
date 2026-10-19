@@ -222,8 +222,10 @@ if (!python) {
   // ---------- relight + a matteClip WINDOW cut-out (no whole-recording matte cached) ----------
   // Only recording 0.467-3.033 s (from frame 14) is cut out (assets/talk-matte@467-3033.webm); the cut-out must carry the relit
   // colour of those SAME frames. The source's grey steps 9 levels a frame (a 20-frame sawtooth), so every frame names its source
-  // frame (mod 20) and a one-frame slip is visible. A fake npx writes a stub cut-out that keeps the window's own pixels (the
-  // ellipse opaque), like remove-background would for that window only. The invariant: frame j of the RELIT window cut-out shows
+  // frame (mod 20) and a one-frame slip is visible. A fake npx writes a stub cut-out that keeps the window's own pixels, with
+  // the ALPHA inside the ellipse = the frame's grey too (so the alpha names its frame), and like the real remove-background
+  // window files (r_frame_rate 151/5, 1/1000 time base) its timestamps step 33 ms, not 1/30 s: they drift ~0.33 ms a frame,
+  // so pairing by time slips a frame after ~50 frames while pairing by index does not. The invariant: frame j of the RELIT window cut-out shows
   // the same source frame as frame j of the un-lit window cut-out. Run twice: a source whose video starts at 0, and one whose
   // video starts at 0.033 s with the audio at 0 (as prep.sh's and phone files do; every decoder then repeats frame 0).
   if (process.platform !== "win32") {
@@ -232,7 +234,7 @@ if (!python) {
 in=""; out=""; prev=""
 for a in "$@"; do [ "$prev" = "remove-background" ] && in="$a"; [ "$prev" = "-o" ] && out="$a"; prev="$a"; done
 echo "$in" >> "${wLog}"
-exec ffmpeg -v error -y -i "$in" -vf "format=yuva420p,geq=lum='p(X\\,Y)':cb='p(X\\,Y)':cr='p(X\\,Y)':a='if(lt(hypot((X-${W / 2})/32\\,(Y-${H * 0.55})/60)\\,1)\\,255\\,0)'" -fps_mode passthrough -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 "$out"
+exec ffmpeg -v error -y -i "$in" -vf "format=yuva420p,geq=lum='p(X\\,Y)':cb='p(X\\,Y)':cr='p(X\\,Y)':a='if(lt(hypot((X-${W / 2})/32\\,(Y-${H * 0.55})/60)\\,1)\\,lum(X\\,Y)\\,0)',setpts=N*33/(1000*TB)" -fps_mode passthrough -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 "$out"
 `, { mode: 0o755 });
     const wEnv = { [pathKey]: wNpx + path.delimiter + SAFE_ENV[pathKey], MATTE_THREADS: "" };
     const lumas = (f, dec = []) => { const N = W * H, b = execFileSync("ffmpeg", ["-v", "error", ...dec, "-i", f, "-f", "rawvideo", "-pix_fmt", "gray", "-"], { maxBuffer: 1 << 28 }); return Array.from({ length: Math.floor(b.length / N) }, (_, k) => b[k * N + Math.round(H * 0.55) * W + W / 2]); };
@@ -271,13 +273,18 @@ exec ffmpeg -v error -y -i "$in" -vf "format=yuva420p,geq=lum='p(X\\,Y)':cb='p(X
       const rawL = lumas(winRaw, vp9), lvRaw = rawL.map(levels(rawL, "un-lit"));
       const lvLit = lumas(wAbs, vp9).map(levels(lumas(relitW), "relit"));
       const bad = lvLit.map((l, j) => [j, lvRaw[j], l]).filter(([, r, l]) => r !== l);
+      // and the ALPHA, frame by frame: frame j of the relit window carries the alpha of frame j of the window cut-out
+      const alphas = (f) => { const N = W * H, b = execFileSync("ffmpeg", ["-v", "error", ...vp9, "-i", f, "-vf", "alphaextract", "-fps_mode", "passthrough", "-f", "rawvideo", "-pix_fmt", "gray", "-"], { maxBuffer: 1 << 28 }); return Array.from({ length: Math.floor(b.length / N) }, (_, k) => b[k * N + Math.round(H * 0.55) * W + W / 2]); };
+      const aRaw = alphas(winRaw), aLvRaw = aRaw.map(levels(aRaw, "un-lit alpha")), aLit = alphas(wAbs), aLvLit = aLit.map(levels(aRaw, "un-lit alpha"));
+      const badA = aLvLit.map((l, j) => [j, aLvRaw[j], l]).filter(([, r, l]) => r !== l);
+      assert.equal(badA.length, 0, `start ${start}: relit window frame carries another frame's alpha than the window cut-out at [j, cut-out, relit] ${JSON.stringify(badA.slice(0, 5))} (${badA.length} frames)`);
       assert.equal(bad.length, 0, `start ${start}: relit window frame shows another source frame than the un-lit window at [j, unlit, relit] ${JSON.stringify(bad.slice(0, 5))}`);
       assert.equal(lvLit.length, lvRaw.length, "the relit window cut-out has as many frames as the window cut-out");
       // cached: a second build cuts and relights nothing, same page
       const wl2 = build(wd, wEnv);
       assert.ok(!/relit cut-out of/.test(wl2) && fs.readFileSync(wLog, "utf8").trim().split("\n").length === 1, "cached");
       assert.equal(html(wd), wp, "same page twice");
-      check(`relight + matteClip window cut (video starts at ${start} s, ${nDec} frames decoded): ${wm[1]}, all ${lvLit.length} frames show the un-lit window's source frame, cached`);
+      check(`relight + matteClip window cut (video starts at ${start} s, ${nDec} frames decoded): ${wm[1]}, all ${lvLit.length} frames show the un-lit window's source frame and carry its alpha, cached`);
     }
   }
 }

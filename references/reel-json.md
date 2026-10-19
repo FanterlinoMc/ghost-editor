@@ -371,12 +371,14 @@ What the build does, per recording that has a face track (the primary always; sa
    its alpha kept (`assets/<recording>-matte-relit-<hash>.webm`, ffmpeg `alphamerge`, cached). The occluder then matches the
    plate pixel for pixel and only the caption layer between them shows that it is there.
    With a `matteClip` **window cut** (no whole-recording matte cached), each window cut-out `assets/talk-matte@<a>-<b>.webm` is
-   relit on its own: the relit file is trimmed on the same frame indices as the window (`fps=<fps>:start_time=0,trim=...`) and
-   merged under the window's alpha (`alphamerge=shortest=1:repeatlast=0`) into its own `assets/talk-matte-relit-<hash>.webm`
+   relit on its own: the relit file is trimmed on the same frame indices as the window (`fps=<fps>:start_time=0,trim=...`), both
+   inputs are re-timed by frame index (`setpts=N/(<fps>*TB)`: a real window cut-out's millisecond timestamps step 33 ms and
+   drifted a frame against the exact 1/30 s trim from ~2.6 s on, measured on a 0-4.93 s window, when the merge paired by time),
+   and the relit frames are merged under the window's alpha (`alphamerge=shortest=1:repeatlast=0`) into its own `assets/talk-matte-relit-<hash>.webm`
    (the hash also keys the window); the clipped cut-out reads that file at the same offset as the un-lit window would. A window
    at the recording's end can come out one frame short of its trim (measured: 75 frames for a 76-frame trim of a source whose
    video starts at 0); the merge ends with the window cut-out frame for frame, so that is harmless (`shortest=1` alone also
-   dropped the last frame when both inputs end together, hence `repeatlast=0`). Checked on sources whose video starts at 0 and
+   dropped the last frame when both inputs end together, hence `repeatlast=0`). Checked frame by frame (colour and alpha) on sources whose video starts at 0 and
    at 0.033 s (prep.sh, phone files: frame 0 is repeated on decode by the window cut and relight.py alike). A piece no window
    holds falls back to the whole-recording matte, relit the same way as above.
 
