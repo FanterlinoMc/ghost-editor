@@ -134,4 +134,6 @@ asset packs switched on by styles (library/packs/<name>/, not audio manifests):`
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+// run directly: compare real paths, so a checkout under a symlinked folder (macOS /tmp) still runs main()
+const realOf = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+if (process.argv[1] && realOf(process.argv[1]) === realOf(fileURLToPath(import.meta.url))) main();
