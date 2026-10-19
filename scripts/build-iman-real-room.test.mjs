@@ -9,6 +9,7 @@
 //   - the type cards sit inside the camera wrappers between the takes and the cut-out (#capsb), hung from the head-top track so
 //     the last line dips `overlap` under the crown; none are in the front caption layer
 //   - a tight close-up (crown near the top of the frame) gets its cards in front, placed by the placer, and #capsb stays empty
+//   - relight from the style degrades (no depth model / no python -> a warning, an unrelit build); set in reel.json it still dies
 //   - opt-in: captions.behind false, or no matte, writes no #capsb; a reel that sets `stage` itself still gets the old set path
 // The relight parts need a python with numpy and OpenCV; without one the reel is built with "relight": false and says so.
 import assert from "node:assert/strict";
@@ -35,12 +36,12 @@ const text = "the room stays real and the light comes from the side so the words
 const words = { segments: [{ start: 0, end: SEC, words: Array.from({ length: 16 }, (_, i) => ({ word: text[i % text.length], start: +(0.2 + i * 0.34).toFixed(2), end: +(0.46 + i * 0.34).toFixed(2) })) }] };
 let n = 0;
 // crown: the head top (px, 1920 scale) the seeded head-top track reports for every sample
-function project(reel, { crown = 640 } = {}) {
+function project(reel, { crown = 640, depth = true } = {}) {
   const dir = path.join(root, `p${n++}`);
   fs.mkdirSync(path.join(dir, "assets"), { recursive: true });
   fs.mkdirSync(path.join(dir, "build"), { recursive: true });
   fs.copyFileSync(path.join(root, "talk.mp4"), path.join(dir, "assets", "talk.mp4"));
-  fs.copyFileSync(path.join(root, "depth.mp4"), path.join(dir, "assets", "talk-depth.mp4"));
+  if (depth) fs.copyFileSync(path.join(root, "depth.mp4"), path.join(dir, "assets", "talk-depth.mp4"));
   fs.copyFileSync(path.join(root, "matte.webm"), path.join(dir, "assets", "talk-matte.webm"));
   fs.writeFileSync(path.join(dir, "build", "headtop.json"), JSON.stringify(Array.from({ length: SEC * 5 + 1 }, (_, i) => [+(i / 5).toFixed(2), crown])));
   fs.writeFileSync(path.join(dir, "build", "words.whisper.json"), JSON.stringify(words));
@@ -54,8 +55,9 @@ fs.writeFileSync(path.join(fakeBin, "npx"), "#!/bin/sh\necho 'npx is disabled in
 const noModels = path.join(root, "no-models"); fs.mkdirSync(noModels);
 const pathKey = Object.keys(process.env).find((k) => k.toLowerCase() === "path") ?? "PATH";
 const SAFE_ENV = { ...process.env, PHANTASIC_LIB: silentLibrary(), PHANTASIC_MODELS: noModels, [pathKey]: fakeBin + path.delimiter + process.env[pathKey] };
-const run = (dir) => spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: SAFE_ENV });
-const build = (dir) => { const r = run(dir); assert.equal(r.status, 0, r.stderr + r.stdout); return r.stdout + r.stderr; };
+const run = (dir, env = {}) => spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: { ...SAFE_ENV, ...env } });
+const build = (dir, env) => { const r = run(dir, env); assert.equal(r.status, 0, r.stderr + r.stdout); return r.stdout + r.stderr; };
+const fails = (dir, re, env) => { const r = run(dir, env); assert.notEqual(r.status, 0, "should have failed"); assert.match(r.stdout + r.stderr, re); };
 const html = (dir) => fs.readFileSync(path.join(dir, "index.html"), "utf8");
 const layout = (dir) => JSON.parse(fs.readFileSync(path.join(dir, "build", "caption_layout.json"), "utf8")).blocks;
 const check = (label) => console.log(`ok    ${label}`);
@@ -120,6 +122,27 @@ try {
   assert.ok(count(frontCapsOf(h), /class="tc clip/g) >= 4, "the cards are placed in front");
   assert.ok(layout(dir).every((b) => b.mode !== "behind"), "placed by the face-aware placer");
   check("premium-iman on a tight close-up: every card in front (placer), #capsb empty");
+
+  // ---------- relight from the STYLE degrades; relight set by the REEL still dies ----------
+  // no depth video and an empty PHANTASIC_MODELS: the style's relight is skipped with a warning, the reel builds unrelit
+  dir = project({}, { depth: false });
+  let out = build(dir); h = html(dir);
+  assert.match(out, /WARNINGS:[\s\S]*relight \(from the style\) skipped, the reel is built unrelit: no depth map at assets\/talk-depth-[0-9a-f]{8}\.mp4 and no depth model at .*no-models/);
+  assert.equal(count(h, /<video id="take-\d" src="assets\/talk\.mp4"/g), 2, "the takes play the unrelit footage");
+  assert.match(h, /<video id="matte-0" class="matte" src="assets\/talk-matte\.webm"/, "the occluder is the plain cut-out");
+  assert.ok(!fs.readdirSync(path.join(dir, "assets")).some((f) => /relit/.test(f)), "no relit file");
+  assert.ok(count(capsbOf(h), /class="tc clip/g) >= 4, "the type still goes behind the head");
+  const off = project({ relight: false }, { depth: false }); build(off);
+  const gh = (d) => JSON.parse(fs.readFileSync(path.join(d, "build", "sections.json"), "utf8")).globalHash;
+  assert.equal(h, html(off), "the degraded page is the relight: false page");
+  assert.equal(gh(dir), gh(off), "the skipped relight is not in the section hash");
+  // no python with the modules (depth video present): same degrade
+  out = build(project({}), { PHANTASIC_PYTHON: path.join(root, "no-such-python") });
+  assert.match(out, /relight \(from the style\) skipped, the reel is built unrelit: PHANTASIC_PYTHON=.*no-such-python cannot import numpy, cv2/);
+  // the reel sets relight itself: the same causes still fail the build
+  fails(project({ relight: {} }, { depth: false }), /ERROR: relight: no depth map at .*no depth model at .*no-models/);
+  fails(project({ relight: { roomDim: 0.3 } }), /ERROR: relight: PHANTASIC_PYTHON=.*no-such-python cannot import numpy, cv2/, { PHANTASIC_PYTHON: path.join(root, "no-such-python") });
+  check("relight from the style: no model / no python -> warning + unrelit build; relight in reel.json: still a die()");
 
   // ---------- opt-in ----------
   dir = project({ ...RL, captions: { reds: ["real"], behind: false } });

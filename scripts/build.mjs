@@ -923,14 +923,24 @@ if (spec.sourceGrade) {
 // copy (assets/<recording>-relit-<hash>.mp4, from the sourceGrade'd file when that is set) replaces the media like sourceGrade
 // does; takes, words, faces and edit_truth keep the recording's own name. Only recordings with a person in them are relit
 // (the primary, and any with a face track - the same rule as stage). With matte / stage the cut-out is relit too (below).
-const RELIGHT = spec.relight == null || spec.relight === false ? null : (() => { try { return RL.normalizeRelight(spec.relight); } catch (e) { die(e.message); } })();
+let RELIGHT = spec.relight == null || spec.relight === false ? null : (() => { try { return RL.normalizeRelight(spec.relight); } catch (e) { die(e.message); } })();
 const relitMatteOf = new Map();
 const relightable = (s) => s === SRC || fs.existsSync(path.join(proj, facePathFor(s)));
 if (RELIGHT) {
+  // relight that comes from the STYLE (premium-iman), not from the reel's own reel.json, degrades: with no depth model (and no
+  // depth video) or no python with the modules it needs, the reel builds unrelit with a warning. A reel that sets relight dies.
+  const fromStyle = rawSpec.relight === undefined, before = new Map(mediaOf);
+  const missingTool = /^relight: (no depth map at |PHANTASIC_PYTHON=.* cannot import |no python with )/;
   for (const s of SOURCES.filter(relightable)) {
-    try { mediaOf.set(s, RL.ensureRelit(proj, s, mediaOf.get(s), RELIGHT)); } catch (e) { die(e.message); }
+    try { mediaOf.set(s, RL.ensureRelit(proj, s, mediaOf.get(s), RELIGHT)); } catch (e) {
+      if (!(fromStyle && missingTool.test(e.message))) die(e.message);
+      for (const [k, v] of before) mediaOf.set(k, v);
+      warn.push(`relight (from the style) skipped, the reel is built unrelit: ${e.message.replace(/^relight: /, "")} (set "relight": false in reel.json to silence this)`);
+      RELIGHT = null;
+      break;
+    }
   }
-  console.log(`relight: ${SOURCES.filter(relightable).map((s) => `${s} -> ${mediaOf.get(s)}`).join(", ")}`);
+  if (RELIGHT) console.log(`relight: ${SOURCES.filter(relightable).map((s) => `${s} -> ${mediaOf.get(s)}`).join(", ")}`);
 }
 // Every take must fit inside its OWN recording. With one source this is the check that already
 // existed implicitly via srcDur; with several it is the only thing standing between a typo in
@@ -2719,6 +2729,7 @@ const clusterHtml = cap.style !== "cluster" ? "" : (() => {
 // its take goes into #capsb, inside the camera wrappers between the takes and the cut-out, so the head covers part of it; a card that
 // does not fit (a tight close-up) is placed in front by the placer as before.
 const OCCLUDE = !!(cap.style === "type" && cap.behind && spec.matte && !spec.stage);
+if (OCCLUDE && FORMAT !== "9:16") warn.push(`captions.behind is tuned for 9:16 (the head-top track and the type sizes); ${FORMAT} may look off`);
 if (OCCLUDE && spec.matteWindows) warn.push("captions.behind: matteWindows shows the cut-out only during behind / ground beats, so type cards behind the head are not covered outside them");
 const occMatted = (src) => perSrcMatte ? stageMatted(src) : src === SRC;
 let typeBehindHtml = "";
