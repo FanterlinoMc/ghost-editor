@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // node --test scripts/missing-assets.test.mjs
 // references/missing-assets.json is generated: it must equal `node scripts/missing_assets.mjs` byte for byte, so a style,
-// manifest or engine change that moves an asset reference fails here until the file is regenerated.
+// manifest or engine change that adds or removes an asset reference (or moves one to another file) fails here until
+// the file is regenerated. Moving a reference within a file does not (code sites carry no line numbers).
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

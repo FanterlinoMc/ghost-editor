@@ -4,8 +4,8 @@
   "root": "build.mjs LIB = $PHANTASIC_LIB or library/",
   "sfx": "build.mjs reads sfx/manifest.json; addSfx: id (a family pop/whoosh/impact picks its variants round-robin, VARIANTS) -> sfx/<manifest[id].file>; no entry or no file = skipped with a warning",
   "music": "build.mjs music (auto, fallback) and lib/motion.mjs buildMusic: id -> music/<manifest[id].file>; missing = fatal unless music.optional",
-  "art": "build.mjs artAsset: key -> art/<key>.jpg (fatal when missing); layer images (skipped when missing)",
-  "engraving": "build.mjs objectPops (CONCEPTS) and lib/motion.mjs page scenes: key -> engravings/png/<key>.png; lib/motion.mjs collage: engravings/bulge.png",
+  "art": "build.mjs artAsset: key -> art/<key>.jpg (fatal when missing); resolveLayerImage for layer images (skipped when missing)",
+  "engraving": "build.mjs objectPops (CONCEPTS) and lib/motion.mjs page scenes (paper / pageToCollage, collage, concept, stack icon, cutout): key -> engravings/png/<key>.png; lib/motion.mjs collage: engravings/bulge.png",
   "object": "lib/gadzhi.mjs gm-object / gm-nodes: name -> gm-objects/<name>.png (brain -> puzzle)",
   "meme": "build.mjs memeLib: id -> memes/<id>/meta.json (fatal when missing)",
   "pack": "build.mjs packClip: style `packs` on -> packs/<pack>/<kind>/*.mp4 (leaks, burns, 8mm-gate, 8mm-dust); pickBurn: openFlash.clip -> packs/<pack>/burns/<clip>. Absent = asset-free fallback"
