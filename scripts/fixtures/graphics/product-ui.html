@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Product UI: publish flow</title>
+<style>
+  #pui { position: relative; width: 1080px; height: 1080px; overflow: hidden; font-family: Inter, sans-serif; color: #14151a; }
+  #pui .card { position: absolute; left: 120px; top: 210px; width: 840px; height: 660px; border-radius: 32px; background: #fbfbf8;
+    box-shadow: 0 40px 80px rgba(10, 12, 20, 0.28), 0 2px 0 rgba(255, 255, 255, 0.9) inset; overflow: hidden; }
+  #pui .side { position: absolute; left: 0; top: 0; width: 210px; height: 660px; background: #f1f1ec; border-radius: 32px 0 0 32px; }
+  #pui .logo { position: absolute; left: 32px; top: 34px; width: 36px; height: 36px; border-radius: 10px; background: #4f5bff; }
+  #pui .nav { position: absolute; left: 32px; width: 150px; height: 40px; border-radius: 12px; font-size: 19px; font-weight: 500; color: #6b7078;
+    display: flex; align-items: center; padding-left: 14px; box-sizing: border-box; }
+  #pui .nav.on { background: #fff; color: #14151a; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+  #pui .h { position: absolute; left: 250px; top: 36px; font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  #pui .pill { position: absolute; left: 474px; top: 40px; height: 30px; padding: 0 14px; border-radius: 15px; font-size: 15px; font-weight: 600;
+    display: flex; align-items: center; background: #ececE6; color: #6b7078; }
+  #pui .lab { position: absolute; font-size: 16px; font-weight: 500; color: #8a8f98; letter-spacing: 0.01em; }
+  #pui .kpi { position: absolute; left: 250px; top: 156px; font-size: 76px; font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
+  #pui .delta { position: absolute; left: 252px; top: 252px; font-size: 18px; font-weight: 600; color: #1f9d6b; }
+  #pui svg.spark { position: absolute; left: 560px; top: 140px; }
+  #pui .row { position: absolute; left: 250px; width: 550px; height: 64px; border-top: 1px solid #e6e6e0; display: flex; align-items: center;
+    font-size: 20px; font-weight: 500; }
+  #pui .tog { position: absolute; right: 0; top: 16px; width: 60px; height: 34px; border-radius: 17px; background: #d9d9d2; }
+  #pui .knob { position: absolute; top: 3px; left: 3px; width: 28px; height: 28px; border-radius: 14px; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+  #pui .btn { position: absolute; left: 560px; top: 560px; width: 240px; height: 64px; border-radius: 18px; background: #4f5bff; color: #fff;
+    font-size: 21px; font-weight: 600; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #pui .btn span { position: absolute; left: 0; right: 0; top: 0; height: 64px; line-height: 64px; text-align: center; }
+  #pui .ring { position: absolute; width: 20px; height: 20px; border-radius: 50%; border: 3px solid #4f5bff; box-sizing: border-box; }
+  #pui .cursor { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="pui">
+  <div class="card" id="card">
+    <div class="side"><div class="logo" id="logo"></div>
+      <div class="nav on" id="n0" style="top: 110px">Overview</div>
+      <div class="nav" id="n1" style="top: 160px">Campaigns</div>
+      <div class="nav" id="n2" style="top: 210px">Audience</div>
+      <div class="nav" id="n3" style="top: 260px">Settings</div>
+    </div>
+    <div class="h" id="h">Spring launch</div>
+    <div class="pill" id="pill">Draft</div>
+    <div class="lab" id="lab" style="left: 252px; top: 128px">Projected revenue</div>
+    <div class="kpi" id="kpi">$0</div>
+    <div class="delta" id="delta">+18.4% vs last launch</div>
+    <svg class="spark" width="240" height="130" viewBox="0 0 240 130">
+      <path id="sparkArea" d="M0 110 L40 96 L80 102 L120 70 L160 76 L200 40 L240 22 L240 130 L0 130 Z" fill="#4f5bff" opacity="0"/>
+      <path id="spark" d="M0 110 L40 96 L80 102 L120 70 L160 76 L200 40 L240 22" fill="none" stroke="#4f5bff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="row" id="r0" style="top: 330px">Email sequence<span style="margin-left: auto; color: #8a8f98">4 steps</span></div>
+    <div class="row" id="r1" style="top: 394px">Audience<span style="margin-left: auto; color: #8a8f98">12,480 people</span></div>
+    <div class="row" id="r2" style="top: 458px">Auto-publish<div class="tog" id="tog"><div class="knob" id="knob"></div></div></div>
+    <div class="btn" id="btn"><span id="b0">Publish</span><span id="b1">Published &#10003;</span></div>
+  </div>
+  <div class="ring" id="ring"></div>
+  <canvas class="cursor" id="cur" width="88" height="104"></canvas>
+</div>
+<script>
+  window.duration = 4.5;
+  window.size = { w: 1080, h: 1080 };
+  window.rng = window.rng || function (seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0; var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  function seg(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }
+  function outCubic(p) { return 1 - Math.pow(1 - p, 3); }
+  function outExpo(p) { return p >= 1 ? 1 : 1 - Math.pow(2, -10 * p); }
+  function inOut(p) { return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; }
+  function mix(a, b, p) { return a + (b - a) * p; }
+  function $(id) { return document.getElementById(id); }
+  function rise(el, t, a, d) { var p = outExpo(seg(t, a, a + (d || 0.6))); el.style.opacity = p; el.style.transform = p >= 1 ? "none" : "translateY(" + (18 * (1 - p)) + "px)"; }
+  (function () { // the cursor arrow, drawn once at load at 2x
+    var g = $("cur").getContext("2d"); g.scale(2, 2); g.beginPath();
+    g.moveTo(4, 3); g.lineTo(4, 40); g.lineTo(14, 31); g.lineTo(21, 47); g.lineTo(28, 44); g.lineTo(21, 28); g.lineTo(35, 28); g.closePath();
+    g.lineJoin = "round"; g.lineWidth = 3; g.strokeStyle = "#fff"; g.fillStyle = "#14151a"; g.stroke(); g.fill(); g.stroke();
+  })();
+  var spark = $("spark"), sparkLen = spark.getTotalLength();
+  spark.style.strokeDasharray = sparkLen;
+  // the cursor path: from the lower right, an eased arc to the Publish button
+  var C0 = { x: 980, y: 1010 }, C1 = { x: 760, y: 770 }, CK = { x: 900, y: 900 };
+  window.seek = function (t) {
+    var p = outExpo(seg(t, 0, 0.8));
+    $("card").style.opacity = clamp(p * 1.4, 0, 1);
+    $("card").style.transform = p >= 1 ? "none" : "translateY(" + (90 * (1 - p)) + "px) scale(" + mix(0.94, 1, p) + ")";
+    rise($("logo"), t, 0.2); rise($("h"), t, 0.3); rise($("pill"), t, 0.38);
+    for (var i = 0; i < 4; i++) rise($("n" + i), t, 0.3 + 0.06 * i);
+    rise($("lab"), t, 0.45); rise($("kpi"), t, 0.5); rise($("delta"), t, 1.4);
+    for (i = 0; i < 3; i++) rise($("r" + i), t, 0.75 + 0.08 * i);
+    rise($("btn"), t, 1.0);
+    var k = outCubic(seg(t, 0.5, 1.9));
+    $("kpi").textContent = "$" + Math.round(48920 * k).toLocaleString("en-US");
+    var s = inOut(seg(t, 0.6, 1.8));
+    spark.style.strokeDashoffset = sparkLen * (1 - s);
+    $("sparkArea").style.opacity = 0.12 * outCubic(seg(t, 1.4, 2.0));
+    // cursor: enters 1.9, reaches toggle 2.4, clicks 2.5; moves to button 2.7..3.2, clicks 3.3
+    var cin = outCubic(seg(t, 1.8, 2.4)), cmv = inOut(seg(t, 2.7, 3.25));
+    var tx = 880, ty = 690;
+    var x = mix(C0.x, tx, cin), y = mix(C0.y, ty, cin);
+    var q = cmv, bx = (1 - q) * (1 - q) * tx + 2 * (1 - q) * q * CK.x + q * q * C1.x, by = (1 - q) * (1 - q) * ty + 2 * (1 - q) * q * CK.y + q * q * C1.y;
+    if (t > 2.7) { x = bx; y = by; }
+    var away = outCubic(seg(t, 3.5, 4.2)); // after the click the cursor drifts off the label
+    if (away > 0) { x = mix(C1.x, 905, away); y = mix(C1.y, 868, away); }
+    var press = Math.max(1 - Math.abs(t - 2.5) / 0.08, 0) + Math.max(1 - Math.abs(t - 3.32) / 0.08, 0);
+    $("cur").style.opacity = seg(t, 1.8, 2.0);
+    var cs = 1 - 0.12 * clamp(press, 0, 1);
+    $("cur").style.left = x + "px"; $("cur").style.top = y + "px";
+    $("cur").style.width = (44 * cs) + "px"; $("cur").style.height = (52 * cs) + "px";
+    var on = outExpo(seg(t, 2.5, 2.85));
+    $("knob").style.left = (3 + 26 * on) + "px";
+    $("tog").style.background = on > 0.5 ? "#4f5bff" : "#d9d9d2";
+    $("tog").style.opacity = 1;
+    // click ripple on the button
+    var rp = seg(t, 3.32, 3.9);
+    $("ring").style.opacity = rp > 0 ? 0.55 * (1 - rp) : 0;
+    var rr = 10 * mix(1, 9, outCubic(rp));
+    $("ring").style.left = (C1.x - rr) + "px"; $("ring").style.top = (C1.y - rr) + "px";
+    $("ring").style.width = (2 * rr) + "px"; $("ring").style.height = (2 * rr) + "px";
+    var done = outExpo(seg(t, 3.4, 3.9));
+    var bp = 1 - 0.05 * clamp(Math.max(1 - Math.abs(t - 3.32) / 0.1, 0), 0, 1);
+    var by0 = 18 * (1 - outExpo(seg(t, 1.0, 1.6)));
+    $("btn").style.transform = (by0 === 0 && bp === 1) ? "none" : "translateY(" + by0 + "px) scale(" + bp + ")";
+    $("btn").style.background = done > 0.02 ? "#1f9d6b" : "#4f5bff";
+    $("b0").style.top = (-50 * done) + "px"; $("b0").style.opacity = 1 - done;
+    $("b1").style.top = (50 * (1 - done)) + "px"; $("b1").style.opacity = done;
+    $("pill").textContent = done > 0.5 ? "Live" : "Draft";
+    $("pill").style.background = done > 0.5 ? "#dff3ea" : "#ececE6";
+    $("pill").style.color = done > 0.5 ? "#1f9d6b" : "#6b7078";
+  };
+  window.seek(0);
+</script>
+</body>
+</html>

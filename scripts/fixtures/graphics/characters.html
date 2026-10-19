@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Characters: Bit says hi</title>
+<style>
+  #cr { position: relative; width: 1080px; height: 1080px; overflow: hidden; }
+  #cr canvas { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; opacity: 0; font-family: Geist; font-weight: 700">Hi there!</div>
+<div id="cr"><canvas id="cv" width="1080" height="1080"></canvas></div>
+<script>
+  window.duration = 4;
+  window.size = { w: 1080, h: 1080 };
+  window.rng = window.rng || function (seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0; var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  };
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  function seg(t, a, b) { return clamp((t - a) / (b - a), 0, 1); }
+  function outCubic(p) { return 1 - Math.pow(1 - p, 3); }
+  function outExpo(p) { return p >= 1 ? 1 : 1 - Math.pow(2, -10 * p); }
+  function inOut(p) { return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; }
+  function mix(a, b, p) { return a + (b - a) * p; }
+  function $(id) { return document.getElementById(id); }
+  // set a transform, or "none" at rest (a transform left at identity renders differently on a page that seeked there cold)
+  function tf(el, x, y, s, r) {
+    s = s === undefined ? 1 : s; r = r || 0;
+    el.style.transform = (x === 0 && y === 0 && s === 1 && r === 0) ? "none" : "translate(" + x + "px," + y + "px) scale(" + s + ") rotate(" + r + "deg)";
+  }
+  // the hidden line in the markup makes the page load the canvas font before frame 0 (canvas text never triggers the load itself in time)
+  var g = $("cv").getContext("2d");
+  var BODY = "#6d5dfc", DARK = "#4b3fd1", FACE = "#f4f1ea", INK = "#17171d", CHEEK = "#ff8a6b";
+  var GX = 410, GY = 900, BW = 340, BH = 300;
+  function bump(t, at, w) { var x = (t - at) / w; return Math.abs(x) >= 1 ? 0 : 0.5 + 0.5 * Math.cos(Math.PI * x); }
+  window.seek = function (t) {
+    g.clearRect(0, 0, 1080, 1080);
+    // fall (gravity: the square of time), one squash on landing, then a slow breath
+    var f = seg(t, 0, 0.5), fall = f * f, y0 = -380;
+    var land = seg(t, 0.5, 0.85), squash = Math.sin(Math.PI * land) * (1 - land * 0.4);
+    var breathe = 0.014 * Math.sin(2 * Math.PI * 0.7 * (t - 0.85)) * seg(t, 0.85, 1.3);
+    var sy = 1 - 0.16 * squash + breathe, sx = 1 + 0.12 * squash - breathe * 0.6;
+    var footY = mix(y0, GY, fall);
+    // ground shadow, wider as it nears the ground
+    var near = clamp(1 - (GY - footY) / 700, 0, 1);
+    g.fillStyle = "rgba(10, 10, 16, " + (0.28 * near) + ")"; g.beginPath(); g.ellipse(GX, GY + 6, 212 * sx * mix(0.5, 1, near), 20, 0, 0, 6.2832); g.fill();
+    g.save(); g.translate(GX, footY); g.scale(1.25 * sx, 1.25 * sy);
+    // feet
+    g.fillStyle = DARK; g.beginPath(); g.roundRect(-110, -34, 80, 34, 17); g.roundRect(30, -34, 80, 34, 17); g.fill();
+    // arm (left, still) and arm (right, waves from its shoulder)
+    var wave = Math.sin(2 * Math.PI * 2.0 * (t - 1.7)) * bump(t, 2.45, 0.8);
+    var raise = outCubic(seg(t, 1.5, 1.85)) * (1 - outCubic(seg(t, 3.1, 3.45)));
+    g.fillStyle = BODY;
+    g.save(); g.translate(-BW / 2 + 6, -BH * 0.42); g.rotate(0.25); g.beginPath(); g.roundRect(-22, 0, 44, 120, 22); g.fill(); g.restore();
+    g.save(); g.translate(BW / 2 - 6, -BH * 0.5); g.rotate(-0.25 - 2.3 * raise + 0.38 * wave); g.beginPath(); g.roundRect(-22, 0, 44, 120, 22); g.fill(); g.restore();
+    // body
+    g.fillStyle = BODY; g.beginPath(); g.roundRect(-BW / 2, -BH - 30, BW, BH, 110); g.fill();
+    // antenna: the ball trails the body's motion
+    var sway = 0.22 * squash + 0.08 * Math.sin(2 * Math.PI * 0.9 * t) * seg(t, 0.8, 1.4);
+    g.save(); g.translate(0, -BH - 30); g.rotate(sway); g.strokeStyle = DARK; g.lineWidth = 10; g.lineCap = "round";
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -70); g.stroke(); g.fillStyle = CHEEK; g.beginPath(); g.arc(0, -84, 20, 0, 6.2832); g.fill(); g.restore();
+    // face plate
+    g.fillStyle = FACE; g.beginPath(); g.roundRect(-BW / 2 + 42, -BH - 30 + 50, BW - 84, 170, 70); g.fill();
+    // eyes: blink twice, glance toward the bubble while it talks
+    var blink = Math.max(bump(t, 1.35, 0.09), bump(t, 3.15, 0.09));
+    var look = outCubic(seg(t, 1.8, 2.1)) * (1 - outCubic(seg(t, 3.3, 3.6)));
+    var eh = 22 * (1 - 0.9 * blink), ex = 10 * look, ey = -6 * look, cy = -BH - 30 + 118;
+    g.fillStyle = INK;
+    g.beginPath(); g.ellipse(-56 + ex, cy + ey, 15, eh, 0, 0, 6.2832); g.ellipse(56 + ex, cy + ey, 15, eh, 0, 0, 6.2832); g.fill();
+    g.fillStyle = "#fff"; if (blink < 0.5) { g.beginPath(); g.arc(-51 + ex, cy + ey - 8, 5, 0, 6.2832); g.arc(61 + ex, cy + ey - 8, 5, 0, 6.2832); g.fill(); }
+    // cheeks and a mouth that opens while it says hi
+    g.fillStyle = CHEEK; g.globalAlpha = 0.85; g.beginPath(); g.ellipse(-92, cy + 40, 18, 11, 0, 0, 6.2832); g.ellipse(92, cy + 40, 18, 11, 0, 0, 6.2832); g.fill(); g.globalAlpha = 1;
+    var talk = Math.abs(Math.sin(2 * Math.PI * 3 * (t - 2.0))) * bump(t, 2.35, 0.4);
+    g.fillStyle = INK; g.beginPath(); g.ellipse(ex * 0.6, cy + 48, 22, 6 + 16 * talk, 0, 0, Math.PI); g.fill();
+    g.restore();
+    // speech bubble
+    var b = outExpo(seg(t, 1.95, 2.45));
+    if (b > 0) {
+      g.save(); g.translate(780, 300 + 30 * (1 - b)); g.globalAlpha = b; var s = mix(0.85, 1, b); g.scale(s, s);
+      g.fillStyle = FACE; g.beginPath(); g.roundRect(-190, -80, 380, 150, 46); g.fill();
+      g.beginPath(); g.moveTo(-120, 60); g.lineTo(-170, 120); g.lineTo(-70, 64); g.fill();
+      g.fillStyle = INK; g.font = "700 60px Geist"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("Hi there!", 0, -4);
+      g.restore();
+    }
+  };
+  window.seek(0);
+</script>
+</body>
+</html>
