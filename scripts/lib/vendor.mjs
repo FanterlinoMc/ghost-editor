@@ -1,35 +1,65 @@
-// Vendored runtime libraries (vendor/manifest.json): build.mjs copies the ones its page references into the project,
-// and a render runs with scripts/vendor-offline.cjs preloaded, which serves those URLs from the local copies.
-// The page keeps the CDN URL (it is part of every golden reel's hashed index.html); the bytes never come from it.
+// Vendored runtime libraries (vendor/manifest.json). The page keeps the CDN <script src> (it is part of every golden
+// reel's hashed index.html); a render gets the bytes from vendor/ instead:
+//   - runRender(): THE way the fork runs `hyperframes render`. It preloads scripts/vendor-offline.cjs (which answers
+//     hyperframes' fetch() of a manifest URL with the vendored file, sha256-checked) and FAILS the render when the page
+//     references a manifest URL that the preload did not report serving: a render can never quietly use the CDN.
+//     Python callers go through scripts/render.mjs, the CLI for it.
+//   - serveVendoredInPage(): the same for a puppeteer page the fork drives itself (motion-determinism, motion-cost).
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const VENDOR = path.join(SKILL, "vendor");
+export const HYPERFRAMES = "0.8.81";   // engine/tests/common.py HYPERFRAMES_VERSION
 // forward slashes: NODE_OPTIONS reads a backslash inside quotes as an escape (Windows takes either)
 export const PRELOAD = path.join(SKILL, "scripts", "vendor-offline.cjs").split(path.sep).join("/");
+export const MARK = "vendor: served";
 export const LIBRARIES = JSON.parse(fs.readFileSync(path.join(VENDOR, "manifest.json"), "utf8")).libraries;
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
 
-// Copy every vendored library whose URL the page uses into the project (skipped when an identical copy is there).
-// Dies through `die` when the fork's own copy is missing or does not match its sha256: a render would fall back to the CDN.
-export function copyVendored(proj, html, die = (m) => { throw new Error(m); }) {
-  const copied = [];
-  for (const e of LIBRARIES) {
-    if (!html.includes(e.url)) continue;
-    const dst = path.join(proj, e.project);
-    if (fs.existsSync(dst) && sha(fs.readFileSync(dst)) === e.sha256) { copied.push(e.project); continue; }
-    const src = path.join(VENDOR, e.file);
-    const b = fs.existsSync(src) ? fs.readFileSync(src) : null;
-    if (!b || sha(b) !== e.sha256) die(`vendored ${e.name} ${e.version} missing or altered: ${path.relative(SKILL, src)} (sha256 must be ${e.sha256})`);
-    fs.mkdirSync(path.dirname(dst), { recursive: true });
-    fs.writeFileSync(dst, b);
-    copied.push(e.project);
-  }
-  return copied;
+// the vendored bytes of a manifest entry, sha256-checked; throws when missing or altered (never a silent CDN fallback)
+export function vendoredBytes(e) {
+  const p = path.join(VENDOR, e.file);
+  const b = fs.existsSync(p) ? fs.readFileSync(p) : null;
+  if (!b || sha(b) !== e.sha256) throw new Error(`vendored ${e.name} ${e.version} missing or altered: vendor/${e.file} (sha256 must be ${e.sha256})`);
+  return b;
 }
 
 // env for a `hyperframes render` child: the vendor preload added to NODE_OPTIONS
 export const renderEnv = (env = process.env) => ({ ...env, NODE_OPTIONS: `${env.NODE_OPTIONS || ""} --require "${PRELOAD}"`.trim() });
+
+// the manifest URLs the page uses that the render's stderr does not show the preload serving (empty = all local)
+export const unservedUrls = (html, stderr) => LIBRARIES.filter((e) => html.includes(e.url) && !stderr.includes(`${MARK} ${e.url}`)).map((e) => e.url);
+
+// Run `npx hyperframes@<pin> render <args>` in cwd with the preload. Returns { status, stdout, stderr, error };
+// status is 1 with `error` set when the page (cwd/index.html, or the -c composition) is missing (nothing is run), or
+// uses a vendored URL the preload did not serve. spawn is injectable for tests.
+export function runRender(args, { cwd = process.cwd(), version = HYPERFRAMES, env = process.env, spawn = spawnSync } = {}) {
+  const ci = args.findIndex((a) => a === "-c" || a === "--composition");
+  const page = path.resolve(cwd, ci >= 0 ? args[ci + 1] ?? "" : "index.html");
+  if (!fs.existsSync(page) || !fs.statSync(page).isFile()) return { status: 1, stdout: "", stderr: "", error: `no page to render: ${page}` };
+  const cmd = process.platform === "win32" ? ["cmd", ["/c", "npx", "-y", `hyperframes@${version}`, "render", ...args]] : ["npx", ["-y", `hyperframes@${version}`, "render", ...args]];
+  const r = spawn(cmd[0], cmd[1], { cwd, env: renderEnv(env), encoding: "utf8", maxBuffer: 1 << 28 });
+  const out = { status: r.status ?? 1, stdout: String(r.stdout || ""), stderr: String(r.stderr || ""), error: r.error ? String(r.error.message || r.error) : "" };
+  if (out.status !== 0) return out;
+  const html = fs.readFileSync(page, "utf8");
+  const missed = unservedUrls(html, out.stderr);
+  if (missed.length) Object.assign(out, { status: 1, error: `render used the network for ${missed.join(", ")}: the vendor preload (scripts/vendor-offline.cjs) did not serve it` });
+  return out;
+}
+
+// Puppeteer: answer the page's requests for manifest URLs with the vendored bytes (Chrome would load them from the
+// CDN); everything else goes through untouched.
+export async function serveVendoredInPage(page) {
+  const byUrl = new Map(LIBRARIES.map((e) => [e.url, vendoredBytes(e)]));
+  await page.setRequestInterception(true);
+  page.on("request", (req) => {
+    if (req.isInterceptResolutionHandled?.()) return;
+    const body = byUrl.get(req.url());
+    if (body) req.respond({ status: 200, contentType: "application/javascript; charset=utf-8", body });
+    else req.continue();
+  });
+}

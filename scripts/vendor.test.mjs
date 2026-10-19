@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // node --test scripts/vendor.test.mjs
-// A render never loads a library from a CDN (vendor/manifest.json, scripts/lib/vendor.mjs, scripts/vendor-offline.cjs):
+// A render never loads a library from a CDN (vendor/manifest.json, scripts/vendor-offline.cjs, runRender() in
+// scripts/lib/vendor.mjs, its CLI scripts/render.mjs):
 //   - every vendored file matches its sha256 and has its licence and SOURCES note next to it
-//   - a built reel (and a blank one) references no http(s) <script src>/<link href> that is not vendored, and the
-//     local copy of each one it does reference is in the project with the right bytes. A new CDN tag in build.mjs
-//     (lottie, three, a GSAP plugin, another GSAP version) fails here until it is vendored.
-//   - the render preload, with every other network fetch refused (VENDOR_OFFLINE=1), answers the page's CDN URL
-//     with the vendored bytes
+//   - a built reel (and a blank one) has no http(s) <script src>/<link href> that is not vendored. A new CDN tag in
+//     build.mjs (lottie, three, a GSAP plugin, another GSAP version) fails here until it is vendored.
+//   - the preload answers the page's CDN URL with the vendored bytes while Node's other fetches are refused
+//     (VENDOR_OFFLINE=1: Node only, Chrome is not covered by it), and refuses a manifest URL whose copy is altered
+//   - runRender() fails a render whose stderr does not show the preload serving every vendored URL the page uses
+//   - every `hyperframes ... render` invocation under scripts/ goes through runRender()
 // The page keeps the CDN URL itself: it is part of every golden reel's hashed index.html (byte-identity.mjs).
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -16,11 +18,12 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { LIBRARIES, VENDOR, PRELOAD, renderEnv } from "./lib/vendor.mjs";
+import { LIBRARIES, VENDOR, PRELOAD, MARK, runRender } from "./lib/vendor.mjs";
 import { silentLibrary } from "./lib/silent-library.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.join(HERE, "build.mjs");
+const GSAP = LIBRARIES.find((l) => l.name === "gsap");
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "vendor-test-"));
 process.on("exit", () => fs.rmSync(root, { recursive: true, force: true }));
@@ -28,6 +31,7 @@ process.on("exit", () => fs.rmSync(root, { recursive: true, force: true }));
 // every http(s) URL a <script src> or <link href> on the page points at
 const externalRefs = (html) => [...html.matchAll(/<(?:script|link)\b[^>]*?\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)]
   .map((m) => m[1].trim()).filter((u) => /^(https?:)?\/\//i.test(u));
+const unvendored = (html) => externalRefs(html).filter((u) => !LIBRARIES.some((l) => l.url === u));
 
 function project(name, reel, withSource = true) {
   const dir = path.join(root, name);
@@ -43,25 +47,26 @@ function project(name, reel, withSource = true) {
   fs.writeFileSync(path.join(dir, "reel.json"), JSON.stringify({ title: "vendor test", fps: 30, outro: 0, music: null, style: "clean", zoom: {}, beats: [], ...reel }, null, 2));
   const r = spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: { ...process.env, PHANTASIC_LIB: silentLibrary() } });
   assert.equal(r.status, 0, r.stderr + r.stdout);
-  return dir;
+  return fs.readFileSync(path.join(dir, "index.html"), "utf8");
 }
 
-function assertNoCdn(dir) {
-  const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
-  const refs = externalRefs(html);
-  assert.ok(refs.length > 0, "expected the page's GSAP <script src> (the test reads it)");
-  for (const url of refs) {
-    const e = LIBRARIES.find((l) => l.url === url);
-    assert.ok(e, `index.html loads ${url} from the network: vendor it (vendor/manifest.json) or reference a local file`);
-    const local = path.join(dir, e.project);
-    assert.ok(fs.existsSync(local), `build.mjs did not copy ${e.name} into the project (${e.project})`);
-    assert.equal(sha(fs.readFileSync(local)), e.sha256, `${e.project} in the project is not the vendored ${e.name} ${e.version}`);
-  }
-  return refs;
-}
+// node -e <probe> with the preload: fetch the GSAP URL, then an unvendored CDN URL; prints JSON
+const PROBE = `
+  const crypto = require("node:crypto");
+  (async () => {
+    let ok = false, h = "", err = "", blocked = "";
+    try { const r = await fetch(${JSON.stringify(GSAP.url)}, { signal: AbortSignal.timeout(15000) }); ok = r.ok; h = crypto.createHash("sha256").update(Buffer.from(await r.arrayBuffer())).digest("hex"); } catch (e) { err = String(e.message); }
+    try { await fetch("https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"); } catch (e) { blocked = String(e.message); }
+    console.log(JSON.stringify({ ok, sha: h, err, blocked }));
+  })();`;
+const probe = (preload) => {
+  const r = spawnSync(process.execPath, ["-e", PROBE], { cwd: root, encoding: "utf8", env: { ...process.env, NODE_OPTIONS: `--require "${preload}"`, VENDOR_OFFLINE: "1" } });
+  assert.equal(r.status, 0, r.stderr);
+  return { ...JSON.parse(r.stdout.trim().split("\n").pop()), stderr: r.stderr };
+};
 
 test("every vendored file matches its sha256 and carries its licence and SOURCES note", () => {
-  assert.ok(LIBRARIES.some((l) => l.name === "gsap"));
+  assert.ok(GSAP);
   for (const e of LIBRARIES) {
     assert.match(e.version, /^\d+\.\d+\.\d+$/, `${e.name}: pin an exact version`);
     assert.ok(e.url.includes(`@${e.version}/`), `${e.name}: the URL must name the pinned version ${e.version}`);
@@ -70,41 +75,94 @@ test("every vendored file matches its sha256 and carries its licence and SOURCES
   }
 });
 
-test("a built reel and a blank reel load no library from a CDN", () => {
-  const refs = assertNoCdn(project("talk", { source: "assets/talk.mp4", words: "build/words.whisper.json", face: "build/face.json", takes: [{ a: 0, b: 4 }] }));
-  assert.deepEqual(refs, ["https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"]);
-  assertNoCdn(project("blank", { origin: "blank", takes: [] }, false));
-});
-
-test("the check itself flags an unvendored CDN script", () => {
-  const html = `<script src="https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js"></script><link href="//unpkg.com/x.css" rel="stylesheet">`;
-  const bad = externalRefs(html).filter((u) => !LIBRARIES.some((l) => l.url === u));
-  assert.equal(bad.length, 2);
-});
-
-test("the render preload serves the page's CDN URL from the vendored bytes with the network refused", () => {
-  const dir = path.join(root, "talk");
-  const gsap = LIBRARIES.find((l) => l.name === "gsap");
-  const probe = `
-    const crypto = require("node:crypto");
-    (async () => {
-      const r = await fetch(${JSON.stringify(gsap.url)}, { signal: AbortSignal.timeout(15000) });
-      const b = Buffer.from(await r.arrayBuffer());
-      let blocked = "";
-      try { await fetch("https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"); } catch (e) { blocked = String(e.message); }
-      console.log(JSON.stringify({ ok: r.ok, sha: crypto.createHash("sha256").update(b).digest("hex"), blocked }));
-    })();`;
-  // the project's copy first; with it gone, the fork's vendor/ copy
-  for (const remove of [false, true]) {
-    if (remove) fs.rmSync(path.join(dir, gsap.project));
-    const r = spawnSync(process.execPath, ["-e", probe], { cwd: dir, encoding: "utf8", env: { ...renderEnv(), VENDOR_OFFLINE: "1" } });
-    assert.equal(r.status, 0, r.stderr);
-    const out = JSON.parse(r.stdout.trim().split("\n").pop());
-    assert.equal(out.ok, true);
-    assert.equal(out.sha, gsap.sha256);
-    assert.match(out.blocked, /VENDOR_OFFLINE/);
-    const from = remove ? path.join(VENDOR, gsap.file) : path.join(fs.realpathSync(dir), gsap.project);   // cwd is the real path (/var -> /private/var)
-    assert.ok(r.stderr.includes(`vendor: served ${gsap.url} from ${from}`), r.stderr);
+test("a built reel and a blank reel load no library that is not vendored", () => {
+  for (const html of [project("talk", { source: "assets/talk.mp4", words: "build/words.whisper.json", face: "build/face.json", takes: [{ a: 0, b: 4 }] }),
+    project("blank", { origin: "blank", takes: [] }, false)]) {
+    assert.deepEqual(externalRefs(html), [GSAP.url], "the page's one external script is the vendored GSAP");
+    assert.deepEqual(unvendored(html), [], "index.html loads a library from the network: vendor it (vendor/manifest.json)");
   }
+  // and the check itself flags an unvendored CDN script / stylesheet
+  assert.equal(unvendored(`<script src="https://cdn.jsdelivr.net/npm/lottie-web@5.12.2/build/player/lottie.min.js"></script><link href="//unpkg.com/x.css" rel="stylesheet">`).length, 2);
+});
+
+test("the preload serves the page's CDN URL from vendor/ with Node's network refused", () => {
+  const out = probe(PRELOAD);
+  assert.equal(out.ok, true, out.err + out.stderr);
+  assert.equal(out.sha, GSAP.sha256);
+  assert.match(out.blocked, /VENDOR_OFFLINE/);
+  assert.ok(out.stderr.includes(`${MARK} ${GSAP.url} from vendor/${GSAP.file}`), out.stderr);
+});
+
+test("the preload fails closed when the vendored copy is missing or altered", () => {
+  // a copy of the preload next to a vendor/ whose GSAP file is altered (the preload reads ../vendor from its own folder)
+  const fake = path.join(root, "fake-fork");
+  fs.mkdirSync(path.join(fake, "scripts"), { recursive: true });
+  fs.mkdirSync(path.join(fake, "vendor", path.dirname(GSAP.file)), { recursive: true });
+  fs.copyFileSync(PRELOAD, path.join(fake, "scripts", "vendor-offline.cjs"));
+  fs.copyFileSync(path.join(VENDOR, "manifest.json"), path.join(fake, "vendor", "manifest.json"));
+  fs.writeFileSync(path.join(fake, "vendor", GSAP.file), fs.readFileSync(path.join(VENDOR, GSAP.file), "utf8") + "\n// altered");
+  const preload = path.join(fake, "scripts", "vendor-offline.cjs").split(path.sep).join("/");
+  let out = probe(preload);
+  assert.equal(out.ok, false);
+  assert.match(out.err, /fail closed/);
+  assert.ok(!out.stderr.includes(MARK), out.stderr);
+  fs.rmSync(path.join(fake, "vendor", GSAP.file));
+  out = probe(preload);
+  assert.match(out.err, /fail closed/);
+});
+
+test("runRender preloads the vendor hook and fails a render the preload did not serve", () => {
+  const dir = path.join(root, "talk");
+  let seen;
+  const stub = (stderr) => (cmd, args, opts) => { seen = { cmd, args, opts }; return { status: 0, stdout: "", stderr }; };
+  let r = runRender(["-o", "out.mp4", "--quiet"], { cwd: dir, spawn: stub(`${MARK} ${GSAP.url} from vendor/${GSAP.file}\n`) });
+  assert.equal(r.status, 0, r.error);
+  assert.ok(seen.opts.env.NODE_OPTIONS.includes(`--require "${PRELOAD}"`));
+  assert.deepEqual(seen.args.slice(-6), ["-y", "hyperframes@0.8.81", "render", "-o", "out.mp4", "--quiet"]);
+  assert.equal(seen.opts.cwd, dir);
+  // the same render with no MARK on stderr: hyperframes fetched GSAP itself (or the preload never loaded)
+  r = runRender(["-o", "out.mp4", "--quiet"], { cwd: dir, spawn: stub("[INFO] [Compiler] Inlined CDN script: " + GSAP.url) });
+  assert.equal(r.status, 1);
+  assert.match(r.error, /render used the network for https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@3\.14\.2/);
+  // no page (cwd/index.html, or the -c file): an error, and nothing is run
+  let ran = false;
+  for (const [args, cwd] of [[["-o", "out.mp4"], root], [["-c", "missing.html", "-o", "out.mp4"], dir], [["-o", "out.mp4", "-c"], dir]]) {
+    r = runRender(args, { cwd, spawn: () => { ran = true; return { status: 0, stdout: "", stderr: "" }; } });
+    assert.equal(r.status, 1);
+    assert.match(r.error, /no page to render/);
+  }
+  assert.equal(ran, false);
+  // a failed render keeps its own status
+  r = runRender(["-o", "out.mp4"], { cwd: dir, spawn: () => ({ status: 3, stdout: "", stderr: "boom" }) });
+  assert.equal(r.status, 3);
   assert.ok(PRELOAD.endsWith("scripts/vendor-offline.cjs") && !PRELOAD.includes("\\"));
+});
+
+// Per FILE, not per line (a call can be split across lines or built from variables): a file under scripts/ whose code
+// (comments stripped) names hyperframes anywhere AND has a "render" token is a render caller, and must go through
+// runRender() / scripts/render.mjs. Exempt: the helper itself and this test (it holds the shapes as strings).
+const RENDER_TOKEN = /["'`]render["'`]|(^|[\s;|&(])render\s+-/m;
+const stripComments = (src) => src.split("\n").filter((l) => !/^\s*(\/\/|#|\*|\/\*)/.test(l)).map((l) => l.replace(/\s(\/\/|#)\s.*$/, "")).join("\n");
+function rawRenderCallers(dir) {
+  const bad = [];
+  const walk = (d) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { if (e.name !== "__pycache__" && e.name !== "node_modules") walk(p); continue; }
+      const rel = path.relative(path.join(HERE, ".."), p).split(path.sep).join("/");
+      if (rel === "scripts/lib/vendor.mjs" || rel === "scripts/vendor.test.mjs") continue;
+      const buf = fs.readFileSync(p);
+      if (buf.includes(0)) continue;                                   // binary
+      const code = stripComments(buf.toString("utf8"));
+      if (!/hyperframes/i.test(code) || !RENDER_TOKEN.test(code)) continue;
+      if (/\brunRender\b|render\.mjs/.test(code)) continue;            // goes through the helper
+      bad.push(rel);
+    }
+  };
+  walk(dir);
+  return bad.sort();
+}
+
+test("every hyperframes render call under scripts/ goes through runRender (scripts/lib/vendor.mjs)", () => {
+  assert.deepEqual(rawRenderCallers(HERE), [], "render through runRender() / scripts/render.mjs so GSAP comes from vendor/ and a CDN fetch fails the render");
 });
