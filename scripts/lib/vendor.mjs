@@ -36,7 +36,7 @@ export const unservedUrls = (html, stderr) => LIBRARIES.filter((e) => html.inclu
 
 // Run `npx hyperframes@<pin> render <args>` in cwd with the preload. Returns { status, stdout, stderr, error };
 // status is 1 with `error` set when the page (cwd/index.html, or the -c composition) is missing (nothing is run), or
-// uses a vendored URL the preload did not serve. spawn is injectable for tests.
+// uses a vendored URL the preload did not serve; then the -o/--output file is deleted. spawn is injectable for tests.
 export function runRender(args, { cwd = process.cwd(), version = HYPERFRAMES, env = process.env, spawn = spawnSync } = {}) {
   const ci = args.findIndex((a) => a === "-c" || a === "--composition");
   const page = path.resolve(cwd, ci >= 0 ? args[ci + 1] ?? "" : "index.html");
@@ -47,7 +47,13 @@ export function runRender(args, { cwd = process.cwd(), version = HYPERFRAMES, en
   if (out.status !== 0) return out;
   const html = fs.readFileSync(page, "utf8");
   const missed = unservedUrls(html, out.stderr);
-  if (missed.length) Object.assign(out, { status: 1, error: `render used the network for ${missed.join(", ")}: the vendor preload (scripts/vendor-offline.cjs) did not serve it` });
+  if (missed.length) {
+    // the reel may be complete (Chrome fetched the library from the CDN itself): never leave it where a caller looks
+    const oi = args.findIndex((a) => a === "-o" || a === "--output");
+    const output = oi >= 0 && args[oi + 1] ? path.resolve(cwd, args[oi + 1]) : null;
+    const removed = output && fs.existsSync(output) ? (fs.rmSync(output, { force: true }), true) : false;
+    Object.assign(out, { status: 1, error: `not served from vendor/: ${missed.join(", ")} (${out.stderr.includes("vendor: REFUSED") ? "its vendored copy is missing or altered, so the preload refused it" : "the vendor preload (scripts/vendor-offline.cjs) did not serve it: the CDN was used"})${removed ? `; the output ${output} was removed` : ""}` });
+  }
   return out;
 }
 
