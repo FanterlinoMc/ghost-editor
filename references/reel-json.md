@@ -235,8 +235,8 @@ A reel that sets none of this builds byte-identical (`scripts/byte-identity.mjs`
 - **`take.ramp`** (`"rush" | "surge" | "hit" | "slowmo"` or `{curve: [[u, speed], ...], preset, interp: "blend" | "mci" | "dup"}`): a NON-SPEECH action take plays on an eased speed curve. The picture is pre-rendered by ffmpeg into `assets/ramp-take<i>-<hash>.mp4` (cached), muted, no captions; its length on the timeline is `(b - a) / mean speed` (rush: 3 s of source = 1.23 s). `E()` maps a source second inside it through the warp. Works per recording (`take.src`, and the `sourceGrade`'d file). Not with `stage` / `matte`. A ramp can't be the last take or carry a `hold`.
 - **`scene.ramp`** (image / window scene with a video `src` or `self`): same curves, the scene keeps its `at`/`to`; `media` (or `self`) is where the source starts. Stills ignore it.
 - **`transitions: {kind: "whip" | "zoom" | "mix", every: 1, frames: 8, strength: 1}`**: a whip (directional blur) or zoom-through on every `every`-th jump cut between takes (ramp-take boundaries always), on the `#tx` wrapper (which now also exists when this is set). A join that has its own `take.transition` (I-17, blur / whip between two recordings) keeps that one and is skipped here; so are joins next to a hold, next to a punch-in (0.3 s) and joins across a section boundary. Scenes: `in` / `out` accept `"whip"` and `"zoom"` (style default `scenes: {image: {in: "whip"}}` or `sceneIn` / `sceneOut`).
-- **`sfxDesign: {density: "low" | "med" | "high", rules, hitDb, riserDb, tailDb, softDb, tickDb, swishDb, whipDb, rampDb, hitLen, popGap, voiceGapDb}`** (also `sfx: {density}` as an OBJECT; `sfx` as an array is still the manual hit list): riser > hit > tail on major hard cuts (into B-roll / a ramp take), a swish on whips, a speed-up whoosh at the ramp peak, a soft whoosh on text-in, a swish on punch-ins, ticks on word pops (highlight words and `!` always pop); every sound is placed by its measured peak (`library/sfx/timing.json`), and every non-impact sound over speech is capped `voiceGapDb` (-8) under the voice. **A sound that is not on disk is skipped with the usual warning at the end of the build, never a die.** The shipped library has no audio, so today the pass places nothing; with files in `library/sfx` (or `PHANTASIC_LIB`) it does.
-- **`drop: {hold | at, shots: [{self: <source s>} | {src, media, ramp}...], ladder: [frames], bpm + beats, gap: 3, flashEvery: 3, flash: 0.6, lift: 3, overlap, riser, boom, tail, cutSfx, in}`**: talk -> riser -> 3 f silence -> boom -> a cut ladder of image scenes (`_drop` beats; they appear in `edit_truth.json` `beats`), a white flash on every `flashEvery`-th cut, the SFX inside the drop lifted `lift` dB. `hold: i` puts it on take i's hold (give that take a `hold` >= ladder + gap); `at` is a source second inside a plain take (a warning fires when speech falls in the silence). `bpm` + `beats` express the ladder in beats, rounded on the running total. A style may carry drop defaults; the drop runs only when the reel sets `hold` / `at` / `shots`.
+- **`sfxDesign: {density: "low" | "med" | "high", rules, hitDb, riserDb, tailDb, softDb, tickDb, swishDb, whipDb, rampDb, hitLen, popGap, voiceGapDb}`** (also `sfx: {density}` as an OBJECT; `sfx` as an array is still the manual hit list): riser > hit > tail on major hard cuts (into B-roll / a ramp take), a swish on whips, a speed-up whoosh at the ramp peak, a soft whoosh on text-in, a swish on punch-ins, ticks on word pops (highlight words and `!` always pop); every sound is placed by its measured peak (`library/sfx/timing.json`), and every non-impact sound over speech is capped `voiceGapDb` (-8) under the voice. **A sound that is not on disk is skipped with the usual warning at the end of the build, never a die.** The shipped library has no audio, so today the pass places nothing; with files in `library/sfx` (or `PHANTASIC_LIB`) it does. Exact fields, families and fallback: "Prestige sound design" below.
+- **`drop: {hold | at, shots: [{self: <source s>} | {src, media, ramp}...], ladder: [frames], bpm + beats, gap: 3, flashEvery: 3, flash: 0.6, lift: 3, overlap, riser, boom, tail, cutSfx, in}`** (sound fields and levels: "Prestige sound design" below): talk -> riser -> 3 f silence -> boom -> a cut ladder of image scenes (`_drop` beats; they appear in `edit_truth.json` `beats`), a white flash on every `flashEvery`-th cut, the SFX inside the drop lifted `lift` dB. `hold: i` puts it on take i's hold (give that take a `hold` >= ladder + gap); `at` is a source second inside a plain take (a warning fires when speech falls in the silence). `bpm` + `beats` express the ladder in beats, rounded on the running total. A style may carry drop defaults; the drop runs only when the reel sets `hold` / `at` / `shots`.
 - **`music.alignDrop`** (track second) puts the bed's own drop on the drop's first cut; **`music.dropLift`** dB lifts the bed from there; **`music.lifts: [{a, b, db, ramp}]`** are generic lifts. `music.optional` is the fork key from the Noir section.
 - **Captions**: `captions.wordReveal` (type: whole words land on their spoken start, no half-typed word), `captions.cursor: false`, type cards shrink to fit above the crown when `stage` + `captions.behind` (so the head covers part of the last line), and with `stage` + `behind` the caption layer sits between the set and the speaker (`#pip > #caps` under `#pip > #base`); `captions.popSafe` (long words pop less) and `captions.wordGap` (box style's word margin, default `0.14em`). Beat `endcard` with `bg: "none"` sits above B-roll scenes. Not ported: `captions.chestFirst` and `captions.prefer` for the placer (they live in `safezone.mjs`, which has no such option here); the kit demo drops `chestFirst`.
 - **Scenes**: `pos` (CSS object-position for the crop), `cutSfx` / `cutDb` (a burst member gets its own small sound instead of the major-cut chain), `inSfx` / `inSfxDb` (the scene's own entry sound on any transition), concept scene `tickSfx` / `tickDb` (a tick per typeface swap).
@@ -244,13 +244,64 @@ A reel that sets none of this builds byte-identical (`scripts/byte-identity.mjs`
 - **`PHANTASIC_PREVIEW_SCALE=0.5`** renders the same page inside a 540x960 stage (iteration only). **`PHANTASIC_LIB`** points the build at another library root.
 - `look.preset` grades `belmar-teal`, `noir-film`, `empire-noir` already existed; `presets/grades.json` is identical to Ahmed's.
 
+### Prestige sound design (`sfxDesign` + the drop's sounds; mac-4)
+
+Both are opt-in: a reel or style with neither `sfxDesign` (or `sfx` as an object) nor a placed `drop` builds byte-identically. The sound files are never in this repository: a deployment syncs the licensed pack's sounds into `library/sfx/<file>` under the engine ids below (see `library/SOURCES.md`). Any id whose manifest entry or file is missing is **skipped with the end-of-build warning `N sound(s) skipped, M id(s) unavailable: ...`, never a die**; with no sound on disk at all the reel builds silent (no `<audio id="sfx-N">` tag, `build/sfx_events.json` `events: []`).
+
+**`sfxDesign`** (object; `sfx: {...}` as an object is the same thing; `premium-belmar` sets `{density: "low"}`):
+
+| field | type | default | what it does |
+|---|---|---|---|
+| `density` | `"low"` \| `"med"` \| `"high"` | `"med"` | picks the rule row below. Anything else: die `sfxDesign.density must be low, med or high (got X)` |
+| `rules` | object | `{}` | overrides single fields of the density row: `riser` (`"major"` \| `"transitions"` \| `false`), `hit` (`"major"` \| `"transitions"` \| `"all"`), `tail` (bool), `text` (`"scenes"` \| `"all"` \| `false`), `punch` (int: a swish on every Nth punch-in, `0` = none), `pop` (bool), `ramp` (bool), `gap` (s: minimum spacing of the non-forced sounds) |
+| `riserDb`, `hitDb`, `tailDb`, `softDb`, `tickDb`, `swishDb`, `whipDb`, `rampDb` | number (dB) | `0`, `2`, `-4`, `0`, `-8`, `-2`, `0`, `0` | added to the id's role level: `vol = min(1, 10^((voiceP95 + mix.roleDb[role] + db + 1) / 20))` |
+| `hitLen` | number (s) | `0.9` | a hit on a major cut is cut (0.06 s fade) this long after its peak |
+| `popGap` | number (s) | low `1.7`, med `0.8`, high `0.3` | spacing of word-pop ticks; highlight words and words ending in `!` pop after `0.25` s |
+| `voiceGapDb` | number (dB) | `-8` | every non-impact, non-meme sound that overlaps a word is capped this far under the voice p95 (all of the reel's sfx, not only the pass's own) |
+
+Density rows: `low` = riser + hit on major cuts, no tail, soft whoosh on scene pages only, no punch swish, ticks on, gap 0.6 s; `med` = + tail, hits on transitions, soft whoosh on every text-in, a swish on every 2nd punch-in, gap 0.35 s; `high` = risers on transitions too, a hit on every transition, a swish on plain jump cuts and every punch-in, gap 0.2 s. A major cut is a cut into an image / window scene that is not a drop shot and has no `cutSfx`, or into a ramp take. Every sound is placed so its measured peak (`library/sfx/timing.json` `peak_t`; absent = 0) lands on the event; one starting before 0 s or after the reel's end is not placed. Each event in `sfx_events.json` carries `design: <family>` and `why: "design: ..."`.
+
+**Families (the engine ids `sfxDesign` plays), in round-robin order.** If the id whose turn it is is not playable, the next member of the same family that is on disk plays instead; if none is, the turn's id is the one reported as skipped.
+
+| family | ids | role (manifest) | Prestige (`low`) uses it for |
+|---|---|---|---|
+| `riser` | `riser-1`, `cinematic-rumble-riser` | whoosh | into each major cut (cut 0.04 s after the cut, 0.06 s fade) |
+| `hit` | `cinematic-deep-boom`, `impact-1` | impact | on each major cut |
+| `tail` | `whoosh-cine` | whoosh | (med / high only) 0.12 s after the hit |
+| `soft` | `pop-whoosh-light`, `whoosh-cine` | ui, whoosh | a scene page coming in |
+| `tick` | `click-1`, `pop-1`, `tick-1` | ui | word pops (about one per caption block) |
+| `swish` | `zoom-sweep-small`, `zoom-sweep-short` | ui | (med / high only) punch-ins, jump cuts |
+| `whip` | `burn-whoosh-fast`, `tech-digital-whoosh` | whoosh | each whip / zoom transition (`transitions`, scene `in: "whip"`) |
+| `ramp` | `burn-whoosh-tunnel` | whoosh | the speed peak of a ramp take |
+
+**The drop's sounds** (fields of `drop`, read only when the drop is placed: `hold`, `at` or `shots`). Each sound field is a **sound id, a non-empty list of ids (the first one on disk plays; none on disk = the first is reported as skipped), or `false` / `"none"` (no sound)**. Anything else: die `drop.<field> must be a sound id, a non-empty list of sound ids, false or "none" (got X)`.
+
+| field | type | default | what it does |
+|---|---|---|---|
+| `riser` | id \| [ids] \| false | `"cinematic-rumble-riser"` | placed so its peak lands `gap` frames before the boom, then cut there with a 0.03 s fade (`why: "drop riser (tops out before the gap)"`); not placed when it would start before 0 s |
+| `riserDb` | number (dB) | `2` | |
+| `boom` | id \| [ids] \| false | `"cinematic-deep-boom"` | on the first ladder shot (`why: "drop boom"`) |
+| `boomDb` | number (dB) | `0` | |
+| `tail` | id \| [ids] \| false | `"whoosh-cine"` | 0.02 s after the boom (`why: "drop tail"`) |
+| `tailDb` | number (dB) | `-2` | |
+| `cutSfx` | id \| [ids] \| false | `"tech-camera-flash"` | on every flash cut (every `flashEvery`-th cut after the first; `why: "drop flash cut"`) |
+| `cutDb` | number (dB) | `-2` | |
+| `lift` | number (dB) | `3` | the drop's own sounds that start inside the drop window (boom, tail, flash cuts; not the riser) are raised this much (volume capped at 1) |
+| `gap` | int (frames) | `3` | silence before the boom: a sound placed before the drop pass (beat sounds, manual `sfx`) still ringing at `boom - gap` is cut there with a 0.03 s fade; the design pass runs after and keeps its own spacing |
+
+`premium-belmar` sets the lists `riser: ["cinematic-rumble-riser", "riser-1"]`, `boom: ["cinematic-deep-boom", "impact-1"]`, `tail: ["whoosh-cine"]`, `cutSfx: ["tech-camera-flash", "click-1"]`, so a library that holds only some of these ids still plays a drop. Without `sound.completeMix` the drop's sounds and the design pass are still in the mix (both run before the early audio tags are written).
+
+**Engine ids Prestige needs on disk** (for mapping the licensed pack; ids from `library/sfx/manifest.json`): drop `cinematic-rumble-riser` (or `riser-1`), `cinematic-deep-boom` (or `impact-1`), `whoosh-cine`, `tech-camera-flash` (or `click-1`); design pass at `low`: `riser-1` / `cinematic-rumble-riser`, `cinematic-deep-boom` / `impact-1`, `pop-whoosh-light` / `whoosh-cine`, `click-1` / `pop-1` / `tick-1`, `burn-whoosh-fast` / `tech-digital-whoosh`, `burn-whoosh-tunnel` (ramps only). `scripts/prestige_score.py` (after a render) also names `cinematic-cine-hit`, `pop-1` and `cinematic-heartbeat` by file name in `library/sfx` (`--sfx-dir`).
+
+Test: `scripts/build-prestige-sound.test.mjs` builds a small Prestige reel against a stub library of generated tones (made in the test's temp folder, never committed) and against the silent library.
+
 ### `edit_truth.json` (additive, each key ONLY when set)
 
 `takes[i].ramp` (the ramp as written; `dur` is already the ramped length, so `dur != b - a` for that take) and a top-level `txTransitions: [{t, kind}]` (the `#tx` whips and zoom-throughs of `transitions`; a join's own `take.transition` stays a take field). Drop ladder scenes are ordinary `beats` (`type: "scene"`, `kind: "image"`). Nothing else changed.
 
 ### What the build refuses (`die()`; planner validator checks)
 
-take N has a ramp but contains speech; a ramped take can't be the last take or carry a hold; `take.ramp` with `spec.stage` / `spec.matte`; unknown ramp preset; `sfxDesign.density` not low / med / high; `transitions.kind` not whip / zoom / mix; `drop` without `shots`; `drop` without `hold` or `at`; `drop.hold` naming a take that does not exist. (A ramp that would run past the end of its source is also checked, but a take's `b` is already checked against the file.)
+take N has a ramp but contains speech; a ramped take can't be the last take or carry a hold; `take.ramp` with `spec.stage` / `spec.matte`; unknown ramp preset; `sfxDesign.density` not low / med / high; `transitions.kind` not whip / zoom / mix; `drop` without `shots`; `drop` without `hold` or `at`; `drop.riser` / `boom` / `tail` / `cutSfx` not an id, a non-empty list of ids, `false` or `"none"`; `drop.hold` naming a take that does not exist. (A ramp that would run past the end of its source is also checked, but a take's `b` is already checked against the file.)
 
 ### Python (`scripts/`, run with the venv python or `py`; needs only numpy and opencv-python; none calls a paid service or a model)
 

@@ -615,6 +615,7 @@ const RESTRAINED_DROP = /type tick|fly3d word|chip|list line|card pill|badge in|
 // Music keeps its named, fatal error (A10) because a missing music bed IS structural.
 // Every miss is collected and reported once at the end rather than per occurrence.
 const missingSfx = new Map();
+const sfxOk_ = (r) => !!(sfxManifest[r] && fs.existsSync(path.join(LIB, "sfx", sfxManifest[r].file)));
 const addSfx = (t, id, why, { db = 0, lead = 0 } = {}) => {
   if (!id || id === "none") return;
   if (SFX_PROFILE === "restrained" && RESTRAINED_DROP.test(why)) return;
@@ -633,7 +634,6 @@ const addSfx = (t, id, why, { db = 0, lead = 0 } = {}) => {
   let m = sfxManifest[real];
   // ---- spec.sfxFallback (opt-in; Folio, mini2): { "<id>": "<other id>" | "none" } - a sound whose file is not on this machine plays
   // the named stand-in instead (when that one is there), else it is skipped and reported below as before.
-  const sfxOk_ = (r) => sfxManifest[r] && fs.existsSync(path.join(LIB, "sfx", sfxManifest[r].file));
   if (spec.sfxFallback && !sfxOk_(real)) { const alt = spec.sfxFallback[real]; if (alt && alt !== "none" && sfxOk_(alt)) { real = alt; m = sfxManifest[alt]; } }
   if (!m) { missingSfx.set(real, (missingSfx.get(real) ?? 0) + 1); return; }
   const srcFile = path.join(LIB, "sfx", m.file);
@@ -1407,6 +1407,11 @@ if (spec.drop && (spec.drop.hold != null || spec.drop.at != null || spec.drop.sh
   if (!DR.shots?.length) die("drop needs shots: [{ self: <source s> } | { src: <clip> }, ...]");
   if (DR.hold == null && DR.at == null) die("drop needs hold: <take index> or at: <source second>");
   if (DR.hold != null && !takes[DR.hold]) die(`drop.hold ${DR.hold}: there is no take ${DR.hold}`);
+  for (const k of ["riser", "boom", "tail", "cutSfx"]) {
+    const v = DR[k];
+    const ok = v === false || v == null || (typeof v === "string" && v) || (Array.isArray(v) && v.length && v.every((x) => typeof x === "string" && x));
+    if (!ok) die(`drop.${k} must be a sound id, a non-empty list of sound ids, false or "none" (got ${JSON.stringify(v)})`);
+  }
   // drop.bpm + drop.beats (opt-in): the ladder in beats of the music bed, rounded on the running total so the cuts
   // stay on the beat grid (no drift from rounding each shot to whole frames)
   if (DR.bpm && DR.beats?.length) { const spb = 60 / DR.bpm; let acc = 0, prevF = 0; DR.ladder = DR.beats.map((n) => { acc += n * spb; const f = Math.round(acc * FPS); const d = f - prevF; prevF = f; return d; }); }
@@ -2175,7 +2180,9 @@ for (const s of Array.isArray(spec.sfx) ? spec.sfx : []) addSfx(E(s.at, "sfx"), 
 // peaks at its start, which only costs placement accuracy.
 const sfxTiming = (() => { try { return JSON.parse(fs.readFileSync(path.join(LIB, "sfx", "timing.json"), "utf8")); } catch { return {}; } })();
 if (dropWin) {
-  const DR = motionCtx.dropPlan, timing = sfxTiming;
+  // drop.riser / boom / tail / cutSfx: an id, or a list of ids where the first one on disk plays (none: the first is reported as skipped)
+  const DR = { ...motionCtx.dropPlan }, timing = sfxTiming;
+  for (const k of ["riser", "boom", "tail", "cutSfx"]) if (Array.isArray(DR[k])) DR[k] = DR[k].find(sfxOk_) ?? DR[k][0];
   const [T0, T1] = dropWin, gapS = DR.gap / FPS;
   const n0 = sfxEvents.length;
   if (DR.riser) {
@@ -2231,7 +2238,7 @@ if (SFX_DESIGN) {
     lastPop = w.start; return true;
   }).map((w) => r3(w.start));
   PK.sfxDesign(SFX_DESIGN, { majors, transitions: [...transitionsAt, ...sceneTrans], joins: takes.slice(1).map((k) => r3(k.start)), textIns, punches: punchTimes, pops, ramps: rampsAt.filter((r) => !inDrop(r.t0)) },
-    { addSfx, sfxEvents, timing: sfxTiming, words, voiceP95, ROLE_DB, TOTAL, log: (m) => console.log(m) });
+    { addSfx, sfxEvents, timing: sfxTiming, words, voiceP95, ROLE_DB, TOTAL, log: (m) => console.log(m), has: sfxOk_ });
 }
 
 // ---------- SFX rules ----------
