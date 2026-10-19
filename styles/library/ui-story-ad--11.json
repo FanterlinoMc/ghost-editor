@@ -13,6 +13,7 @@
     "maxWords": 3
   },
   "look": {
+    "fx": false,
     "grade": "contrast(1.06) saturate(0.93) brightness(1.51)",
     "vignette": 0.18,
     "grain": 0,

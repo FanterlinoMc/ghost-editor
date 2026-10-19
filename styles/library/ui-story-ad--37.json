@@ -11,6 +11,7 @@
     "red": "#FF3B3B"
   },
   "look": {
+    "fx": false,
     "grade": "contrast(1.12) saturate(1.5) brightness(0.89) sepia(0.06)",
     "tint": {
       "color": "#7a4a1f",

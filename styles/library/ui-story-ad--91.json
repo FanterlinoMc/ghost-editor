@@ -13,6 +13,7 @@
     "upper": true
   },
   "look": {
+    "fx": false,
     "grade": "contrast(1.12) saturate(1.79) brightness(1.10) sepia(0.06)",
     "tint": {
       "color": "#7a4a1f",

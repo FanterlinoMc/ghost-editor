@@ -42,18 +42,21 @@ const fxTweens = (h) => (h.match(/tl\.to\("#fx", \{ filter: "blur\(\d+px\) brigh
 const hasFx = (h) => h.includes('<div id="fx">') && /#fx \{ position: absolute; inset: 0;/.test(h);
 
 try {
-  // 1. a style that sets look.fx (ui-story-ad--11 inherits it from pitch through ui-story-ad, and turns look.refocus off, podcast captions:
-  //    before look.fx it had no #fx, so its popcard defocus and leak bloom tweened nothing)
-  const on = build({ style: "library/ui-story-ad--11" });
+  // 1. look.fx: true on a style with no other #fx source (ui-story-ad--11: look.refocus false, podcast captions; it ships with the
+  //    look.fx: false opt-out, which the reel overrides here): before look.fx its popcard defocus and leak bloom tweened nothing
+  const on = build({ style: "library/ui-story-ad--11", look: { fx: true } });
   assert.ok(hasFx(on), "a style with look.fx gets the #fx wrapper and its CSS");
   assert.ok(fxTweens(on) >= 2, "the popcard defocus and the leak bloom tween #fx");
   assert.match(on, /tl\.to\("#fx", \{ filter: "blur\(9px\) brightness\(0\.72\)"/, "the popcard blur tween is there");
   // the popcard is drawn inside #fx's parent chain: the take video sits inside the #fx div
   const fxOpen = on.indexOf('<div id="fx">'), take = on.indexOf('class="clip take', fxOpen) >= 0 ? on.indexOf('class="clip take', fxOpen) : on.indexOf("<video", fxOpen);
   assert.ok(fxOpen > 0 && take > fxOpen, "the footage is inside #fx, so its blur reaches the speaker");
-  check("style with look.fx (library/ui-story-ad--11): #fx written, the popcard blur / leak bloom tweens target it");
+  check("look.fx: true (on library/ui-story-ad--11): #fx written, the popcard blur / leak bloom tweens target it");
 
-  // 1b. the opt-out: a pitch child (refocus false) that sets look.fx: false overrides the inherited true (deep merge) and gets NO #fx
+  // 1b. the opt-out: a pitch child (refocus false) that sets look.fx: false overrides the inherited true (deep merge) and gets NO #fx.
+  //     ui-story-ad--11 ships with that opt-out in its own style JSON; the explicit reel keys say the same thing
+  const shipped = build({ style: "library/ui-story-ad--11" });
+  assert.ok(!shipped.includes('id="fx"') && !shipped.includes("#fx {"), "ui-story-ad--11 as shipped (look.fx: false) has no #fx");
   const optOut = build({ style: "library/ui-story-ad--11", look: { fx: false, refocus: false } });
   assert.ok(!optOut.includes('id="fx"') && !optOut.includes("#fx {"), "look.fx: false on a pitch child removes #fx");
   check("pitch child with look.fx: false and refocus false: no #fx (the opt-out)");
