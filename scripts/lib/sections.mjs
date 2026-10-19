@@ -91,7 +91,7 @@ const sha1 = (value) => crypto.createHash("sha1").update(JSON.stringify(value)).
  * `{type, kind, at, to, in, out}` shape edit_truth.json already dumps, passed straight through, so
  * this hash moves exactly when edit_truth.json's own beat dump would.
  */
-export function buildSectionManifest(sections, { takes, beats, words, layers = [] }) {
+export function buildSectionManifest(sections, { takes, beats, words, layers = [], graphics = [] }) {
   return sections.map((sec) => {
     const takeIdx = [];
     takes.forEach((t, i) => { if (t.start < sec.end - 1e-6 && t.start + t.dur > sec.start + 1e-6) takeIdx.push(i); });
@@ -109,6 +109,8 @@ export function buildSectionManifest(sections, { takes, beats, words, layers = [
       beats: beatIdx.map((i) => beats[i]),
       words: wordIdx.map((i) => words[i]),
       ...(layerIdx.length ? { layers: layerIdx.map((i) => layers[i]) } : {}),
+      // Prompt Motion: a graphic beat's render cache key (re-rendered graphic = changed section). Absent without one.
+      ...(graphics.some((g) => sectionOf(sections, g.t0) === sec.index) ? { graphics: graphics.filter((g) => sectionOf(sections, g.t0) === sec.index).map((g) => g.key) } : {}),
     };
     return { index: sec.index, start: sec.start, end: sec.end, takes: takeIdx, beats: beatIdx, words: wordIdx, ...(layers.length ? { layers: layerIdx } : {}), hash: sha1(payload) };
   });

@@ -120,8 +120,7 @@ existed (`scripts/byte-identity.mjs`).
     `box` is ignored. `room` is never honoured and a layer's own `exit` runs on the whole graphic.
     `hideCaptions: true` (`motion` and `text` layers) hides the captions while the layer is up, as it does on a
     beat; edit_truth.json's layer entry carries `hideCaptions: true` then.
-  - `graphic`: **spec (CP1), not built yet** - a Prompt Motion HTML graphic pre-rendered to its own video; see
-    "Prompt Motion graphic" below.
+  - `graphic`: a Prompt Motion HTML graphic pre-rendered to its own video (PM3); see "Prompt Motion graphic" below.
 - **Where it sits.** Above the footage and the beats' `.layer` band (z 3), below the captions (z 8), unless
   `overCaptions: true` (then above them). Within one band, ordered by `z` (0 to 99), ties by array order.
 - **Enter and exit** are explicit `fromTo` tweens with `force3D: false`, 0.3 s (a third of the layer if it is
@@ -782,9 +781,9 @@ reverse play, dotLottie (`.lottie`), image or text layers, expressions.
 
 ## Prompt Motion graphic (`kind: "graphic"` layer, `type: "graphic"` beat): spec (CP1), not built yet
 
-Status: **spec (CP1) v3.2.4 (v3.2.4 records PM2's security hardening, `mac/graphic-render` @ 4cbdc73; v3.2.3 adds what the PM5 fixtures measured: the streaming-encoder pin, the blob-worker R1 exclusion, authoring for determinism; v3.2.2 resolves the twelve points PM2 hit while building; CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found; v3.2.1 notes the G31 trade-off); not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
-`kind: "graphic"` dies with the existing `unknown kind "graphic"` error and a `graphic` beat is not placed. PM2
-(sandbox + render) and PM3 (in the reel) build it exactly as written here. The PC mirrors every **static** rule
+Status: **spec (CP1) v3.2.4 (v3.2.4 records PM2's security hardening, `mac/graphic-render` @ 4cbdc73; v3.2.3 adds what the PM5 fixtures measured: the streaming-encoder pin, the blob-worker R1 exclusion, authoring for determinism; v3.2.2 resolves the twelve points PM2 hit while building; CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found; v3.2.1 notes the G31 trade-off); PM3 (in the reel) built on `mac/graphic-place`, see "Placement as built (PM3)".**
+`build.mjs` and `layers.mjs` place a graphic layer (`kind: "graphic"`) and a `graphic` beat as written here, through PM2's
+`renderGraphic` (sandbox + render). The PC mirrors every **static** rule
 (G1 to G28) and every placement rule in the validator word for word, at the same time.
 
 A user types a prompt ("a counter from 10k to 80k with sparks"); Claude writes ONE self-contained HTML file;
@@ -1141,6 +1140,38 @@ no face or UI-zone check (they are full frame by design).
 **Sections, edit_truth.** A graphic counts like a layer / beat for section boundaries; the cache key (below)
 is part of the hash of the section it starts in. `edit_truth.json`: a graphic layer is recorded by the existing
 `layerTruth` (`kind: "graphic"`), plus `mode`; a graphic beat as every beat. Nothing else changes.
+
+### Placement as built (PM3, `scripts/lib/graphic-place.mjs`)
+
+- **Async render, synchronous build.** `build.mjs` resolves every graphic layer (with the other layers) and every
+  graphic beat (before the beat loop, like the motion-beat pre-pass), then awaits ONE top-level pre-pass
+  (`prepareGraphics`) that renders each missing file through `renderGraphic`, one at a time, once per distinct
+  placement (`html`, `mode`, `L`, `in`, `after`); an existing `assets/graphics/<name>-<key16>.<ext>` is used as is.
+  Nothing is written before the pre-pass ends, so the page is the same bytes for the same reel and cached files. A reel
+  with no graphic never reaches the pre-pass. The build does not take the Mac render lock itself: run a build that
+  may render graphics under `lockf -k /tmp/phantasic-render.lock`, like any render.
+- **Order of checks (layer).** The existing `id`, kind and timing dies, then G1..G35 (the file), P1, the `dur` die,
+  P2 (on `dur` as asked, before clamping to the reel), clamping, `after: "cut"` (GW2), the box die, P3, the
+  `enter` / `exit` / `fit` dies. Beat: G1..G35, P1, P2 (on `to - at` in source seconds), the time mapping (a
+  failure drops the beat: `graphic <id or at>: <html>: <the E() message>, dropped`), P3, then `box must be { x, y, w,
+  h } numbers with w, h > 0, got <json>` and `fit must be one of cover|contain, got <json>` (the layer texts, as a
+  dropped beat). A render refusal: the first R text, as a layer die / dropped beat.
+- **Markup.** A layer: the `video` layer's markup (`data-layer-kind="graphic"`, `data-media-start="0"`: `in` and
+  `after` are baked into the file, which starts at the placement's frame 0; no `<audio>`); `enter`/`exit` default
+  `none`, `fit` `contain` (an insert: box = the canvas, `fit` cover). A beat: an untimed `<div class="layer">` (an
+  insert: `style="z-index:5"`, above the other beats and the under-captions layers, below grain and captions)
+  holding `<div id="<id>-in" class="graphic" data-graphic="<name>" data-graphic-mode="<mode>">` in its box and the
+  timed `<video>`. The 1 ms show tween ENDS at `t0` (measured: starting it at `t0` left the window's first frame
+  empty) and the hide tween ends at `t1`, so the window shows exactly frames `[t0, t1)`.
+- **Captions.** `hideCaptions` (default `true` for an insert) hides them from `t0 - 0.08` to `t1 + 0.05`, so the
+  0.08 s fade has ended on the graphic's first frame and the re-show starts on its end (measured: a plain `[t0, t1]`
+  window left the caption over the first and last frames of an insert).
+- **edit_truth.json.** Layer: `layerTruth` + `mode`, and `hideCaptions: true` when resolved true. Beat: as every
+  beat, except `to` is the resolved end (the default window, or shortened by `cut`). sections.json: a graphic layer's
+  file and key are in its layer object; a graphic beat's key is added to its section's payload (`graphics`).
+- **Tests.** `GRAPHIC_TEST_DEPS=<module>` (tests only) replaces renderGraphic's external steps with the module's
+  `deps`; `scripts/fixtures/graphic-stub-deps.mjs` writes a small ffmpeg clip and reports Chrome `0.0.0-stub`, so a
+  stubbed file never shares a key with a real render.
 
 ### Cache key
 
