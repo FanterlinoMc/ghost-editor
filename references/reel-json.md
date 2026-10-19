@@ -334,7 +334,7 @@ Explainer (`explainer-2`):
 
 Mono (`mono-2`, `scripts/mono_plan.py` v5):
 - `brand.footScrim` (0-1): a dark gradient behind the words on footage pages. `brand.iconSfx` / `b.iconSfx`: the icon pop sound. `brand.film` / `look.grade`: grayscale footage.
-- stack beat: `punchOrigin` ("50% 30%": punch in around the face), `fit` (0.6-1: a close-up shown smaller from the top over a blurred copy), `cardH` / `cardW` / `cardRadius` (a portrait card), `filmFace: [x, y]` (frame the card / phone film on the face, source 1080x1920 px).
+- stack beat: `punchOrigin` ("50% 30%": punch in around the face), `fit` (0.6-1: a close-up shown smaller from the top over a blurred copy), `cardH` / `cardW` / `cardRadius` (a portrait card), `filmFace: [x, y]` (frame the card / phone film on the face, source 1080x1920 px). Every `stack` field: "Page scene kinds" under Motion layer.
 
 Folio (`folio-2`, `scripts/folio_plan.py`):
 - `objectPops.faceAware: true` (+ `minScale`): the card goes in the reaction slot beside the head of the recording on screen (`placer.slot`), and is skipped when the face fills the frame.
@@ -351,7 +351,7 @@ Keys and fields the renderer reads for them (each emits nothing unless set):
 - `popcard` / popcard beat: `object` (cut-out PNG, no photo frame), `objectFilter`, `glow`, `stage` (a full-frame page behind the card, any CSS background), `outFade` (seconds; the card leaves before the focus returns), `dim` (the defocus brightness, default 0.72), `labelSize`. Each is also a beat field except `objectFilter`/`glow`.
 - beat `pills` `{at, to, y, w, items: [{text, glyph, at}]}` with style `pills: {w, h, gap, tab, color, size, y, sfx, sfxDb}`: the UI Story Ad #10 checklist (glyphs: check doc report chart people globe image book archive museum home shield heart clock star bolt mask tree).
 - scene kind `title` `{at, to, lines: [string | {text, at, size}], size}`: the Breakdown hook title (navy card, condensed serif caps, the block shrinks ~15%). scene kind `chapter` `{at, to, num, tone: navy|paper|blue|cream, serif: [words], fit, fitWidth, sfx}`: a chapter card with a giant numeral and the spoken words one at a time; `fit: true` steps a long word down to `fitWidth` (default 960 px). Their CSS is written only when such a scene exists.
-- scene kind `wordpage`: `bg: "black"` (white words on black), `ink` (word colour), `gold: [words]` + `goldColor`. scene kind `highlight`: `boxColor`, `boxInk`, `ink`.
+- scene kind `wordpage`: `bg: "black"` (white words on black), `ink` (word colour), `gold: [words]` + `goldColor`. scene kind `highlight`: `boxColor`, `boxInk`, `ink`. Full field lists: "Page scene kinds" under Motion layer.
 - `boxline.dodgeFace` / `boxline.fitLabel` (style keys): the box and its name label never cover the face and stay inside the frame; beat field `prefer: "above"`. `captions.dodgeMouth` (duo captions with `fixedY`): px of clearance under the mouth. `captions.chestBand` (cluster captions; with `chinPad`, `chinMax`): on a close-up the caption goes under the chin or is dropped.
 
 Carried as data, not read by the renderer yet (the style still builds; these only matter once the code lands): `sound.complete` (the fork styles that carry it are unchanged; the premium styles use `sound.completeMix`, see "Premium line"), `prep.speakerCrop` (a prep.sh option), `monochrome.*`, `podcastPunch.*`, `mono.hookRotation` (read by Ahmed's planners), and the hardened-look keys `zoom.fit.always/maxBase/blur/dim/sat/radius` (+ `capRoom`, `minBase`, `top`, `punch`), `safeTopMin`, `captions.underChin/floor/hardFloor/keepUnderUi/uiRoom/stillY/chinAlways/chinMid/noWeakEnd/properCase/minLead/shrinkHero/scriptLead/scriptHold`, `pills.floor/textWith`. The framed close-up guard (`zoom.fit`) needs `safezone.mjs` to know each take's own card size, which is not in the fork.
@@ -406,6 +406,11 @@ take with no `transition`.
 | `paper` | `lines:[{text, style: "serif"\|"box"\|"marker", at, size, rotate}]`, `y`, `align`, `engraving` | whoosh/pop per line (`sound.lines: false` to silence) | A grid-paper cutaway for one key statement: a serif line, an accent-box keyword, a handwritten note. **With `engraving` set** (a `library/engravings/png/<key>.png` concept), the beat is auto-converted to a laid-out `collage` scene instead (`pageToCollage()`, R1b): the lines become sized/positioned text items, the engraving is placed under them, and `spec.pageMap`/`pagePaper`/`pageScreen` (set by the style, e.g. Broadsheet's `pageMap` remaps `serif`/`box`/`marker` to `deck`/`headline`/`kicker`) reshape the result - see `references/styles.md` |
 | `tv` | `items:[{src \| self, dur, media}]`, `flipSfx` | tick-1 per channel flip (2+ items only) | A montage of clips/stills on a vintage CRT, for "distraction", "noise", "everyone else". `{self: 0}` (the default) needs no library asset |
 | `collage` | `paper: "grid"\|"plain"\|"newsprint"`, `screen`, `bulge`, `zoom`, `items:[{type: "text"\|"image"\|"sticker"\|"glasses", style: "serif"\|"caps"\|"dark"\|"box"\|"marker"\|"italic"\|"headline"\|"kicker"\|"deck", ...}]` | pop/whoosh per item, gated on `sound.lines`/`sound.objects` | The vintage engraving-and-sticker "old school" look. Usually reached via a `paper` beat's `engraving` field, not written by hand. `image`/`glasses` items read `library/engravings/`. `newsprint` paper (R1b, Broadsheet) and the `headline`/`kicker`/`deck` text styles are for the newspaper look; `grid`/`plain` and the other text styles are the original Alif/Keynote vintage-collage look |
+| `wordpage` | `bg`, `paper`, `size`, `big`, `serif`, `ink`, `gold`, `goldColor` (full list below) | The spoken words one at a time on a flat accent, black or paper page |
+| `highlight` | `lines:[{text, at, box, size}]`, `paper`, `size`, `y`, `ink`, `boxColor`, `boxInk` (below) | Lines ink in word by word as spoken; a `box` line grows an accent box under its words. Sound: click on a box line |
+| `cardpage` | `items:[{at, art \| logo}]`, `paper`, `w`, `y`, `labelSize` (below) | A small framed picture swaps stop-motion style while the spoken words show under it. Sound: click per swap |
+| `concept` | `word`, `size`, `fonts`, `step`, `bg`, `engravings`, `tickSfx`, `tickDb` (below) | One word cycling typefaces over engravings that swap on the beat |
+| `stack` | `lines:[{text, role, say, at, size, color, enter, ring, pulse}]` or `lead`/`key`/`tail`, `bg: accent\|paper\|footage\|card\|phone`, icon, flip and footage fields (below) | Mono's lead / HUGE key / tail statement. Sound: click as the key lands, pop on the icon |
 
 Ported from main's `engine/core` (BRANCH-AUDIT.md R1): `window`, `paper` and `tv`
 need no library assets and are the three of the four actually exercised by
@@ -413,6 +418,145 @@ that port's own test build. `collage`'s `image`/`glasses` items and the
 `paper`-with-`engraving` auto-conversion need `library/engravings/` (ported
 in R1b, along with `objectPops`, above) - build-verified against a real
 recording in R1b; see `references/styles.md`.
+
+### Page scene kinds: `wordpage`, `highlight`, `cardpage`, `concept`, `stack`
+
+Flat graphic pages ported from main's `engine/core` (the mono / pitch / monologue templates; `stack` is
+Mono's three-tier statement). They take the common scene fields above (`at`, `to`, `in`, `out`,
+`captions`, `inSfx` / `inSfxDb`). "Spoken words" means the transcript words that start inside the
+scene (from 0.05 s before `at` up to `to`), shown one at a time in speech order. Times are source
+seconds like every beat time. `look.cleanScenes: true` keeps the tint, vignette and grain off
+`wordpage`, `highlight` and `cardpage` pages (not `concept` or `stack`).
+
+**`wordpage`**: the spoken words one at a time, each resolving out of a blur, centred on a flat page.
+
+| field | type | default | what it does |
+|---|---|---|---|
+| `bg` | `"accent"` \| `"black"` \| any other string | `"accent"` | `accent`: brand-accent page, white words. `black`: black page, white words (Monochrome Cinema). Anything else: a paper page (`paper`) with accent words |
+| `paper` | CSS colour | `#F3F3F3` | page colour when `bg` is neither `accent` nor `black` |
+| `size` | number (px) | `118` | word size |
+| `big` | string[] | `[]` | words drawn 1.5x (the payoff of the line); matched case- and punctuation-insensitively, like every word list here |
+| `serif` | string[] | `[]` | words set in the italic display serif, 1.2x |
+| `ink` | CSS colour | white on accent/black, `brand.accent` on paper | colour of every word |
+| `gold` | string[] | `[]` | words drawn in `goldColor` instead of `ink` (one coloured payoff word) |
+| `goldColor` | CSS colour | `#F2C94C` | colour of the `gold` words |
+
+No sound of its own (use `inSfx`).
+
+**`highlight`**: a white page of lines that ink in word by word as spoken; a `box` line grows its accent box one word at a time under white type.
+
+| field | type | default | what it does |
+|---|---|---|---|
+| `lines` | `[{text, at, box, size}]` | `[]` | the lines, top to bottom (below) |
+| `paper` | CSS colour | `#F3F3F3` | page colour |
+| `size` | number (px) | `104` | line size when a line has no `size` |
+| `y` | number (px) | `800` | top of the block of lines |
+| `ink` | CSS colour | `brand.accent` | colour of plain (non-box) words |
+| `boxColor` | CSS colour | `brand.accent` | box behind the words of a `box` line |
+| `boxInk` | CSS colour | (the stylesheet's white) | colour of the words on a `box` line (e.g. dark type on a marker-yellow box) |
+
+`lines[]`:
+
+| field | type | default | what it does |
+|---|---|---|---|
+| `text` | string | required | the line; split on spaces, each word is timed to the next matching spoken word (searching forward from the last match) |
+| `at` | source seconds | **required** (a missing or out-of-take `at` fails the build: `E(...) for highlight line: not inside any take`) | fallback timing: a word not found in the speech appears at `at + 0.14 s x` its index |
+| `box` | boolean | `false` | the line is a box line: its words wipe in left to right on `boxColor`; `click-1` (-6 dB) on its first word |
+| `size` | number (px) | the beat's `size` | this line's size |
+
+**`cardpage`**: a white page with one small framed picture in the middle that swaps stop-motion style, and the spoken words one at a time in the accent colour under it.
+
+| field | type | default | what it does |
+|---|---|---|---|
+| `items` | `[{at, art \| logo}]` | `[]` | the pictures, in order; each shows from its `at` until the next one's (the last until the scene ends) |
+| `paper` | CSS colour | `#F3F3F3` | page colour |
+| `w` | number (px) | `380` | picture width; the stage is `w x 1.3` tall, a logo tile is `w x w` |
+| `y` | number (px) | `560` | top of the picture stage; the word line sits 40 px under it |
+| `labelSize` | number (px) | `86` | size of the spoken words |
+
+`items[]`:
+
+| field | type | default | what it does |
+|---|---|---|---|
+| `at` | source seconds | **required** (`E(...) for cardpage item` fails the build without it) | when this picture swaps in (a small scale/rotate settle), `click-1` (-8 dB) on each swap |
+| `art` | string | | a `library/art/<key>.jpg` painting that fills the frame; a missing key dies (`art '<key>' not in library/art`) |
+| `logo` | string | | a simple-icons slug on a white tile, fetched at build time (wins over `art`); an unknown slug dies |
+
+The swap clicks are not silenced by the beat's `sfx`.
+
+**`concept`**: one key word on a white-to-grey card, its typeface cycling every `step` seconds, over engravings that swap on the beat.
+
+| field | type | default | what it does |
+|---|---|---|---|
+| `word` | string | `""` | the word |
+| `size` | number (px) | `120` | word size |
+| `fonts` | `[[family, style, weight], ...]` | Instrument Serif, Yellowtail, JetBrains Mono, Inter 800, EB Garamond italic, Gloock | the typefaces it cycles through, in order |
+| `step` | seconds | `0.22` | how long each typeface shows; the scene holds `floor(duration / step)` faces (at least 1) |
+| `bg` | CSS background | `linear-gradient(180deg, #ffffff 0%, #f1f1f1 45%, #bdbdbd 100%)` | the page |
+| `engravings` | string[] | `[]` | `library/engravings/png/<name>.png` pictures, splitting the scene into equal parts, each one swapping in with a small scale settle. A name containing `/` is the project's own picture, used as written. A missing library engraving is not an error: the image is simply blank |
+| `tickSfx` | sound id | none | a tick on every typeface swap after the first (Signature) |
+| `tickDb` | dB | `-8` | volume of `tickSfx` |
+
+Top-level `conceptCenter: true` keeps the engravings centred while they scale (see the style library section).
+
+**`stack`** (Mono): a statement that grows top-down as it is spoken: small lead words type on, the KEY word lands huge out of a ghosted blur, a small italic tail lands under it. Written either as `lines` or as the short form `lead` / `key` / `tail` (one of each); `lines` wins when both are set.
+
+| field | type | default | what it does |
+|---|---|---|---|
+| `lines` | `[{text, role, ...}]` | built from `lead`/`key`/`tail` | the stack, top to bottom (below) |
+| `lead` | string | | short form: a role `s` line above the key |
+| `key` | string | | short form: the role `k` line |
+| `keySay` / `keySize` / `keyColor` / `ring` / `enter` | | | short form: the key line's `say` / `size` / `color` / `ring` / `enter` (below). The short form has no `at` or `pulse` |
+| `tail` | string | | short form: a role `t` line under the key |
+| `keyMax` | number (px) | `240` | cap on the automatic key size, `min(keyMax, 1640 / max(4, characters))` |
+| `bg` | `"accent"` \| `"paper"` \| `"footage"` \| `"card"` \| `"phone"` | `"accent"` | the ground (below). Any other value renders as `accent` |
+| `y` | number (px) | depends on `bg` (below) | top of the word column |
+| `sfx` | sound id \| `false` \| `"none"` | `"click-1"` | the sound when a key line goes solid (-10 dB); `false`/`"none"` also silences the icon pop |
+| `icon` | string | | a `library/engravings/png/<icon>.png` engraving drawn above the key as an ink-coloured mask; a missing file dies (`asset not found`) |
+| `logo` | string | | a simple-icons slug drawn above the key instead (wins over `icon`) |
+| `logoFill` | CSS colour | `#fff` | the logo's colour |
+| `iconSize` | number (px) | `150` for a logo or on `phone`, else `230` | icon box size |
+| `iconAt` | source seconds | 0.08 s after the first key | when the icon pops in |
+| `iconSfx` | sound id | `brand.iconSfx`, else `pop-whoosh-light` | the icon pop (-4 dB) |
+| `flips` | source seconds[] | `[]` | `accent` and `paper` grounds only: each time swaps the page accent <-> paper and the ink with it, as a hard cut |
+| `push` | boolean | `false` | the whole stack scales in from 1.25x out of a blur at the start |
+| `self` | source seconds | the beat's `at` | where the speaker's footage starts on `footage`, `card` and `phone` grounds |
+| `filmFace` | `[x, y]` (source px, 1080x1920) | none (centred cover crop) | `card` / `phone`: frame the film on the face |
+| `fit` | number 0.6-1 | none | `footage`: the close-up shown at this scale from the top edge over a blurred, darkened full-bleed copy, slowly growing 3% |
+| `punch` | `true` \| number | none | `footage`: the camera punches in on the key (`true` = 1.22x, then drifts to 1.28x; a number `p` = `p`x then `p + 0.06`x, both times `zoom.base`) |
+| `punchOrigin` | CSS transform-origin | `50% 38%` | `footage` with `punch`: the point it punches in around (the face) |
+| `tilt` | degrees | `0` | `footage` with `punch`: rotation during the punch |
+| `cardH` | number (px) | auto, 560-900 from the stack's height | `card`: the card's height |
+| `cardW` | number (px) | none (full width, 70 px margins) | `card`: a fixed, centred card width |
+| `cardRadius` | number (px) | `18` (only with `cardW`; else the stylesheet's 44) | `card`: corner radius |
+| `handle` | string | `"yourname"` | `phone`: the account name in the fake reels UI |
+| `leadY` | number (px) | `230` | `phone`: top of the lead lines (everything before the first key), above the phone |
+
+`lines[]`:
+
+| field | type | default | what it does |
+|---|---|---|---|
+| `text` | string | required | the line; each word joins the line as it is spoken (matched forward through the speech), so a line grows from its centre |
+| `role` | `"s"` \| `"m"` \| `"k"` \| `"t"` | `"s"` (any non-`k` value other than `m`/`t` is a lead) | `s` small regular lead, `m` bold mid line (`brand.midSize`, 96), `k` HUGE key, `t` small italic tail (`brand.tailSize`, 46) |
+| `size` | number (px) | leads: the stylesheet's `max(brand.leadSize ?? 54, brand.minLead ?? (brand.leadSerif ? 62 : 50))`, so 54 unless `brand.minLead` or `brand.leadSerif` raises the floor; automatic for a key (see `keyMax`) | this line's size |
+| `say` | string | `text` | `k` only: the spoken words the key is timed to (when the key is shown differently from how it is said) |
+| `at` | source seconds | the first `say` word's start | `k` only: when the key appears |
+| `color` | CSS colour | the ink | `k` only: the key's colour |
+| `enter` | `"letters"` \| `"rise"` | ghost (a pale blurred copy that goes solid as the last `say` word starts, 0.16-0.5 s after it appears) | `k` only: `letters` builds the key letter by letter out of a blur; `rise` lifts it from below, stretched |
+| `ring` | boolean | `false` | `k` only: a hand-drawn ellipse draws round the key once it is solid |
+| `pulse` | boolean | `false` | `k` only: a ring bursts out from behind the key and the key bumps 1.18x as it lands |
+
+A non-key word not found in the speech falls back to the scene start (the first line) or 0.3 s after the first key above it (the scene start when there is none), plus 0.12 s per word.
+
+Grounds:
+
+- `accent` (default): the brand-accent page, white words, column `y` default `max(260, 900 - height / 2)`.
+- `paper`: `brand.paper` (`#FEFEFE`), accent words, same `y` default.
+- `footage`: a transparent page over the speaker's picture (`brand.film`, e.g. grayscale), white words with a shadow (`brand.footKey` for the key), column `y` default `max(760, min(1080, 1460 - height))`; `brand.footScrim` (0-1) adds a dark gradient behind the words.
+- `card`: the speaker's footage in a rounded card on the accent page, words under it (`y` default `330 + cardH - 60`, where `cardH` is always the automatic card height: a known quirk, an explicit `cardH` resizes the card but does not move the words, so set `y` with it). On a light accent the words take a dark ink and the key's ghost stays at 60 %.
+- `phone`: the footage in a phone with a reels UI on the accent page; the icon sits in a tile on the phone and the lines from the first key on start at `y` (default `1480`).
+
+The word column never starts above the platform's safe top. Brand keys read by the stack's stylesheet: `brand.leadSize`, `brand.minLead`, `brand.leadSerif`, `brand.midSize`, `brand.tailSize`, `brand.keyFont`, `brand.footKey`, `brand.film`, `brand.paper`, `brand.leadColor`, `brand.iconSfx`, `brand.footScrim`.
 
 Helpers:
 
