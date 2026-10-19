@@ -393,7 +393,7 @@ Explainer (`explainer-2`):
 - The CSS of `effect` and `cutout` is written only when a reel has one.
 
 Pitch (`pitch`):
-- beat `titlebox` `{text, at, to, y (default 250), color (default brand.accent), size (default 66 px), typeFor (default 0.8 s)}`: the hook title typed letter by letter into an accent box that slides in tilted from the left and settles centred (`left: 50%` + `xPercent: -50`), growing with the letters. Its `.tbox` / `.tbox-in` CSS is written only when a reel has one.
+- beat `titlebox` `{text, at, to, y (default 250), color (default brand.accent), size (default 66 px), typeFor (max type-on time, default 0.8 s; at most 45 ms per letter, so a short title types faster)}`; plays `typing-1` while it types: the hook title typed letter by letter into an accent box that slides in tilted from the left and settles centred (`left: 50%` + `xPercent: -50`), growing with the letters. Its `.tbox` / `.tbox-in` CSS is written only when a reel has one.
 
 Mono (`mono-2`, `scripts/mono_plan.py` v5):
 - `brand.footScrim` (0-1): a dark gradient behind the words on footage pages. `brand.iconSfx` / `b.iconSfx`: the icon pop sound. `brand.film` / `look.grade`: grayscale footage.
