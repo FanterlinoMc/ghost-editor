@@ -4,8 +4,8 @@
     glow_plan.py <project> [--dry] [--every 5.0]
 
   - hook: the first sentence (<= 9 words) as a question/title at the TOP ("WHY DO YOU" / "PROCRASTINATE?"); with
-    glow.hookGround true (OFF by default in this fork: it needs the `ground` beat, which the fork does not have) it also
-    writes a dark grid ground under it
+    glow.hookGround true and a matte already on the reel it also writes a dark grid ground under it (otherwise build.mjs
+    adds that same ground, and the matte, from glow.hookGround itself)
   - headlines: about every `every` seconds the strongest word of a sentence slams in HUGE and yellow under the 1-3 words
     said before it in white ("WE HAVE" / "NO IDEA"); a negation/quantifier rides with its word ("NO DICTIONARY")
   - positions alternate low / top-left; every other low headline gets a hand-drawn arrow

@@ -109,6 +109,22 @@ if (kitId) {
 const spec = deepMerge(preset, rawSpec);
 // stage (premium, opt-in): the speaker is cut out (matte) and composited on a designed set; the plate is hidden
 if (spec.stage) spec.matte = true;
+// glow.hookGround (opt-in, Podcast Glow; references/reel-json.md): the hook (the earliest pos "top" headline) gets the speaker cut
+// out over a dark grid page for its window, as in the approved sample. Only when there is such a headline, no ground already on
+// it and no stage: then the matte is cut, and shown (and extracted) only while the page is up (matteWindows + matteClip, unless the reel sets them).
+if (spec.glow?.hookGround && !spec.stage && Array.isArray(spec.beats)) {
+  const isNum = (x) => typeof x === "number" && Number.isFinite(x);
+  const hook = spec.beats.filter((b) => b && b.type === "headline" && b.pos === "top" && isNum(b.at) && isNum(b.to) && b.to > b.at).sort((p, q) => p.at - q.at)[0];
+  if (hook && !spec.beats.some((b) => b && b.type === "ground" && !(isNum(b.at) && isNum(b.to) && (b.to <= hook.at || b.at >= hook.to)))) {
+    const over = typeof spec.glow.hookGround === "object" ? spec.glow.hookGround : {};
+    const ground = { type: "ground", gradient: ["#141414", "#050505"], paper: "grid", gridColor: "rgba(255,255,255,.09)", gridSize: 64, grain: false, ...over, at: hook.at, to: hook.to };
+    const k = spec.beats.indexOf(hook);
+    spec.beats = [...spec.beats.slice(0, k), ground, ...spec.beats.slice(k)];
+    spec.matte = true;
+    if (spec.matteWindows === undefined) spec.matteWindows = true;
+    if (spec.matteClip === undefined) spec.matteClip = true;
+  }
+}
 
 const FPS = spec.fps ?? 30;
 // brand kit: one accent (60/30/10), ink for text on light scenes, caption size
@@ -1706,6 +1722,13 @@ for (const b of beatsList) {
           const smallH = SMALL ? ssz * 1.05 : 0;
           if (room >= smallH + bsz * 0.98) y = Math.round(Math.max(under, 980 * hk));
           else if (room >= smallH + 170 * hk) { bsz = Math.floor((room - smallH) / 0.98); y = Math.round(Math.max(under, 980 * hk)); }
+          else if (spec.glow?.keepLow) {
+            // glow.keepLow (opt-in): a low headline never jumps to the top band; it sits as low as the safe area allows, over the
+            // chest (the approved Podcast Glow sample), shrinking the big word only if the block would not fit, and with no arrow
+            const floorY = 980 * hk, bottom = placer.safeBottom + 40;
+            bsz = Math.max(1, Math.min(bsz, Math.floor((bottom - floorY - smallH) / 0.98)));
+            y = Math.round(Math.max(floorY, bottom - (smallH + bsz * 0.98))); arrowOn = undefined;
+          }
           else { y = placer.safeTop + 40 * hk; arrowOn = undefined; }   // a close-up with no room under the chin: the headline goes to the top band (no arrow)
         }
       }
@@ -3480,6 +3503,16 @@ if (spec.matte && spec.matteWindows && !spec.stage) {
   // never two sets on the same instant (a hide and a show both at 0 left the cut-out hidden in the render)
   if (!merged.length || merged[0][0] > 0.05) tl.push(`tl.set(".matte", { autoAlpha: 0 }, 0);`);
   for (const [a, b] of merged) { if (a > 0.05) tl.push(`tl.set(".matte", { autoAlpha: 1 }, ${r3(a - 0.02)});`); tl.push(`tl.set(".matte", { autoAlpha: 0 }, ${r3(b + 0.02)});`); }
+  // matteClip (opt-in; glow.hookGround sets it): the cut-out <video> covers only those windows instead of every whole take, so the
+  // renderer extracts (alpha, so PNG: ~1.4 MB a 1080x1920 frame) and pushes into Chrome only the frames that are shown. A take
+  // transition tweens #matte-<i> as a whole, so a reel with one keeps the full-length cut-out.
+  if (spec.matteClip) {
+    if (takeJoins.length) warn.push("matteClip: this reel has take transitions (blur/whip), so the cut-out stays on its full takes");
+    else {
+      matteHtml = takes.map((k, i) => (perSrcMatte && !stageMatted(k.src)) ? "" : merged.map(([a, b]) => [Math.max(k.start, a > 0.05 ? a - 0.02 : 0), Math.min(k.start + k.dur, b + 0.02)]).filter(([s, e]) => e - s > 0.5 / FPS).map(([s, e], j) => `
+      <video id="matte-${i}${j ? `-${j}` : ""}" class="matte" src="${matteRelOf(k.src)}" data-start="${r3(s)}" data-duration="${r3(e - s)}" data-media-start="${r3(k.a + (s - k.start))}" data-track-index="2" muted playsinline></video>`).join("")).join("");
+    }
+  }
 }
 // ground pages (flat colour/paper behind the cut-out speaker) always skip the brand tint, so white stays white
 for (const [a, b] of groundFlat) { tl.push(`tl.set(".look-ov", { visibility: "hidden" }, ${r3(a)});`); tl.push(`tl.set(".look-ov", { visibility: "visible" }, ${r3(b)});`); }

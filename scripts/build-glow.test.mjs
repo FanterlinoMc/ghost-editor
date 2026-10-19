@@ -61,7 +61,12 @@ function project(reel, { second = false, face1 = true, matte = false } = {}) {
   fs.writeFileSync(path.join(dir, "reel.json"), JSON.stringify({ title: "glow", source: "assets/talk.mp4", words: "build/words.whisper.json", face: "build/face.json", fps: FPS, outro: 0.15, takes: [{ a: 0, b: SEC }], beats: [], ...reel }, null, 2));
   return dir;
 }
-const run = (dir, env = {}) => spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: { ...process.env, PHANTASIC_LIB: silentLibrary(), PHANTASIC_SFX_PACK: path.join(root, "no-such-pack"), ...env } });   // no audio: see lib/silent-library.mjs
+// a refusing npx first on PATH: a reel that would cut a matte without a stub fails in a second instead of running remove-background
+const noNpx = path.join(root, "no-npx");
+fs.mkdirSync(noNpx);
+fs.writeFileSync(path.join(noNpx, "npx"), "#!/bin/sh\necho 'npx refused in build-glow.test (stub the matte)' >&2\nexit 1\n", { mode: 0o755 });
+fs.writeFileSync(path.join(noNpx, "npx.cmd"), "@echo npx refused in build-glow.test (stub the matte) 1>&2\r\n@exit /b 1\r\n");
+const run = (dir, env = {}) => spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: { ...process.env, PATH: noNpx + path.delimiter + process.env.PATH, PHANTASIC_LIB: silentLibrary(), PHANTASIC_SFX_PACK: path.join(root, "no-such-pack"), ...env } });   // no audio: see lib/silent-library.mjs
 const build = (dir, env) => { const r = run(dir, env); assert.equal(r.status, 0, r.stderr + r.stdout); return r.stdout + r.stderr; };
 const html = (dir) => fs.readFileSync(path.join(dir, "index.html"), "utf8");
 const jsonOf = (dir, f) => JSON.parse(fs.readFileSync(path.join(dir, "build", f), "utf8"));
@@ -71,7 +76,7 @@ const HEAD = { type: "headline", small: "we have", big: "no idea", at: 3, to: 5,
 
 try {
   // ---- single source, podcast-glow, a headline beat ----
-  let dir = project({ style: "podcast-glow", beats: [HEAD, { ...HEAD, at: 7, to: 8.5, bigAt: 7.4, pos: "top", arrow: undefined, small: "", smallAt: [] }] });
+  let dir = project({ style: "podcast-glow", beats: [HEAD, { ...HEAD, at: 7, to: 8.5, bigAt: 7.4, pos: "top", arrow: undefined, small: "", smallAt: [] }] }, { matte: true });
   let log = build(dir);
   let h = html(dir);
   assert.ok(count(h, /class="gw clip"/g) > 10, "one glow word per group");
@@ -184,8 +189,86 @@ try {
   assert.ok(fs.existsSync(path.join(dir, "index.html")));
   check("blank reel with podcast-glow builds");
 
+  // ---- glow.hookGround (style podcast-glow): the hook headline gets the speaker cut out over a dark grid page ----
+  const HOOK = { type: "headline", pos: "top", small: "we have", big: "no idea", at: 1, to: 3, bigAt: 1.6, smallAt: [1.1, 1.3] };
+  dir = project({ style: "podcast-glow", beats: [HOOK, { ...HEAD, at: 6, to: 8, bigAt: 6.6, smallAt: [6.1, 6.3] }] }, { matte: true });
+  build(dir);
+  h = html(dir);
+  assert.ok(/class="clip ground" data-start="1" data-duration="2"/.test(h), "a ground page for exactly the hook's window");
+  assert.ok(h.includes("linear-gradient(180deg, #141414 0%, #050505 100%)") && h.includes("rgba(255,255,255,.09) 1px") && h.includes("background-size:64px 64px"), "dark grid ground");
+  assert.ok(h.includes('id="matte-0" class="matte" src="assets/talk-matte.webm"'), "the speaker is cut out");
+  assert.ok(h.includes('tl.set(".matte", { autoAlpha: 0 }, 0);') && h.includes('tl.set(".matte", { autoAlpha: 1 }, 0.98);') && h.includes('tl.set(".matte", { autoAlpha: 0 }, 3.02);'), "the cut-out shows only while the page is up (matteWindows)");
+  assert.equal(count(h, /class="clip ground"/g), 1, "one ground: the low headline gets none");
+  assert.equal(count(h, /class="matte"/g), 1);
+  assert.ok(h.includes('<video id="matte-0" class="matte" src="assets/talk-matte.webm" data-start="0.98" data-duration="2.04" data-media-start="0.98"'), "matteClip: the cut-out video covers only the hook window");
+  check("glow.hookGround: the top hook headline gets a dark grid ground + the cut-out, shown (and extracted) only in its window");
+
+  // matteClip on its own: two windows in one take -> two clipped videos with their media offsets; take 2 (from 6 s) shows none
+  dir = project({ style: "clean", matte: true, matteWindows: true, matteClip: true, takes: [{ a: 0, b: 5 }, { a: 6, b: SEC }],
+    beats: [{ type: "ground", at: 0.5, to: 1.5, color: "#111111" }, { type: "ground", at: 3, to: 4, color: "#111111" }] }, { matte: true });
+  build(dir);
+  h = html(dir);
+  assert.equal(count(h, /class="matte"/g), 2);
+  assert.ok(h.includes('id="matte-0" class="matte" src="assets/talk-matte.webm" data-start="0.48" data-duration="1.04" data-media-start="0.48"'));
+  assert.ok(h.includes('id="matte-0-1" class="matte" src="assets/talk-matte.webm" data-start="2.98" data-duration="1.04" data-media-start="2.98"'));
+  assert.ok(!h.includes('id="matte-1"'), "no window in take 1: no cut-out video there");
+  // without matteClip the same reel keeps one full-length cut-out per take (unchanged)
+  dir = project({ style: "clean", matte: true, matteWindows: true, takes: [{ a: 0, b: 5 }, { a: 6, b: SEC }],
+    beats: [{ type: "ground", at: 0.5, to: 1.5, color: "#111111" }, { type: "ground", at: 3, to: 4, color: "#111111" }] }, { matte: true });
+  build(dir);
+  h = html(dir);
+  assert.ok(h.includes('id="matte-0" class="matte" src="assets/talk-matte.webm" data-start="0" data-duration="5"') && h.includes('id="matte-1" class="matte"'));
+  // a take transition keeps the full-length cut-out, with a warning
+  dir = project({ style: "clean", matte: true, matteWindows: true, matteClip: true, takes: [{ a: 0, b: 5 }, { a: 6, b: SEC, transition: "blur" }],
+    beats: [{ type: "ground", at: 0.5, to: 1.5, color: "#111111" }] }, { matte: true });
+  const tlog = build(dir);
+  assert.match(tlog, /matteClip: this reel has take transitions/);
+  assert.ok(html(dir).includes('id="matte-1" class="matte"'));
+  check("matteClip: the cut-out covers only its windows (per take, with media offsets); off or with a take transition it is full length");
+
+  // the same reel without the key (style clean): no ground, no matte; and podcast-glow with no top headline cuts no matte
+  // (the refusing npx on PATH and no stub: a matte cut would fail the build)
+  dir = project({ style: "clean", beats: [HOOK] });
+  build(dir);
+  assert.ok(!html(dir).includes("class=\"clip ground\"") && !html(dir).includes("talk-matte"), "no key, no ground, no matte");
+  dir = project({ style: "podcast-glow", beats: [HEAD] });
+  build(dir);
+  assert.ok(!html(dir).includes("talk-matte") && !html(dir).includes("class=\"clip ground\""), "no top headline: no matte is cut");
+  // a reel that already has a ground on the hook keeps just that one; matteWindows false is respected
+  dir = project({ style: "podcast-glow", matte: true, matteWindows: false, beats: [HOOK, { type: "ground", at: 1, to: 3, color: "#123456" }] }, { matte: true });
+  build(dir);
+  h = html(dir);
+  assert.equal(count(h, /class="clip ground"/g), 1);
+  assert.ok(h.includes("background:#123456") && !h.includes('tl.set(".matte"'), "the reel's own ground and matteWindows win");
+  check("glow.hookGround: nothing added without the key, without a top headline, or over the reel's own ground");
+
+  // ---- glow.keepLow (style podcast-glow): a low headline on a close-up stays in the lower frame ----
+  const closeUp = (dir) => fs.writeFileSync(path.join(dir, "build", "face.json"), JSON.stringify({ fps: 5, w: 1080, h: 1920, samples: Array.from({ length: 7 }, (_, i) => [i * 2, 40, 1320, 160, 930, 620, 960]) }));
+  const LOW = { ...HEAD, at: 6, to: 8, bigAt: 6.6, smallAt: [6.1, 6.3] };
+  const hlTop = (h) => [...h.matchAll(/class="hl" style="top:(\d+)px/g)].map((m) => +m[1]);
+  dir = project({ style: "podcast-glow", beats: [LOW] });
+  closeUp(dir);
+  build(dir);
+  h = html(dir);
+  const [lowY] = hlTop(h);
+  assert.ok(lowY >= 980, `a low headline on a close-up stays low (top ${lowY}px, was the top band at 260px)`);
+  const bsz = +h.match(/class="hl-b" style="font-size:(\d+)px/)[1];
+  assert.ok(lowY + 78 * 1.05 + bsz * 0.98 <= 1540 + 1, "its bottom stays inside the safe area + 40");
+  assert.ok(!h.includes('id="b0-ar"'), "no arrow under the safe area");
+  dir = project({ style: "podcast-glow", glow: { keepLow: false }, beats: [LOW] });
+  closeUp(dir);
+  build(dir);
+  assert.deepEqual(hlTop(html(dir)), [260], "keepLow off: the old top-band fallback");
+  dir = project({ style: "podcast-glow", beats: [LOW] });
+  build(dir);
+  const roomy = hlTop(html(dir))[0];
+  dir = project({ style: "podcast-glow", glow: { keepLow: false }, beats: [LOW] });
+  build(dir);
+  assert.equal(hlTop(html(dir))[0], roomy, "a headline with room under the chin is placed exactly as before");
+  check("glow.keepLow: a low headline on a close-up sits over the chest, not in the top band; with room it is unchanged");
+
   // ---- glow_plan.py ----
-  dir = project({ style: "podcast-glow", takes: [{ a: 0, b: SEC }] });
+  dir = project({ style: "podcast-glow", takes: [{ a: 0, b: SEC }] }, { matte: true });
   fs.writeFileSync(path.join(dir, "build", "words.whisper.json"), JSON.stringify({ segments: [{ start: 0, end: SEC, words: "Why do you procrastinate? Because nobody is dying to start. We have no idea what it costs. The real problem is fear of failing. So stop waiting and begin today. Everything changes when you do.".split(" ").map((w, i) => ({ word: w, start: +(0.3 + i * 0.4).toFixed(2), end: +(0.6 + i * 0.4).toFixed(2) })) }] }));
   const py = [process.env.PYTHON, "python3", "python", "py"].filter(Boolean).find((c) => { const r = spawnSync(c, ["--version"], { encoding: "utf8" }); return !r.error && r.status === 0 && /Python 3/.test(r.stdout + r.stderr); });
   const pr = spawnSync(py, ["-I", PLAN, dir, "--dry"], { encoding: "utf8" });
