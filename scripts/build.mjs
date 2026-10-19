@@ -3443,13 +3443,23 @@ if (spec.master) fs.writeFileSync(path.join(proj, "build", "master.json"), JSON.
 
 // Explainer (opt-in beats / scenes; hand port of phantasic engine/core): the CSS of the `effect` hook title and the `cutout` concept page.
 // Written into index.html ONLY when such a beat / scene exists, so every other reel is byte-identical.
-// Ahmed's library-bundle beats (boxline, like, label, pin) and Pitch's titlebox: their page CSS, written only when such a beat exists (so every other reel is byte-identical).
+// Ahmed's library-bundle beats (boxline, like, label, pin) and Pitch's popcard and titlebox: their page CSS, written only when such a beat exists (so every other reel is byte-identical).
 const LIBRARY_CSS = (beats_, spec_) => {
   const has = (t) => beats_.some((b) => b.type === t);
   return (spec_.showLogo ? `
   .show-logo { position: absolute; z-index: 9; color: #fff; font-family: Inter, system-ui, sans-serif; text-align: center; line-height: 1; pointer-events: none; text-shadow: 0 2px 10px rgba(0,0,0,.5); }
   .show-logo i { display: block; font-style: normal; font-weight: 700; font-size: 30px; letter-spacing: .12em; }
   .show-logo b { display: block; font-weight: 900; font-size: 64px; letter-spacing: -0.02em; }` : "")
+  // popcard (Pitch pop cards; phantasic 2fba97c engine/core build.mjs + motion.mjs, lost in the b060367 / 54a2f04 port): the card
+  // column centred by left 50% + the tween's xPercent -50, the white photo frame, the accent label under it; and the "bars" UI card's
+  // bar (width, rounded top, grows from the bottom), which overrides the window-bar .ui-bar rule in MOTION_CSS. Scoped to .ui-bars on
+  // purpose (main's rule is unscoped and also shrank a scene kind "ui" window card's title bar to 120 px)
+  + (has("popcard") ? `
+  .popcard { position: absolute; left: 50%; width: max-content; display: flex; flex-direction: column; align-items: center; perspective: 1200px; }
+  .popcard-img { display: block; border-radius: 10px; border: 10px solid #fff; box-shadow: 0 26px 60px rgba(0,0,0,.45); }
+  .popcard-lab { margin-top: 22px; font-family: Inter, system-ui, sans-serif; font-weight: 600; letter-spacing: -0.05em; color: #fff; padding: 4px 22px 10px; line-height: 1.05; white-space: nowrap; }` : "")
+  + (beats_.some((b) => b.type === "popcard" && b.ui?.type === "bars") ? `
+  .ui-bars .ui-bar { width: 120px; border-radius: 14px 14px 4px 4px; transform-origin: 50% 100%; }` : "")
   + (has("boxline") ? `
   .bx { position: absolute; background: #fff; color: #0b0b0b; font-family: Inter, system-ui, sans-serif; font-weight: 900; line-height: 1.02; letter-spacing: -0.02em; padding: 18px 26px 20px; text-align: center; box-shadow: 0 14px 40px rgba(0,0,0,.35); transform-origin: 50% 50%; }
   .bx-lab { position: absolute; display: flex; align-items: flex-start; gap: 6px; color: #fff; font-family: Inter, system-ui, sans-serif; font-weight: 700; font-size: 46px; text-shadow: 0 2px 10px rgba(0,0,0,.7); }
