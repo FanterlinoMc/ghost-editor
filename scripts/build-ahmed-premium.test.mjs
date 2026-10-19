@@ -387,7 +387,7 @@ if (!python) {
   r = py("relight.py", [path.join(S3, "src.mp4"), path.join(S3, "depth.mp4"), path.join(S3, "frame.png"), "--frame", "--look", "warm", "--no-auto"]);
   assert.equal(r.status, 0, r.stderr); assert.ok(fs.statSync(path.join(S3, "frame.png")).size > 1000, "--frame writes a before/after png");
   r = py("relight.py", [path.join(S3, "src.mp4"), path.join(S3, "depth.mp4"), path.join(S3, "x.mp4"), "--look", "disco"]);
-  assert.notEqual(r.status, 0); assert.match(r.stderr, /--look must be neon or warm/);
+  assert.notEqual(r.status, 0); assert.match(r.stderr, /--look must be neon, warm or empire/);
   r = py("splice_matte.py", [path.join(S3, "orig.webm"), path.join(S3, "relit.mp4"), path.join(S3, "relit-mask.mp4"), "0", path.join(S3, "out.webm")]);
   assert.equal(r.status, 0, r.stderr + r.stdout); assert.match(r.stdout, /frames \d+, relit \d+/);
   assert.ok(fs.statSync(path.join(S3, "out.webm")).size > 100, "splice writes a webm");
