@@ -1478,6 +1478,15 @@ const hzLists = [];   // Authority (hormozi): edit-time spans of the split-scree
 // implementation could silently drift from. lib/sections.mjs uses this to decide which take joins
 // a beat spans, so it never becomes a section boundary.
 const beatSpans = [];
+// #fx holds: the windows in which a popcard keeps the camera defocused ({a: the defocus starts, b: the focus-return tween
+// starts, blur, dim}). Every other tween on #fx's filter (look.refocus pulls, captions.energyPunch, a leak's bloom) used to
+// end on "blur(0px) brightness(1)", and a later-starting tween on the same property wins in GSAP, so one landing inside a
+// popcard re-sharpened the speaker behind the card for the rest of it. fxRest(start) is what a tween that STARTS inside a hold
+// must settle on instead (one that starts before the hold is overridden by the card's own later-starting tween, so it is left as is).
+const fxHolds = [];
+const fxHoldAt = (t) => fxHolds.find((h) => t >= h.a - 1e-6 && t < h.b - 1e-6);
+const fxRest = (t, bright = 1) => { const h = fxHoldAt(t); return h ? `blur(${h.blur}px) brightness(${r3(h.dim * bright)})` : `blur(0px) brightness(${bright})`; };
+const fxLeaks = [];   // leak bloom tweens on #fx (tl index + times), re-aimed after the loop if they land inside a popcard hold
 for (const b of beatsList) {
   CUR_BEAT = b;
   const id = `b${n++}`;
@@ -1929,6 +1938,7 @@ for (const b of beatsList) {
       if (b.defocus !== false) {
         tl.push(`tl.to("#fx", { filter: "blur(${b.blur ?? 9}px) brightness(${b.dim ?? spec.popcard?.dim ?? 0.72})", duration: 0.25, ease: "power2.out" }, ${t0});`);
         tl.push(`tl.to("#fx", { filter: "blur(0px) brightness(1)", duration: ${outFade ? 0.14 : 0.26}, ease: "power2.out" }, ${r3(outFade ? t1 - 0.14 : t1 - 0.3)});`);
+        fxHolds.push({ a: t0, b: r3(outFade ? t1 - 0.14 : t1 - 0.3), blur: b.blur ?? 9, dim: b.dim ?? spec.popcard?.dim ?? 0.72 });
       }
       hiddenCaps.push([t0, t1]);
       beatSfx(b, t0, "pop-whoosh-light", "pop card", { db: -4 });
@@ -2152,6 +2162,7 @@ for (const b of beatsList) {
     case "leak": {
       // a warm light-leak flash (a real burn/leak clip, screen-blended) with a bloom on the camera: the "$80" transition
       deferredLeaks.push({ b, t0, t1 });
+      fxLeaks.push({ i: tl.length, t0, t1, bloom: b.bloom ?? 1.5 });
       tl.push(`tl.to("#fx", { filter: "blur(0px) brightness(${b.bloom ?? 1.5})", duration: 0.1, ease: "power2.out" }, ${t0});`);
       tl.push(`tl.to("#fx", { filter: "blur(0px) brightness(1)", duration: 0.25, ease: "power2.in" }, ${r3(Math.max(t0 + 0.12, t1 - 0.25))});`);
       beatSfx(b, t0, "whoosh", "light leak", { db: -6 });
@@ -2212,6 +2223,13 @@ const LOOK_OV = groundFlat.length > 0 || !!spec.look?.cleanScenes;
 const OV = LOOK_OV ? " look-ov" : "";
 // a layer never straddles a section boundary (lib/sections.mjs): its span counts like a beat's
 for (const l of LAYERS) beatSpans.push({ t0: l.t0, t1: l.t1 });
+// a leak bloom inside a popcard hold blooms the defocused camera and settles back on the defocus (fxRest), not on sharp; a leak
+// outside every hold keeps its exact tweens, so a reel without that overlap builds byte-identically
+for (const L of fxLeaks) {
+  const back = r3(Math.max(L.t0 + 0.12, L.t1 - 0.25));
+  if (fxHoldAt(L.t0)) tl[L.i] = `tl.to("#fx", { filter: "${fxRest(L.t0, L.bloom)}", duration: 0.1, ease: "power2.out" }, ${L.t0});`;
+  if (fxHoldAt(back)) tl[L.i + 1] = `tl.to("#fx", { filter: "${fxRest(back)}", duration: 0.25, ease: "power2.in" }, ${back});`;
+}
 
 // ---------- making room: shrink the whole footage stack under a `room:"below"` motion beat ----------
 // Windows merge (overlap -> one shrink); #room wraps #pip and scales about the canvas top centre, OUTSIDE the
@@ -3595,11 +3613,14 @@ if (look.cleanScenes) for (const [b, sp] of beatsList.map((b, i) => [b, beatSpan
 // look.refocus {blur, dur}: the video opens, and the camera comes back from every page, out of focus and pulls sharp
 if (look.refocus) {
   const pulls = [0, ...beatsList.map((b, i) => [b, beatSpans[i]]).filter(([b]) => b.type === "scene" || b.type === "headpage" || b.type === "photostack").map(([, sp]) => sp.t1)].filter((t) => t < TOTAL - 0.3);
-  for (const t of pulls) tl.push(`tl.fromTo("#fx", { filter: "blur(${look.refocus.blur ?? 14}px) brightness(1)" }, { filter: "blur(0px) brightness(1)", duration: ${look.refocus.dur ?? 0.3}, ease: "power2.out", immediateRender: ${t === 0} }, ${r3(t)});`);
+  // a pull that starts inside a popcard hold settles on the card's defocus (fxRest), not on sharp
+  for (const t of pulls) tl.push(`tl.fromTo("#fx", { filter: "blur(${look.refocus.blur ?? 14}px) brightness(${fxHoldAt(t)?.dim ?? 1})" }, { filter: "${fxRest(t)}", duration: ${look.refocus.dur ?? 0.3}, ease: "power2.out", immediateRender: ${t === 0} }, ${r3(t)});`);
 }
 // captions.energyPunch {scale, blur} (duo only): every energy span opens with a zoom punch that smears for a few frames, then settles
 if (cap.style === "duo" && cap.energyPunch) for (const [t] of energySpans) {
-  tl.push(`tl.fromTo("#fx", { scale: ${cap.energyPunch.scale ?? 1.14}, filter: "blur(${cap.energyPunch.blur ?? 7}px) brightness(1)" }, { scale: 1, filter: "blur(0px) brightness(1)", duration: 0.28, ease: "power3.out", immediateRender: false }, ${r3(Math.max(0, t - 0.02))});`);
+  // a punch that starts inside a popcard hold keeps the card's dim and settles on its defocus (fxRest), not on sharp
+  const pt = r3(Math.max(0, t - 0.02)), ph = fxHoldAt(pt);
+  tl.push(`tl.fromTo("#fx", { scale: ${cap.energyPunch.scale ?? 1.14}, filter: "blur(${ph ? Math.max(ph.blur, cap.energyPunch.blur ?? 7) : cap.energyPunch.blur ?? 7}px) brightness(${ph ? ph.dim : 1})" }, { scale: 1, filter: "${fxRest(pt)}", duration: 0.28, ease: "power3.out", immediateRender: false }, ${r3(Math.max(0, t - 0.02))});`);
   addSfx(Math.max(0, t - 0.02), "zoom-sweep-short", "energy punch", { db: spec.sound?.zoomDb ?? -10 });
 }
 if (look.grain) for (let t = 0, k = 0; t < TOTAL; t += 1 / 12, k++) tl.push(`tl.set("#grain", { backgroundPosition: "${(k * 137) % 400}px ${(k * 251) % 400}px" }, ${r3(t)});`);
