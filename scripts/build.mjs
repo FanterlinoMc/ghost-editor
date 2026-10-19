@@ -993,7 +993,11 @@ if (spec.matte) {
       // npx is a .cmd shim on Windows and CreateProcess cannot launch it directly, so this
       // threw ENOENT and took every `behind` beat with it (they die() without a matte).
       const npx = process.platform === "win32" ? ["cmd", ["/c", "npx"]] : ["npx", []];
-      execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 }); console.log("  matte done");
+      // MATTE_THREADS=T / MATTE_JOBS=N (opt-in): the same matte, with onnxruntime held to T threads and/or cut in N time
+      // chunks by N tool processes at once (scripts/matte.mjs). Neither set: the direct call below, as before.
+      if (Number(process.env.MATTE_JOBS) > 1 || Number(process.env.MATTE_THREADS) > 0) execFileSync(process.execPath, [path.join(SKILL, "scripts", "matte.mjs"), path.resolve(proj, s), mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 });
+      else execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 });
+      console.log("  matte done");
     }
   }
   matteHtml = takes.map((k, i) => (perSrcMatte && !stageMatted(k.src)) ? "" : `
