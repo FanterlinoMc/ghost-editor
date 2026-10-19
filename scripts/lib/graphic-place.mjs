@@ -8,12 +8,15 @@
 // prepareGraphics() once, at top level, before anything is emitted. Every render is finished (or the reel died /
 // the beat was dropped) before the first byte of index.html is written, so the build stays deterministic: the same
 // reel + the same cached files give the same bytes. A reel with no graphic layer or beat never reaches this file.
+import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { inspectGraphic, graphicFrames, checkPlacement, reason, beatProblem, graphicName } from "./graphic.mjs";
 import { renderGraphic } from "./graphic-render.mjs";
 
 export const MODES = ["overlay", "insert"];
+export const FIXTURES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+export const STUB_CHROME = "0.0.0-stub";   // the Chrome version every test-deps render is keyed (and checked, R13) under
 export const GRAPHIC_FITS = ["cover", "contain"];
 const r3 = (x) => Math.round(x * 1000) / 1000;
 const fin = (v) => typeof v === "number" && Number.isFinite(v);
@@ -63,16 +66,22 @@ export function resolveGraphicBeat(b, insp, { out, fps, W, H }) {
   if (!MODES.includes(mode)) return drop(reason("P1", { v: mode }));
   const tm = graphicTiming(meta, b, fps);
   const warnings = [...tm.warnings];
-  // the window, in source seconds: to - at, or the graphic's own length from `in` when `to` is left out
-  const srcT = (x) => (fin(x) ? x : isObj(x) && fin(x.t) ? x.t : null);
-  const a = srcT(b.at), z = b.to === undefined ? null : srcT(b.to);
-  const win = b.to === undefined ? tm.defaultWindow : a !== null && z !== null ? z - a : undefined;
-  if (win !== undefined) { const p = checkPlacement({ mode, window: r3(win) }, { W, H }); if (p.length) return drop(p[0]); }
+  // the window, in source seconds: to - at when both are seconds of the same recording, or the graphic's own length
+  // from `in` when `to` is left out. When it cannot be read in source seconds ("end", "hold:...", two recordings),
+  // P2 is applied to the output window after mapping instead.
+  const srcOf = (x) => (fin(x) ? { src: null, t: x } : isObj(x) && fin(x.t) ? { src: x.src ?? null, t: x.t } : null);
+  const A = srcOf(b.at), Z = b.to === undefined ? null : srcOf(b.to);
+  const win = b.to === undefined ? (A ? tm.defaultWindow : undefined) : A && Z && A.src === Z.src ? Z.t - A.t : undefined;
+  const p2 = (s) => checkPlacement({ mode, window: r3(s) }, { W, H });
+  if (win !== undefined && p2(win).length) return drop(p2(win)[0]);
   let t0, t1;
   try {
     t0 = out(b.at);
-    t1 = b.to !== undefined ? out(b.to) : out(fin(b.at) ? r3(b.at + win) : isObj(b.at) ? { ...b.at, t: r3(b.at.t + win) } : b.at);
+    if (b.to !== undefined) t1 = out(b.to);
+    else if (A) t1 = out(fin(b.at) ? r3(b.at + win) : { ...b.at, t: r3(b.at.t + win) });
+    else t1 = r3(t0 + tm.defaultWindow);   // an `at` that is not a source second: the default window in output seconds
   } catch (e) { return drop(String(e.message).split("\n")[0]); }
+  if (win === undefined && p2(t1 - t0).length) return drop(p2(t1 - t0)[0]);
   const Lf = Math.round((t1 - t0) * fps);
   if (Lf < 1) return drop(reason("P2", { s: r3(t1 - t0) }));
   const cut = cutFrames(meta, tm, fps, Lf);
@@ -105,8 +114,8 @@ export const graphicLabel = (b) => (b.id !== undefined ? String(b.id) : fin(b.at
  * opts: { proj, W, H, fps, deps (renderGraphic's injectable steps), log }
  * -> Promise<results[]> in job order, each { ok, file (project-relative, "/"), key, reasons, codes, cached }
  */
-export async function prepareGraphics(jobs, { proj, W, H, fps, deps = {}, log = () => {}, render = renderGraphic }) {
-  const done = new Map();
+export async function prepareGraphics(jobs, { proj, W, H, fps, deps = {}, log = () => {}, render = renderGraphic, done = new Map() }) {
+  // done: pass the same Map to several calls (layers first, then beats) to keep one render per placement across them
   const results = [];
   for (const j of jobs) {
     const id = JSON.stringify([j.html, j.mode, j.L, j.inF, j.after]);
@@ -127,20 +136,30 @@ export async function prepareGraphics(jobs, { proj, W, H, fps, deps = {}, log = 
 
 /**
  * Tests only: GRAPHIC_TEST_DEPS names a module whose `deps` export replaces renderGraphic's external steps (Chrome,
- * the probe, `hyperframes render`). Its stub never opens the graphic in a browser, so it cannot reach the network;
- * its Chrome version is not a real one, so its files never share a cache key with a real render.
+ * the probe, `hyperframes render`). Three guards, so it can never weaken a real render or poison the cache:
+ *   1. honoured only under `node --test` (NODE_TEST_CONTEXT set); anywhere else it is ignored, with a warning;
+ *   2. only a module whose realpath lies inside scripts/fixtures/ of this engine (anything else dies);
+ *   3. chromeVersion is forced to STUB_CHROME after the module's deps are spread, so every such render is keyed
+ *      under a Chrome that does not exist, and a real Chrome's render under it is refused by R13 (nothing cached).
  */
 export async function testDeps(env = process.env) {
   if (!env.GRAPHIC_TEST_DEPS) return {};
-  const m = await import(pathToFileURL(path.resolve(env.GRAPHIC_TEST_DEPS)).href);
-  console.log(`graphic renders STUBBED by GRAPHIC_TEST_DEPS (${env.GRAPHIC_TEST_DEPS}): tests only`);
-  return m.deps;
+  if (!env.NODE_TEST_CONTEXT) { console.log("WARNING: GRAPHIC_TEST_DEPS is ignored outside node --test"); return {}; }
+  let real = null;
+  try { real = fs.realpathSync(path.resolve(env.GRAPHIC_TEST_DEPS)); } catch {}
+  const dir = fs.realpathSync(FIXTURES_DIR);
+  if (!real || !real.startsWith(dir + path.sep)) throw new Error(`GRAPHIC_TEST_DEPS must name a module inside ${dir.split(path.sep).join("/")}/ (got ${env.GRAPHIC_TEST_DEPS})`);
+  const m = await import(pathToFileURL(real).href);
+  console.log(`graphic renders STUBBED by GRAPHIC_TEST_DEPS (${path.basename(real)}): tests only`);
+  return { ...m.deps, chromeVersion: () => STUB_CHROME };
 }
 
 /** A beat's markup: an untimed box (the beats' .layer band; an insert above the beats) with the timed <video>. */
 export function graphicBeatHtml(id, g, { t0, dur, esc, rel }) {
   const b = g.box, name = graphicName(g.html);
-  const style = `position:absolute;left:${r3(b.x)}px;top:${r3(b.y)}px;width:${r3(b.w)}px;height:${r3(b.h)}px;overflow:hidden;visibility:hidden`;
+  // a graphic at 0 is visible from the first frame by its own style (a 1 ms show tween cannot end at 0)
+  const shown = t0 <= 0 ? (g.opacity < 1 ? `opacity:${r3(g.opacity)}` : "") : "visibility:hidden";
+  const style = `position:absolute;left:${r3(b.x)}px;top:${r3(b.y)}px;width:${r3(b.w)}px;height:${r3(b.h)}px;overflow:hidden${shown ? `;${shown}` : ""}`;
   return `<div id="${id}-in" class="graphic" data-graphic="${esc(name)}" data-graphic-mode="${g.mode}" style="${style}"><video id="${id}-v" src="${esc(rel)}" data-start="${t0}" data-duration="${dur}" data-media-start="0" muted playsinline style="width:100%;height:100%;object-fit:${g.fit};display:block"></video></div>`;
 }
 /** Show / hide tweens for a beat's box (the graphic animates itself: no enter / exit motion). The 1 ms show tween ENDS
@@ -148,7 +167,7 @@ export function graphicBeatHtml(id, g, { t0, dur, esc, rel }) {
 export function graphicBeatTweens(id, g, t0, t1) {
   const sel = `#${id}-in`, op = r3(g.opacity);
   return [
-    `ft("${sel}", ${JSON.stringify({ autoAlpha: 0 })}, ${JSON.stringify({ autoAlpha: op, duration: 0.001, ease: "none", force3D: false })}, ${r3(Math.max(0, t0 - 0.001))});`,
+    ...(t0 <= 0 ? [] : [`ft("${sel}", ${JSON.stringify({ autoAlpha: 0 })}, ${JSON.stringify({ autoAlpha: op, duration: 0.001, ease: "none", force3D: false })}, ${r3(t0 - 0.001)});`]),
     `tl.fromTo("${sel}", ${JSON.stringify({ autoAlpha: op })}, ${JSON.stringify({ autoAlpha: 0, duration: 0.001, ease: "none", force3D: false, immediateRender: false })}, ${r3(t1 - 0.001)});`,
   ];
 }

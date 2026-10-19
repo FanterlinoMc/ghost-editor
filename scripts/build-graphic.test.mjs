@@ -18,6 +18,7 @@ import { reason, layerProblem, beatProblem, mapFrame } from "./lib/graphic.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.join(HERE, "build.mjs");
 const STUB = path.join(HERE, "fixtures", "graphic-stub-deps.mjs");
+const FIX = (f) => path.join(HERE, "fixtures", f);
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "build-graphic-"));
 const ff = (...a) => execFileSync("ffmpeg", ["-v", "error", "-y", ...a], { stdio: "pipe" });
 ff("-f", "lavfi", "-i", "testsrc2=size=108x192:rate=30:duration=8", "-f", "lavfi", "-i", "sine=frequency=200:duration=8", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-c:a", "aac", "-ac", "2", "-shortest", path.join(root, "talk.mp4"));
@@ -197,9 +198,7 @@ test("a static refusal: the layer dies, the beat is dropped with a warning (exac
 });
 
 test("a render refusal: the layer dies with the R text, the beat is dropped", () => {
-  const refuse = path.join(root, "refuse-deps.mjs");
-  fs.writeFileSync(refuse, `import { deps as d } from ${JSON.stringify(STUB)};
-export const deps = { ...d, probeNetwork: () => ({ ok: false, lines: [], refusal: "network lock is not in place (http://1.1.1.1/ was reachable from the render browser): graphic renders refused" }) };\n`);
+  const refuse = FIX("graphic-refuse-deps.mjs");
   const R12 = reason("R12", { url: "http://1.1.1.1/" });
   const d1 = project({ layers: [card()] });
   const r1 = build(d1, { GRAPHIC_TEST_DEPS: refuse });
@@ -212,10 +211,9 @@ export const deps = { ...d, probeNetwork: () => ({ ok: false, lines: [], refusal
   assert.ok(!read(d2, "index.html").includes("data-graphic="));
 });
 
-test("opt-in: a reel without graphics never loads the renderer and builds the same bytes as before graphics existed", () => {
+test("opt-in: a reel without graphics never runs the renderer and builds the same bytes as before graphics existed", () => {
   // the same reel twice: with GRAPHIC_TEST_DEPS pointing at a module that throws on import, and without it at all
-  const boom = path.join(root, "boom-deps.mjs");
-  fs.writeFileSync(boom, `throw new Error("graphic deps loaded for a reel without graphics");\n`);
+  const boom = FIX("graphic-boom-deps.mjs");
   const reel = { layers: [{ id: "tx", kind: "text", pin: true, at: 1, dur: 2, text: "Plain", box: { x: 90, y: 1400, w: 900, h: 160 } }], beats: [] };
   const a = project(reel), b = project(reel);
   const ra = build(a, { GRAPHIC_TEST_DEPS: boom }), rb = spawnSync(process.execPath, [BUILD, "."], { cwd: b, encoding: "utf8" });
@@ -225,6 +223,78 @@ test("opt-in: a reel without graphics never loads the renderer and builds the sa
   assert.ok(!/data-graphic|data-layer-kind="graphic"|assets\/graphics/.test(read(a, "index.html")), "no graphic markup");
   assert.ok(!fs.existsSync(path.join(a, "build", "graphics")));
   // the golden reels (scripts/lib/golden-build-hashes.json) are checked byte for byte by scripts/byte-identity.mjs in the gate
+});
+
+test("GRAPHIC_TEST_DEPS guards: ignored outside node --test, only scripts/fixtures/, never a real Chrome key", () => {
+  // 1. without NODE_TEST_CONTEXT the variable is ignored (the throwing module is never imported): the REAL renderer
+  //    runs, here pointed at a Chrome that does not exist, so it refuses before any render (R12 "could not run")
+  const env = { ...process.env, GRAPHIC_TEST_DEPS: FIX("graphic-boom-deps.mjs"), HYPERFRAMES_BROWSER_PATH: path.join(root, "no-such-chrome") };
+  delete env.NODE_TEST_CONTEXT;
+  const d1 = project({ layers: [card()] });
+  const r1 = spawnSync(process.execPath, [BUILD, "."], { cwd: d1, encoding: "utf8", env });
+  assert.equal(r1.status, 1);
+  assert.ok(r1.stdout.includes("WARNING: GRAPHIC_TEST_DEPS is ignored outside node --test"), r1.stdout);
+  assert.ok(!r1.stderr.includes("graphic deps loaded"), r1.stderr);
+  assert.ok(r1.stderr.startsWith("ERROR: layer card: graphic assets/graphics/card.html: network lock probe could not run: "), r1.stderr);
+  // 2. a module outside scripts/fixtures/ (here a byte-identical copy of the stub) kills the build
+  const copy = path.join(root, "graphic-stub-deps.mjs");
+  fs.copyFileSync(STUB, copy);
+  const d2 = project({ layers: [card()] });
+  const r2 = build(d2, { GRAPHIC_TEST_DEPS: copy });
+  assert.equal(r2.status, 1);
+  assert.match(r2.stderr, /^ERROR: GRAPHIC_TEST_DEPS must name a module inside \S+\/scripts\/fixtures\/ \(got /);
+  assert.equal(r2.renders.length, 0);
+  // 3. a module claiming the real Chrome is keyed under the stub Chrome anyway: the launch line no longer matches, R13
+  const d3 = project({ layers: [card()] });
+  const r3 = build(d3, { GRAPHIC_TEST_DEPS: FIX("graphic-realver-deps.mjs") });
+  assert.equal(r3.status, 1, r3.stdout);
+  assert.equal(r3.stderr.trim(), `ERROR: ${layerProblem("card", "assets/graphics/card.html", reason("R13", { v: "152.0.7977.30", k: "0.0.0-stub" }))}`);
+  assert.deepEqual(fs.readdirSync(path.join(d3, "assets", "graphics")).filter((f) => /\.(webm|mp4)$/.test(f)), [], "nothing cached");
+});
+
+test("across a take join: L = round((E(to) - E(at)) * fps); a default window ending in a removed gap drops the beat; P2 on the output window", () => {
+  // takes 0-3 and 5-8 (a 2 s gap, too long to snap): source 2..6 is output 2..4
+  const takes = [{ a: 0, b: 3 }, { a: 5, b: 8 }];
+  const dir = project({ takes, beats: [
+    { type: "graphic", id: "across", html: "assets/graphics/card.html", at: 2, to: 6, after: "loop", box: { x: 0, y: 300, w: 500, h: 500 } },
+    { type: "graphic", id: "gap", html: "assets/graphics/card.html", at: 2.5 },                    // default to 4.5: in the gap
+    { type: "graphic", id: "tail", html: "assets/graphics/card.html", at: 7.95, to: "end" },        // 0.05 s of output
+  ] });
+  const r = build(dir);
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  const html = read(dir, "index.html");
+  const m = /<video id="b\d+-v" src="(assets\/graphics\/card-[0-9a-f]{16}\.webm)" data-start="2" data-duration="2"/.exec(html);
+  assert.ok(m, "the beat spans output 2..4 (source 2..6)");
+  assert.equal(frameCount(path.join(dir, m[1])), 60, "L from the output window, not the 4 s source window");
+  assert.deepEqual(truth(dir).beats.filter((b) => b.type === "graphic").map((b) => [b.at, b.to]), [[2, 4]]);
+  assert.ok(r.stdout.includes("graphic gap: assets/graphics/card.html: E(4.5) for graphic: not inside any take, dropped"), r.stdout);
+  assert.ok(r.stdout.includes(beatProblem("tail", "assets/graphics/card.html", reason("P2", { s: 0.05 }))), r.stdout);
+});
+
+test("sections.json: a graphic beat's cache key is in its section's hash", () => {
+  const beat = (after) => ({ type: "graphic", id: "k", html: "assets/graphics/card.html", at: 1, to: 2, after });
+  const hashes = ["hold", "loop", "hold"].map((after) => {
+    const d = project({ beats: [beat(after)] });
+    const r = build(d);
+    assert.equal(r.status, 0, r.stderr);
+    return JSON.parse(read(d, "build/sections.json")).sections.map((x) => x.hash).join();
+  });
+  // hold and loop: the same at/to/in in edit_truth.json, a different file (key): only the graphics payload differs
+  assert.notEqual(hashes[0], hashes[1]);
+  assert.equal(hashes[0], hashes[2], "and the same key gives the same hash");
+});
+
+test("a graphic at 0 is visible on frame 0 by its own style (no show tween that cannot end before 0)", () => {
+  const dir = project({ layers: [card({ at: 0, opacity: 0.5, box: { x: 0, y: 300, w: 500, h: 500 } })], beats: [{ type: "graphic", id: "z", html: "assets/graphics/card.html", at: 0, to: 1, box: { x: 500, y: 300, w: 500, h: 500 } }] });
+  const r = build(dir);
+  assert.equal(r.status, 0, r.stderr);
+  const html = read(dir, "index.html");
+  assert.match(html, /data-layer-box="card" style="opacity:0\.5;left:0px;top:300px;width:500px;height:500px;"/);
+  assert.ok(!html.includes('ft("#ly-card_box"'), "no show tween for the layer");
+  assert.match(html, /<div id="(b\d+)-in" class="graphic" data-graphic="card" data-graphic-mode="overlay" style="position:absolute;left:500px;top:300px;width:500px;height:500px;overflow:hidden">/);
+  const id = /<div id="(b\d+)-in" class="graphic"/.exec(html)[1];
+  assert.ok(!html.includes(`ft("#${id}-in"`), "no show tween for the beat");
+  assert.ok(html.includes(`tl.fromTo("#${id}-in", {"autoAlpha":1}, {"autoAlpha":0,"duration":0.001,"ease":"none","force3D":false,"immediateRender":false}, 0.999);`), "hidden at its end");
 });
 
 test.after(() => fs.rmSync(root, { recursive: true, force: true }));

@@ -3,7 +3,10 @@
 // test, and prepareGraphics' one-render-per-placement rule (with renderGraphic injected: no render).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveGraphicBeat, prepareGraphics, crossesUi, centredBox } from "./graphic-place.mjs";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { resolveGraphicBeat, prepareGraphics, crossesUi, centredBox, testDeps, FIXTURES_DIR, STUB_CHROME } from "./graphic-place.mjs";
 import { reason } from "./graphic.mjs";
 import { PLATFORMS } from "./safezone.mjs";
 
@@ -50,4 +53,33 @@ test("prepareGraphics: one render per distinct placement, results in job order, 
   assert.deepEqual(calls.map((c) => [c.frames, c.inS, c.after, c.mode]), [[60, 0, "hold", "overlay"], [90, 0, "hold", "overlay"], [60, 0, "hold", "insert"]]);
   assert.deepEqual(res.map((r) => [r.ok, r.file]), [[true, "assets/graphics/c-60.webm"], [true, "assets/graphics/c-90.webm"], [true, "assets/graphics/c-60.webm"], [false, null]]);
   assert.equal(res[0], res[2], "the same result object");
+});
+
+test("a beat's P2 when its source window cannot be read: on the output window after mapping", () => {
+  const out = (x) => (typeof x === "number" ? x + 10 : x === "end" ? 200 : x && x.src === "b" ? x.t : x.t + 10);
+  const c = { ...ctx, out };
+  const P = (b) => resolveGraphicBeat({ type: "graphic", html: H, ...b }, ok, c).problem;
+  assert.equal(P({ at: 1, to: "end" }), `graphic 1: ${H}: ${reason("P2", { s: 189 })}, dropped`, "to: end -> 189 s of output");
+  // two recordings: 1..5 reads as 4 s of source, but the output window is 5 - 11 = -6 s
+  assert.equal(P({ at: { src: "a", t: 1 }, to: { src: "b", t: 5 } }), `graphic {"src":"a","t":1}: ${H}: ${reason("P2", { s: -6 })}, dropped`);
+  assert.equal(P({ at: { src: "a", t: 1 }, to: { src: "a", t: 5 } }), undefined, "the same recording: the 4 s source window");
+  // 1..65 would read as 64 s (over 60) if the two recordings were subtracted; the output window is 65 - 11 = 54 s: placed
+  assert.equal(P({ at: { src: "a", t: 1 }, to: { src: "b", t: 65 } }), undefined, "two recordings: never a source window");
+});
+
+test("testDeps: only under node --test, only scripts/fixtures/, Chrome version forced to the stub's", async () => {
+  const stub = path.join(FIXTURES_DIR, "graphic-realver-deps.mjs");
+  assert.deepEqual(await testDeps({ GRAPHIC_TEST_DEPS: stub }), {}, "no NODE_TEST_CONTEXT: ignored");
+  const d = await testDeps({ GRAPHIC_TEST_DEPS: stub, NODE_TEST_CONTEXT: "child-v8" });
+  assert.equal(d.chromeVersion(), STUB_CHROME, "the module's real Chrome version is overridden");
+  const outside = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "gdeps-")), "graphic-stub-deps.mjs");
+  fs.copyFileSync(path.join(FIXTURES_DIR, "graphic-stub-deps.mjs"), outside);
+  await assert.rejects(testDeps({ GRAPHIC_TEST_DEPS: outside, NODE_TEST_CONTEXT: "child-v8" }), /must name a module inside/);
+  // a symlink inside scripts/fixtures/ that points outside is judged by its realpath
+  if (process.platform === "win32") return;   // symlinks need privileges there
+  const link = path.join(FIXTURES_DIR, ".graphic-link-test.mjs");
+  fs.rmSync(link, { force: true });
+  fs.symlinkSync(outside, link);
+  try { await assert.rejects(testDeps({ GRAPHIC_TEST_DEPS: link, NODE_TEST_CONTEXT: "child-v8" }), /must name a module inside/); }
+  finally { fs.rmSync(link, { force: true }); }
 });

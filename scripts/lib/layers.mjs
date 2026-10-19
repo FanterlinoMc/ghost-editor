@@ -192,6 +192,9 @@ export function takeVolumeLane(d, fps, start = 0, wins = []) {
   return JSON.stringify({ version: 1, lanes: [{ target: "volume", points: pts }] });
 }
 
+/** A graphic layer with no enter animation that starts at the (section's) 0: shown by its inline style from frame 0. */
+const graphicShownAtZero = (l, off = 0) => l.kind === "graphic" && l.enter === "none" && r3(l.t0 - off) <= 0;
+
 /** The enter + exit tween lines for a layer's box. Explicit from AND to on every tween, force3D:false. */
 export function layerTweens(l, off = 0) {
   const sel = `#ly-${l.id}_box`, op = r3(l.opacity), ed = r3(Math.min(ENTER_DUR, l.dur / 3));
@@ -207,7 +210,8 @@ export function layerTweens(l, off = 0) {
   else if (l.enter === "none" && l.kind === "graphic") {
     // a graphic shows its own frame 0 AT t0: the 1 ms show tween ends at t0 instead of starting there (measured in a
     // real render: starting at t0 left the first frame of the window empty). Graphic layers only (byte-identity).
-    lines.push(`ft("${sel}", ${JSON.stringify({ autoAlpha: 0, y: 0 })}, ${JSON.stringify({ autoAlpha: op, y: 0, duration: 0.001, ease: "none", force3D: false })}, ${r3(Math.max(0, t0 - 0.001))});`);
+    // At t0 = 0 there is no tween: the box is visible by its own style (graphicShownAtZero, renderLayer).
+    if (!graphicShownAtZero(l, off)) lines.push(`ft("${sel}", ${JSON.stringify({ autoAlpha: 0, y: 0 })}, ${JSON.stringify({ autoAlpha: op, y: 0, duration: 0.001, ease: "none", force3D: false })}, ${r3(t0 - 0.001)});`);
   }
   else if (l.enter === "none") ft({ autoAlpha: 0, y: 0 }, { autoAlpha: op, y: 0, duration: 0.001, ease: "none" });
   else ft({ autoAlpha: 0, y: 0 }, { autoAlpha: op, y: 0, duration: ed, ease: "power1.out" });
@@ -269,7 +273,8 @@ export function renderLayer(l, ctx, n = 0) {
   const radius = fin(l.radius) && l.radius > 0 ? `border-radius:${r3(Math.min(l.radius, 2000))}px;` : "";
   const sh = l.shadow === true ? SHADOWS.soft : SHADOWS[l.shadow] ?? "";
   const shadowCss = sh ? `box-shadow:${sh};` : "";
-  const box = `<div id="${wid}_box" class="lyr-box${free ? " lyr-free" : ""}" data-layer-box="${esc(l.id)}" style="visibility:hidden;${boxCss};${radius}${shadowCss}">${content}</div>`;
+  const hidden = graphicShownAtZero(l, off) ? (l.opacity < 1 ? `opacity:${r3(l.opacity)};` : "") : "visibility:hidden;";
+  const box = `<div id="${wid}_box" class="lyr-box${free ? " lyr-free" : ""}" data-layer-box="${esc(l.id)}" style="${hidden}${boxCss};${radius}${shadowCss}">${content}</div>`;
   // a <video> must be timed itself (a timed wrapper around it breaks the media clock), so its wrapper is
   // untimed and the box's own autoAlpha tweens are what show and hide it; every other kind sits in a timed .clip
   // (the box starts visibility:hidden inline: GSAP's baseline set is not applied at seek(0) on a fresh paused timeline,

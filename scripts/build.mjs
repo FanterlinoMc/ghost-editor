@@ -715,15 +715,18 @@ for (let i = motionBeats.length - 1; i >= 0; i--) {
   graphicBeats.unshift(b);
 }
 if (graphicLayers.length || graphicBeats.length) {
-  const jobs = [...graphicLayers.map((l) => l.graphic), ...graphicBeats.map((b) => b._graphic)];
-  const res = await prepareGraphics(jobs, { proj, W, H, fps: FPS, deps: await testDeps(), log: (m) => console.log(m) });
-  graphicLayers.forEach((l, i) => {
-    const r = res[i];
+  let gdeps = {};
+  try { gdeps = await testDeps(); } catch (e) { die(e.message); }
+  const gopts = { proj, W, H, fps: FPS, deps: gdeps, log: (m) => console.log(m), done: new Map() };
+  // layers first, one at a time: the first layer that cannot be rendered kills the reel before any beat is rendered
+  for (const l of graphicLayers) {
+    const [r] = await prepareGraphics([l.graphic], gopts);
     if (!r.ok) die(graphicLayerProblem(l.id, l.graphic.html, r.reasons[0]));
     Object.assign(l.graphic, { file: r.file, key: r.key });
-  });
+  }
+  const res = await prepareGraphics(graphicBeats.map((b) => b._graphic), gopts);
   graphicBeats.forEach((b, i) => {
-    const r = res[graphicLayers.length + i];
+    const r = res[i];
     if (r.ok) { Object.assign(b._graphic, { file: r.file, key: r.key }); for (const w of b._graphic.warnings) warn.push(w); return; }
     warn.push(graphicBeatProblem(_gl(b), b.html, r.reasons[0]));
     motionBeats.splice(motionBeats.indexOf(b), 1);
