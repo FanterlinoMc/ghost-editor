@@ -34,10 +34,17 @@ const depthModel = () => JSON.parse(fs.readFileSync(path.join(SCRIPTS, "..", "li
 export const depthModelPath = (env = process.env) => path.join(modelsDir(env), depthModel().file);
 
 // content hash of a file (streamed): a re-recorded or replaced file gets a new key even with the same name, size or mtime
+// A per-process shortcut keyed on path + size + mtime: a cached rebuild hashes each file once, not once per use (the recording is
+// both the depth key's source and, without sourceGrade, the relit media). The content hash is still the key.
+const hashMemo = new Map();
 export function fileHash(abs) {
+  const st = fs.statSync(abs), memo = `${path.resolve(abs)}|${st.size}|${st.mtimeMs}`;
+  if (hashMemo.has(memo)) return hashMemo.get(memo);
   const h = createHash("md5"), fd = fs.openSync(abs, "r"), buf = Buffer.alloc(1 << 20);
   try { for (let n; (n = fs.readSync(fd, buf, 0, buf.length, null)) > 0;) h.update(buf.subarray(0, n)); } finally { fs.closeSync(fd); }
-  return h.digest("hex");
+  const d = h.digest("hex");
+  hashMemo.set(memo, d);
+  return d;
 }
 // the depth file of a recording: keyed on the recording's content, the model input size and the model's sha256, so new footage
 // or another model never reuses an old depth map. assets/<rec>-depth.mp4 (no tag), when present, is a HAND-PLACED override
@@ -45,7 +52,7 @@ export function fileHash(abs) {
 export function depthRelOf(proj, src) {
   const override = `assets/${baseOf(src)}-depth.mp4`;
   if (fs.existsSync(path.resolve(proj, override))) return { rel: override, override: true };
-  const tag = md5([fileHash(path.resolve(proj, src)), DEPTH_SIZE, depthModel().sha256].join("|"));
+  const tag = md5([fileHash(path.resolve(proj, src)), DEPTH_SIZE, depthModel().sha256, md5(fs.readFileSync(path.join(SCRIPTS, "depth_map.py")))].join("|"));
   return { rel: `assets/${baseOf(src)}-depth-${tag}.mp4`, override: false };
 }
 

@@ -299,7 +299,7 @@ What the build does, per recording that has a face track (the primary always; sa
 
 1. **Depth** (`assets/<recording>-depth-<tag>.mp4`, cached): an 8-bit grey video, near = bright, same frame count and rate
    as the recording, at the model's working size (short side 364, fixed). `<tag>` covers the recording's CONTENT (md5 of the
-   file), the model input size and the model's sha256, so a re-recorded file or another model never reuses an old depth map.
+   file), the model input size, the model's sha256 and depth_map.py itself, so a re-recorded file or another model never reuses an old depth map.
    If it is missing the build runs `scripts/depth_map.py <recording> <out> --size 364` (Depth Anything V2 Small, ONNX,
    onnxruntime on the CPU). The model is **not** in this repo: `python3 scripts/depth_map.py --fetch` downloads it once into
    `PHANTASIC_MODELS` (default `~/.cache/phantasic/models`); depth_map.py checks the file's sha256 against
@@ -337,7 +337,9 @@ not match the sha256 in library/models.json (...)`; `relight: could not merge th
 
 Cost, measured 19 Oct 2026 on the Mac mini (Apple M4, 4 performance + 6 efficiency cores, 16 GB; other sessions running, load
 average 7-13) on a 10 s 1080x1920 30 fps clip (301 decoded frames), each step alone under the render lock. All three run once per
-recording and are cached; a rebuild with everything cached takes the same < 1 s as without `relight`.
+recording and are cached. A cached rebuild still reads each recording (and, with `matte`, its cut-out) once to md5 it for
+the cache keys (hashed once per build, however often it is used). That cost grows with file size: 0.011 s for this 9 MB
+clip on the M4; a long phone clip of several hundred MB adds a fraction of a second to a second, on top of the < 1 s build.
 
 | step | time per 10 s | per frame | notes |
 |---|---|---|---|

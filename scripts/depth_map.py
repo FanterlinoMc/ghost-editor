@@ -105,7 +105,8 @@ def main():
     ap.add_argument("src", nargs="?")
     ap.add_argument("out", nargs="?")
     ap.add_argument("--fetch", action="store_true", help="download the model (sha256-checked) and exit")
-    ap.add_argument("--model", default=None, help="the .onnx file (default: PHANTASIC_MODELS/<manifest file>)")
+    ap.add_argument("--model", default=None, help="the .onnx file (default: PHANTASIC_MODELS/<manifest file>); a file named "
+                    "here is NOT checked against the sha256 in library/models.json (the default one is, every run)")
     ap.add_argument("--size", type=int, default=364, help="short side fed to the model (the build passes 364, part of its cache key)")
     ap.add_argument("--threads", type=int, default=int(os.environ.get("DEPTH_THREADS", "0") or 0) or min(4, os.cpu_count() or 4))
     ap.add_argument("--frames", type=int, default=0, help="stop after this many frames (timing runs only)")
