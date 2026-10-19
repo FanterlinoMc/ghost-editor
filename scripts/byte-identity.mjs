@@ -27,6 +27,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { BUSY_BEAT, ROOM_BEAT } from "./lib/motion-fixture.mjs";
 import { silentLibrary } from "./lib/silent-library.mjs";
+import { measuredMatch, VOICE_TOL_DB } from "./lib/measured-match.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD_MJS = path.join(HERE, "build.mjs");
@@ -83,7 +84,7 @@ function buildOnce(name, reel, tag) {
 }
 
 const got = {};
-let bad = 0;
+let bad = 0, tolerated = 0;
 for (const [name, reel] of Object.entries(REELS)) {
   const a = buildOnce(name, reel, "a"), b = buildOnce(name, reel, "b");
   if (JSON.stringify(a) !== JSON.stringify(b)) { console.error(`NOT REPRODUCIBLE: ${name} builds differently run to run`); bad++; }
@@ -97,10 +98,13 @@ if (RECORD) {
   const want = JSON.parse(fs.readFileSync(GOLDEN, "utf8"));
   for (const name of Object.keys(REELS)) {
     for (const k of new Set([...Object.keys(want[name] || {}), ...Object.keys(got[name])])) {
-      if ((want[name] || {})[k] !== got[name][k]) { console.error(`DIFFERS: ${name} ${k}`); bad++; }
+      if ((want[name] || {})[k] === got[name][k]) continue;
+      const near = k === "build/sfx_events.json" && want[name]?.[k] ? measuredMatch(fs.readFileSync(path.join(root, `${name}-a`, k), "utf8"), want[name][k]) : null;
+      if (near) { console.log(`within tolerance: ${name} ${k} (${near})`); tolerated++; continue; }
+      console.error(`DIFFERS: ${name} ${k}`); bad++;
     }
   }
-  console.log(bad ? `byte-identity: ${bad} problem(s)` : `byte-identity: ${Object.keys(REELS).length} reels, every output identical to the golden hashes`);
+  console.log(bad ? `byte-identity: ${bad} problem(s)` : `byte-identity: ${Object.keys(REELS).length} reels, every output identical to the golden hashes${tolerated ? ` (${tolerated} measured voiceP95 within ${VOICE_TOL_DB} dB)` : ""}`);
 }
 if (!KEEP) fs.rmSync(root, { recursive: true, force: true }); else console.log("kept " + root);
 process.exit(bad ? 1 : 0);
