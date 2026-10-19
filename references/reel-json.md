@@ -782,7 +782,7 @@ reverse play, dotLottie (`.lottie`), image or text layers, expressions.
 
 ## Prompt Motion graphic (`kind: "graphic"` layer, `type: "graphic"` beat): spec (CP1), not built yet
 
-Status: **spec (CP1) v3, after the CP3 re-review; not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
+Status: **spec (CP1) v3.1 (CP3 PASS at v3; v3.1 answers the PC's eight questions); not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
 `kind: "graphic"` dies with the existing `unknown kind "graphic"` error and a `graphic` beat is not placed. PM2
 (sandbox + render) and PM3 (in the reel) build it exactly as written here. The PC mirrors every **static** rule
 (G1 to G28) and every placement rule in the validator word for word, at the same time.
@@ -815,7 +815,7 @@ studio writes the user's choice as a **layer** (`kind: "graphic"`, `"by": "user"
 anchored to a take, the existing layer machinery (timing, clamping, z bands, `overCaptions`, `hideCaptions`,
 sections, `edit_truth.json`) unchanged, and the `<video>` it renders is the existing `video` layer's markup.
 A planner/designer-placed graphic is a **beat** (`type: "graphic"`): source seconds, so it moves with its words
-when a take is cut. Both carry the same graphic fields (`src`, `mode`, `box`, `fit`, `after`, ...) and both
+when a take is cut. Both carry the same graphic fields (`html`, `mode`, `box`, `fit`, `after`, ...) and both
 cover `mode: "overlay"` and `mode: "insert"`; an insert is a mode, not a separate kind, because the render path
 is the same and only the box (the whole canvas) and the background differ. As for Lottie, a problem **dies** in
 a layer (user-placed: it must not vanish silently) and **drops the beat with a warning** in a beat (hard rule 5:
@@ -998,7 +998,7 @@ without running the file):
 
 ```jsonc
 // layer (output seconds; the studio writes this)
-{ "id": "counter", "kind": "graphic", "src": "assets/graphics/counter.html",
+{ "id": "counter", "kind": "graphic", "html": "assets/graphics/counter.html",
   "mode": "overlay",                         // overlay | insert
   "anchor": { "take": 2, "offset": 0.4 },    // OR "pin": true, "at": 12.5  (the layer rules, unchanged)
   "dur": 3.5,                                // optional: default the file's window.duration minus in
@@ -1007,7 +1007,7 @@ without running the file):
   "z": 2, "opacity": 1, "enter": "none", "exit": "none",
   "overCaptions": false, "hideCaptions": false, "by": "user" }
 // beat (source seconds; the planner/designer writes this)
-{ "type": "graphic", "id": "counter", "src": "assets/graphics/counter.html", "at": 41.2, "to": 44.7,
+{ "type": "graphic", "id": "counter", "html": "assets/graphics/counter.html", "at": 41.2, "to": 44.7,
   "mode": "overlay", "in": 0, "after": "hold", "box": { ... }, "fit": "contain", "opacity": 1, "hideCaptions": false }
 ```
 
@@ -1015,7 +1015,8 @@ without running the file):
 |---|---|---|---|
 | `id` | string | | layer: the layer rule (`[a-z0-9-]{1,24}`, unique). Beat: optional, the same pattern |
 | `kind` / `type` | `"graphic"` | | literal |
-| `src` | string | | `assets/graphics/<name>.html`, `<name>` `[a-z0-9-]{1,48}`, lowercase `.html`, no `..`, no URL, no absolute path, the resolved file inside `<project>/assets/graphics/` (G1, G2) |
+| `html` | string | | `assets/graphics/<name>.html`, `<name>` `[a-z0-9-]{1,48}`, lowercase `.html`, no `..`, no URL, no absolute path, the resolved file inside `<project>/assets/graphics/` (G1, G2) |
+| `src` (beat) | string | the primary recording | the recording the beat's `at`/`to` belong to, exactly as on every beat (multi-source reels). Not the graphic file: v3.1 renamed the graphic file field to `html` so a graphic beat can name its recording. A graphic layer has no `src` (output seconds); a `src` on it is ignored (GW8) |
 | `mode` | string | `"overlay"` | `overlay` (alpha WebM in `box`) or `insert` (opaque MP4 over the whole canvas). Else P1 |
 | timing (layer) | | | exactly the layer rules: `pin` + `at`, or `anchor {take, offset}`; clamped to the reel; under 0.1 s once clamped: dropped (existing warnings and dies) |
 | timing (beat) | `at`, `to` | `to` = `at` + the graphic's window | source seconds, the beat rules (`src` for multi-source); `to - at` 0.1..60 s (P2) |
@@ -1057,7 +1058,7 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
 
 `key` = the sha256 (hex) of the canonical JSON of the object below. Canonical = exactly Python's
 `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")` (every value is
-ASCII: `src` and media paths are `[a-z0-9-]` by G1/G15). Every number is an integer.
+ASCII: `html` and media paths are `[a-z0-9-]` by G1/G15). Every number is an integer.
 
 ```jsonc
 { "v": 2,                                  // bumped when the wrapper / bridge / CSP / lock changes
@@ -1115,8 +1116,8 @@ PM5 harness).
 
 ### Problems, word for word (v2; the validator mirrors G1 to G28 and P1 to P3)
 
-- layer (`die()`): `layer <layer id>: graphic <src>: <reason>`
-- beat (warning, the beat is dropped): `graphic <beat id or at>: <src>: <reason>, dropped`
+- layer (`die()`): `layer <layer id>: graphic <html>: <reason>`
+- beat (warning, the beat is dropped): `graphic <beat id or at>: <html>: <reason>, dropped`
 
 **Order.** The checks run in the order of the table below (G1, G2, ... G28, then P1 to P3); the FIRST failing
 check is the one reported, and for a regex its LEFTMOST match in the first scope listed that matches is the
@@ -1131,7 +1132,8 @@ check is the one reported, and for a regex its LEFTMOST match in the first scope
   `&apos;`/`&#39;` -> `'`, `&amp;` -> `&` decoded; all joined with `\n`.
 - `MARKUP`: the file with every `<script ...>...</script>` and `<style ...>...</style>` element (the same two
   regexes) removed.
-- Before the scopes are cut, every character in
+- Before the scopes are cut, line endings are normalised: every `\r\n` and every lone `\r` becomes `\n`
+  (`rules.json` `newlines`; both reference implementations). Then every character in
   `[\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]` (written here as escapes; the
   characters themselves) is replaced by a space, so `\s` means the same in JavaScript and in Python `re.ASCII`.
 - Comments are scanned (a forbidden word in a JS or CSS comment fails); text content of the page is not scanned
@@ -1184,34 +1186,47 @@ G25, so the writer prompt must avoid it; and `anime`, `d3`, `THREE`,
 
 | # | check | `<reason>` (exact) |
 |---|---|---|
-| G1 | `src` matches `^assets/graphics/[a-z0-9-]{1,48}\.html$` and resolves inside `<project>/assets/graphics/` | `graphic src '<src>' is not assets/graphics/<name>.html inside the project` |
-| G2 | the file exists | `graphic file <src> does not exist` |
-| G3 | size <= 2097152 bytes | `graphic file <src> is <bytes> bytes (max 2097152)` |
-| G4 | valid UTF-8; exactly one `<head\b` and one `<body\b` (flag `i`, `WHOLE`) | `graphic file <src> is not a UTF-8 HTML document with one <head> and one <body>` |
-| G5 | listing G5 | `graphic file <src> loads a script file or a module (<script src> / type=module): only inline classic scripts are allowed` |
-| G6 | listing G6 | `graphic file <src> has a <link> tag: put styles inline in <style>` |
-| G7 | listing G7 (both lines) | `graphic file <src> uses @import, url(...) or image-set(...) with something other than a data: URI or a #fragment` |
-| G8 | listing G8 | `graphic file <src> uses <match> (no network: fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, import(), import.meta, workers, RTCPeerConnection)` |
-| G9 | listing G9 | `graphic file <src> uses <match> (no eval, new Function or constructor tricks)` |
-| G10 | listing G10 | `graphic file <src> uses <match> (no timers: seek(t) is the only clock)` |
-| G11 | listing G11 | `graphic file <src> reads the clock (<match>): use the t passed to seek(t)` |
-| G12 | listing G12 | `graphic file <src> calls Math.random: use window.rng(seed)` |
-| G13 | listing G13 (three lines) | `graphic file <src> uses <match> (no CSS animations, transitions, Web Animations or SVG animation: compute every style in seek(t))` |
-| G14 | listing G14 (two lines) | `graphic file <src> has a <match> element (no video, audio, iframe, object, embed, base, form or meta refresh)` |
-| G15 | in `MARKUP`, every value of `src=`, `srcset=`, `poster=` and of `href=` / `xlink:href=` on `<image` and `<use` (flag `i`) is a `data:image/(png\|jpeg\|webp\|gif\|svg+xml)` URI, a `#fragment` (`<use>` only) or matches `^assets/graphics/media/[a-z0-9-]{1,48}\.(png\|jpe?g\|webp)$` | `graphic file <src> refers to '<value>' (images must be data: URIs or assets/graphics/media/ files)` |
-| G16 | each `assets/graphics/media/...` file it names exists inside the project | `graphic media <path> does not exist` |
-| G17 | at most 8 media files, each <= 4194304 bytes | `graphic media <path> is <bytes> bytes (max 4194304)` / `graphic file <src> uses <n> media files (max 8)` |
-| G18 | the font rule below | `graphic file <src> uses font family '<name>' (only the engine's fonts, a data: @font-face, var(--...), or a generic family)` |
-| G19 | listing G19 (two lines) | `graphic file <src> uses a library (<match>): no GSAP or any other animation, 3D, chart or UI library; write plain seek(t) code` |
-| G20 | listing G20 | `graphic file <src> asks for a WebGL/WebGPU context (only canvas 2d)` |
-| G21 | `\bwindow\s*\.\s*seek\s*=` (`SCRIPT`) present. A top-level `function seek(t) {}` alone is refused here | `graphic file <src> does not define window.seek(t)` |
-| G22 | in `SCRIPT`: `\bwindow\s*\.\s*duration\s*=(?!=)` occurs exactly once AND `\bwindow\s*\.\s*duration\s*=\s*(\d+(?:\.\d+)?)\s*(?:;\|$\|//)` (flag `m`; a trailing `//` comment is allowed) matches exactly once, value 0.5..30 (a leading digit is required: `.5` and `3.` fail) | `graphic file <src> does not set window.duration to a number literal from 0.5 to 30` |
+| G1 | `html` matches `^assets/graphics/[a-z0-9-]{1,48}\.html$` and resolves inside `<project>/assets/graphics/` | `graphic html '<html>' is not assets/graphics/<name>.html inside the project` |
+| G2 | the file exists | `graphic file <html> does not exist` |
+| G3 | size <= 2097152 bytes | `graphic file <html> is <bytes> bytes (max 2097152)` |
+| G4 | valid UTF-8; exactly one `<head\b` and one `<body\b` (flag `i`, `WHOLE`) | `graphic file <html> is not a UTF-8 HTML document with one <head> and one <body>` |
+| G5 | listing G5 | `graphic file <html> loads a script file or a module (<script src> / type=module): only inline classic scripts are allowed` |
+| G6 | listing G6 | `graphic file <html> has a <link> tag: put styles inline in <style>` |
+| G7 | listing G7 (both lines) | `graphic file <html> uses @import, url(...) or image-set(...) with something other than a data: URI or a #fragment` |
+| G8 | listing G8 | `graphic file <html> uses <match> (no network: fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, import(), import.meta, workers, RTCPeerConnection)` |
+| G9 | listing G9 | `graphic file <html> uses <match> (no eval, new Function or constructor tricks)` |
+| G10 | listing G10 | `graphic file <html> uses <match> (no timers: seek(t) is the only clock)` |
+| G11 | listing G11 | `graphic file <html> reads the clock (<match>): use the t passed to seek(t)` |
+| G12 | listing G12 | `graphic file <html> calls Math.random: use window.rng(seed)` |
+| G13 | listing G13 (three lines) | `graphic file <html> uses <match> (no CSS animations, transitions, Web Animations or SVG animation: compute every style in seek(t))` |
+| G14 | listing G14 (two lines) | `graphic file <html> has a <match> element (no video, audio, iframe, object, embed, base, form or meta refresh)` |
+| G15 | in `MARKUP`, every value of `src=`, `srcset=`, `poster=` and of `href=` / `xlink:href=` on `<image` and `<use` (flag `i`) is a `data:image/(png\|jpeg\|webp\|gif\|svg+xml)` URI, a `#fragment` (`<use>` only) or matches `^assets/graphics/media/[a-z0-9-]{1,48}\.(png\|jpe?g\|webp)$` | `graphic file <html> refers to '<value>' (images must be data: URIs or assets/graphics/media/ files)` |
+| G16 | each `assets/graphics/media/...` file it names exists, and its realpath (symlinks resolved) lies inside `<project>/assets/graphics/media/` (as Lottie L1 does for `assets/`) | `graphic media <path> does not exist` / `graphic media <path> resolves outside assets/graphics/media/` |
+| G17 | at most 8 media files, each <= 4194304 bytes | `graphic media <path> is <bytes> bytes (max 4194304)` / `graphic file <html> uses <n> media files (max 8)` |
+| G18 | the font rule below | `graphic file <html> uses font family '<name>' (only the engine's fonts, a data: @font-face, var(--...), or a generic family)` |
+| G19 | listing G19 (two lines) | `graphic file <html> uses a library (<match>): no GSAP or any other animation, 3D, chart or UI library; write plain seek(t) code` |
+| G20 | listing G20 | `graphic file <html> asks for a WebGL/WebGPU context (only canvas 2d)` |
+| G21 | `\bwindow\s*\.\s*seek\s*=` (`SCRIPT`) present. A top-level `function seek(t) {}` alone is refused here | `graphic file <html> does not define window.seek(t)` |
+| G22 | in `SCRIPT`: `\bwindow\s*\.\s*duration\s*=(?!=)` occurs exactly once AND `\bwindow\s*\.\s*duration\s*=\s*(\d+(?:\.\d+)?)\s*(?:;\|$\|//)` (flag `m`; a trailing `//` comment is allowed) matches exactly once, value 0.5..30 (a leading digit is required: `.5` and `3.` fail) | `graphic file <html> does not set window.duration to a number literal from 0.5 to 30` |
 | G23 | in `SCRIPT`: `\bwindow\s*\.\s*size\s*=(?!=)` occurs 0 times, or once AND `\bwindow\s*\.\s*size\s*=\s*\{\s*w\s*:\s*(\d+)\s*,\s*h\s*:\s*(\d+)\s*,?\s*\}` matches once (w before h, unquoted keys, a trailing comma allowed), both even, `16 <= w <= W`, `16 <= h <= H` | `graphic size must be window.size = { w: <even int>, h: <even int> } within 16..<W> x 16..<H>` |
 | G24 | `mode: "insert"` and a `window.size` other than W x H | `an insert graphic must be <W>x<H> (window.size is <w>x<h>)` |
-| G25 | listing G25 (v3: `defaultView`, `this[`, `.href =`, `.click(` added; the broad `self`/`top`/`parent`/`opener`/`frames` and `history` forms dropped) | `graphic file <src> uses <match> (no storage, navigation, window access or environment reads)` |
-| G26 | `\bwindow\s*\.\s*rng\s*=(?!\s*window\s*\.\s*rng\s*\|\|)` (`SCRIPT`) matches | `graphic file <src> redefines window.rng (copy the engine snippet as is)` |
-| G27 | listing G27 (new in v2) | `graphic file <src> has a link that leaves the page (<match>): <a>/<area> href must be a #fragment, no ping` |
-| G28 | listing G28 (v3: only on a member access, `x['a' + b]`, not an array literal) | `graphic file <src> builds a name from pieces (<match>): write property names out in full` |
+| G25 | listing G25 (v3: `defaultView`, `this[`, `.href =`, `.click(` added; the broad `self`/`top`/`parent`/`opener`/`frames` and `history` forms dropped) | `graphic file <html> uses <match> (no storage, navigation, window access or environment reads)` |
+| G26 | `\bwindow\s*\.\s*rng\s*=(?!\s*window\s*\.\s*rng\s*\|\|)` (`SCRIPT`) matches | `graphic file <html> redefines window.rng (copy the engine snippet as is)` |
+| G27 | listing G27 (new in v2) | `graphic file <html> has a link that leaves the page (<match>): <a>/<area> href must be a #fragment, no ping` |
+| G28 | listing G28 (v3: only on a member access, `x['a' + b]`, not an array literal) | `graphic file <html> builds a name from pieces (<match>): write property names out in full` |
+
+**G15 to G17, exactly (v3.1).**
+
+- G15 reads every attribute value **as written**: no HTML entity decoding (an encoded value like `&#104;ttp://...`
+  does not match an allowed form, so it is refused anyway).
+- A `srcset` is ONE value, compared whole: `data:image/png;base64,AA 1x` is allowed (it starts with an allowed
+  data URI), `assets/graphics/media/a.png 2x` is refused (the media pattern is anchored with `$`).
+- An allowed data URI matches `^data:image/(png|jpeg|webp|gif|svg\+xml)[;,]` (flag `i`); an allowed media path
+  matches `^assets/graphics/media/[a-z0-9-]{1,48}\.(png|jpe?g|webp)$`; `#fragment` (`^#`) only on `<use>`.
+- Media files are the DISTINCT media paths in order of first appearance. G16 checks each in that order (exists,
+  then realpath). G17 checks each file's size in that order FIRST, then the count (> 8 refused).
+- The count (> 8 distinct media paths) needs no file system and is checked even when the validator has no
+  project files (it then skips G16 and the sizes, never the count).
 
 **G18, the font rule, exactly.** Allowed families (compared case-insensitively): the engine's (`Inter`, `Geist`,
 `Montserrat`, `Oswald`, `Unbounded`, `Gloock`, `Instrument Serif`, `EB Garamond`, `Playfair Display`,
@@ -1239,7 +1254,9 @@ has the first `!important` (flag `i`) removed from the list, is trimmed, loses O
 | P2 | `graphic window <s>s is outside 0.1..60s` |
 | P3 | `graphic box shows less than 20% inside the <W>x<H> canvas` |
 
-(The layer's existing `id`, timing, `dur`, `box`, `fit`, `enter`, `exit` dies apply unchanged to a graphic layer.)
+(The layer's existing `id`, timing, `dur`, `box`, `fit`, `enter`, `exit` dies apply unchanged to a graphic layer.
+P3 REPLACES the generic layer rule "at least 20 % of the box inside the canvas" for a graphic layer: the
+validator and the build report P3 only, never both.)
 
 **Refused at render (PM2: the build or the studio renders the graphic when its cache file is missing).** The
 render wrapper reads the whole log of both renders; any of these deletes the output and is the problem.
@@ -1259,6 +1276,24 @@ render wrapper reads the whole log of both renders; any of these deletes the out
 | R11 (v2) | a log line containing `GRAPHIC-REFUSED: navigated` (bridge `pagehide` / `beforeunload`) | `graphic navigated away from its page: render refused` |
 | R12 (v2) | the network probe (above) loaded `http://1.1.1.1/` or `http://169.254.169.254/` through the render's Chrome shim, or the probe could not run | `network lock is not in place (<url> was reachable from the render browser): graphic renders refused` / `network lock probe could not run: <message>` |
 | R13 (v2) | the render log's `Browser launched (HeadlessChrome/<v>, ...` differs from the key's `chrome` | `the render used Chrome <v>, the cache key says <k>: nothing cached` |
+
+**Warnings (never fatal; layer and beat alike, prefixed `layer <id>:` / `graphic <id>:`).** The e79b4d3 texts,
+confirmed; GW7's `<platform name>` and GW8 are v3.1.
+
+| # | text (exact) |
+|---|---|
+| GW1 | `graphic in <v>s is outside 0..<duration>s, clamped` |
+| GW2 | `graphic after cut: shortened from <a>s to <b>s (the graphic's length)` |
+| GW3 | `graphic after '<v>' is not hold, loop or cut, using hold` |
+| GW4 | `graphic box is ignored for an insert (full frame)` |
+| GW5 | `graphic audio is ignored (graphics are silent)` |
+| GW6 | `graphic fps is ignored (the reel's fps is used)` |
+| GW7 | `graphic box crosses the <platform name> UI zone`: `<platform name>` is the DISPLAY name, `safezone.mjs` `PLATFORMS[platform].name` (e.g. `Instagram Reels`, `TikTok`, `YouTube Shorts`), not the key. Any part of the box above `top`, below `H - bottom` or right of `W - right` |
+| GW8 | `graphic src is ignored on a layer (a layer is in output seconds; the graphic file is html)` |
+
+Lottie's W7 (the "Lottie element" section) uses the same display name. The paused `origin/mac/lottie` code
+already prints it (`lottie box crosses the ${sz.name} UI zone`; its test expects `... the Instagram Reels UI
+zone`), so nothing there changes; this section's `<platform name>` means the display name in both places.
 
 **What only the render-time checks catch.** The static scan is hygiene; these pass it and are caught only by
 the network lock (no request leaves) and the determinism check R6 (a clock or randomness shows as differing

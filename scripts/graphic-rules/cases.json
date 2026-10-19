@@ -1,5 +1,5 @@
 {
- "_": "Cases for scripts/graphic-rules/parity.mjs: html in, expect = the first failure (rules.mjs format) or null. bypass/fp: the CP3 reviewer's sets; meta: G18/G21-G26; v3: the CP3 re-review.",
+ "_": "Cases for scripts/graphic-rules/parity.mjs: html in, expect = the first failure (rules.mjs format) or null. bypass/fp: the CP3 reviewer's sets; meta: G18/G21-G26; v3: the CP3 re-review. mine: the CP3 re-reviewer's 11 extra cases; v31: line endings.",
  "cases": {
   "bypass.fetchConcat": {
    "html": "<script>window['fe'+'tch']('https://x')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
@@ -556,6 +556,66 @@
   "v3.durComment": {
    "html": "<script>window.duration = 3.5 // seconds\nwindow.seek = function (t) {};</script>",
    "expect": null
+  },
+  "mine.thisTmplKey": {
+   "html": "<script>var o={}; for (var i=0;i<3;i++) this[`x${i}`] = i;</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"this[\""
+  },
+  "mine.animeFn": {
+   "html": "<script>function anime(x){return x} anime(1);</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G19:SCRIPT:\"anime(\""
+  },
+  "mine.parentAppend": {
+   "html": "<script>var parent=document.getElementById(\"row\"); parent.appendChild(document.createElement(\"div\"));</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "mine.framesArr": {
+   "html": "<script>var frames=[1,2]; var f=frames[0];</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "mine.arrLitConcat": {
+   "html": "<script>var lines=[\"Revenue: \" + 5, \"x\"];</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "mine.durTrailingComment": {
+   "html": "<script>window.duration = 3.5 // seconds\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "mine.defaultViewLoc": {
+   "html": "<script>document.defaultView.location = \"http://localhost:9320/x\";</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"defaultView\""
+  },
+  "mine.hrefClick": {
+   "html": "<script>var a=document.createElement(\"a\"); a.href=\"http://localhost:9320/y\"; a.click();</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\".href=\""
+  },
+  "mine.unicodeWordBoundary": {
+   "html": "<script>var éfetch = 1; éfetch(2);</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G8:SCRIPT:\"fetch(\""
+  },
+  "mine.nbspFetch": {
+   "html": "<script>fetch (\"x\")</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G8:SCRIPT:\"fetch (\""
+  },
+  "mine.historyArr": {
+   "html": "<script>var history=[]; history.push(1);</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "v31.crlfNoSemi": {
+   "html": "<script>\r\nwindow.duration = 2\r\nwindow.seek = function (t) {};\r\n</script>",
+   "expect": null
+  },
+  "v31.crNoSemi": {
+   "html": "<script>\rwindow.duration = 2\rwindow.seek = function (t) {};\r</script>",
+   "expect": null
+  },
+  "v31.crlfSemi": {
+   "html": "<script>\r\nwindow.duration = 2;\r\nwindow.seek = function (t) {};\r\n</script>",
+   "expect": null
+  },
+  "v31.crlfTwoDur": {
+   "html": "<script>\r\nwindow.duration = 2\r\nwindow.duration = 3\r\nwindow.seek = function (t) {};\r\n</script>",
+   "expect": "G22"
   }
  }
 }
