@@ -1183,9 +1183,11 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
       }
       if (li > 0 && !bl[li - 1].tag && bl[li - 1].words) tl.push(`tl.to("#eb${bi}l${li - 1} .ew:not(.eser):not(.ebold):not(.ealarm)", { fontWeight: ${cap.prevWeight ?? 300}, color: "rgba(255,255,255,${cap.prevAlpha ?? 0.86})", duration: 0.2, ease: "power2.out" }, ${r3(ln.words[0].start - 0.03)});`);
       // captions.fitLine (opt-in; Ahmed's f88943d): a line wider than the safe width (long words, a big keyword) shrinks to fit
-      // instead of running off the frame
-      const estW = cap.fitLine ? ln.words.reduce((n, w) => { const kk = isKey(w) ? (cap.keywords || {})[norm(w.word)] : null; const em = kk === "bold" ? (brand.boldScale ?? 1.9) : kk === "script" ? (brand.serifScale ?? 1) * 0.85 : 1; return n + (w.word.length * 0.56 * em + 0.26) * brand.capSize; }, 0) : 0;
-      const fitPx = estW > 900 ? Math.max(40, Math.floor(brand.capSize * 900 / estW)) : 0;
+      // instead of running off the frame. fitLine: <px> (opt-in, a number > 0, raised to at least 400) sets that width instead
+      // of 900, e.g. 820 = the .eblock's own width, so the line also stays inside its grey box (The Keynote). Anything else is off.
+      const fitW = cap.fitLine === true ? 900 : (typeof cap.fitLine === "number" && cap.fitLine > 0 ? Math.max(400, cap.fitLine) : 0);
+      const estW = fitW ? ln.words.reduce((n, w) => { const kk = isKey(w) ? (cap.keywords || {})[norm(w.word)] : null; const em = kk === "bold" ? (brand.boldScale ?? 1.9) : kk === "script" ? (brand.serifScale ?? 1) * 0.85 : 1; return n + (w.word.length * 0.56 * em + 0.26) * brand.capSize; }, 0) : 0;
+      const fitPx = estW > fitW ? Math.max(40, Math.floor(brand.capSize * fitW / estW)) : 0;
       return `<span id="${lid}" class="eline"${fitPx ? ` style="font-size:${fitPx}px"` : ""}>${ln.words.map((w, wi) => {
         const wid = `${lid}w${wi}`;
         tl.push(`ft("#${wid}", { autoAlpha: 0, y: 10, filter: "blur(10px)" }, { autoAlpha: 1, y: 0, filter: "blur(0px)", duration: 0.26, ease: "power3.out" }, ${r3(w.start - 0.03)});`);
@@ -1222,7 +1224,10 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
         return `<span id="${wid}" class="ew">${esc(txt)}</span>`;
       }).join("")}</span>`;
     }).join("");
-    return `<div id="eb${bi}" class="eblock clip${pl.mode === "lower-face" ? (cap.backing === false ? " eshadow" : " ebacked") : ""}" style="top:${y}px${pl.scale && pl.scale < 1 ? `;transform:scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(Math.max(0, s))}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${inner}</div>`;
+    // captions.backingUntil: <edit s> (opt-in): the grey box only on close-up blocks that start before it; later ones get the
+    // heavy text shadow (the approved Keynote sample drops the box after its opening lines)
+    const noBox = cap.backing === false || (typeof cap.backingUntil === "number" && Math.max(0, s) >= cap.backingUntil);
+    return `<div id="eb${bi}" class="eblock clip${pl.mode === "lower-face" ? (noBox ? " eshadow" : " ebacked") : ""}" style="top:${y}px${pl.scale && pl.scale < 1 ? `;transform:scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(Math.max(0, s))}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${inner}</div>`;
   }).join("\n      ");
   // hide the captions under full-screen scenes that don't want them
   tl.push(`tl.set("#ecaps", { autoAlpha: 1 }, 0);`);
