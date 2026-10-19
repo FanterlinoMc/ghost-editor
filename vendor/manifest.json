@@ -1,0 +1,15 @@
+{
+  "_": "Runtime libraries the compositions load, served from this folder instead of a CDN. url: exactly what build.mjs writes into index.html. file: the copy here. project: where build.mjs copies it inside the reel project. sha256 of the file (identical to the CDN's bytes and the npm package's). The render resolves url -> local bytes through scripts/vendor-offline.cjs.",
+  "libraries": [
+    {
+      "name": "gsap",
+      "version": "3.14.2",
+      "url": "https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js",
+      "file": "gsap/3.14.2/gsap.min.js",
+      "project": "assets/vendor/gsap@3.14.2/gsap.min.js",
+      "sha256": "c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280",
+      "license": "gsap/3.14.2/LICENSE.txt",
+      "sources": "gsap/3.14.2/SOURCES.md"
+    }
+  ]
+}

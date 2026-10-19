@@ -80,7 +80,10 @@ b = run(["node", os.path.join(HERE, "build.mjs"), P], cwd=P)
 open(os.path.join(build, "build-finish.log"), "w", encoding="utf-8").write(b.stdout + b.stderr)
 final = os.path.join(build, "reel-final.mp4")
 if "--no-render" not in A:
-    run([*NPX, "hyperframes@0.8.81", "render", "-o", final, "--quiet"], cwd=P)
+    # scripts/vendor-offline.cjs serves GSAP from vendor/ instead of the CDN (forward slashes: NODE_OPTIONS quoting)
+    pre = os.path.join(HERE, "vendor-offline.cjs").replace(os.sep, "/")
+    run([*NPX, "hyperframes@0.8.81", "render", "-o", final, "--quiet"], cwd=P,
+        env={**os.environ, "NODE_OPTIONS": (os.environ.get("NODE_OPTIONS", "") + f' --require "{pre}"').strip()})
     mj = os.path.join(build, "master.json")
     if os.path.isfile(mj):
         run([PY, os.path.join(HERE, "master.py"), final, final + ".mastered.mp4", "--from-json", mj])
