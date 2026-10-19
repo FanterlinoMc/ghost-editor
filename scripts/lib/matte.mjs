@@ -2,6 +2,7 @@
 // MATTE_THREADS=T (opt-in, integer >= 1): the run gets scripts/matte-ort-threads.cjs preloaded, which holds onnxruntime
 // to T threads with spinning off. The preload prints MARK when it takes effect; if it does not (another hyperframes or
 // onnxruntime version), the matte is still valid, so the build warns loudly instead of dying.
+import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
@@ -24,4 +25,14 @@ export function cutMatteThreaded(tool, src, out, { cwd, threads, preload = PRELO
   const fired = String(r.stderr || "").includes(MARK);
   if (!fired) warn(`WARNING: MATTE_THREADS=${threads} was set but the onnxruntime thread patch did not take effect: the matte is fine, the speed-up is lost (about 7x on an 8-CPU quota). Check the hyperframes / onnxruntime-node versions against scripts/matte-ort-threads.cjs.`);
   return fired;
+}
+
+// The matte cache is "the file exists", so a matte is written to <name>.part.webm (still .webm: the tool picks the
+// format from the extension) and renamed over the real name only after the tool exits 0. write(part) makes the file.
+export const partPathOf = (mp) => mp.replace(/\.webm$/i, "") + ".part.webm";
+export function writeAtomically(mp, write) {
+  const part = partPathOf(mp);
+  fs.rmSync(part, { force: true });             // a leftover from a build killed earlier
+  write(part);
+  fs.renameSync(part, mp);
 }

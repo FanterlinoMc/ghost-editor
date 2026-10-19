@@ -7,7 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { matteThreads, cutMatteThreaded, PRELOAD, MARK } from "./matte.mjs";
+import { matteThreads, cutMatteThreaded, writeAtomically, partPathOf, PRELOAD, MARK } from "./matte.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "matte-threads-test-"));
 const p = (f) => path.join(root, f);
@@ -62,10 +62,25 @@ test("the stderr line is MARK, and a failing tool still fails the build", () => 
   assert.throws(() => cutMatteThreaded(tool, "in.mp4", p("d.json"), { cwd: root, threads: 0 }), /threads must be >= 1/);
 });
 
-test("build.mjs: unset MATTE_THREADS keeps the direct remove-background call", () => {
+test("build.mjs: unset MATTE_THREADS keeps the direct remove-background call, into the .part file", () => {
   const b = fs.readFileSync(path.join(path.dirname(PRELOAD), "build.mjs"), "utf8");
   assert.ok(b.includes("const threads = matteThreads();"));
-  assert.ok(b.includes('else execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 });'));
+  assert.ok(b.includes("writeAtomically(mp, (out) => {"));
+  assert.ok(b.includes('else execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", out], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 });'));
+});
+
+test("writeAtomically: a finished matte arrives byte for byte; a killed one leaves nothing that looks cached", () => {
+  const mp = p("talk-matte.webm");
+  assert.equal(partPathOf(mp), p("talk-matte.part.webm"));
+  const bytes = Buffer.from(Array.from({ length: 4096 }, (_, i) => (i * 37) & 255));
+  writeAtomically(mp, (out) => { assert.ok(out.endsWith(".webm")); fs.writeFileSync(out, bytes); });
+  assert.ok(fs.readFileSync(mp).equals(bytes));
+  assert.equal(fs.existsSync(partPathOf(mp)), false);
+  const mp2 = p("other-matte.webm");
+  fs.writeFileSync(partPathOf(mp2), "stale");                 // left by an earlier killed build: replaced, not appended to
+  assert.throws(() => writeAtomically(mp2, (out) => { fs.appendFileSync(out, bytes.subarray(0, 100)); throw new Error("killed"); }), /killed/);
+  assert.equal(fs.existsSync(mp2), false);
+  assert.equal(fs.readFileSync(partPathOf(mp2)).length, 100);
 });
 
 test.after(() => fs.rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }));

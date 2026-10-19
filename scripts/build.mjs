@@ -38,7 +38,7 @@ import { GM_CSS } from "./lib/gadzhi.mjs";
 import { HZ_CSS, hzBeat } from "./lib/hormozi.mjs";
 import { createHash } from "node:crypto";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
-import { matteThreads, cutMatteThreaded } from "./lib/matte.mjs";
+import { matteThreads, cutMatteThreaded, writeAtomically } from "./lib/matte.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -996,8 +996,12 @@ if (spec.matte) {
       const npx = process.platform === "win32" ? ["cmd", ["/c", "npx"]] : ["npx", []];
       // MATTE_THREADS=T (opt-in, integer >= 1): the same matte, onnxruntime held to T threads (lib/matte.mjs); unset: as before
       const threads = matteThreads();
-      if (threads) cutMatteThreaded([npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background"]], path.resolve(proj, s), mp, { cwd: proj, threads, warn: (m) => { console.warn(m); warn.push(m); } });
-      else execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 });
+      // written to <name>.part.webm and renamed when done: a killed build never leaves a truncated matte that the next
+      // build would take as cached (the tool picks its format from the extension, so the name ends in .webm)
+      writeAtomically(mp, (out) => {
+        if (threads) cutMatteThreaded([npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background"]], path.resolve(proj, s), out, { cwd: proj, threads, warn: (m) => { console.warn(m); warn.push(m); } });
+        else execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", out], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 });
+      });
       console.log("  matte done");
     }
   }
