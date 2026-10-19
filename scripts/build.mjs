@@ -45,7 +45,6 @@ import * as RL from "./lib/relight.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 import { inspectPlaced, resolveGraphicBeat, prepareGraphics, testDeps, graphicBeatHtml, graphicBeatTweens, crossesUi, graphicLabel as _gl } from "./lib/graphic-place.mjs";
 import { layerProblem as graphicLayerProblem, beatProblem as graphicBeatProblem, reason as graphicReason } from "./lib/graphic.mjs";
-import { copyVendored } from "./lib/vendor.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = process.env.PHANTASIC_LIB ? path.resolve(process.env.PHANTASIC_LIB) : path.join(SKILL, "library");   // PHANTASIC_LIB: another library root (tests; a studio with its own sounds)
@@ -218,7 +217,6 @@ function writeBlankPage() {
 </html>
 `;
   fs.writeFileSync(path.join(proj, "index.html"), html);
-  copyVendored(proj, html, die);   // GSAP from vendor/, so the render needs no CDN (scripts/vendor-offline.cjs)
   fs.mkdirSync(path.join(proj, "build"), { recursive: true });
   const j = (name, v) => fs.writeFileSync(path.join(proj, "build", name), JSON.stringify(v, null, 2));
   j("edit_truth.json", { total: BLANK_S, speech: 0, fps: FPS, takes: [], snaps: [], pushes: [], beats: [] });
@@ -4015,8 +4013,6 @@ const htmlOut = PREVIEW > 0 && PREVIEW < 1 ? (() => {
     .replace(/<\/div>\n<script>/, "</div></div>\n<script>");
 })() : html;
 fs.writeFileSync(path.join(proj, "index.html"), htmlOut);
-// the page keeps the CDN <script src> (every golden index.html has it); the render serves it from this copy
-copyVendored(proj, htmlOut, die);
 fs.mkdirSync(path.join(proj, "build"), { recursive: true });
 fs.writeFileSync(path.join(proj, "build", "sfx_events.json"), JSON.stringify({ total: TOTAL, speech: SPEECH, voiceP95: r3(voiceP95), roleDb: ROLE_DB, events: sfxEvents }, null, 2));
 fs.writeFileSync(path.join(proj, "build", "words.edit.json"), JSON.stringify(words));

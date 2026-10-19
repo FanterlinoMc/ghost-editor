@@ -1,11 +1,13 @@
-// Preloaded (node --require) into `hyperframes render` so a render never fetches a library from a CDN.
-// build.mjs writes <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"> (that exact tag is in
-// every golden reel's index.html, so it stays), and hyperframes' compiler downloads each http(s) <script src> with
-// the global fetch() and inlines it. This preload answers fetch() for every URL in vendor/manifest.json with the
-// vendored bytes: first the copy build.mjs put in the project (assets/vendor/...), then the fork's vendor/ folder,
-// each only if its sha256 matches the manifest. Each URL it serves prints MARK on stderr, so a caller can tell.
-//   VENDOR_OFFLINE=1  also refuse every other non-loopback http(s) fetch (tests; proving a render needs no network)
-// Otherwise an unvendored CDN URL still goes to the network, with a warning on stderr.
+// Preloaded (node --require) into `hyperframes render` by scripts/lib/vendor.mjs runRender() (CLI: scripts/render.mjs).
+// build.mjs writes <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"> (that exact tag is in every
+// golden reel's hashed index.html, so it stays). hyperframes' compiler downloads each http(s) <script src> with the
+// global fetch() and inlines it into the page Chrome renders. This preload answers fetch() for every URL in
+// vendor/manifest.json with the fork's vendor/ copy, sha256-checked, and prints MARK + the URL on stderr; runRender()
+// fails the render when the page uses such a URL and MARK is missing. A manifest URL whose local copy is missing or
+// altered is refused (fail closed), never fetched from the network.
+//   VENDOR_OFFLINE=1  also refuse every other non-loopback fetch() in this Node process (tests, diagnosis). It covers
+//                     Node only: a script tag hyperframes failed to inline would still be loaded by Chrome itself.
+// Otherwise an unvendored CDN script URL still goes to the network, with a warning on stderr.
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -14,21 +16,10 @@ const MARK = "vendor: served";
 const VENDOR = path.join(__dirname, "..", "vendor");
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(VENDOR, "manifest.json"), "utf8")).libraries;
 const BY_URL = new Map(MANIFEST.map((e) => [e.url, e]));
-const CDN = /^https?:\/\/([a-z0-9-]+\.)*(jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com|googleapis\.com|gstatic\.com|esm\.sh|skypack\.dev)\//i;
+const CDN = /^https?:\/\/([a-z0-9-]+\.)*(jsdelivr\.net|unpkg\.com|cdnjs\.cloudflare\.com|esm\.sh|skypack\.dev)\//i;
 const LOOPBACK = /^https?:\/\/(localhost|127\.\d+\.\d+\.\d+|\[::1\])(:\d+)?\//i;
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
-
-// the vendored bytes for a manifest entry, or null: the project's copy first, then the fork's, sha256-checked
-function resolveLocal(entry, cwd = process.cwd()) {
-  for (const p of [path.resolve(cwd, entry.project), path.join(VENDOR, entry.file)]) {
-    let b;
-    try { b = fs.readFileSync(p); } catch { continue; }
-    if (sha(b) === entry.sha256) return { path: p, bytes: b };
-    process.stderr.write(`vendor: WARNING ${p} does not match the sha256 in vendor/manifest.json, ignored\n`);
-  }
-  return null;
-}
-module.exports = { MARK, MANIFEST, resolveLocal };
+module.exports = { MARK, MANIFEST };
 
 const urlOf = (input) => (typeof input === "string" ? input : input instanceof URL ? input.href : input && input.url) || "";
 const real = globalThis.fetch;
@@ -38,12 +29,15 @@ if (typeof real === "function" && !real.__vendorOffline) {
     const url = urlOf(input);
     const entry = BY_URL.get(url);
     if (entry) {
-      const hit = resolveLocal(entry);
-      if (hit) {
-        process.stderr.write(`${MARK} ${url} from ${hit.path}\n`);
-        return new Response(hit.bytes, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8" } });
+      const p = path.join(VENDOR, entry.file);
+      let b = null;
+      try { b = fs.readFileSync(p); } catch {}
+      if (!b || sha(b) !== entry.sha256) {
+        process.stderr.write(`vendor: REFUSED ${url}: ${p} is missing or does not match its sha256 in vendor/manifest.json\n`);
+        throw new TypeError(`vendor: no valid local copy of ${url} (fail closed, not fetched from the network)`);
       }
-      process.stderr.write(`vendor: WARNING no valid local copy of ${url}\n`);
+      process.stderr.write(`${MARK} ${url} from vendor/${entry.file}\n`);
+      return new Response(b, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8" } });
     }
     if (/^https?:/i.test(url) && !LOOPBACK.test(url)) {
       if (offline) {
