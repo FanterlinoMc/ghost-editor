@@ -38,6 +38,7 @@ import { GM_CSS } from "./lib/gadzhi.mjs";
 import { HZ_CSS, hzBeat } from "./lib/hormozi.mjs";
 import { createHash } from "node:crypto";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
+import { matteThreads, cutMatteThreaded } from "./lib/matte.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -993,9 +994,9 @@ if (spec.matte) {
       // npx is a .cmd shim on Windows and CreateProcess cannot launch it directly, so this
       // threw ENOENT and took every `behind` beat with it (they die() without a matte).
       const npx = process.platform === "win32" ? ["cmd", ["/c", "npx"]] : ["npx", []];
-      // MATTE_THREADS=T / MATTE_JOBS=N (opt-in): the same matte, with onnxruntime held to T threads and/or cut in N time
-      // chunks by N tool processes at once (scripts/matte.mjs). Neither set: the direct call below, as before.
-      if (Number(process.env.MATTE_JOBS) > 1 || Number(process.env.MATTE_THREADS) > 0) execFileSync(process.execPath, [path.join(SKILL, "scripts", "matte.mjs"), path.resolve(proj, s), mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 });
+      // MATTE_THREADS=T (opt-in, integer >= 1): the same matte, onnxruntime held to T threads (lib/matte.mjs); unset: as before
+      const threads = matteThreads();
+      if (threads) cutMatteThreaded([npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background"]], path.resolve(proj, s), mp, { cwd: proj, threads, warn: (m) => { console.warn(m); warn.push(m); } });
       else execFileSync(npx[0], [...npx[1], "hyperframes@0.8.81", "remove-background", path.resolve(proj, s), "-o", mp], { stdio: ["ignore", "ignore", "pipe"], cwd: proj, maxBuffer: 1 << 28 });
       console.log("  matte done");
     }
