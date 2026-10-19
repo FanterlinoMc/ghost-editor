@@ -20,7 +20,8 @@ import { compileMotion } from "./lib/motion-graphics.mjs";
 import { makeLottieResolver, lottieHead, inspectLottie, LOTTIE_URL, LOTTIE_MAX_BYTES } from "./lib/lottie.mjs";
 import { renderLayer } from "./lib/layers.mjs";
 import { makeProject, LOTTIE_BEAT, LOTTIE_FIXTURE, LOTTIE_FILE } from "./lib/motion-fixture.mjs";
-import { LIBRARIES, VENDOR } from "./lib/vendor.mjs";
+import { LIBRARIES, VENDOR, PRELOAD, MARK } from "./lib/vendor.mjs";
+import { spawnSync } from "node:child_process";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lottie-test-"));
 const FIX = JSON.stringify(LOTTIE_FIXTURE);
@@ -337,6 +338,37 @@ test("lottie_light: no expression engine, no eval (why the light build)", () => 
   const src = fs.readFileSync(path.join(VENDOR, lw.file), "utf8");
   assert.ok(!/\beval\(|new Function\(/.test(src));
   assert.ok(src.includes("goToAndStop") && src.includes("setSubframe"));
+});
+
+test("the vendor preload fails closed for lottie_light too: an altered or missing copy is served as a throwing stub", () => {
+  const lw = LIBRARIES.find((x) => x.name === "lottie-web");
+  const fake = fs.mkdtempSync(path.join(tmp, "fake-fork-"));
+  fs.mkdirSync(path.join(fake, "scripts"), { recursive: true });
+  fs.mkdirSync(path.join(fake, "vendor", path.dirname(lw.file)), { recursive: true });
+  fs.copyFileSync(PRELOAD, path.join(fake, "scripts", "vendor-offline.cjs"));
+  fs.copyFileSync(path.join(VENDOR, "manifest.json"), path.join(fake, "vendor", "manifest.json"));
+  const preload = path.join(fake, "scripts", "vendor-offline.cjs").split(path.sep).join("/");
+  const probe = () => {
+    const code = `(async () => { const r = await fetch(${JSON.stringify(lw.url)}); const b = Buffer.from(await r.arrayBuffer()); console.log(JSON.stringify({ sha: require("node:crypto").createHash("sha256").update(b).digest("hex"), head: b.subarray(0, 300).toString() })); })();`;
+    const r = spawnSync(process.execPath, ["-e", code], { cwd: fake, encoding: "utf8", env: { ...process.env, NODE_OPTIONS: `--require "${preload}"`, VENDOR_OFFLINE: "1" } });
+    assert.equal(r.status, 0, r.stderr);
+    return { ...JSON.parse(r.stdout.trim().split("\n").pop()), stderr: r.stderr };
+  };
+  // the genuine copy is served
+  fs.copyFileSync(path.join(VENDOR, lw.file), path.join(fake, "vendor", lw.file));
+  let out = probe();
+  assert.equal(out.sha, lw.sha256);
+  assert.ok(out.stderr.includes(`${MARK} ${lw.url} from vendor/${lw.file}`), out.stderr);
+  // altered, then missing: refused, a script that throws, and no MARK (so runRender fails the render)
+  const refused = (o) => {
+    assert.notEqual(o.sha, lw.sha256);
+    assert.ok(o.head.startsWith(`/* vendor: REFUSED ${lw.url} */\nthrow new Error(`), o.head);
+    assert.ok(!o.stderr.includes(MARK) && o.stderr.includes(`vendor: REFUSED ${lw.url}`), o.stderr);
+  };
+  fs.appendFileSync(path.join(fake, "vendor", lw.file), "\n// altered");
+  refused(probe());
+  fs.rmSync(path.join(fake, "vendor", lw.file));
+  refused(probe());
 });
 
 test.after(() => { if (!process.env.KEEP) fs.rmSync(tmp, { recursive: true, force: true }); });
