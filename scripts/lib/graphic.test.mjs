@@ -401,6 +401,48 @@ test("findChrome: the pinned build, else the highest cached build not above its 
   assert.equal(RR.findChrome({ HYPERFRAMES_BROWSER_PATH: "/x" }, home), "/x");
 });
 
+test("findChrome: GRAPHIC_CHROME_PATH first, and a broken one refuses instead of falling back", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-home-"));
+  const exeName = process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
+  const cached = path.join(home, ".cache", "hyperframes", "chrome", "chrome-headless-shell", `mac_arm-${RR.PINNED_CHROME}`, "sub", exeName);
+  fs.mkdirSync(path.dirname(cached), { recursive: true }); fs.writeFileSync(cached, "");
+  const pinned = path.join(home, "pinned", exeName);
+  fs.mkdirSync(path.dirname(pinned), { recursive: true }); fs.writeFileSync(pinned, "#!/bin/sh\n"); fs.chmodSync(pinned, 0o755);
+  const others = { HYPERFRAMES_BROWSER_PATH: "/other/hf", PRODUCER_HEADLESS_SHELL_PATH: "/other/producer" };
+  // wins over both env paths and over the cache
+  assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: pinned, ...others }, home), pinned);
+  assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: pinned }, home), pinned);
+  // set but missing / a directory / not executable: a clear error, never another browser
+  const missing = path.join(home, "nope", exeName);
+  for (const bad of [missing, path.dirname(pinned)].concat(process.platform === "win32" ? [] : [(() => { const f = path.join(home, "noexec"); fs.writeFileSync(f, ""); fs.chmodSync(f, 0o644); return f; })()])) {
+    assert.throws(() => RR.findChrome({ GRAPHIC_CHROME_PATH: bad, ...others }, home), { message: `GRAPHIC_CHROME_PATH=${bad} is not an executable file` });
+    assert.throws(() => RR.findChrome({ GRAPHIC_CHROME_PATH: bad }, home), { message: `GRAPHIC_CHROME_PATH=${bad} is not an executable file` }, "no fallback to the cache");
+  }
+  // unset (or empty): today's order
+  assert.equal(RR.findChrome({ ...others }, home), "/other/hf");
+  assert.equal(RR.findChrome({ PRODUCER_HEADLESS_SHELL_PATH: "/other/producer" }, home), "/other/producer");
+  assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: "" }, home), cached);
+  assert.equal(RR.findChrome({}, home), cached);
+  // renderGraphic: the throw is a setup refusal (R12n with the text), nothing probed or rendered
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-rg-"));
+  const calls = { probe: 0, render: 0, shim: 0 };
+  const r = await RR.renderGraphic({ content: goodGraphic(), html: "assets/graphics/good.html", outDir: path.join(work, "out"), buildDir: path.join(work, "build") }, {
+    findChrome: () => RR.findChrome({ GRAPHIC_CHROME_PATH: missing, ...others }, home),
+    chromeShim: () => { calls.shim++; return "/fake/shim"; }, chromeVersion: () => "152.0.7977.30", ffmpegVersion: () => "7.1.1",
+    probeNetwork: () => { calls.probe++; return { ok: true, lines: [] }; }, runRender: async () => { calls.render++; return { status: 0, secs: 1, log: "" }; },
+  });
+  assert.deepEqual([r.ok, r.codes, r.reasons, r.stage, calls], [false, ["R12"], [G.reason("R12n", { message: `GRAPHIC_CHROME_PATH=${missing} is not an executable file` })], "setup", { probe: 0, render: 0, shim: 0 }]);
+  // the render child never sees it (only this renderer reads it; normal reels must not)
+  const prev = process.env.GRAPHIC_CHROME_PATH;
+  process.env.GRAPHIC_CHROME_PATH = pinned;
+  try { assert.equal(RR.cleanEnv({ X: "1" }).GRAPHIC_CHROME_PATH, undefined); } finally { if (prev === undefined) delete process.env.GRAPHIC_CHROME_PATH; else process.env.GRAPHIC_CHROME_PATH = prev; }
+});
+
+test("normal (non-graphic) Chrome lookup ignores GRAPHIC_CHROME_PATH", () => {
+  const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "browser.mjs"), "utf8");
+  assert.doesNotMatch(src, /GRAPHIC_CHROME_PATH/);
+});
+
 // renderGraphic with every external step injected: the guards, without a real render
 function fakeDeps(over = {}) {
   const calls = { render: 0, probe: 0 };

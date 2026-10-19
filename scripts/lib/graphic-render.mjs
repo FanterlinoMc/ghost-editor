@@ -4,7 +4,8 @@
 //
 // Network isolation (the production container has no OS-level lockdown: no CAP_NET_ADMIN, no unshare, no egress
 // firewall; so the isolation is at the BROWSER level and the same on macOS and Linux):
-//   1. A Chrome launcher shim (HYPERFRAMES_BROWSER_PATH) that execs the pinned headless shell with CHROME_FLAGS: every
+//   1. A Chrome launcher shim (HYPERFRAMES_BROWSER_PATH) that execs the pinned headless shell (GRAPHIC_CHROME_PATH, a
+//      dedicated path for the graphic renderer's pinned headless shell, if set; see findChrome) with CHROME_FLAGS: every
 //      request through a dead proxy (127.0.0.1:9; covers IP literals), every host name but localhost unresolvable,
 //      no QUIC, WebRTC limited to proxied UDP (= none), no background networking; loopback is proxied too
 //      ("<-loopback>") except HyperFrames' own render server, whose ephemeral port the preload records in
@@ -70,7 +71,7 @@ export function sandboxLauncher(env = process.env) {
 }
 // the environment of every process of a graphic render (probe, Node half, hyperframes): never an inherited
 // GRAPHIC_RENDER_ORIGINS (only the preload inside THIS render's hyperframes may set it)
-export const cleanEnv = (extra = {}) => { const e = { ...process.env, ...extra }; delete e.GRAPHIC_RENDER_ORIGINS; delete e.GRAPHIC_SHIM_MARK; return e; };
+export const cleanEnv = (extra = {}) => { const e = { ...process.env, ...extra }; delete e.GRAPHIC_RENDER_ORIGINS; delete e.GRAPHIC_SHIM_MARK; delete e.GRAPHIC_CHROME_PATH; return e; };
 
 // ---------- the probe (R12) ----------
 const PROBE_CHILD = path.join(HERE, "graphic-probe.mjs");
@@ -121,11 +122,22 @@ export function resolveHyperframes() {
 }
 // hyperframes 0.8.81 pins chrome-headless-shell 152.0.7977.30 (CHROME_VERSION in its cli.js; 150.0.7871.124 on macOS 12)
 // and never uses a cached build above its major ceiling; the same choice here: the pinned build if cached, else the
-// highest cached build whose major is not above the pin's
+// highest cached build whose major is not above the pin's.
+// Order: GRAPHIC_CHROME_PATH (a dedicated path for the graphic renderer's pinned headless shell, so graphics can use the
+// pinned build while normal reels keep whatever HYPERFRAMES_BROWSER_PATH names; only this renderer reads it), then
+// HYPERFRAMES_BROWSER_PATH, PRODUCER_HEADLESS_SHELL_PATH, then the cache search. A GRAPHIC_CHROME_PATH that is set but
+// is not an executable file THROWS (no fallback to another browser): renderGraphic turns that into an R12n refusal.
 export const PINNED_CHROME = "152.0.7977.30";
 const verOf = (dir) => { const m = /(\d+(?:\.\d+){1,3})$/.exec(dir); return m ? m[1].split(".").map(Number) : null; };
 const cmpVer = (a, b) => { for (let i = 0; i < 4; i++) { const d = (b[i] || 0) - (a[i] || 0); if (d) return d; } return 0; };
 export function findChrome(env = process.env, home = os.homedir()) {
+  const pinned = env.GRAPHIC_CHROME_PATH;
+  if (pinned) {
+    let ok = false;
+    try { ok = fs.statSync(pinned).isFile(); fs.accessSync(pinned, fs.constants.X_OK); } catch { ok = false; }
+    if (!ok) throw new Error(`GRAPHIC_CHROME_PATH=${pinned} is not an executable file`);
+    return pinned;
+  }
   const given = env.HYPERFRAMES_BROWSER_PATH || env.PRODUCER_HEADLESS_SHELL_PATH;
   if (given) return given;
   const ceiling = Number(PINNED_CHROME.split(".")[0]);
@@ -340,7 +352,9 @@ export async function renderGraphic(opts, deps = {}) {
   fs.mkdirSync(path.join(buildDir, "graphics"), { recursive: true });
   const scratch = fs.mkdtempSync(path.join(buildDir, "graphics", ".sandbox-")); // per call: concurrent renders never share a shim
   try {
-    const shim = D.chromeShim(path.join(scratch, "chrome"), D.findChrome());
+    let exe; // a set-but-broken GRAPHIC_CHROME_PATH throws: refuse here, never wrap another browser
+    try { exe = D.findChrome(); } catch (e) { return { ok: false, reasons: [reason("R12n", { message: e.message })], codes: ["R12"], stage: "setup" }; }
+    const shim = D.chromeShim(path.join(scratch, "chrome"), exe);
     const chrome = shim ? D.chromeVersion(shim) : null; // the version as the launcher runs it (the shim forwards --version)
     const ffmpeg = D.ffmpegVersion();
     if (!chrome || !ffmpeg) return { ok: false, reasons: [reason("R12n", { message: !chrome ? (shim ? "the Chrome shim gave no --version" : "no chrome-headless-shell, or no POSIX shim (Windows)") : "ffmpeg -version gave no version" })], codes: ["R12"], stage: "setup" };
