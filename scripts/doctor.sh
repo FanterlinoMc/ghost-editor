@@ -23,12 +23,12 @@ if [ -n "$GEMINI_API_KEY" ] || grep -qs '^GEMINI_API_KEY=' "$S/.env"; then pass 
 
 echo "library"
 n=$(ls "$S"/library/sfx/*.wav 2>/dev/null | wc -l | tr -d ' ')
-[ "$n" -ge 30 ] && pass "sfx kit ($n files)" || fail "sfx kit ($n files)" "python3 $S/scripts/library_restore.py --sfx-only"
+[ "$n" -ge 30 ] && pass "sfx kit ($n files)" || fail "sfx kit ($n files)" "restore the licensed pack (see $S/library/SOURCES.md); nothing here downloads sounds"
 m=$(ls "$S"/library/memes/*/clip.webm "$S"/library/memes/*/image.png 2>/dev/null | wc -l | tr -d ' ')
 if [ "$m" -ge 1 ]; then pass "memes ($m)"
 elif [ -f "$S/.public-edition" ]; then echo "  opt   memes: none (public edition; add clips you have rights to with scripts/meme_add.py)"
 else fail "memes" "python3 $S/scripts/library_restore.py --memes-only"; fi
-ls "$S"/library/music/*.mp3 >/dev/null 2>&1 && pass "music beds" || fail "music beds" "python3 $S/scripts/library_restore.py --music-only"
+ls "$S"/library/music/*.mp3 >/dev/null 2>&1 && pass "music beds" || echo "  opt   music beds: none ship (library/SOURCES.md); a reel's music is a file the user supplies"
 
 echo; echo "$ok ok, $bad missing"
 [ "$bad" -eq 0 ]

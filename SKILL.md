@@ -32,8 +32,9 @@ deliver        -> ~/Desktop/<name>-reel.mp4
 
 ### 0. Check the toolchain once per session
 `bash $S/scripts/doctor.sh`: tools, GEMINI_API_KEY and the media library,
-each with its fix. On a fresh machine run `python3 $S/scripts/library_restore.py`
-first (SFX, memes and music aren't in git). Say what is missing; don't
+each with its fix. Sounds, memes and music aren't in git: sounds come from a licensed pack
+restored outside git (`library/SOURCES.md`), memes from
+`python3 $S/scripts/library_restore.py`. Say what is missing; don't
 improvise around it.
 
 ### 1. Prep and look
@@ -135,7 +136,6 @@ different meme, the URL for the end card).
 ```bash
 python3 $S/scripts/trends.py                 # what's new on imgflip / Know Your Meme, what we lack
 python3 $S/scripts/meme_add.py <id> <url|file> --tags ... --use ... --triggers ... --trend hot
-python3 $S/scripts/sfx_fetch.py --only <id> --force   # after editing KIT in sfx_fetch.py
 python3 $S/scripts/audition.py --open         # soundboard + meme wall for a human listen
 ```
 Always look at a new meme's `preview.png` before using it. Sounds with a
@@ -163,7 +163,6 @@ and the dead ends not to retry.
 - `scripts/transcribe.py` whisper (PATH) → words json + take table
 - `scripts/build.mjs` reel.json → HyperFrames index.html, SFX mixing and rules
 - `scripts/qa.py` render QA with SFX stem level check
-- `scripts/sfx_fetch.py` build/refresh the SFX kit (Mixkit + yt-dlp), normalized, manifest
 - `scripts/meme_add.py` add a meme clip/still (key, crop, alpha WebM, preview)
 - `scripts/meme_find.py` shortlist memes and meme sounds for a line
 - `scripts/trends.py` trending meme names not yet in the library

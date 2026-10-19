@@ -23,10 +23,7 @@ Work through these steps in order. Tell the user in plain words what you're inst
    Every `MISS` line ends with the command that fixes it. Run those.
    - On a Mac they use Homebrew. If `brew` is missing, ask the user to install it from https://brew.sh first (it needs their password).
    - Install Python packages with `pip install` (or `pip3`). If pip refuses with "externally managed environment", use `pip install --user`, or ask the user whether they prefer a virtualenv.
-3. **Download the sound effects and music** (free Mixkit licence, a few dozen small files):
-   ```bash
-   python3 ~/.claude/skills/ghost-editor/scripts/library_restore.py
-   ```
+3. **Sound effects and music are not downloaded.** No audio ships with this repo: sound effects come from a licensed pack restored outside git (`library/SOURCES.md`), and music is a file the user supplies. Without them reels build and render silent.
 4. **Run `doctor.sh` again** until it ends with `0 missing`. Lines marked `opt` are optional.
 5. **Gemini key (optional).** Only needed to copy the look of a reel the user shows you, or to make AI B-roll images. Ask the user whether they want that. If yes:
    - they get a free key at https://aistudio.google.com/apikey
@@ -51,7 +48,6 @@ You need a Mac or Linux machine with:
 git clone https://github.com/kurbaitaev/ghost-editor ~/.claude/skills/ghost-editor
 cd ~/.claude/skills/ghost-editor
 bash scripts/doctor.sh
-python3 scripts/library_restore.py
 ```
 
 **Other agents.** Codex, or any agent that reads Agent Skills: clone or symlink the folder into that agent's skills directory. Any other agent: tell it "Follow `<path>/ghost-editor/SKILL.md` to edit this recording." Every step is a plain shell command.

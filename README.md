@@ -67,7 +67,7 @@ It installs everything it needs and tells you when it's ready (a few minutes).
 
 ## Under the hood
 
-Whisper for transcription, OpenCV for face tracking, [HyperFrames](https://www.npmjs.com/package/hyperframes) for rendering, and royalty-free Mixkit sounds and music. Details: [HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
+Whisper for transcription, OpenCV for face tracking, [HyperFrames](https://www.npmjs.com/package/hyperframes) for rendering, and sound effects from a licensed pack that the deployment restores outside git (none are in this repo). Details: [HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
 
 ---
 

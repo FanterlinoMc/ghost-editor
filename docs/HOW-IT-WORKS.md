@@ -66,14 +66,15 @@ It writes a contact sheet, full-resolution frames and a second-by-second edit lo
   - `prep.sh`, `transcribe.py`, `autocut.py`, `face_track.py`
   - `qa.py`, `doctor.sh`
   - `reference_study.py`, `broll_gen.py`
-  - `sfx_fetch.py`, `library_restore.py`, `audition.py`
+  - `library_restore.py` (memes), `audition.py`
   - `meme_add.py`, `meme_find.py`, `trends.py`: your own meme library
 - `references/`: every `reel.json` field and beat type, styles, take selection, sound mixing.
 
 ## Licences
 
 - Code: MIT.
-- Sound effects and music: [Mixkit](https://mixkit.co/license/) (free, commercial use, no attribution). `library_restore.py` downloads them on your machine; none are stored in this repo.
+- Sound effects: a licensed pack whose creator gave written permission, restored by the deployment outside git. No audio is stored in this repo and nothing in it downloads sounds; see [library/SOURCES.md](../library/SOURCES.md).
+- Music: none ships. A reel's music is a file the user supplies.
 - Fonts: SIL OFL.
 - Face model (YuNet): MIT.
 - No memes ship. Add clips you have the rights to with `scripts/meme_add.py`.

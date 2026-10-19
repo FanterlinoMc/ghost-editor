@@ -11,7 +11,7 @@ the thud's 120 to 75 Hz sine is below what a phone speaker reproduces.
 Here:
 1. `prep.sh` normalizes the VOICE to -16 LUFS before anything is mixed.
 2. Kit files are real recordings, trimmed and peak-normalized to -1 dBFS once
-   (`sfx_fetch.py`, manifest in `library/sfx/manifest.json`).
+   (restored outside git, see `library/SOURCES.md`; manifest in `library/sfx/manifest.json`).
 3. `build.mjs` measures this recording's voice peak (p95 of 50 ms windows
    over kept words) and sets each hit relative to it by role:
    ui -14 dB, whoosh -12, impact -8, meme -3. The HyperFrames mixer is linear
@@ -33,7 +33,8 @@ Here:
 
 ## Kit (library/sfx)
 
-Editing layer (Mixkit free licence, commercial OK): whoosh-1/2/3, whoosh-cine,
+Editing layer (ids first designed around Mixkit sounds, which are not used: the
+files come from the licensed pack, see `library/SOURCES.md`): whoosh-1/2/3, whoosh-cine,
 pop-1/2/3, click-1, tick-1, typing-1, impact-1/2, riser-1, ding-1, buzzer-1,
 kaching-1, shutter-1.
 
@@ -44,8 +45,8 @@ taco-bell, crickets, anime-wow, airhorn (use airhorn rarely, it is dated).
 
 Entries with `"review"` in the manifest were disputed by an automated
 listen; audition them (`audition.py --open`) before relying on them, then
-delete the `review` key or replace the sound (`sfx_fetch.py --only <id>
---force` after editing its query in `KIT`).
+delete the `review` key or replace the sound from the licensed pack
+(`library/SOURCES.md`).
 
 ## Memes (library/memes)
 

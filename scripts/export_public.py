@@ -6,7 +6,7 @@
 The private repo keeps YouTube-ripped meme sounds and green-screen memes (fine
 for personal IG/TikTok use, not ours to redistribute). The public edition ships
 only assets with a redistribution-safe source:
-  - sound effects and music from Mixkit (free licence, commercial use)
+  - the SFX manifest's records (no audio: see library/SOURCES.md)
   - fonts under the SIL OFL, the YuNet face model (MIT)
 and it drops:
   - every `yt:` entry from the SFX kit and the manifest
@@ -55,11 +55,7 @@ def main():
     with tarfile.open(tar) as t:
         t.extractall(dest, filter="data")
 
-    # 1. SFX kit: drop the YouTube rip entries from the fetch list and the manifest
-    kit = os.path.join(dest, "scripts", "sfx_fetch.py")
-    src = open(kit).read()
-    src = "\n".join(l for l in src.splitlines() if '"yt:' not in l) + "\n"
-    open(kit, "w").write(src)
+    # 1. SFX manifest: drop the YouTube rip entries (the records kept carry no audio)
     man_p = os.path.join(dest, "library", "sfx", "manifest.json")
     man = json.load(open(man_p))
     kept = {k: v for k, v in man.items() if "Mixkit" in v.get("licence", "") or v.get("mixkit_id")}
