@@ -16,12 +16,19 @@ def dec(v): return re.sub(r"&quot;|&#34;", '"', re.sub(r"&apos;|&#39;", "'", v))
 
 def scopes(raw):
     html = SPACES.sub(" ", NEWLINES.sub(J["newlines"][1], raw))
-    sc, st, sa = rx(J["scopes"]["script"]), rx(J["scopes"]["style"]), rx(J["scopes"]["styleAttr"])
-    script = "\n".join(m.group(1) for m in sc.finditer(html))
-    style_els = [m.group(1) for m in st.finditer(html)]
-    markup = st.sub("", sc.sub("", html))
-    attrs = [dec(m.group(1) if m.group(1) is not None else m.group(2)) for m in sa.finditer(markup)]
-    return {"WHOLE": html, "SCRIPT": script, "STYLE": "\n".join(style_els + attrs), "MARKUP": markup}
+    # one left-to-right pass, as the browser's tokenizer reads raw-text elements (see rules.mjs)
+    scripts, style_els, parts, last, inside = [], [], [], 0, None
+    for m in rx(J["scopes"]["tokens"]).finditer(html):
+        before = html[:m.start()]
+        if inside is None and before.rfind("<") > before.rfind(">"):
+            inside = re.match(r"<[a-z]+", m.group(0), re.ASCII | re.I).group(0)
+        if m.group(1) is not None: scripts.append(m.group(1))
+        if m.group(2) is not None: style_els.append(m.group(2))
+        parts.append(html[last:m.start()]); last = m.end()
+    parts.append(html[last:])
+    markup = "".join(parts)
+    attrs = [dec(m.group(1) if m.group(1) is not None else m.group(2)) for m in rx(J["scopes"]["styleAttr"]).finditer(markup)]
+    return {"WHOLE": html, "SCRIPT": "\n".join(scripts), "STYLE": "\n".join(style_els + attrs), "MARKUP": markup, "insideTag": inside}
 
 def fams(v):
     out = []
@@ -69,7 +76,8 @@ def first_fail(html, W=1080, H=1920):
         return None if good else "G23"
     checks = [lambda: regex_hit(5, 14), lambda: g18(S), lambda: regex_hit(19, 20),
               lambda: None if rx(M["G21"]).search(s) else "G21", g22, g23, lambda: regex_hit(25, 25),
-              lambda: "G26" if rx(M["G26"]).search(s) else None, lambda: regex_hit(27, 28)]
+              lambda: "G26" if rx(M["G26"]).search(s) else None, lambda: regex_hit(27, 34),
+              lambda: ("G35:" + json.dumps(S["insideTag"])) if S["insideTag"] else None]
     for c in checks:
         r = c()
         if r: return r

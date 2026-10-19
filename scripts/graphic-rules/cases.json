@@ -1,5 +1,5 @@
 {
- "_": "Cases for scripts/graphic-rules/parity.mjs: html in, expect = the first failure (rules.mjs format) or null. bypass/fp: the CP3 reviewer's sets; meta: G18/G21-G26; v3: the CP3 re-review. mine: the CP3 re-reviewer's 11 extra cases; v31: line endings.",
+ "_": "Cases for scripts/graphic-rules/parity.mjs: html in, expect = the first failure (rules.mjs format) or null. bypass/fp: the CP3 reviewer's sets; meta: G18/G21-G26; v3: the CP3 re-review. mine: the CP3 re-reviewer's 11 extra cases; v31: line endings. pc: the PC reviewer's four v3.2 probe files verbatim (OK = the base script) plus the octal control; v32: siblings and controls.",
  "cases": {
   "bypass.fetchConcat": {
    "html": "<script>window['fe'+'tch']('https://x')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
@@ -179,7 +179,8 @@
   },
   "fp.transCommentHTML": {
    "html": "<!-- no animation: here --><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
-   "expect": null
+   "expect": "G30:WHOLE:\"<!--\"",
+   "note": "v3.2: HTML comments are refused (G30)"
   },
   "fp.perfText": {
    "html": "<h1>Peak performance. Every day.</h1><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
@@ -590,11 +591,11 @@
    "expect": "G25:SCRIPT:\".href=\""
   },
   "mine.unicodeWordBoundary": {
-   "html": "<script>var éfetch = 1; éfetch(2);</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "html": "<script>var \u00e9fetch = 1; \u00e9fetch(2);</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
    "expect": "G8:SCRIPT:\"fetch(\""
   },
   "mine.nbspFetch": {
-   "html": "<script>fetch (\"x\")</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "html": "<script>fetch\u00a0(\"x\")</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
    "expect": "G8:SCRIPT:\"fetch (\""
   },
   "mine.historyArr": {
@@ -616,6 +617,153 @@
   "v31.crlfTwoDur": {
    "html": "<script>\r\nwindow.duration = 2\r\nwindow.duration = 3\r\nwindow.seek = function (t) {};\r\n</script>",
    "expect": "G22"
+  },
+  "pc.onload": {
+   "html": "<html><head></head><body onload=\"fetch('//x')\"><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G29:MARKUP:\"<body onload=\""
+  },
+  "pc.doubleEscape": {
+   "html": "<html><head></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script><script><!--<script>\n/*</script>*/\nfetch(\"//x\")\n</script></body></html>",
+   "expect": "G30:WHOLE:\"<!--\""
+  },
+  "pc.cssEscape": {
+   "html": "<html><head><style>div{background:u\\72l(http://x/a.png)}</style></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G31:STYLE:\"\\\\7\""
+  },
+  "pc.cssEscapeControl": {
+   "html": "<html><head><style>div{background:u:l(http://x/a.png)}</style></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null,
+   "note": "control: u:l( is not url( (the PC probe was a non-raw Python string, octal \\72 = \":\"); harmless, passes"
+  },
+  "pc.svgScriptHref": {
+   "html": "<html><head></head><body><svg><script href=\"http://x/a.js\"></script></svg><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G5:WHOLE:\"<script href=\""
+  },
+  "v32.cssEsc75": {
+   "html": "<html><head><style>div{background:\\75rl(http://x/a.png)}</style></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G31:STYLE:\"\\\\7\""
+  },
+  "v32.cssEsc000072": {
+   "html": "<html><head><style>div{background:u\\000072l(http://x/a.png)}</style></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G31:STYLE:\"\\\\0\""
+  },
+  "v32.cssEscSpace": {
+   "html": "<html><head><style>div{background:\\75 rl(http://x/a.png)}</style></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G31:STYLE:\"\\\\7\""
+  },
+  "v32.cssEscImport": {
+   "html": "<html><head><style>@\\69mport \"http://x/a.css\";</style></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G31:STYLE:\"\\\\6\""
+  },
+  "v32.cssEscAttr": {
+   "html": "<html><head></head><body><div style=\"background:\\75rl(http://x/a.png)\"></div><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G31:STYLE:\"\\\\7\""
+  },
+  "v32.svgOnload": {
+   "html": "<html><head></head><body><svg onload=\"fetch(1)\"></svg><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G29:MARKUP:\"<svg onload=\""
+  },
+  "v32.slashOnload": {
+   "html": "<html><head></head><body><svg/onload=fetch(1)></svg><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G29:MARKUP:\"<svg/onload=\""
+  },
+  "v32.quoteOnload": {
+   "html": "<html><head></head><body><svg x=\"1\"onload=\"fetch(1)\"></svg><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G29:MARKUP:\"<svg x=\\\"1\\\"onload=\""
+  },
+  "v32.jsHref": {
+   "html": "<html><head></head><body><svg><a href=\"javascript:fetch(1)\"><text>x</text></a></svg><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G27:MARKUP:\"<a href=\""
+  },
+  "v32.xlinkHref": {
+   "html": "<html><head></head><body><svg><a xlink:href=\"http://x/\"><text>x</text></a></svg><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G27:MARKUP:\"<a xlink:href=\""
+  },
+  "v32.formaction": {
+   "html": "<html><head></head><body><button formaction=\"http://x/\">x</button><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G27:MARKUP:\" formaction=\""
+  },
+  "v32.imgAltScript": {
+   "html": "<html><head></head><body><img alt=\"<script>\" src=\"http://x/a.png\"><script>var a=1;</script><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G35:\"<script\""
+  },
+  "v32.unclosedScript": {
+   "html": "<html><head></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script><script>fetch(\"//x\")",
+   "expect": "G8:SCRIPT:\"fetch(\""
+  },
+  "v32.endTagSpace": {
+   "html": "<html><head></head><body><script>var a=1;</script ><img src=\"http://x/a.png\"><script></script><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G32:WHOLE:\"</script\""
+  },
+  "v32.customScriptEl": {
+   "html": "<html><head></head><body><script-x><img src=\"http://x/a.png\"></script-x><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null,
+   "note": "<script-x> is not a script: the img stays in MARKUP, where G15 (not in this harness) refuses it"
+  },
+  "v32.mathStyle": {
+   "html": "<html><head></head><body><math><style><img src=\"http://x/a.png\"></style></math><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G34:WHOLE:\"<math\""
+  },
+  "v32.svgStyle": {
+   "html": "<html><head></head><body><svg><style>@import \"http://x/a.css\";</style></svg><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G7:STYLE:\"@import\""
+  },
+  "v32.titleSwallow": {
+   "html": "<html><head><title><style></title></head><body><img src=\"http://x/a.png\"><style></style><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null,
+   "note": "the <style> inside <title> is title text: the img stays in MARKUP, where G15 (not in this harness) refuses it"
+  },
+  "v32.emptyComment": {
+   "html": "<html><head></head><body><!--><img src=\"http://x/a.png\"><!-- --><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G30:WHOLE:\"<!--\""
+  },
+  "v32.iframeSrcdoc": {
+   "html": "<html><head></head><body><iframe srcdoc=\"<img src=http://x>\"></iframe><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G14:MARKUP:\"<iframe\""
+  },
+  "v32.objectData": {
+   "html": "<html><head></head><body><object data=\"http://x/a.svg\"></object><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G14:MARKUP:\"<object\""
+  },
+  "v32.baseHref": {
+   "html": "<html><head><base href=\"http://x/\"></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G14:MARKUP:\"<base\""
+  },
+  "v32.importmap": {
+   "html": "<html><head></head><body><script type=\"importmap\">{\"imports\":{}}</script><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G5:WHOLE:\"<script type=\""
+  },
+  "v32.svgScriptXlink": {
+   "html": "<html><head></head><body><svg><script xlink:href=\"http://x/a.js\"></script></svg><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G5:WHOLE:\"<script xlink:href=\""
+  },
+  "v32.templateEl": {
+   "html": "<html><head></head><body><template><img src=\"http://x/a.png\"></template><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G34:WHOLE:\"<template\""
+  },
+  "v32.ctlSvgInlineStyle": {
+   "html": "<html><head></head><body><svg><rect style=\"fill:#f00\" width=\"10\" height=\"10\"/></svg><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v32.ctlTitle": {
+   "html": "<html><head><title>Counter</title></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v32.ctlJavaScriptProse": {
+   "html": "<html><head></head><body><h2>JavaScript: the basics</h2><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v32.ctlOnceProse": {
+   "html": "<html><head></head><body><p>pay once = save</p><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v32.ctlStyleNoEscape": {
+   "html": "<html><head><style>h1{color:#fff;content:\"a\"}</style></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v32.ctlLessThanInScript": {
+   "html": "<html><head></head><body><script>for (var i=0;i<3;i++) {}</script><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
   }
  }
 }

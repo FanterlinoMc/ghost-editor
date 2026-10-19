@@ -782,7 +782,7 @@ reverse play, dotLottie (`.lottie`), image or text layers, expressions.
 
 ## Prompt Motion graphic (`kind: "graphic"` layer, `type: "graphic"` beat): spec (CP1), not built yet
 
-Status: **spec (CP1) v3.1 (CP3 PASS at v3; v3.1 answers the PC's eight questions); not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
+Status: **spec (CP1) v3.2 (CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found); not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
 `kind: "graphic"` dies with the existing `unknown kind "graphic"` error and a `graphic` beat is not placed. PM2
 (sandbox + render) and PM3 (in the reel) build it exactly as written here. The PC mirrors every **static** rule
 (G1 to G28) and every placement rule in the validator word for word, at the same time.
@@ -1119,19 +1119,25 @@ PM5 harness).
 - layer (`die()`): `layer <layer id>: graphic <html>: <reason>`
 - beat (warning, the beat is dropped): `graphic <beat id or at>: <html>: <reason>, dropped`
 
-**Order.** The checks run in the order of the table below (G1, G2, ... G28, then P1 to P3); the FIRST failing
+**Order.** The checks run in the order of the table below (G1, G2, ... G35, then P1 to P3); the FIRST failing
 check is the one reported, and for a regex its LEFTMOST match in the first scope listed that matches is the
 `<match>`. One problem per graphic.
 
 **Scopes (what each regex scans).**
 
 - `WHOLE`: the file text.
-- `SCRIPT`: the bodies of every `<script\b[^>]*>([\s\S]*?)</script\s*>` (flag `i`), joined with `\n`.
-- `STYLE`: the bodies of every `<style\b[^>]*>([\s\S]*?)</style\s*>` (flag `i`), then the value of every
-  `\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')` (flag `i`) found in `MARKUP`, with `&quot;`/`&#34;` -> `"`,
-  `&apos;`/`&#39;` -> `'`, `&amp;` -> `&` decoded; all joined with `\n`.
-- `MARKUP`: the file with every `<script ...>...</script>` and `<style ...>...</style>` element (the same two
-  regexes) removed.
+- `SCRIPT`, `STYLE`, `MARKUP` (v3.2) come from ONE left-to-right pass of the `rules.json` `scopes.tokens` regex
+  (flag `i`), the way the browser's tokenizer reads raw-text elements:
+  `<script(?![\w-])[^>]*>([\s\S]*?)(?:</script>|(?![\s\S]))|<style(?![\w-])[^>]*>([\s\S]*?)(?:</style>|(?![\s\S]))|<title(?![\w-])[^>]*>[\s\S]*?(?:</title>|(?![\s\S]))`.
+  Matches never overlap (whichever element starts first owns the text up to its end tag); an element left open
+  runs to the end of the file, as in the browser. G30 (no HTML comments), G32 (end tags exact) and G34 (no
+  foreign `<script>`/`<style>`, no other raw-text elements) keep the browser from reading the file differently.
+- `SCRIPT`: group 1 of every match, joined with `\n`.
+- `STYLE`: group 2 of every match, then the value of every `\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')` (flag `i`) found
+  in `MARKUP`, with `&quot;`/`&#34;` -> `"`, `&apos;`/`&#39;` -> `'`, `&amp;` -> `&` decoded; all joined with `\n`.
+- `MARKUP`: the file with every match removed (a `<title>`'s text is dropped with it).
+- G35 (v3.2): a match whose start lies inside another tag (in the text before it, the last `<` comes after the
+  last `>`, e.g. `<img alt="<script>" ...>`) is refused, so a tag's attributes cannot hide markup.
 - Before the scopes are cut, line endings are normalised: every `\r\n` and every lone `\r` becomes `\n`
   (`rules.json` `newlines`; both reference implementations). Then every character in
   `[\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]` (written here as escapes; the
@@ -1154,7 +1160,7 @@ Python 3.9.6). The harness covers the regex rules, G18 and G21-G23/G26; it is no
 
 ```text
 id   scope         flags source
-G5   WHOLE         i  <script\b[^>]*\b(src\s*=|type\s*=\s*["']?module)
+G5   WHOLE         i  <script\b[^>]*[\s/](src|href|xlink:href|type)\s*=
 G6   WHOLE         i  <link(?![\w-])
 G7   STYLE         i  @import\b
 G7   STYLE+MARKUP  -  url\(\s*(?![\s'"]|data:|#)|url\(\s*['"](?!data:|#)|image-set\(\s*['"](?!data:|#)
@@ -1172,8 +1178,15 @@ G19  SCRIPT        -  \b(gsap|TweenMax|TweenLite|TimelineMax|TimelineLite|Scroll
 G19  WHOLE         i  GreenSock
 G20  SCRIPT        -  getContext\s*\(\s*['"](webgl2?|experimental-webgl|webgpu)['"]
 G25  SCRIPT        -  \b(localStorage|sessionStorage|indexedDB|caches|navigator|location|crypto)\s*(\.\s*[A-Za-z_$]|\[)|\blocation\s*=(?!=)|\bdocument\s*\.\s*(cookie|referrer|domain|location|write|writeln|open)\b|\bwindow\s*\.\s*(open|parent|top|opener|location|frames)\b|\bglobalThis\s*[.\[]|\bwindow\s*\[|\bthis\s*\[|\bdefaultView\b|\bopen\s*\(|\.\s*href\s*=(?!=)|\.\s*click\s*\(|\bpostMessage\s*\(|\bReflect\s*\.
-G27  MARKUP        i  <(a|area)(?![\w-])[^>]*\shref\s*=\s*(?!["']?#)|\sping\s*=
+G27  MARKUP        i  <(a|area)(?![\w-])[^>]*[\s/](xlink:)?href\s*=\s*(?!["']?#)|[\s/]ping\s*=|[\s/]formaction\s*=
 G28  SCRIPT        -  [\w$\])]\s*\[\s*(['"`])[^'"`]*\1\s*\+|[\w$\])]\s*\[\s*`[^`]*\$\{
+G29  MARKUP        i  <[^>]*[\s/"']on[a-z]+\s*=
+G30  WHOLE         -  <!--
+G31  STYLE         -  \\[\s\S]?
+G32  WHOLE         i  </(script|style|title)(?=[\s/])
+G33  MARKUP        i  =\s*["']?\s*(java|vb)script\s*:|=\s*["']?\s*data\s*:\s*text/html
+G33  STYLE         i  (java|vb)script\s*:
+G34  WHOLE         i  <(math|noscript|xmp|noembed|noframes|plaintext|textarea|template)(?![\w-])|<svg(?![\w-])(?:(?!</svg\s*>)[\s\S])*?<(script|style)(?![\w-])
 ```
 
 **Writing forbidden words as text.** A graphic that SHOWS such a word (the Code category) writes it in markup
@@ -1190,7 +1203,7 @@ G25, so the writer prompt must avoid it; and `anime`, `d3`, `THREE`,
 | G2 | the file exists | `graphic file <html> does not exist` |
 | G3 | size <= 2097152 bytes | `graphic file <html> is <bytes> bytes (max 2097152)` |
 | G4 | valid UTF-8; exactly one `<head\b` and one `<body\b` (flag `i`, `WHOLE`) | `graphic file <html> is not a UTF-8 HTML document with one <head> and one <body>` |
-| G5 | listing G5 | `graphic file <html> loads a script file or a module (<script src> / type=module): only inline classic scripts are allowed` |
+| G5 | listing G5 (v3.2: `src`, `href`, `xlink:href` or `type`, attribute after whitespace or `/`) | `graphic file <html> loads a script file or has a typed script (<script src / href / xlink:href / type>): only plain inline scripts are allowed` |
 | G6 | listing G6 | `graphic file <html> has a <link> tag: put styles inline in <style>` |
 | G7 | listing G7 (both lines) | `graphic file <html> uses @import, url(...) or image-set(...) with something other than a data: URI or a #fragment` |
 | G8 | listing G8 | `graphic file <html> uses <match> (no network: fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, import(), import.meta, workers, RTCPeerConnection)` |
@@ -1200,7 +1213,7 @@ G25, so the writer prompt must avoid it; and `anime`, `d3`, `THREE`,
 | G12 | listing G12 | `graphic file <html> calls Math.random: use window.rng(seed)` |
 | G13 | listing G13 (three lines) | `graphic file <html> uses <match> (no CSS animations, transitions, Web Animations or SVG animation: compute every style in seek(t))` |
 | G14 | listing G14 (two lines) | `graphic file <html> has a <match> element (no video, audio, iframe, object, embed, base, form or meta refresh)` |
-| G15 | in `MARKUP`, every value of `src=`, `srcset=`, `poster=` and of `href=` / `xlink:href=` on `<image` and `<use` (flag `i`) is a `data:image/(png\|jpeg\|webp\|gif\|svg+xml)` URI, a `#fragment` (`<use>` only) or matches `^assets/graphics/media/[a-z0-9-]{1,48}\.(png\|jpe?g\|webp)$` | `graphic file <html> refers to '<value>' (images must be data: URIs or assets/graphics/media/ files)` |
+| G15 | in `MARKUP`, inside any tag, every value of the attributes `src`, `srcset`, `poster`, `background` (v3.2), and of `href` / `xlink:href` on EVERY element except `<a>`/`<area>` (G27) (v3.2; was `<image`/`<use` only: `<feImage>`, `<pattern>` and others load hrefs too), an attribute name preceded by whitespace, `/` or a closing quote (flag `i`), is a `data:image/(png\|jpeg\|webp\|gif\|svg+xml)` URI, a `#fragment` (`<use>` only) or matches `^assets/graphics/media/[a-z0-9-]{1,48}\.(png\|jpe?g\|webp)$` | `graphic file <html> refers to '<value>' (images must be data: URIs or assets/graphics/media/ files)` |
 | G16 | each `assets/graphics/media/...` file it names exists, and its realpath (symlinks resolved) lies inside `<project>/assets/graphics/media/` (as Lottie L1 does for `assets/`) | `graphic media <path> does not exist` / `graphic media <path> resolves outside assets/graphics/media/` |
 | G17 | at most 8 media files, each <= 4194304 bytes | `graphic media <path> is <bytes> bytes (max 4194304)` / `graphic file <html> uses <n> media files (max 8)` |
 | G18 | the font rule below | `graphic file <html> uses font family '<name>' (only the engine's fonts, a data: @font-face, var(--...), or a generic family)` |
@@ -1212,8 +1225,27 @@ G25, so the writer prompt must avoid it; and `anime`, `d3`, `THREE`,
 | G24 | `mode: "insert"` and a `window.size` other than W x H | `an insert graphic must be <W>x<H> (window.size is <w>x<h>)` |
 | G25 | listing G25 (v3: `defaultView`, `this[`, `.href =`, `.click(` added; the broad `self`/`top`/`parent`/`opener`/`frames` and `history` forms dropped) | `graphic file <html> uses <match> (no storage, navigation, window access or environment reads)` |
 | G26 | `\bwindow\s*\.\s*rng\s*=(?!\s*window\s*\.\s*rng\s*\|\|)` (`SCRIPT`) matches | `graphic file <html> redefines window.rng (copy the engine snippet as is)` |
-| G27 | listing G27 (new in v2) | `graphic file <html> has a link that leaves the page (<match>): <a>/<area> href must be a #fragment, no ping` |
+| G27 | listing G27 (v3.2: `xlink:href`, `formaction`, `/` as a separator) | `graphic file <html> has a link that leaves the page (<match>): <a>/<area> href must be a #fragment; no ping, no formaction` |
 | G28 | listing G28 (v3: only on a member access, `x['a' + b]`, not an array literal) | `graphic file <html> builds a name from pieces (<match>): write property names out in full` |
+| G29 | listing G29 (v3.2) | `graphic file <html> has an event-handler attribute (<match>): no on...= attributes; everything runs from seek(t)` |
+| G30 | listing G30 (v3.2) | `graphic file <html> has an HTML comment (<!--): use /* */ inside <style> and <script> instead` |
+| G31 | listing G31 (v3.2) | `graphic file <html> has a backslash escape in CSS (<match>): write CSS without escapes` |
+| G32 | listing G32 (v3.2) | `graphic file <html> has an end tag written as <match>: write </script>, </style> and </title> exactly` |
+| G33 | listing G33 (v3.2, two lines) | `graphic file <html> uses a script URL (<match>)` |
+| G34 | listing G34 (v3.2) | `graphic file <html> has <match> (no math, noscript, xmp, noembed, noframes, plaintext, textarea or template elements, and no <script> or <style> inside <svg>)` |
+| G35 | the tokenizer check above (v3.2) | `graphic file <html> starts a <match> inside another tag (a < inside an attribute value)` |
+
+**Why v3.2 bans rather than tokenizes.** A spec-exact HTML tokenizer (script-data escape states, foreign
+content, comment edge cases like `<!-->` and `--!>`) would have to be written twice, in node and in Python, and
+kept identical; Node has none built in and Python's `html.parser` does not follow the spec's script states. So
+v3.2 refuses the constructs that make the browser read a file differently from the one-pass regex tokenizer:
+HTML comments (G30, which also kills the `<!--<script>` double escape), inexact end tags (G32), foreign and
+other raw-text elements (G34), raw-text elements starting inside a tag (G35); and the constructs that run code
+or load without passing the SCRIPT rules: event-handler attributes (G29), CSS escapes (G31: `u\72l(`,
+`\75 rl(`, `u\000072l(`, `@\69mport` all read as `url(` / `@import` in CSS), script URLs (G33), scripts with
+`src`/`href`/`xlink:href`/`type` (G5). The browser network lock stays the security boundary; these keep the
+static layer honest. `scripts/graphic-rules/cases.json` holds the PC's four probe files verbatim (`pc.*`, each
+refused; plus `pc.cssEscapeControl`, `u:l(`, which is harmless and passes) and 31 sibling cases (`v32.*`).
 
 **G15 to G17, exactly (v3.1).**
 
