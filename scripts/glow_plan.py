@@ -4,8 +4,7 @@
     glow_plan.py <project> [--dry] [--every 5.0]
 
   - hook: the first sentence (<= 9 words) as a question/title at the TOP ("WHY DO YOU" / "PROCRASTINATE?"); with
-    glow.hookGround true (OFF by default in this fork: it needs the `ground` beat, which the fork does not have) it also
-    writes a dark grid ground under it
+    style key glow.hookGround (podcast-glow and its colour variants) build.mjs puts a dark grid ground and the cut-out under it
   - headlines: about every `every` seconds the strongest word of a sentence slams in HUGE and yellow under the 1-3 words
     said before it in white ("WE HAVE" / "NO IDEA"); a negation/quantifier rides with its word ("NO DICTIONARY")
   - positions alternate low / top-left; every other low headline gets a hand-drawn arrow
@@ -57,8 +56,6 @@ def headline(snt, after=0.0):
 
 def plan(proj, every=4.5):
     spec = json.loads((proj / "reel.json").read_text())
-    style = json.loads((Path(__file__).parent.parent / "styles" / f"{spec.get('style', '')}.json").read_text()) if spec.get("style") else {}
-    matte = spec.get("matte", style.get("matte"))
     ws, takes = load_words(proj, spec)
     ss = sentences(ws)
     beats = [b for b in spec.get("beats", []) if not b.get("_glow")]
@@ -86,9 +83,7 @@ def plan(proj, every=4.5):
               "big": " ".join(show(w["word"]) for w in big).rstrip(",.;:"), "smallAt": [r3(w["start"]) for w in small],
               "bigAt": r3(big[0]["start"]), "at": r3(t0), "to": r3(t1)}
         out.append(hb)
-        if matte and spec.get("glow", style.get("glow", {})).get("hookGround", False):
-            out.append({"_glow": True, "type": "ground", "at": r3(t0), "to": r3(t1), "gradient": ["#141414", "#050505"], "paper": "grid",
-                        "gridColor": "rgba(255,255,255,.09)", "gridSize": 64, "grain": False})
+        # the hook's grid ground + cut-out are build.mjs's (glow.hookGround, resolved through the style's extends chain)
         last_t = big[-1]["end"]
     for s in ss[1:] if out else ss:
         if s[0]["start"] - last_t < every * 0.8 or s[0]["take"] != s[-1]["take"]:
