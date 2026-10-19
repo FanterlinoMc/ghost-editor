@@ -133,10 +133,12 @@ const cmpVer = (a, b) => { for (let i = 0; i < 4; i++) { const d = (b[i] || 0) -
 export function findChrome(env = process.env, home = os.homedir()) {
   const pinned = env.GRAPHIC_CHROME_PATH;
   if (pinned) {
+    // absolute only: the shim's `exec` would search PATH for a bare name, so a relative path could run another browser
+    if (!path.isAbsolute(pinned)) throw new Error(`GRAPHIC_CHROME_PATH=${pinned} must be an absolute path`);
     let ok = false;
     try { ok = fs.statSync(pinned).isFile(); fs.accessSync(pinned, fs.constants.X_OK); } catch { ok = false; }
     if (!ok) throw new Error(`GRAPHIC_CHROME_PATH=${pinned} is not an executable file`);
-    return pinned;
+    return fs.realpathSync(pinned); // the shim runs exactly the file that was checked, not a link that may move
   }
   const given = env.HYPERFRAMES_BROWSER_PATH || env.PRODUCER_HEADLESS_SHELL_PATH;
   if (given) return given;

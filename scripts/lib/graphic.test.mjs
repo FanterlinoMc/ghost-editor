@@ -410,13 +410,25 @@ test("findChrome: GRAPHIC_CHROME_PATH first, and a broken one refuses instead of
   fs.mkdirSync(path.dirname(pinned), { recursive: true }); fs.writeFileSync(pinned, "#!/bin/sh\n"); fs.chmodSync(pinned, 0o755);
   const others = { HYPERFRAMES_BROWSER_PATH: "/other/hf", PRODUCER_HEADLESS_SHELL_PATH: "/other/producer" };
   // wins over both env paths and over the cache
-  assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: pinned, ...others }, home), pinned);
-  assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: pinned }, home), pinned);
+  assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: pinned, ...others }, home), fs.realpathSync(pinned));
+  assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: pinned }, home), fs.realpathSync(pinned));
   // set but missing / a directory / not executable: a clear error, never another browser
   const missing = path.join(home, "nope", exeName);
   for (const bad of [missing, path.dirname(pinned)].concat(process.platform === "win32" ? [] : [(() => { const f = path.join(home, "noexec"); fs.writeFileSync(f, ""); fs.chmodSync(f, 0o644); return f; })()])) {
     assert.throws(() => RR.findChrome({ GRAPHIC_CHROME_PATH: bad, ...others }, home), { message: `GRAPHIC_CHROME_PATH=${bad} is not an executable file` });
     assert.throws(() => RR.findChrome({ GRAPHIC_CHROME_PATH: bad }, home), { message: `GRAPHIC_CHROME_PATH=${bad} is not an executable file` }, "no fallback to the cache");
+  }
+  // relative: refused even when it names an executable file in the current folder (the shim's exec would search PATH)
+  const cwd = process.cwd();
+  try {
+    process.chdir(path.dirname(pinned));
+    for (const rel of [exeName, `./${exeName}`]) assert.throws(() => RR.findChrome({ GRAPHIC_CHROME_PATH: rel, ...others }, home), { message: `GRAPHIC_CHROME_PATH=${rel} must be an absolute path` });
+  } finally { process.chdir(cwd); }
+  // a symlink to the executable: checked, then resolved, so the shim runs exactly the checked file
+  if (process.platform !== "win32") {
+    const link = path.join(home, "link-chrome");
+    fs.symlinkSync(pinned, link);
+    assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: link, ...others }, home), fs.realpathSync(pinned));
   }
   // unset (or empty): today's order
   assert.equal(RR.findChrome({ ...others }, home), "/other/hf");

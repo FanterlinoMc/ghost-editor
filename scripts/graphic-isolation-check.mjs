@@ -90,9 +90,9 @@ const graphic = (code, markup = "") => `<!doctype html><html><head><meta charset
   };
 </script></body></html>`;
 
-const work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-isolation-"));
 let chrome;
 try { chrome = findChrome(); } catch (e) { console.log(`GRAPHIC ISOLATION: FAIL  (${e.message})`); process.exit(1); }
+const work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-isolation-"));
 const shim = chromeShim(path.join(work, "shim"), chrome);
 const launcher = sandboxLauncher();
 const fps = 30, meta = { duration: 1, size: { w: 320, h: 320 }, fonts: [], media: [] };
