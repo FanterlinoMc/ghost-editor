@@ -1180,7 +1180,8 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
 ASCII: `html` and media paths are `[a-z0-9-]` by G1/G15). Every number is an integer.
 
 ```jsonc
-{ "v": 2,                                  // bumped when the wrapper / bridge / CSP / lock changes
+{ "v": 3,                                  // bumped when the wrapper / bridge / CSP / lock changes (v3.2.5: 2 -> 3, the
+                                           // integrity pre-script and the seek-order check changed the wrapper)
   "html": "<sha256 hex of the HTML file bytes>",
   "media": [["assets/graphics/media/a.jpg", "<sha256 hex>"]],    // sorted by path; [] when none
   "fonts": ["Inter"],                      // the bundled families inlined, sorted; [] when none
@@ -1451,7 +1452,7 @@ render wrapper reads the whole log of both renders; any of these deletes the out
 | R3 | `GRAPHIC-REFUSED: window.seek is not a function` (bridge, at load) | `window.seek is not a function after the page loaded` |
 | R4 | `GRAPHIC-REFUSED: seek(<t>) threw: <message>` / `... returned a Promise` (bridge) | `seek(<t>) threw: <message>` / `seek(<t>) returned a Promise (it must be synchronous)` |
 | R5 | `window.duration` / `window.size` at load differ from the static values | `window.duration / window.size changed at load (static <a>, at load <b>)` |
-| R6 | the determinism check | `frame <i> (t=<t>s) differs between two renders (not deterministic)` / `the two renders have <a> and <b> frames` / (v3.2.2) both renders agree on a count `<a>` that is not the placement's `L`: `the two renders have <a> and <L> frames` |
+| R6 | the determinism check; (v3.2.5) also the bridge's seek-order check: on the first `hf-seek` it seeks 8 frames forward, backward and shuffled, snapshots the root's markup, inline styles and canvas pixels, and logs `GRAPHIC-REFUSED: seek order: frame <k> (t=<t>s) depends on the seeks before it` when a frame differs (`<k>` = the graphic's own frame number) | `frame <i> (t=<t>s) differs between two renders (not deterministic)` / `the two renders have <a> and <b> frames` / (v3.2.2) both renders agree on a count `<a>` that is not the placement's `L`: `the two renders have <a> and <L> frames` / (v3.2.5) `frame <k> (t=<t>s) depends on the seeks before it (not deterministic)`. The two-render texts stay as they are |
 | R7 | wall time of one render over `20 s + 0.15 s x L` (v3.2.2, measured in PM2 on the Mac mini, the slower `--workers 1` render: 60 frames 4.7 s, 300 frames 15.4 s at 1080x1080 / 13.8 s insert, 900 frames 40.0 s; the budget is 3.9x to 4.2x that, headroom for the CPU-only Linux container, not yet measured) | `render took <s>s for <L> frames (budget <b>s)` |
 | R8 | rendered file over 52428800 bytes | `rendered file is <bytes> bytes (max 52428800)` |
 | R9 | overlay: every decoded frame has alpha 0 everywhere | `every frame is fully transparent` |
