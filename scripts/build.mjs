@@ -3443,7 +3443,7 @@ if (spec.master) fs.writeFileSync(path.join(proj, "build", "master.json"), JSON.
 
 // Explainer (opt-in beats / scenes; hand port of phantasic engine/core): the CSS of the `effect` hook title and the `cutout` concept page.
 // Written into index.html ONLY when such a beat / scene exists, so every other reel is byte-identical.
-// Ahmed's library-bundle beats (boxline, like, label, pin): their page CSS, written only when such a beat exists (so every other reel is byte-identical).
+// Ahmed's library-bundle beats (boxline, like, label, pin) and Pitch's titlebox: their page CSS, written only when such a beat exists (so every other reel is byte-identical).
 const LIBRARY_CSS = (beats_, spec_) => {
   const has = (t) => beats_.some((b) => b.type === t);
   return (spec_.showLogo ? `
@@ -3462,6 +3462,11 @@ const LIBRARY_CSS = (beats_, spec_) => {
   .lbl { position: absolute; left: 50%; display: inline-block; }
   .lbl-box { position: absolute; inset: 0; border-radius: 4px; }
   .lbl-txt { position: relative; color: #fff; font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-size: 84px; line-height: 1; padding: 10px 30px 18px; white-space: nowrap; }` : "")
+  // titlebox (Pitch hook title; phantasic 2fba97c engine/core build.mjs, lost in the b060367 port): left 50% + the tween's
+  // xPercent -50 centre the box, which grows with the typed letters; without this rule the box sat at left 0, half off screen
+  + (has("titlebox") ? `
+  .tbox { position: absolute; left: 50%; transform-origin: 0% 50%; }
+  .tbox-in { display: inline-block; color: #fff; font-family: Inter, system-ui, sans-serif; font-weight: 600; letter-spacing: -0.05em; line-height: 1.05; padding: 6px 22px 12px; white-space: nowrap; box-shadow: 0 10px 30px rgba(0,0,0,.25); }` : "")
   + (has("pin") ? `
   .pin { position: absolute; left: 50%; font-family: Inter, system-ui, sans-serif; font-weight: 800; letter-spacing: -0.06em; line-height: 1; white-space: nowrap; background: linear-gradient(90deg, #F0333A, #9B3BE8 50%, #2124E7); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 6px 20px rgba(0,0,0,.35)); }` : "");
 };

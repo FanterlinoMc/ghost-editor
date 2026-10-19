@@ -392,6 +392,9 @@ Explainer (`explainer-2`):
 - `captions.pillKit: true` with `captions.size`, `light`, `radius`: the pill caption's size / white-pill-dark-ink / corner radius, and words inherit the pill's ink. `captions.reshowLate`: captions come back after a hard-cut page is gone instead of 0.05 s before it ends.
 - The CSS of `effect` and `cutout` is written only when a reel has one.
 
+Pitch (`pitch`):
+- beat `titlebox` `{text, at, to, y (default 250), color (default brand.accent), size (default 66 px), typeFor (max type-on time, default 0.8 s; at most 45 ms per letter, so a short title types faster)}`; plays `typing-1` while it types: the hook title typed letter by letter into an accent box that slides in tilted from the left and settles centred (`left: 50%` + `xPercent: -50`), growing with the letters. Its `.tbox` / `.tbox-in` CSS is written only when a reel has one.
+
 Mono (`mono-2`, `scripts/mono_plan.py` v5):
 - `brand.footScrim` (0-1): a dark gradient behind the words on footage pages. `brand.iconSfx` / `b.iconSfx`: the icon pop sound. `brand.film` / `look.grade`: grayscale footage.
 - stack beat: `punchOrigin` ("50% 30%": punch in around the face), `fit` (0.6-1: a close-up shown smaller from the top over a blurred copy), `cardH` / `cardW` / `cardRadius` (a portrait card), `filmFace: [x, y]` (frame the card / phone film on the face, source 1080x1920 px). Every `stack` field: "Page scene kinds" under Motion layer.
