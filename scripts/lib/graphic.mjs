@@ -339,10 +339,14 @@ const fmtT = (t) => String(+t.toFixed(3));
 // refusal function as a non-writable, non-configurable window.__graphicRefuse for postScript. HyperFrames dispatches
 // window "hf-seek" with detail.time = j / fps; the listener maps j to the graphic's frame k and calls window.seek(k / fps).
 // Problems go to the saved console.error (HyperFrames prints them as [Browser:ERROR] ...), once per page.
+export const ORDER_SAMPLES = 8;
 export function preScript({ fps, L, inF, D, after }) {
   return `(function () {
   var err = console.error.bind(console), add = EventTarget.prototype.addEventListener, round = Math.round, min = Math.min;
   var toFixed = Number.prototype.toFixed, split = String.prototype.split, Str = String;
+  var getById = Document.prototype.getElementById, qsa = Document.prototype.querySelectorAll, getAttr = Element.prototype.getAttribute;
+  var innerGet = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML").get, toURL = HTMLCanvasElement.prototype.toDataURL;
+  var checked = false, SAMPLES = ${ORDER_SAMPLES};
   var FPS = ${fps}, L = ${L}, IN = ${inF}, D = ${D}, AFTER = ${JSON.stringify(after)}, said = false, R = ${JSON.stringify(REFUSED)};
   function refuse(m) { if (!said) { said = true; err(R + m); } }
   function fmt(t) { try { return Str(+toFixed.call(t, 3)); } catch (x) { return "?"; } }
@@ -353,7 +357,34 @@ export function preScript({ fps, L, inF, D, after }) {
   // (location =, link clicks, form submits, refreshes) and is cancelled here.
   if (window.navigation) add.call(window.navigation, "navigate", function (e) { err(R + "navigated"); if (e.cancelable) e.preventDefault(); });
   else refuse("navigation trap unavailable (no window.navigation)");
+  // R6 at any length: the seek-order check. On the first hf-seek (HyperFrames has waited for fonts and media by
+  // then), seek a sample of frames forward, backward and shuffled, snapshot the page after each (the root's markup with
+  // every inline style, the html/body style attributes, every canvas's pixels) and refuse if a frame's snapshot depends
+  // on the order: state carried between seeks. Two renders alone miss it when HyperFrames uses one worker for both.
+  // Every native it uses was saved above, before any graphic script ran.
+  function snap() {
+    var out = innerGet.call(getById.call(document, "graphic-root")) + "\u0000" + (getAttr.call(document.documentElement, "style") || "") + "\u0000" + (getAttr.call(document.body, "style") || "");
+    var cs = qsa.call(document, "canvas");
+    for (var i = 0; i < cs.length; i++) { try { out += "\u0000" + toURL.call(cs[i]); } catch (x) { out += "\u0000(unreadable canvas)"; } }
+    return out;
+  }
+  function orderCheck() {
+    var n = min(D, SAMPLES), ks = [], i, o, k;
+    for (i = 0; i < n; i++) ks[i] = n === 1 ? 0 : round(i * (D - 1) / (n - 1));
+    var fwd = [], back = [], mix = [];
+    for (i = 0; i < n; i++) { fwd[i] = ks[i]; back[i] = ks[n - 1 - i]; mix[i] = ks[i]; }
+    var a = 2463534242;
+    for (i = n - 1; i > 0; i--) { a = (a * 1103515245 + 12345) % 2147483648; var j = a % (i + 1), tmp = mix[i]; mix[i] = mix[j]; mix[j] = tmp; }
+    var orders = [fwd, back, mix], snaps = [{}, {}, {}];
+    for (o = 0; o < 3; o++) for (i = 0; i < n; i++) {
+      k = orders[o][i];
+      try { window.seek(k / FPS); } catch (x) { refuse("seek(" + fmt(k / FPS) + ") threw: " + msg(x)); return; }
+      snaps[o][k] = snap();
+    }
+    for (i = 0; i < n; i++) { k = ks[i]; if (snaps[0][k] !== snaps[1][k] || snaps[0][k] !== snaps[2][k]) { refuse("seek order: frame " + k + " (t=" + fmt(k / FPS) + "s) depends on the seeks before it"); return; } }
+  }
   add.call(window, "hf-seek", function (e) {
+    if (!checked) { checked = true; if (typeof window.seek === "function") orderCheck(); }
     var j = round(e.detail.time * FPS); if (j < 0) j = 0; if (j > L - 1) j = L - 1;
     var k = IN + j; k = AFTER === "loop" ? k % D : min(k, D - 1);
     var t = k / FPS;

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The network lock, measured (PM2; real renders, NOT in the gate):
-//   node scripts/graphic-isolation-check.mjs [--baseline] [--no-trap] [--only <route prefix>]
+//   node scripts/graphic-isolation-check.mjs [--baseline] [--no-trap] [--only <route prefix>] [--lock PATH]
 // Opens a TCP + UDP listener on this machine's NON-loopback IPv4 address (loopback stays open by design), then renders
 // one wrapper page per network route through `hyperframes render` with the Chrome shim (CHROME_FLAGS), the CSP and the
 // Node preload, exactly as renderGraphic does, and counts what reaches the listener. The routes bypass the static scan
@@ -13,8 +13,10 @@ import net from "node:net";
 import dgram from "node:dgram";
 import path from "node:path";
 import { wrapperHtml, graphicFrames } from "./lib/graphic.mjs";
+import { holdRenderLock } from "./lib/graphic-lock.mjs";
 import { runRender, chromeShim, findChrome, probeNetwork, sandboxLauncher, scanLog, PROBE_URLS } from "./lib/graphic-render.mjs";
 
+holdRenderLock(); // --lock <path> / GRAPHIC_RENDER_LOCK: re-run under lockf / flock (the shared Mac)
 const args = process.argv.slice(2);
 const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
 const ip = Object.values(os.networkInterfaces()).flat().find((i) => i && i.family === "IPv4" && !i.internal)?.address;

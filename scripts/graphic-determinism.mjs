@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The Prompt Motion determinism check, standalone (PM2): static rules, network probe, wrapper, two independent
 // `hyperframes@0.8.81 render`s (the second with --workers 1), every R rule, framemd5 of both outputs.
-//   node scripts/graphic-determinism.mjs <graphic.html> [--mode overlay|insert] [--fps 30] [--size WxH] [--out DIR] [--keep]
+//   node scripts/graphic-determinism.mjs <graphic.html> [--mode overlay|insert] [--fps 30] [--size WxH] [--out DIR] [--keep] [--lock PATH]
 // --size is the reel canvas (default 1080x1920). Prints `GRAPHIC DETERMINISM: PASS` or `GRAPHIC DETERMINISM: FAIL`
 // (with the reasons; R6 names the first differing frame and its t) and exits 0 / 1. Needs node, npx, ffmpeg only
 // (macOS and Linux). The rendered file is deleted unless --keep (then it stays in --out, default a temp dir).
@@ -10,11 +10,14 @@ import os from "node:os";
 import path from "node:path";
 import { renderGraphic } from "./lib/graphic-render.mjs";
 import { SRC_RE } from "./lib/graphic.mjs";
+import { holdRenderLock } from "./lib/graphic-lock.mjs";
+
+holdRenderLock(); // --lock <path> / GRAPHIC_RENDER_LOCK: re-run under lockf / flock (the shared Mac)
 
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-const file = args.find((a, i) => !a.startsWith("--") && !["--mode", "--fps", "--size", "--out"].includes(args[i - 1]));
-const usage = () => { console.error("usage: node scripts/graphic-determinism.mjs <graphic.html> [--mode overlay|insert] [--fps 30] [--size WxH] [--out DIR] [--keep]"); process.exit(2); };
+const file = args.find((a, i) => !a.startsWith("--") && !["--mode", "--fps", "--size", "--out", "--lock"].includes(args[i - 1]));
+const usage = () => { console.error("usage: node scripts/graphic-determinism.mjs <graphic.html> [--mode overlay|insert] [--fps 30] [--size WxH] [--out DIR] [--keep] [--lock PATH]"); process.exit(2); };
 if (!file || !fs.existsSync(file)) usage();
 const mode = opt("--mode", "overlay");
 const fps = Number(opt("--fps", "30"));
