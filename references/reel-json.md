@@ -782,10 +782,10 @@ reverse play, dotLottie (`.lottie`), image or text layers, expressions.
 
 ## Prompt Motion graphic (`kind: "graphic"` layer, `type: "graphic"` beat): spec (CP1), not built yet
 
-Status: **spec (CP1), not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
+Status: **spec (CP1) v2, after the CP3 review; not built yet.** Nothing below is read by `build.mjs` or `layers.mjs` today: a layer with
 `kind: "graphic"` dies with the existing `unknown kind "graphic"` error and a `graphic` beat is not placed. PM2
 (sandbox + render) and PM3 (in the reel) build it exactly as written here. The PC mirrors every **static** rule
-(G1 to G26) and every placement rule in the validator word for word, at the same time.
+(G1 to G28) and every placement rule in the validator word for word, at the same time.
 
 A user types a prompt ("a counter from 10k to 80k with sparks"); Claude writes ONE self-contained HTML file;
 the engine renders that file on its own, deterministically, to a video; the video drops into the reel as an
@@ -797,11 +797,12 @@ canvas 2d whose every style is computed from `t` inside `window.seek(t)`.
 
 **1. How a graphic gets into a reel: pre-rendered to its own video, composited as a video layer.** The HTML is
 rendered alone (`hyperframes@0.8.81 render` of an engine-written wrapper page, below) to an alpha WebM (overlay)
-or an MP4 (insert), cached as `assets/graphics/<id>-<key16>.<webm|mp4>`, and the reel shows that file in a
+or an MP4 (insert), cached as `assets/graphics/<name>-<key16>.<webm|mp4>`, and the reel shows that file in a
 `<video>` exactly like a `video` layer. Isolation: the graphic's CSS selectors, globals and DOM never meet the
 reel page's (a sub-composition, `data-composition-src`, inlines its `<template>` into the reel's DOM, so a
 graphic's `.title {}` or `window.x` would collide with the reel's, and its script would run inside every reel
-and section render). Sandbox: the network lock-down (a CSP meta) and the checks for page errors apply to the
+and section render). Sandbox: the network lock (Chrome launched with no route except loopback, checked by a
+fail-closed probe before every render, plus a CSP meta) and the checks for page errors apply to the
 graphic's own render, not to a reel page that legitimately loads media. Cache: the key is a pure content hash
 (the HTML, its media, the renderer, the placement's frame count), so an unchanged graphic is never re-rendered
 when the reel around it changes, and the studio preview IS the file that goes into the reel. An `<iframe>` was
@@ -829,7 +830,7 @@ carries `data-no-timeline`: without it the render waits 45 s for a GSAP timeline
 wrapper defines before the graphic's scripts (the prompt templates carry the same snippet, so a graphic opened
 in a plain browser looks the same).
 
-### The file: `assets/graphics/<id>.html`
+### The file: `assets/graphics/<name>.html`
 
 A complete HTML document with one `<head>` and one `<body>`, UTF-8, at most 2 097 152 bytes. Inline `<style>`
 and inline classic `<script>` only. What it must define, as literal assignments (the validator reads them
@@ -862,7 +863,7 @@ without running the file):
 **The seek contract, exactly:**
 
 - `window.seek(t)`: `t` is seconds since the graphic's frame 0, always a whole frame `k / fps` (`fps` = the
-  reel's fps; the render of a preview uses 30). It is called synchronously, any number of times, in **any
+  reel's fps; a preview is rendered at the reel's fps when the studio knows it, else 30). It is called synchronously, any number of times, in **any
   order** (each render worker is a separate Chrome loading the page fresh, and the determinism check renders
   twice), so the pixels for `t` must depend on `t` alone: no state carried from one call to the next, nothing
   read from the previous frame, no Promise returned. It must not throw.
@@ -870,6 +871,8 @@ without running the file):
 - Top-level code may build the DOM and draw random numbers at load, synchronously; it must not start anything
   that runs later (no timers, no events, no async).
 - `window.duration` (required) and `window.size` (optional) are read statically (G22, G23) and again at render.
+- `window.seek` must be assigned (`window.seek = function (t) {...}`): a top-level `function seek(t) {}` alone
+  is refused by G21.
 - `window.rng(seed)`: `seed` an integer; returns a function giving floats in `[0, 1)`, the same sequence for the
   same seed on every machine. A stream used inside `seek` must be re-created from its seed inside that call
   (or drawn at load), never advanced across calls.
@@ -885,14 +888,57 @@ without running the file):
 
 ### How it renders (PM2; deterministic, no network)
 
-- The engine writes `build/graphics/<id>-<key16>/index.html`: a CSP meta (`default-src 'none'; script-src
+- **The network lock (render precondition; v2).** A CSP is not enough: measured in HyperFrames' pinned Chrome
+  (HeadlessChrome/152.0.7977.30) with the v1 CSP, `location = url`, a static `<a href>` + `click()`, `open(url)`,
+  an inserted meta refresh and `RTCPeerConnection` with a STUN url all reached a non-loopback listener on this
+  Mac, and none of them logs a CSP line. The production container has no OS-level lockdown available (the PC
+  measured: no CAP_NET_ADMIN / SYS_ADMIN, `unshare` denied, no iptables, no egress firewall). So the requirement
+  is **browser-level isolation, the same on every platform**:
+  - **Every graphic render launches Chrome through a `HYPERFRAMES_BROWSER_PATH` shim** (the variable hyperframes
+    0.8.81's BrowserManager reads) that execs the pinned `chrome-headless-shell` with, at least:
+    `--proxy-server=http://127.0.0.1:9` (a dead proxy: every non-loopback HTTP(S)/WS request goes nowhere; Chrome
+    bypasses the proxy for loopback by default, so HyperFrames' local server and CDP still work),
+    `"--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE localhost"` (no DNS lookups),
+    `--force-webrtc-ip-handling-policy=disable_non_proxied_udp` and
+    `--webrtc-ip-handling-policy=disable_non_proxied_udp` (no STUN/UDP), and `--disable-quic`.
+    **Final flag list: `<PM2 fills this in from its measurements>`.**
+  - Measured on this Mac with exactly the flags above (puppeteer on the same Chrome, page served from
+    127.0.0.1, the target the Mac's own non-loopback IPv4 address, the v2 CSP below): **0 of 22** routes
+    reached the listener (fetch, `new Image`, image-set, innerHTML img, document.write script, srcdoc iframe,
+    sendBeacon, eval via constructor, `@font-face` url, SVG `<image>`, `location =`, script `<a>` + click,
+    `open()`, form POST, meta refresh, STUN, prefetch, preload, WebSocket, static `<a>` + click, dns-prefetch,
+    CSS `@import`). Without the shim, 6 of 22 did (`location =`, both `<a>` clicks, `open()`, meta refresh:
+    GET; STUN: UDP). Through `hyperframes render` itself: a page that navigates at t > 0.3 s and opens a STUN
+    connection sent `2 GET /nav` + `3 UDP` without the shim and **nothing** with it; a normal page rendered under
+    the shim gave the same 60 frame md5s as without it.
+  - **The probe (R12), fail closed, before EVERY graphic render and inside `scripts/graphic-determinism.mjs`:**
+    the renderer launches Chrome through the same shim, opens a page with NO CSP (a CSP would make the probe
+    fail for the wrong reason) and loads `http://1.1.1.1/` and `http://169.254.169.254/` (`fetch(url, {mode:
+    "no-cors"})`, 3 s timeout each). Both must FAIL; if either loads, the render is refused (R12) and nothing is
+    rendered unlocked. Measured on this Mac: plain Chrome REACHED `1.1.1.1`; Chrome under the flag shim failed
+    both (TypeError); the parent Node process itself CONNECTED to `1.1.1.1:443` (so the probe is not vacuous
+    here).
+  - **Node side:** HyperFrames' own compiler fetches remote URLs in Node (below); the vendor offline preload
+    (`VENDOR_OFFLINE=1`) covers those.
+  - **Optional extra defence, where the OS allows it (not the requirement):** `sandbox-exec` on macOS (measured
+    here: a profile `(version 1) (allow default) (deny network-outbound) (allow network-outbound (remote ip
+    "localhost:*")) (allow network-outbound (remote unix-socket))` around the same Chrome also gave 0 of 22 and
+    a passing render; Chrome then needs `--no-sandbox`, which hyperframes 0.8.81 already passes), `unshare -n`
+    on a Linux host that permits it.
+  - What stays open: loopback (the shim bypasses the proxy for it). A graphic could reach a service listening on
+    the render host's own `localhost`; the static rules (G8, G25, G27) and the CSP refuse the obvious routes to it.
+- The engine writes `build/graphics/<name>-<key16>/index.html`: a CSP meta (v2: `default-src 'none'; script-src
   'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src
-  'none'`), the font `@font-face` rules, the `rng` definition, the graphic's `<head>` content, then
-  `<div id="graphic-root" data-composition-id="graphic" data-width="<w>" data-height="<h>" data-start="0"
-  data-duration="<L / fps>" data-no-timeline>` holding the graphic's `<body>` content, then the bridge:
-  `window.addEventListener("hf-seek", e => { k = Math.round(e.detail.time * fps); window.seek(map(k) / fps) })`,
-  catching and reporting (`console.error("GRAPHIC-REFUSED: ...")`) a throw, a missing `seek` or a Promise.
+  'none'; form-action 'none'; base-uri 'none'; frame-src 'none'`), the font `@font-face` rules, the `rng`
+  definition, the graphic's `<head>` content, then `<div id="graphic-root" data-composition-id="graphic"
+  data-width="<w>" data-height="<h>" data-start="0" data-duration="<L / fps>" data-no-timeline>` holding the
+  graphic's `<body>` content, then the bridge: `window.addEventListener("hf-seek", e => { k =
+  Math.round(e.detail.time * fps); window.seek(map(k) / fps) })`, catching and reporting
+  (`console.error("GRAPHIC-REFUSED: ...")`) a throw, a missing `seek` or a Promise, and
+  `addEventListener("pagehide" | "beforeunload", () => console.error("GRAPHIC-REFUSED: navigated"))` (R11).
   For `mode: "insert"` the root's background is `#000` (opaque); for `overlay` it is `transparent`.
+  Measured: the v2 CSP's `form-action 'none'` stops a script-built `<form>.submit()` POST; the navigation
+  listener printed `[Browser:ERROR] GRAPHIC-REFUSED: navigated` (twice) and the render exited 1.
 - Measured (HyperFrames 0.8.81, this Mac): a CSP-blocked image and `fetch()` print
   `[Browser:ERROR] ... violates the following Content Security Policy directive ...` and are not loaded; `eval`
   is blocked by the same CSP; a `console.error` from the page prints `[Browser:ERROR] <text>`; an uncaught
@@ -900,8 +946,9 @@ without running the file):
   the log and fails closed (deletes the output) on any of those lines.
 - HyperFrames' own compiler (Node, before Chrome) downloads remote `<img src>` / `<script src>` URLs itself
   (measured: `[WARN] [Compiler] Remote image download failed`). The render runs with the vendor preload
-  (`scripts/vendor-offline.cjs` from `origin/mac/bundle-gsap`, which PM2 brings in, run with `VENDOR_OFFLINE=1`) so every non-loopback Node `fetch()` is refused too.
-- Frames: `L` = the placement's frame count (below). Wrapper frame `j` (`0 <= j < L`) shows graphic frame
+  (`scripts/vendor-offline.cjs` from `origin/mac/bundle-gsap`, which PM2 brings in, run with `VENDOR_OFFLINE=1`)
+  so every non-loopback Node `fetch()` is refused too.
+- Frames: `L` = the placement's frame count (exact definition under Cache key). Wrapper frame `j` (`0 <= j < L`) shows graphic frame
   `k = in_f + j` (`in_f = round(in * fps)`, `D_f = round(duration * fps)`), mapped by `after`: `hold`: `min(k,
   D_f - 1)`; `loop`: `k mod D_f`; `cut`: `k` (the placement is shortened so `k < D_f`).
 - Output, verified with `hyperframes@0.8.81 render --format webm` / `--format mp4` on this Mac:
@@ -974,30 +1021,50 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
 
 ### Cache key
 
-`key = sha256` of the canonical JSON (keys sorted, no spaces) of:
+`key` = the sha256 (hex) of the canonical JSON of the object below. Canonical = exactly Python's
+`json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("utf-8")` (every value is
+ASCII: `src` and media paths are `[a-z0-9-]` by G1/G15). Every number is an integer.
 
 ```jsonc
-{ "v": 1,                                  // bumped when the wrapper/bridge/CSP changes
-  "html": "<sha256 of the HTML file bytes>",
-  "media": [["assets/graphics/media/a.jpg", "<sha256>"], ...],   // sorted by path; [] when none
-  "fonts": ["Inter", ...],                 // the bundled families inlined, sorted
+{ "v": 2,                                  // bumped when the wrapper / bridge / CSP / lock changes
+  "html": "<sha256 hex of the HTML file bytes>",
+  "media": [["assets/graphics/media/a.jpg", "<sha256 hex>"]],    // sorted by path; [] when none
+  "fonts": ["Inter"],                      // the bundled families inlined, sorted; [] when none
   "renderer": "hyperframes@0.8.81",
-  "fps": 30, "w": 1080, "h": 1080,         // the RENDERED size (W x H for an insert)
+  "chrome": "152.0.7977.30",               // the browser build actually used: the last token of `<chrome> --version`
+                                           // for the binary the launcher runs (measured: "Google Chrome for Testing 152.0.7977.30")
+  "ffmpeg": "7.1.1",                       // the token after "ffmpeg version " in `<ffmpeg> -version`, where <ffmpeg> is
+                                           // HYPERFRAMES_FFMPEG_PATH, else FFMPEG_PATH, else ffmpeg on PATH
+  "quality": "looks",                      // the -q preset passed to hyperframes render
+  "platform": "darwin-arm64",              // <os>-<arch> in Node's names: os darwin | linux | win32; arch arm64 | x64
+                                           // (Python: sys.platform; platform.machine() arm64/aarch64 -> arm64, x86_64/AMD64 -> x64)
+  "fps": 30, "w": 1080, "h": 1080,         // the reel fps; the RENDERED size (W x H for an insert)
   "mode": "overlay",                       // overlay | insert
-  "frames": 105, "in": 0, "after": "hold"  // L, in_f, after: which frames the file holds
-}
+  "frames": 105,                           // L
+  "in": 0,                                 // in_f = round(in * fps), frames, not seconds
+  "after": "hold" }
 ```
 
-File: `assets/graphics/<name>-<first 16 hex of key>.webm` (overlay) or `.mp4` (insert). A file with that name
-is used as is (no re-render); it is written only after the render passed every R rule and the determinism
-check (written to `<name>.part.<ext>` and renamed, as the matte is). The key never includes the reel, the
-placement time or the box, so moving or resizing a graphic re-uses its file; changing `dur`, `in` or `after`
-re-renders it. The studio preview renders with `frames = round(duration * fps)`, `in 0`, `after "hold"`, which
-is the same key as a placement that keeps the default `dur`.
+A render whose log line `Browser launched (HeadlessChrome/<version>, ...` names another version than the key's
+`chrome` is refused (R13): nothing is cached.
+
+File: `assets/graphics/<name>-<first 16 hex of key>.webm` (overlay) or `.mp4` (insert), `<name>` being the
+`<name>` of `assets/graphics/<name>.html`; its render folder is `build/graphics/<name>-<key16>/`. A file with
+that name is used as is (no re-render); it is written only after the render passed every R rule and the
+determinism check (written to `<name>-<key16>.part.<ext>` and renamed, as the matte is). The key never includes
+the reel, the placement time or the box, so moving or resizing a graphic re-uses its file; changing `dur`, `in`
+or `after` re-renders it. The studio preview renders with `frames = round(duration * fps)`, `in 0`, `after
+"hold"`: it is the same file as a placement that keeps the default `dur` **only at the same fps** (fps is in
+the key; the studio renders the preview at the reel's fps when it knows it, else 30).
+
+**`L` (frames), exactly.** Layer: `L = round(dur * fps)` with `dur` the resolved layer length (after clamping,
+and after `after: "cut"`). Beat: `L = round((out(to) - out(at)) * fps)`, where `out()` maps a source second to
+the output timeline (build.mjs `E()`, the same mapping every beat uses), so a beat across a cut gets the output
+length, not the source length.
 
 ### Determinism check
 
-Two **independent** renders of the same wrapper page (two separate `hyperframes render` processes, cold, the
+Two **independent** renders of the same wrapper page, both through the network-lock shim (two separate `hyperframes render` processes, cold, the
 second with `--workers 1` so the frame-to-worker split differs), then each output is decoded and hashed per
 frame: `ffmpeg -v error -c:v libvpx-vp9 -i <out.webm> -pix_fmt yuva420p -f framemd5 -` (overlay; the
 `-c:v libvpx-vp9` before `-i` is what decodes the alpha) or `ffmpeg -v error -i <out.mp4> -pix_fmt yuv420p -f
@@ -1012,44 +1079,112 @@ rendered files. First data point (this spec): one 2 s 540x960 seek(t) page, two 
 60 of 60 frames. That it holds on this Mac for every category is to be proven in PM2 (one fixture per category,
 PM5 harness).
 
-### Problems, word for word (the validator mirrors G1 to G26 and P1 to P3)
+### Problems, word for word (v2; the validator mirrors G1 to G28 and P1 to P3)
 
 - layer (`die()`): `layer <layer id>: graphic <src>: <reason>`
 - beat (warning, the beat is dropped): `graphic <beat id or at>: <src>: <reason>, dropped`
 
-**Refused before render (static: on the file text, the WHOLE file including comments, so a forbidden word in a
-comment fails too; regexes are JavaScript syntax, case-sensitive unless marked `i`; `\|` in the table is a
-plain `|` in the regex; `<match>` is the matched text). A Code graphic that SHOWS such a word as text writes it
-with an HTML entity (`&#115;etTimeout`), which the scan does not match and the page displays the same.**
+**Order.** The checks run in the order of the table below (G1, G2, ... G28, then P1 to P3); the FIRST failing
+check is the one reported, and for a regex its LEFTMOST match in the first scope listed that matches is the
+`<match>`. One problem per graphic.
+
+**Scopes (what each regex scans).**
+
+- `WHOLE`: the file text.
+- `SCRIPT`: the bodies of every `<script\b[^>]*>([\s\S]*?)</script\s*>` (flag `i`), joined with `\n`.
+- `STYLE`: the bodies of every `<style\b[^>]*>([\s\S]*?)</style\s*>` (flag `i`), then the value of every
+  `\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')` (flag `i`) found in `MARKUP`, with `&quot;`/`&#34;` -> `"`,
+  `&apos;`/`&#39;` -> `'`, `&amp;` -> `&` decoded; all joined with `\n`.
+- `MARKUP`: the file with every `<script ...>...</script>` and `<style ...>...</style>` element (the same two
+  regexes) removed.
+- Before the scopes are cut, every character in `[   -     　﻿]`
+  is replaced by a space, so `\s` means the same in JavaScript and in Python `re.ASCII`.
+- Comments are scanned (a forbidden word in a JS or CSS comment fails); text content of the page is not scanned
+  by the JS and CSS rules (`<p>We fetch (data)</p>` passes), only by the markup rules.
+
+**Regex dialect.** Each regex below is the exact source, JavaScript syntax; flags column `i` = case-insensitive,
+`-` = case-sensitive. The Python mirror compiles the same source with `re.ASCII` (plus `re.IGNORECASE` for `i`)
+and uses `search`; measured: node and Python `re.ASCII` give identical first-failure results on the reviewer's
+41 bypass cases, 54 false-positive cases and 29 G18/G21-G26 cases (scratch harness, not committed).
+
+```text
+id   scope         flags source
+G5   WHOLE         i  <script\b[^>]*\b(src\s*=|type\s*=\s*["']?module)
+G6   WHOLE         i  <link(?![\w-])
+G7   STYLE         i  @import\b
+G7   STYLE+MARKUP  -  url\(\s*(?![\s'"]|data:|#)|url\(\s*['"](?!data:|#)|image-set\(\s*['"](?!data:|#)
+G8   SCRIPT        -  \bfetch\s*\(|\bXMLHttpRequest\b|\bWebSocket\b|\bEventSource\b|\bsendBeacon\b|\bimport\s*\(|\bWorker\s*\(|\bSharedWorker\b|\bimportScripts\b|\bRTCPeerConnection\b|\bimport\s*\.\s*meta\b
+G9   SCRIPT        -  \beval\s*\(|\bnew\s+Function\b|\bFunction\s*\(|\bFunction\s*\.\s*prototype\b|\.\s*constructor\s*\.\s*constructor\b|\.\s*constructor\s*\(
+G10  SCRIPT        -  \b(setTimeout|setInterval|requestAnimationFrame|requestIdleCallback|queueMicrotask)\b
+G11  SCRIPT        -  \bnew\s+Date\b|\bDate\s*\(|\bDate\s*\.\s*(now|parse|UTC)\b|\bperformance\s*\.\s*(now|timeOrigin|mark|measure|getEntries)\b|\bdocument\s*\.\s*timeline\b|\.\s*timeStamp\b
+G12  SCRIPT        -  \bMath\s*\.\s*random\b
+G13  STYLE         i  @keyframes\b|(?<![\w-])animation(-name)?\s*:|(?<![\w-])transition(-property)?\s*:
+G13  SCRIPT        -  \.\s*(animation|transition)\s*=|\.\s*animate\s*\(|\bgetAnimations\b
+G13  MARKUP        i  <(animate|animateTransform|animateMotion|set)(?![\w-])
+G14  MARKUP        i  <(video|audio|iframe|frame|frameset|object|embed|base|form|portal)(?![\w-])
+G14  MARKUP        i  <meta\b[^>]*http-equiv\s*=\s*["']?refresh
+G19  SCRIPT        -  \b(gsap|TweenMax|TweenLite|TimelineMax|TimelineLite|ScrollTrigger|anime|THREE|lottie|bodymovin|d3|p5|PIXI|Matter|Konva|BABYLON|Phaser|mojs|createjs|React|ReactDOM|Vue|Velocity|popmotion)\s*[.(]
+G19  WHOLE         i  GreenSock
+G20  SCRIPT        -  getContext\s*\(\s*['"](webgl2?|experimental-webgl|webgpu)['"]
+G25  SCRIPT        -  \b(localStorage|sessionStorage|indexedDB|caches|navigator|location|history|crypto)\s*(\.\s*[A-Za-z_$]|\[)|(?<![\w$.])location\s*=(?!=)|\bdocument\s*\.\s*(cookie|referrer|domain|location|write|writeln|open)\b|\bwindow\s*\.\s*(open|parent|top|opener|location|frames)\b|(?<![\w$.])(globalThis|self|top|parent|opener|frames)\s*[.\[]|\bwindow\s*\[|(?<![\w$.])open\s*\(|\bpostMessage\s*\(|\bReflect\s*\.
+G27  MARKUP        i  <(a|area)(?![\w-])[^>]*\shref\s*=\s*(?!["']?#)|\sping\s*=
+G28  SCRIPT        -  \[\s*(['"`])[^'"`]*\1\s*\+|\[\s*`[^`]*\$\{
+```
+
+**Writing forbidden words as text.** A graphic that SHOWS such a word (the Code category) writes it in markup
+with an HTML entity (`<code>&#115;etTimeout</code>`), or inside a JS string with a `\uXXXX` escape
+(`"setTimeout(cb)"`, `"Launch Date (Q3)"`); the scan does not match either and the page displays
+the same text. A method of your own must not be called `animate` (G13 `.animate(`), and `anime`, `d3`, `THREE`,
+... are reserved names (G19).
 
 | # | check | `<reason>` (exact) |
 |---|---|---|
 | G1 | `src` matches `^assets/graphics/[a-z0-9-]{1,48}\.html$` and resolves inside `<project>/assets/graphics/` | `graphic src '<src>' is not assets/graphics/<name>.html inside the project` |
 | G2 | the file exists | `graphic file <src> does not exist` |
 | G3 | size <= 2097152 bytes | `graphic file <src> is <bytes> bytes (max 2097152)` |
-| G4 | valid UTF-8; exactly one `<head\b` and one `<body\b` (i) | `graphic file <src> is not a UTF-8 HTML document with one <head> and one <body>` |
-| G5 | `<script\b[^>]*\b(src\s*=\|type\s*=\s*["']?module)` (i) | `graphic file <src> loads a script file or a module (<script src> / type=module): only inline classic scripts are allowed` |
-| G6 | `<link\b` (i) | `graphic file <src> has a <link> tag: put styles inline in <style>` |
-| G7 | `@import\b` (i), or `url\(\s*(?!['"]?(data:\|#))` (i) | `graphic file <src> uses @import or url(...) with something other than a data: URI or a #fragment` |
-| G8 | `\bfetch\s*\(\|\bXMLHttpRequest\b\|\bWebSocket\b\|\bEventSource\b\|\bsendBeacon\b\|\bimport\s*\(\|\bWorker\s*\(\|\bSharedWorker\b\|\bimportScripts\b\|\bRTCPeerConnection\b` | `graphic file <src> uses <match> (no network: fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, import(), workers)` |
-| G9 | `\beval\s*\(\|\bnew\s+Function\b\|\bFunction\s*\(` | `graphic file <src> uses <match> (no eval or new Function)` |
-| G10 | `\b(setTimeout\|setInterval\|requestAnimationFrame\|requestIdleCallback\|queueMicrotask)\b` | `graphic file <src> uses <match> (no timers: seek(t) is the only clock)` |
-| G11 | `\bnew\s+Date\b\|\bDate\s*\(\|\bDate\s*\.\s*(now\|parse\|UTC)\b\|\bperformance\s*\.\|\bdocument\s*\.\s*timeline\b` | `graphic file <src> reads the clock (<match>): use the t passed to seek(t)` |
-| G12 | `\bMath\s*\.\s*random\b` | `graphic file <src> calls Math.random: use window.rng(seed)` |
-| G13 | `@keyframes\b\|\banimation(-name)?\s*:\|\btransition(-property)?\s*:\|\.(animation\|transition)\s*=\|\.animate\s*\(\|\bgetAnimations\b`, or `<(animate\|animateTransform\|animateMotion\|set)\b` (i) | `graphic file <src> uses <match> (no CSS animations, transitions, Web Animations or SVG animation: compute every style in seek(t))` |
-| G14 | `<(video\|audio\|iframe\|frame\|frameset\|object\|embed\|base\|form\|portal)\b` (i), or `<meta\b[^>]*http-equiv\s*=\s*["']?refresh` (i) | `graphic file <src> has a <<tag>> element (no video, audio, iframe, object, embed, base, form or meta refresh)` |
-| G15 | every value of `src=`, `srcset=`, `poster=` and of `href=` / `xlink:href=` on `<image` and `<use` (i) is a `data:image/(png\|jpeg\|webp\|gif\|svg+xml)` URI, `#fragment` (`<use>` only) or matches `^assets/graphics/media/[a-z0-9-]{1,48}\.(png\|jpe?g\|webp)$` | `graphic file <src> refers to '<value>' (images must be data: URIs or assets/graphics/media/ files)` |
+| G4 | valid UTF-8; exactly one `<head\b` and one `<body\b` (flag `i`, `WHOLE`) | `graphic file <src> is not a UTF-8 HTML document with one <head> and one <body>` |
+| G5 | listing G5 | `graphic file <src> loads a script file or a module (<script src> / type=module): only inline classic scripts are allowed` |
+| G6 | listing G6 | `graphic file <src> has a <link> tag: put styles inline in <style>` |
+| G7 | listing G7 (both lines) | `graphic file <src> uses @import, url(...) or image-set(...) with something other than a data: URI or a #fragment` |
+| G8 | listing G8 | `graphic file <src> uses <match> (no network: fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, import(), import.meta, workers, RTCPeerConnection)` |
+| G9 | listing G9 | `graphic file <src> uses <match> (no eval, new Function or constructor tricks)` |
+| G10 | listing G10 | `graphic file <src> uses <match> (no timers: seek(t) is the only clock)` |
+| G11 | listing G11 | `graphic file <src> reads the clock (<match>): use the t passed to seek(t)` |
+| G12 | listing G12 | `graphic file <src> calls Math.random: use window.rng(seed)` |
+| G13 | listing G13 (three lines) | `graphic file <src> uses <match> (no CSS animations, transitions, Web Animations or SVG animation: compute every style in seek(t))` |
+| G14 | listing G14 (two lines) | `graphic file <src> has a <match> element (no video, audio, iframe, object, embed, base, form or meta refresh)` |
+| G15 | in `MARKUP`, every value of `src=`, `srcset=`, `poster=` and of `href=` / `xlink:href=` on `<image` and `<use` (flag `i`) is a `data:image/(png\|jpeg\|webp\|gif\|svg+xml)` URI, a `#fragment` (`<use>` only) or matches `^assets/graphics/media/[a-z0-9-]{1,48}\.(png\|jpe?g\|webp)$` | `graphic file <src> refers to '<value>' (images must be data: URIs or assets/graphics/media/ files)` |
 | G16 | each `assets/graphics/media/...` file it names exists inside the project | `graphic media <path> does not exist` |
 | G17 | at most 8 media files, each <= 4194304 bytes | `graphic media <path> is <bytes> bytes (max 4194304)` / `graphic file <src> uses <n> media files (max 8)` |
-| G18 | every font family (read from `font-family:` up to `;` `}` `<` or a newline, inside a `style="..."` up to its closing quote; `.fontFamily = '<v>'`; and the families after the size token of a CSS `font:` shorthand or a canvas `.font = '<v>'`), trimmed of quotes and spaces, compared case-insensitively, is an engine family, a family the file's own `@font-face` declares, or `serif`, `sans-serif`, `monospace`, `system-ui`, `cursive`, `ui-sans-serif`, `ui-serif`, `ui-monospace`, `inherit`, `initial`, `unset` | `graphic file <src> uses font family '<name>' (only the engine's fonts, a data: @font-face, or a generic family)` |
-| G19 | `\b(gsap\|TweenMax\|TweenLite\|TimelineMax\|TimelineLite\|ScrollTrigger\|anime\|THREE\|lottie\|bodymovin\|d3\|p5\|PIXI\|Matter\|Konva\|BABYLON\|Phaser\|mojs\|createjs\|React\|ReactDOM\|Vue\|Velocity\|popmotion)\s*[.(]`, or `GreenSock` (i) | `graphic file <src> uses a library (<match>): no GSAP or any other animation, 3D, chart or UI library; write plain seek(t) code` |
-| G20 | `getContext\s*\(\s*['"](webgl2?\|experimental-webgl\|webgpu)['"]` | `graphic file <src> asks for a WebGL/WebGPU context (only canvas 2d)` |
-| G21 | `\bwindow\s*\.\s*seek\s*=` present | `graphic file <src> does not define window.seek(t)` |
-| G22 | `\bwindow\s*\.\s*duration\s*=\s*(\d+(\.\d+)?)\s*;` present exactly once, value 0.5..30 | `graphic file <src> does not set window.duration to a number literal from 0.5 to 30` |
-| G23 | `\bwindow\s*\.\s*size\s*=` absent, or present exactly once as `\bwindow\s*\.\s*size\s*=\s*\{\s*w\s*:\s*(\d+)\s*,\s*h\s*:\s*(\d+)\s*\}`, both even, `16 <= w <= W`, `16 <= h <= H` | `graphic size must be window.size = { w: <even int>, h: <even int> } within 16..<W> x 16..<H>` |
+| G18 | the font rule below | `graphic file <src> uses font family '<name>' (only the engine's fonts, a data: @font-face, var(--...), or a generic family)` |
+| G19 | listing G19 (two lines) | `graphic file <src> uses a library (<match>): no GSAP or any other animation, 3D, chart or UI library; write plain seek(t) code` |
+| G20 | listing G20 | `graphic file <src> asks for a WebGL/WebGPU context (only canvas 2d)` |
+| G21 | `\bwindow\s*\.\s*seek\s*=` (`SCRIPT`) present. A top-level `function seek(t) {}` alone is refused here | `graphic file <src> does not define window.seek(t)` |
+| G22 | in `SCRIPT`: `\bwindow\s*\.\s*duration\s*=(?!=)` occurs exactly once AND `\bwindow\s*\.\s*duration\s*=\s*(\d+(?:\.\d+)?)\s*(?:;\|$)` (flag `m`) matches exactly once, value 0.5..30 (a leading digit is required: `.5` and `3.` fail) | `graphic file <src> does not set window.duration to a number literal from 0.5 to 30` |
+| G23 | in `SCRIPT`: `\bwindow\s*\.\s*size\s*=(?!=)` occurs 0 times, or once AND `\bwindow\s*\.\s*size\s*=\s*\{\s*w\s*:\s*(\d+)\s*,\s*h\s*:\s*(\d+)\s*,?\s*\}` matches once (w before h, unquoted keys, a trailing comma allowed), both even, `16 <= w <= W`, `16 <= h <= H` | `graphic size must be window.size = { w: <even int>, h: <even int> } within 16..<W> x 16..<H>` |
 | G24 | `mode: "insert"` and a `window.size` other than W x H | `an insert graphic must be <W>x<H> (window.size is <w>x<h>)` |
-| G25 | `\b(localStorage\|sessionStorage\|indexedDB\|caches\|navigator\|location\|history\|crypto)\.[A-Za-z_$]\|\bdocument\s*\.\s*(cookie\|referrer\|domain)\b\|\bwindow\s*\.\s*(open\|parent\|top\|opener)\b\|\bpostMessage\s*\(` | `graphic file <src> uses <match> (no storage, navigation or environment reads)` |
-| G26 | `\bwindow\s*\.\s*rng\s*=` absent, or followed by `window.rng \|\|` (the template snippet) | `graphic file <src> redefines window.rng (copy the engine snippet as is)` |
+| G25 | listing G25 | `graphic file <src> uses <match> (no storage, navigation, window access or environment reads)` |
+| G26 | `\bwindow\s*\.\s*rng\s*=(?!\s*window\s*\.\s*rng\s*\|\|)` (`SCRIPT`) matches | `graphic file <src> redefines window.rng (copy the engine snippet as is)` |
+| G27 | listing G27 (new in v2) | `graphic file <src> has a link that leaves the page (<match>): <a>/<area> href must be a #fragment, no ping` |
+| G28 | listing G28 (new in v2) | `graphic file <src> builds a name from pieces (<match>): write property names out in full` |
+
+**G18, the font rule, exactly.** Allowed families (compared case-insensitively): the engine's (`Inter`, `Geist`,
+`Montserrat`, `Oswald`, `Unbounded`, `Gloock`, `Instrument Serif`, `EB Garamond`, `Playfair Display`,
+`Caveat Brush`, `Yellowtail`, `JetBrains Mono`), the generics `serif`, `sans-serif`, `monospace`, `system-ui`,
+`cursive`, `ui-sans-serif`, `ui-serif`, `ui-monospace`, `inherit`, `initial`, `unset`, every family the file
+declares with `@font-face\s*\{[^}]*?(?<![\w-])font-family\s*:\s*([^;}]*)` (flag `i`, `STYLE`), and any item
+starting with `var(` (flag `i`). Family lists are read from:
+
+1. `STYLE`: `(?<![\w-])font-family\s*:\s*([^;}<]*)` (flag `i`), group 1;
+2. `STYLE`: `(?<![\w-])font\s*:\s*([^;}<]*)` (flag `i`), group 1 after the size token;
+3. `MARKUP`: `\sfont-family\s*=\s*(?:"([^"]*)"|'([^']*)')` (flag `i`; the SVG attribute), group 1 or 2;
+4. `SCRIPT`: `\.\s*fontFamily\s*=\s*(['"`])(.*?)\1`, group 2;
+5. `SCRIPT`: `\.\s*font\s*=\s*(['"`])(.*?)\1` (canvas `ctx.font` and `style.font`), group 2 after the size token.
+
+**The size token:** if the value matches `^.*?(?:^|\s)\S*?(?:px|pt|em|rem|%|vh|vw|vmin|vmax|ch|ex)(?:\s*/\s*\S+)?\s+(.+)$`
+(flags `i` and `s`), the family list is its group 1; otherwise the whole value. A list is split on `,`; each item
+has the first `!important` (flag `i`) removed from the list, is trimmed, loses ONE pair of matching outer quotes
+(`'...'` or `"..."`), is trimmed again; empty items are skipped. The first item not allowed is `<name>`.
 
 **Placement problems (static, on the reel.json entry).**
 
@@ -1076,23 +1211,29 @@ render wrapper reads the whole log of both renders; any of these deletes the out
 | R8 | rendered file over 52428800 bytes | `rendered file is <bytes> bytes (max 52428800)` |
 | R9 | overlay: every decoded frame has alpha 0 everywhere | `every frame is fully transparent` |
 | R10 | `hyperframes render` exits non-zero, or writes no file | `hyperframes render failed (exit <code>): <last log line>` |
+| R11 (v2) | a log line containing `GRAPHIC-REFUSED: navigated` (bridge `pagehide` / `beforeunload`) | `graphic navigated away from its page: render refused` |
+| R12 (v2) | the network probe (above) loaded `http://1.1.1.1/` or `http://169.254.169.254/` through the render's Chrome shim, or the probe could not run | `network lock is not in place (<url> was reachable from the render browser): graphic renders refused` / `network lock probe could not run: <message>` |
+| R13 (v2) | the render log's `Browser launched (HeadlessChrome/<v>, ...` differs from the key's `chrome` | `the render used Chrome <v>, the cache key says <k>: nothing cached` |
 
-Why some rules are only render-time: HyperFrames' runtime shares the page and itself uses timers, `Math.random`
-and `performance`, so the wrapper cannot replace those globals with traps. Static G10 to G12 plus the
-determinism check R6 cover them; a dynamic load the static scan cannot see (a `.src =` assigned in script) is
-blocked by the CSP and refused by R1.
+**What only the render-time checks catch.** The static scan is hygiene; these pass it and are caught only by
+the network lock (no request leaves) and the determinism check R6 (a clock or randomness shows as differing
+frames): dynamic loads (`new Image().src = url`, `el.innerHTML = '<img src=...>'`, `setAttributeNS(..., 'href',
+url)`, an `iframe` built with `srcdoc`, a `link` element built with `rel=dns-prefetch`, a meta refresh inserted from a
+string) - measured blocked by the lock; CSS animations set from script (`style.cssText = 'animation:...'`,
+`style.setProperty('animation', ...)`, a `@keyframes` rule written into a `<style>` from a concatenated string);
+`el['ani' + 'mate']` (G28 refuses the concatenation, a variable holding the name passes); `new
+Intl.DateTimeFormat().format()` with no date (reads the clock); an event's `timeStamp` read through a variable;
+locale-dependent output (`toLocaleString()` without a locale). R6 compares two renders on the same machine, so
+a machine-dependent but stable result (fonts, locale) is caught only across machines, by the cache key's
+`platform` / `chrome` / `ffmpeg`.
 
-**Warnings (never fatal; layer and beat alike, prefixed `layer <id>:` / `graphic <id>:`).**
-
-| # | text (exact) |
-|---|---|
-| GW1 | `graphic in <v>s is outside 0..<duration>s, clamped` |
-| GW2 | `graphic after cut: shortened from <a>s to <b>s (the graphic's length)` |
-| GW3 | `graphic after '<v>' is not hold, loop or cut, using hold` |
-| GW4 | `graphic box is ignored for an insert (full frame)` |
-| GW5 | `graphic audio is ignored (graphics are silent)` |
-| GW6 | `graphic fps is ignored (the reel's fps is used)` |
-| GW7 | `graphic box crosses the <platform name> UI zone` (the Lottie W7 rule, `safezone.mjs` `PLATFORMS[platform]`) |
+**PM5 requirement (from the CP3 review).** The PM5 harness carries one fixture per network route (the 22 above,
+each in its own fixture: fetch, `new Image`, image-set, innerHTML img, document.write script, srcdoc iframe,
+sendBeacon, constructor eval, `@font-face` url, SVG `<image>`, `location =`, script `<a>` + click, `open()`,
+form POST, meta refresh, STUN, prefetch, preload, WebSocket, static `<a>` + click, dns-prefetch, CSS `@import`),
+each written to pass the static scan where possible and aimed at a listener the test opens on the host's
+non-loopback address; the gate test renders each through the shim and passes only if the listener sees **zero
+requests and zero packets** (and the R12 probe passes first).
 
 Not in this version: sound inside a graphic, audio-reactive visualisers (Music graphics draw from seeded data),
 WebGL / three.js, GSAP or any library (owner's pause, licence question), variables passed in at render
