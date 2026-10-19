@@ -1,0 +1,561 @@
+{
+ "_": "Cases for scripts/graphic-rules/parity.mjs: html in, expect = the first failure (rules.mjs format) or null. bypass/fp: the CP3 reviewer's sets; meta: G18/G21-G26; v3: the CP3 re-review.",
+ "cases": {
+  "bypass.fetchConcat": {
+   "html": "<script>window['fe'+'tch']('https://x')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"window[\""
+  },
+  "bypass.globalSetTimeout": {
+   "html": "<script>globalThis.setTimeout(f,10)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G10:SCRIPT:\"setTimeout\""
+  },
+  "bypass.selfFetch": {
+   "html": "<script>self.fetch('https://x')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G8:SCRIPT:\"fetch(\""
+  },
+  "bypass.topFetch": {
+   "html": "<script>top.fetch('https://x')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G8:SCRIPT:\"fetch(\""
+  },
+  "bypass.reflect": {
+   "html": "<script>Reflect.apply(window['fe'+'tch'],window,['https://x'])</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"Reflect.\""
+  },
+  "bypass.tmpl": {
+   "html": "<script>window[`set${'Time'}out`](f)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"window[\""
+  },
+  "bypass.img": {
+   "html": "<script>new Image().src='https://x/a.png'</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "bypass.imageSet": {
+   "html": "<style>.a{background:image-set(\"https://x/a.png\" 1x)}</style><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G7:STYLE:\"image-set(\\\"\""
+  },
+  "bypass.imageSetUrl": {
+   "html": "<style>.a{background:image-set(url(https://x/a.png) 1x)}</style><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G7:STYLE:\"url(\""
+  },
+  "bypass.fontface": {
+   "html": "<style>@font-face{font-family:X;src:url(https://x/f.woff2)}</style><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G7:STYLE:\"url(\""
+  },
+  "bypass.svgimgDyn": {
+   "html": "<script>el.setAttributeNS(null,'href','https://x/a.png')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "bypass.srcdoc": {
+   "html": "<script>var f=document.createElement('ifr'+'ame');f.srcdoc='<img src=https://x>';document.body.appendChild(f)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "bypass.aClick": {
+   "html": "<a id=\"l\" href=\"https://x/leak\"></a><script>document.getElementById('l').click()</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\".click(\""
+  },
+  "bypass.docwrite": {
+   "html": "<script>document.write('<scr'+'ipt src=https://x/a.js></scr'+'ipt>')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"document.write\""
+  },
+  "bypass.docwrite2": {
+   "html": "<script>document.write('<script src=https://x/a.js></script>')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G5:WHOLE:\"<script src=\""
+  },
+  "bypass.innerImg": {
+   "html": "<script>el.innerHTML='<img src=https://x/a.png>'</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "bypass.importMeta": {
+   "html": "<script>import.meta.url</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G8:SCRIPT:\"import.meta\""
+  },
+  "bypass.fnProto": {
+   "html": "<script>Function.prototype.constructor('return 1')()</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G9:SCRIPT:\"Function.prototype\""
+  },
+  "bypass.arrCC": {
+   "html": "<script>[].constructor.constructor('return fetch')()</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G9:SCRIPT:\".constructor.constructor\""
+  },
+  "bypass.beaconAlias": {
+   "html": "<script>var n=window['navi'+'gator'];n.sendBeacon('https://x')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G8:SCRIPT:\"sendBeacon\""
+  },
+  "bypass.beaconAlias2": {
+   "html": "<script>navigator['send'+'Beacon']('https://x')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"navigator[\""
+  },
+  "bypass.rafAlias": {
+   "html": "<script>window['request'+'AnimationFrame'](f)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"window[\""
+  },
+  "bypass.cssText": {
+   "html": "<script>el.style.cssText='animation:spin 1s infinite'</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "bypass.setProp": {
+   "html": "<script>el.style.setProperty('animation','spin 1s infinite')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "bypass.kfDyn": {
+   "html": "<script>st.textContent='@key'+'frames spin{to{transform:rotate(1turn)}}'</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "bypass.dateGT": {
+   "html": "<script>new globalThis.Date</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"globalThis.\""
+  },
+  "bypass.dateGT2": {
+   "html": "<script>new globalThis.Date()</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G11:SCRIPT:\"Date(\""
+  },
+  "bypass.perfAlias": {
+   "html": "<script>globalThis['perf'+'ormance'].now()</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"globalThis[\""
+  },
+  "bypass.locAssign": {
+   "html": "<script>location = 'https://x/leak?d=1'</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"location =\""
+  },
+  "bypass.docLoc": {
+   "html": "<script>document.location = 'https://x/'</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"document.location\""
+  },
+  "bypass.topLoc": {
+   "html": "<script>top.location='https://x/'</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"location=\""
+  },
+  "bypass.bareOpen": {
+   "html": "<script>open('https://x/')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"open(\""
+  },
+  "bypass.selfOpen": {
+   "html": "<script>self.open('https://x/')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"open(\""
+  },
+  "bypass.rtc": {
+   "html": "<script>new window['RTCPeer'+'Connection']({iceServers:[{urls:'stun:x.example:3478'}]})</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"window[\""
+  },
+  "bypass.metaDyn": {
+   "html": "<script>document.head.insertAdjacentHTML('beforeend','<me'+'ta http-equiv=\"refresh\" content=\"0;url=https://x/\">')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "bypass.dnsPrefetch": {
+   "html": "<script>var l=document.createElement('li'+'nk');l.rel='dns-prefetch';l.href='//leak.x.example';document.head.appendChild(l)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\".href=\""
+  },
+  "bypass.intlDate": {
+   "html": "<script>new Intl.DateTimeFormat('en-US').format()</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "bypass.evTimestamp": {
+   "html": "<script>addEventListener('hf-seek',e=>e.timeStamp)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G11:SCRIPT:\".timeStamp\""
+  },
+  "bypass.anim": {
+   "html": "<script>el['ani'+'mate']([{opacity:0},{opacity:1}],1000)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G28:SCRIPT:\"l['ani'+\""
+  },
+  "bypass.entityScan": {
+   "html": "<pre>&#115;etTimeout(cb, 100)</pre><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "bypass.newDateNoParen": {
+   "html": "<script>var d = new globalThis.Date; d.getTime()</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"globalThis.\""
+  },
+  "fp.codeText": {
+   "html": "<pre>setTimeout(() => go(), 100)</pre><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.codeTextJS": {
+   "html": "<script>code.textContent = \"const r = await fetch('/api')\"</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G8:SCRIPT:\"fetch(\""
+  },
+  "fp.transComment": {
+   "html": "<script>/* no transition: we compute in seek */</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.transCommentHTML": {
+   "html": "<!-- no animation: here --><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.perfText": {
+   "html": "<h1>Peak performance. Every day.</h1><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.perfText2": {
+   "html": "<p>Q3 performance.</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.urlGrad": {
+   "html": "<rect fill=\"url(#grad)\"/><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.urlGradSp": {
+   "html": "<rect fill=\"url( #grad )\"/><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.urlStyleGrad": {
+   "html": "<style>.a{fill:url('#g')}</style><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.animeVar": {
+   "html": "<script>var anime = 0; anime(1)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G19:SCRIPT:\"anime(\""
+  },
+  "fp.animeProp": {
+   "html": "<script>obj.anime.x</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G19:SCRIPT:\"anime.\""
+  },
+  "fp.animeText": {
+   "html": "<p>I love anime.</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.matterText": {
+   "html": "<h1>Does it Matter. Yes.</h1><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.matterText2": {
+   "html": "<p>Matter (physics)</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.vueText": {
+   "html": "<p>Vue.js vs React.</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.d3Text": {
+   "html": "<p>Built with d3.</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.threeText": {
+   "html": "<span>THREE.</span><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.reactText": {
+   "html": "<li>React (18)</li><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.navText": {
+   "html": "<p>Use the navigator.</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.navText2": {
+   "html": "<p>navigator.share is cool</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.histText": {
+   "html": "<p>Our history.Begins</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.histText2": {
+   "html": "<p>A brief history. Of time.</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.locText": {
+   "html": "<p>Location.</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.locText2": {
+   "html": "<p>location.Dubai</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.cryptoText": {
+   "html": "<p>Crypto.Bitcoin</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.cryptoText2": {
+   "html": "<p>crypto.Bitcoin rises</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.cachesText": {
+   "html": "<p>caches.</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.dateText": {
+   "html": "<p>Date (2024)</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.dateText2": {
+   "html": "<th>Date</th><td>Date(s)</td><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.dateLabel": {
+   "html": "<script>label(\"Launch Date (Q3)\")</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G11:SCRIPT:\"Date (\""
+  },
+  "fp.setTag": {
+   "html": "<setting><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.setTagSvg": {
+   "html": "<p><set of 3></p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G13:MARKUP:\"<set\""
+  },
+  "fp.formText": {
+   "html": "<p><form-field></p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.openTop": {
+   "html": "<script>ctx.translate(0,0); window.topBar = 1</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.audioText": {
+   "html": "<p>&lt;audio&gt;</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.functionCall": {
+   "html": "<script>function draw(t){} draw(1)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.myFunction": {
+   "html": "<script>var Function = 1; isFunction(x)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.evalText": {
+   "html": "<p>Self-eval (2024)</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.importText": {
+   "html": "<p>@import is CSS</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.fetchText": {
+   "html": "<p>We fetch (data) for you</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.fetchText2": {
+   "html": "<p>Click to fetch(it)</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.workerText": {
+   "html": "<p>Worker (part-time)</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.transitionWord": {
+   "html": "<p>The transition: from A to B</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.animationWord": {
+   "html": "<h2>Animation: the basics</h2><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.setIntervalCode": {
+   "html": "<code>setInterval</code><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.entityTrick": {
+   "html": "<code>&#115;etTimeout</code><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.entityTrickInJS": {
+   "html": "<script>el.textContent = 'setTimeout(cb)'</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G10:SCRIPT:\"setTimeout\""
+  },
+  "fp.sizeShort": {
+   "html": "<script>window.size = {w:1080,h:1080};</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.durNoSemi": {
+   "html": "<script>window.duration = 3.5\n</script><script>window.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.durExp": {
+   "html": "<script>window.duration = 3.;</script><script>window.seek = function (t) {};</script>",
+   "expect": "G22"
+  },
+  "fp.rngNoOr": {
+   "html": "<script>window.rng = window.rng||function(seed){}</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.animateMethodOwn": {
+   "html": "<script>function animate(t){} animate(t)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "fp.dotAnimate": {
+   "html": "<script>this.animate(t)</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G13:SCRIPT:\".animate(\""
+  },
+  "fp.imgSrcSet": {
+   "html": "<img srcset=\"data:image/png;base64,AA 1x\"><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "meta.template_ok": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.css_engine": {
+   "html": "<html><head><style>h1{font-family:'Instrument Serif', serif}</style></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.css_dq_attr": {
+   "html": "<html><head></head><body><h1 style=\"font-family:&quot;Inter&quot;\">x</h1><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.css_bad": {
+   "html": "<html><head><style>h1{font-family: Arial, sans-serif}</style></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G18:\"Arial\""
+  },
+  "meta.css_var": {
+   "html": "<html><head><style>h1{font-family: var(--f), serif}</style></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.css_important": {
+   "html": "<html><head><style>h1{font-family: Inter !important}</style></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.shorthand_ok": {
+   "html": "<html><head><style>h1{font: 700 48px/1.1 'JetBrains Mono', monospace}</style></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.shorthand_bad": {
+   "html": "<html><head><style>h1{font: italic 2rem Helvetica}</style></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G18:\"Helvetica\""
+  },
+  "meta.shorthand_inherit": {
+   "html": "<html><head><style>h1{font: inherit}</style></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.svg_attr_bad": {
+   "html": "<html><head></head><body><svg><text font-family=\"Roboto\">x</text></svg><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G18:\"Roboto\""
+  },
+  "meta.svg_attr_ok": {
+   "html": "<html><head></head><body><svg><text font-family='Gloock, serif'>x</text></svg><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.face_ok": {
+   "html": "<html><head><style>@font-face{font-family:'My Face';src:url(data:font/woff2;base64,AA)} h1{font-family:'My Face'}</style></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.canvas_ok": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};ctx.font = '700 64px Montserrat';</script></body></html>",
+   "expect": null
+  },
+  "meta.canvas_tpl": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};ctx.font = `${s}px Oswald`;</script></body></html>",
+   "expect": null
+  },
+  "meta.canvas_bad": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};ctx.font = \"bold 20px Arial\";</script></body></html>",
+   "expect": "G18:\"Arial\""
+  },
+  "meta.jsfam_bad": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};el.style.fontFamily = \"Comic Sans MS\";</script></body></html>",
+   "expect": "G18:\"Comic Sans MS\""
+  },
+  "meta.dur_nosemi": {
+   "html": "<html><head></head><body><script>window.duration = 3.5\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.dur_dot": {
+   "html": "<html><head></head><body><script>window.duration = 3.;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G22"
+  },
+  "meta.dur_lead": {
+   "html": "<html><head></head><body><script>window.duration = .5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G22"
+  },
+  "meta.dur_twice": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};window.duration = 4;</script></body></html>",
+   "expect": "G22"
+  },
+  "meta.dur_expr": {
+   "html": "<html><head></head><body><script>window.duration = 2 + 1;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G22"
+  },
+  "meta.dur_big": {
+   "html": "<html><head></head><body><script>window.duration = 31;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G22"
+  },
+  "meta.size_trailing": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080, };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.size_quoted": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { \"w\": 1080, \"h\": 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G23"
+  },
+  "meta.size_odd": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1081, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G23"
+  },
+  "meta.size_absent": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\n\nwindow.rng = window.rng || function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "meta.fn_seek": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = window.rng || function (seed) {};\nfunction seek(t) {}</script></body></html>",
+   "expect": "G21"
+  },
+  "meta.rng_redef": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng = function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": "G26"
+  },
+  "meta.rng_compact": {
+   "html": "<html><head></head><body><script>window.duration = 3.5;\nwindow.size = { w: 1080, h: 1080 };\nwindow.rng=window.rng||function (seed) {};\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "v3.defaultView": {
+   "html": "<script>document.defaultView.location='http://127.0.0.1:9320/x'\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"defaultView\""
+  },
+  "v3.thisKey": {
+   "html": "<script>var k='loc';k+='ation';this[k]='http://127.0.0.1:9320/x'\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"this[\""
+  },
+  "v3.aHrefClick": {
+   "html": "<script>var a=document.createElement('a');a.href='http://x/';a.click()\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\".href=\""
+  },
+  "v3.defaultViewOpen": {
+   "html": "<script>x.defaultView.open('http://x/')\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"defaultView\""
+  },
+  "v3.topLocation": {
+   "html": "<script>top.location='http://x/'\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"location=\""
+  },
+  "v3.selfOpen": {
+   "html": "<script>self.open('http://x/')\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"open(\""
+  },
+  "v3.openIP": {
+   "html": "<script>open('http://10.0.0.1/')\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G25:SCRIPT:\"open(\""
+  },
+  "v3.parentAppend": {
+   "html": "<script>var parent = document.getElementById('p'); parent.appendChild(el)\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "v3.framesIndex": {
+   "html": "<script>var frames = [1,2]; var f = frames[i];\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "v3.selfThis": {
+   "html": "<script>var self = this; self.x = 1;\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "v3.historyData": {
+   "html": "<script>var history = [3,4]; history.push(5); var h = history[0];\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "v3.arrayLiteral": {
+   "html": "<script>var rows = ['Revenue: ' + n, 'Cost: ' + c];\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "v3.memberConcat": {
+   "html": "<script>el['ani' + 'mate'](k)\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G28:SCRIPT:\"l['ani' +\""
+  },
+  "v3.callConcat": {
+   "html": "<script>f()['a' + 'b']\nwindow.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G28:SCRIPT:\")['a' +\""
+  },
+  "v3.durComment": {
+   "html": "<script>window.duration = 3.5 // seconds\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  }
+ }
+}
