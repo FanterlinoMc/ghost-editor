@@ -496,8 +496,10 @@ invalid one is dropped (beat) or dies (layer) and does not use up a place. Once 
   or `t: 3` footage) whether a layer uses it or not, adds a `<link>`/`@font-face` for every `fonts.list`
   entry, and `chars` are those fonts' glyphs. So: every `assets[]` entry must be a precomp (an object with a
   `layers` array), `fonts.list` must be absent or empty, and `chars` must be absent or empty.
-- **At most 256 levels of nesting** (L14): the player walks shape groups and precomps recursively; real files
-  stay well under 40.
+- **At most 256 levels of nesting** (L14). A level is counted like this: the top-level object is level 1;
+  each object or array nested inside an object or array adds 1; plain values (numbers, strings, booleans,
+  null) do not count. A file whose deepest object or array is at a level over 256 gives L14. The player walks
+  shape groups and precomps recursively; real files stay well under 40.
 - **No expressions**: no property object carrying a string `x` (After Effects expression). The bundled
   player is `lottie_light`, which does not evaluate them, so the file would render differently from
   what was authored.
@@ -519,11 +521,19 @@ invalid one is dropped (beat) or dies (layer) and does not use up a place. Once 
   (want 59 and 3). Each player is also kept in `window.__geLottieAnims[<beat>-<element id>]` (the determinism check
   and the studio read `currentFrame` there).
   **Risk:** a later HyperFrames that finds players another way (a DOM scan, a hook in `loadAnimation`) would put
-  the second clock back silently. Guard: `motion-determinism.mjs --variant lottie` fails unless, after the first
-  seek, `window.lottie` and `window.bodymovin` are undefined and `window.__hfLottie` (the adapter's list) is
-  empty or absent; and the CP4 render check compares rendered frames with the formula. The guard is NOT a
-  page-side `throw`: a throwing seek did not fail a HyperFrames render, it hung it (measured: 10 min, render
-  lock held, until killed). Re-run both when the HyperFrames pin moves.
+  the second clock back silently. What guards it, exactly:
+  - `node scripts/lottie-render-check.mjs` (**re-run it whenever the HyperFrames version or lottie-web changes**)
+    builds the fixture reel, renders it through `runRender()` (the vendor preload, as `scripts/render.mjs`) under
+    `lockf -k /tmp/phantasic-render.lock` (it takes the lock itself), reads the red square's left edge
+    (centre x = 50 + 5 * frame) in every frame where it is fully visible (play-once 2.9..7.8 s, loop 2.0..7.8 s;
+    frames with a caption over the square are skipped) and compares it with `lottieFrameAt(t)`. It exits 1 on any
+    mismatch or with fewer than 20 readable frames per player. Measured: PASS (147 and 43 frames); with
+    `window.lottie` left in place it FAILS (play-once shows 59 from 2.6 s).
+  - `motion-determinism.mjs --variant lottie` only checks that the page hides the globals HyperFrames 0.8.81
+    looks for: after the first seek `window.lottie` and `window.bodymovin` are undefined. It has no HyperFrames
+    runtime, so its `window.__hfLottie` check is always trivially empty and proves nothing about the adapter.
+  - Not a page-side `throw`: a throwing seek did not fail a HyperFrames render, it hung it (measured: 10 min,
+    render lock held, until killed).
 - **Data inlined**, not fetched: each distinct file is written once into the page as
   `<script type="application/json" id="lottie-<first 12 hex of the sha256 of the minified JSON>">` and passed as `animationData`, so the
   load is synchronous and there is no XHR or `file://` fetch.
@@ -548,7 +558,7 @@ invalid one is dropped (beat) or dies (layer) and does not use up a place. Once 
   `scripts/lib/motion-fixture.mjs`: a hand-written vector file, a play-once player at 1.5x from 0.5 s in with a
   scale/opacity tween on its box, and a 1x loop) runs the reference / shuffled / reverse / repeat / cold comparison
   and also checks each player's frame at every sample time against the formula above. It seeks the timeline
-  directly, so it does not see the HyperFrames adapter; a real render does (see "Off `window.lottie`").
+  directly, so it does not see the HyperFrames adapter; `scripts/lottie-render-check.mjs` does (see "Off `window.lottie`").
 
 ### Library Lottie files
 
@@ -596,6 +606,10 @@ L6; a library id L3, L4, L6, L5; then for both L7, L8, L9, L10, L13, L14, L11; L
 | W1 | `motion <id>: element <el id>: lottie fit '<v>' is not contain, cover or fill, using contain` |
 | W2 | `motion <id>: element <el id>: lottie start <v>s is outside 0..<max>s, clamped` (not a number: `... lottie start '<v>' is not a number, using 0`) |
 | W3 | `motion <id>: element <el id>: lottie speed <v> is outside 0.25..4, clamped` (not a number: `... lottie speed '<v>' is not a number, using 1`) |
+
+In the "not a number" variants of W2 and W3, `<v>` is JavaScript's `String(v)` cut to 40 characters. The
+validator only needs to match it for strings and booleans (`'soon'`, `'true'`); for objects, arrays and null the
+text differs between languages and only the fact of the warning has to match.
 | W4 | `motion <id>: element <el id>: lottie loop must be true or false, using false` |
 | W5 | `motion <id>: element <el id>: lottie frames must be [first, last] whole frames with <ip> <= first < last <= <op>, using [<ip>, <op>]` |
 | W6 | `motion <id>: only the first 3 lottie elements are used` (printed once; counts valid elements, see the limit above) |

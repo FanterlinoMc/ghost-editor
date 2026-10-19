@@ -251,6 +251,10 @@ test("a deeply nested file is refused (L14), never an uncaught RangeError", () =
   let r;
   assert.doesNotThrow(() => { r = inspectLottie(Buffer.from(text), "assets/lottie/deep.json"); });   // CP2 threw RangeError here
   assert.equal(r.reason, "lottie file assets/lottie/deep.json is nested more than 256 levels deep");
+  // the level count, as the spec defines it: top-level object = 1, each nested object/array +1, plain values not counted
+  const at = (k) => `{"fr":30,"ip":0,"op":60,"w":10,"h":10,"layers":[],"meta":${"[".repeat(k)}1${"]".repeat(k)}}`;
+  assert.ok(inspectLottie(Buffer.from(at(255)), "x").ok, "deepest array at level 256: accepted");
+  assert.equal(inspectLottie(Buffer.from(at(256)), "x").reason, "lottie file x is nested more than 256 levels deep", "level 257: L14");
   const ok = clone(); let node = ok.layers[0].shapes; for (let i = 0; i < 60; i++) { const g = { ty: "gr", it: [] }; node.push(g); node = g.it; }
   assert.ok(inspectLottie(Buffer.from(JSON.stringify(ok)), "x").ok, "60 nested shape groups (deeper than real files) pass");
 });

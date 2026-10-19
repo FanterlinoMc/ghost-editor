@@ -232,8 +232,9 @@ for (const t of SAMPLES) ref.set(t, await at(page, t));                       //
 await expectCounts();
 expectLottieFrames();
 // lottie: HyperFrames' own Lottie adapter finds animations through window.lottie (or window.bodymovin, the same player)
-// and would re-seek them to the composition time on every frame. After the first seek the page must expose neither
-// global and the adapter's list (window.__hfLottie) must be empty or absent. (A page-side throw is NOT used: a
+// and would re-seek them to the composition time on every frame. This checks only that the page hides both globals:
+// there is no HyperFrames runtime here, so window.__hfLottie is always absent and proves nothing about the adapter.
+// scripts/lottie-render-check.mjs renders for real and is the check that sees the adapter. (A page-side throw is NOT used: a
 // throwing seek hangs the HyperFrames renderer instead of failing it - measured, 10 min with the render lock held.)
 if (isLottie) {
   const g = await page.evaluate(() => ({ lottie: typeof window.lottie, bodymovin: typeof window.bodymovin, hf: Array.isArray(window.__hfLottie) ? window.__hfLottie.length : String(window.__hfLottie), mine: Object.keys(window.__geLottieAnims || {}).length }));
