@@ -1,4 +1,9 @@
-# Pixel check (A5): spec (CP1), not built yet
+# Pixel check (A5): spec, built (CP2: `mac/pixel-check`)
+
+Built: `scripts/lib/geometry.mjs` + `build.mjs` (writes `build/geometry.json`), `scripts/pixel_probe.mjs` (the DOM probe),
+`scripts/pixel_check.py` (the checker), `scripts/pixel-check.test.mjs` + `scripts/fixtures/pixel_fixture.py` (one
+synthetic reel, clean and with one planted defect per rule), `scripts/lib/geometry.test.mjs`. Where the build had to
+decide something this spec left open, the decision is written into the section it belongs to and marked **(built)**.
 
 `scripts/pixel_check.py` looks at a FINISHED reel (the rendered MP4 plus the build's JSON) and reports what a
 human reviewer would catch: a graphic over the speaker's face, a caption you cannot read, text cut off or under the
@@ -31,11 +36,26 @@ It decodes a fixed sample of frames at full resolution (section 2.4), plus one d
 one audio decode. It never decodes every frame at full resolution. If a reel goes over budget the first knob is the
 grid step (0.5 s to 1.0 s), never the event samples.
 
+**(built) Measured** on the Mac mini (M4, 10 CPUs), process wall time including Python start, against the hyperframes
+`rendered in` time of the same reel: 17.9 s broadsheet reels with 2 overlay graphics, 1.18-1.21 s against 15.5-16.0 s
+renders (7.3-7.8 %); the 13.1 s reel with 2 full-frame inserts, 1.50 s against a 15.7 s render (9.6 %). The probe,
+the graphic files, the grey pass and the audio run in parallel; YuNet runs on 4 threads beside the full-resolution
+decode (one detector per thread, `cv2.setNumThreads(1)`, so results do not depend on scheduling).
+
 **Usage.**
 
 ```
 pixel_check.py <project> <render.mp4> [--out <project>/build/pixel_check.json] [--render-ms N] [--frames-dir DIR]
+               [--probe auto|use] [--yunet MODEL.onnx]
+pixel_check.py <project> --print-samples FILE        the sample list (2.4) as {"frames": [...]}
 ```
+
+**(built)** `--probe auto` (default) runs `pixel_probe.mjs` itself for the sample list; `--probe use` reads an existing
+`build/pixel_probe.json` (PX0 when it was made for another `geometry.json` or sample list). The face model is
+`library/models/face_detection_yunet_2023mar.onnx` (`face_track.py`'s pinned file, sha256 checked; never downloaded
+here), or `--yunet` / `$PIXEL_CHECK_YUNET`; without it PX2 is `skipped` with the reason. Offline: the probe answers the
+page's CDN GSAP from a vendor folder (`$PIXEL_PROBE_VENDOR`, or the engine's `vendor/` once the mac/bundle-gsap layout
+is merged: `manifest.json` url -> file, sha256 checked) and refuses every other non-file request.
 
 Exit 0 = `pass` or `warn`, 2 = `fail`, 3 = could not check (PX0 failed; the report is still written).
 `--frames-dir` writes a PNG of each error's worst frame with the boxes drawn (for the reviewer; not part of the
@@ -96,6 +116,23 @@ byte-identical (the gate's byte-identity sweep proves it).
 
 `srcFrames` is written from the build's own `graphicFrames` result, so the check never re-derives `in` / `after`.
 
+**(built)** As written by `lib/geometry.mjs`:
+- `srcFrames[k]` is the index into the rendered FILE shown at output frame `f0 + k`. The file already has `in` / `after`
+  baked in (graphic-render renders L frames from `in`), so it is `floor((n / fps - t0) * fps)` clamped to `[0, L-1]`:
+  the frame at or before the `<video>`'s media time (measured: an insert that fades up from black at a `t0` between
+  two frames lines up only with floor). `f0` / `f1` = the first frame at or after `t0` / `t1` (the show tween ENDS at t0).
+- `hard`: true for a beat and a layer with enter / exit `none`; PX12 checks only hard edges.
+- `hiddenCaps` entries are `[a, b, why]`: `why` lists the beats / layers / ramps whose spans overlap the window.
+- `faceSkip`: `[[t0, t1, why]]`, the windows the placer does not model (owner answer 2: `room` shrink windows, and any
+  take from a source other than the primary, `source <src>`); `face[n]` is `[n, null]` there and PX1-PX4 report
+  them under `not_checked`.
+- `captionStyle`, `captionsDescribed`: the caption list covers the generic caption path (house, clean, pill, box,
+  condensed, serif, noir, lux, hormozi, sessions, clipping, ...); `type`, `podcast`, `cluster`, `duo`, `glow`,
+  editorial and `none` are not described yet, and PX4-PX9 are `skipped` with that reason.
+- `joins[]` also carry `outSrc` (the outgoing take's source) and `ramp: true` for a ramped take (no speech; PX15 skips).
+- `stillOk`: outro, holds, an insert's hold tail (`after: hold` past its length), endcard / cover beats, full-canvas
+  image / logo layers. `darkOk` is empty. (Which beats are still or dark by design: proposed default, pending owner.)
+
 ### 2.3 `build/pixel_probe.json` (new, `scripts/pixel_probe.mjs`)
 
 A DOM probe: opens `index.html` in the same headless Chrome and puppeteer-core the renderer cached
@@ -109,6 +146,12 @@ does), and at each sampled frame (2.4) records, in canvas px:
 - `text`: per visible text node in the stage (effective opacity >= 0.5): the owning element's id or CSS path, the
   line rects (`Range.getClientRects()`), and the clip rect (the intersection of every ancestor with `overflow` other
   than `visible`).
+
+**(built)** The probe takes the sample list (`--frames <file>`, written by the checker) and records it with
+`geometry_sha256` and `html_sha256`, so a stale probe is a PX0. It also lists `covers`: elements (not the footage, not
+the camera / caption containers) that cover >= 90 % of the canvas at effective opacity >= 0.99 with opaque paint (an
+image, a non-footage video / canvas, a `url()` background, or an opaque background colour; a gradient such as the
+vignette, and anything with a blend mode, is not a cover).
 
 The probe is the page's layout, not the render. Races that happen only in the render (the mac-42 caption font race baked a px offset into the centred group in the render while a fresh page looked right) are why PX8 and PX9 confirm
 on pixels.
@@ -140,7 +183,9 @@ enter/exit tween is not a finding; two consecutive ones are.
   ears and chin).
 - **Graphic opaque mask** at frame n: decode the graphic file's frame `srcFrames[n - f0]` with alpha, fit it into
   the probe's rect for that graphic (`contain` / `cover`, centred, clipped to the rect), multiply alpha by
-  `opacity` and the probe's effective opacity; a pixel is opaque when the result is >= 0.5. An insert (mp4) is
+  `opacity` and the probe's effective opacity; a pixel is opaque when the result is >= 0.5. **(built)** The probe's
+effective opacity already includes the box's `opacity` (the show tween sets `autoAlpha: opacity`), so it is multiplied
+once, not twice; with no probe rect (PX12 outside the window) the geometry box and `opacity` are used. An insert (mp4) is
   opaque everywhere.
 - **Caption ink** at frame n, per visible word (effective opacity >= 0.99): pixels inside the word rect whose
   largest per-channel difference to the word's computed colour is <= 40.
@@ -232,6 +277,10 @@ clusters at gaps > 25 px, end clusters narrower than 14 px dropped (stray specks
 intended centre). Warn: `|d| > 8`. Error: `|d| > 16`. (mac-42: good renders measured within +-4 px of 540, the
 race +22 to +50.)
 `PX9 caption <id> "<text>" is <d> px off centre at t=<t>s (<x_ink> vs <cx>)`.
+**(built)** A render race moves the drawn text, not the probe's layout, so the ink is searched in the group's band
+grown 64 px each side, and only the ink inside the group's rect at the best shift (the shift, within +-64 px, that lays
+the probe's word columns over the most ink columns) counts: light footage beside a caption is not the caption.
+Checked against `m42w-cp4/meas.py` on the mac-42 renders: the same 8 blocks, within 0-7 px.
 
 **PX10 text off the canvas or clipped.** At every probe sample, for every probe text line rect: outside
 `[0, W] x [0, H]` by > 2 px, or outside its clip rect by > 2 px, on two consecutive samples. Error.
@@ -241,6 +290,8 @@ race +22 to +50.)
 **PX11 UI zone.** Zones from `geometry.zones` (= `safezone.mjs` `PLATFORMS[platform]`), the same test as GW7's
 `crossesUi`: y < `top`, y > `H - bottom`, x > `W - right`. Instagram at 1080x1920: top band y 0-220, bottom band
 y 1500-1920, right column x 950-1080. All: top 220, bottom 480, right 150. Two consecutive samples needed.
+**(built, owner answer 3)** The right-hand column counts in the LOWER half only (y > H / 2), as `safezone.mjs` says the
+platforms draw it. GW7 and the planner are unchanged (GW7 still applies the column at full height).
 Error: a visible caption word rect in a zone (the placer's promise). Warn: any other probe text line in a zone; an
 overlay graphic with >= 200 opaque-mask px in a zone (the box's transparent margin does not count, unlike GW7).
 `PX11 caption <id> "<text>" is in the <zone name> UI zone at t=<t>s (<px> px)` /
@@ -251,17 +302,23 @@ overlay graphic with >= 200 opaque-mask px in a zone (the box's transparent marg
 absolute RGB difference between the render and the graphic's own frame over its opaque mask is <= 12, with the mask
 >= 1 % of the rect (at `f0 - 1` the expected frame is `srcFrames[0]`, at `f1` it is `srcFrames[f1 - f0 - 1]`).
 Error when present at `f0 - 1` or `f1`, or absent at `f0` or `f1 - 1`. The probe's opacity is recorded alongside
-(a page bug vs a render bug).
+(a page bug vs a render bug). **(built)** The difference is taken over the SOLID part of the mask (alpha x opacity
+>= 0.95; a half-transparent pixel is a blend, not the graphic's colour), leaving out caption word rects (grown 6 px)
+drawn over the graphic. An edge whose expected frame has < 1 % opaque pixels (a graphic that animates in from
+nothing) cannot be told present from absent: it is listed under `not_checked`, not failed. Measured on real renders:
+present 2.4-3.4, absent 27-38.
 `PX12 graphic <id> is visible at t=<t>s, outside its window [<t0>, <t1>)` /
 `PX12 graphic <id> is missing at t=<t>s (the <first|last> frame of its window)`.
 
 **PX13 black frames.** The grey pass with `blackdetect=d=0:pix_th=0.10:pic_th=0.98`. Runs not entirely inside
-`darkOk`. Error: a run >= 3 frames. Warn: 1 or 2 frames.
+`darkOk`. Error: a run >= 3 frames. Warn: 1 or 2 frames. **(built)** Also minus the frames of an insert whose own
+file is black there (the same `blackdetect` on the file): an insert that fades up from black is its design (the m41c
+inserts open on 1.43 s and 0.73 s of black).
 `PX13 <k> black frame(s) at t=<t0>s-<t1>s`.
 
 **PX14 frozen frames.** The grey pass with `freezedetect=n=-60dB:d=0.5`. Runs minus `stillOk` (holds, outro,
 image layers, an insert's hold tail, and the static beat types the build lists). Error: >= 1.0 s left. Warn:
->= 0.5 s.
+>= 0.5 s. **(built)** Also minus a stretch inside an insert whose own file is frozen there too.
 `PX14 picture frozen <d>s at t=<t0>s-<t1>s`.
 
 **PX15 cut inside a word.** For each join: the outgoing take's `b` against the words of its source, and the
@@ -347,30 +404,59 @@ deterministic.
 
 ## 7. Tests (each rule implementable and verifiable)
 
-`scripts/pixel-check.test.mjs` (node --test, runs `pixel_check.py`) on a small fixture reel, with one planted defect
-per rule; each test asserts the rule id, the severity and the frame:
+**(built)** `scripts/pixel-check.test.mjs` (node --test; in the gate) generates one synthetic reel per case with
+`scripts/fixtures/pixel_fixture.py` into a temp dir (270x480, 30 fps, 4 s: a quarter-size canvas with the Instagram
+zones scaled, h264 qp 0, pcm audio, a VP9-alpha overlay; nothing committed) and a hand-written probe for the
+checker's own sample list (no Chrome). PX2's detections come from the fixture through `PIXEL_CHECK_TEST_DETECTIONS`,
+honoured only under `node --test`. Each case asserts the rule, the severity, the frame of the worst sample, the exit
+code, and that no other rule fired:
 
-PX0 a render resized to 1080x1918. PX1 a graphic box moved onto the face. PX2 a face track shifted 300 px. PX3 a
-snap to 1.8 around the chin. PX4 a caption block forced to y = eyes. PX5 white captions over a white card, no
-outline. PX6 `captions.size: 30`. PX7 a block with 40 chars in 0.6 s. PX8 the `#caps` hide tween removed from an
-insert window (b) and a caption group with `visibility:hidden` (a). PX9 the mac-42 renders (`f9e87f7` race:
-errors on the blocks measured +22 to +50 px; `744d7c2`: pass). PX10 a text layer at x = -200. PX11 a box at y = 100.
-PX12 a show tween moved one frame early. PX13 3 black frames spliced in. PX14 one second frozen inside a take.
-PX15 a take `b` set inside a word. PX16 +12 dB of gain. Plus the clean fixture: `pass`, and twice the same hash.
+PX0 a render of 270x478 (exit 3, every other rule skipped), unreadable JSON, a stale probe. PX1 the graphic box moved
+onto the face. PX2 the face track shifted 100 px (the spec's 300 px at quarter size). PX3 the face pushed off the left
+edge. PX4 a caption block over the eyes. PX5 white captions on a white card. PX6 30 px text. PX7 32 letters in 0.6 s
+(warn). PX8 (a) a block the page shows that the render never drew, (b) a caption drawn over an insert inside its
+hidden window, plus the clean insert. PX9 the caption drawn 30 px right. PX10 a text layer at x = -50. PX11 a
+caption in the top band; a graphic in the right column upper half (pass) and lower half (warn). PX12 the graphic
+shown one frame early. PX13 3 black frames. PX14 1.1 s frozen inside a take. PX15 take 0's `b` inside a word. PX16 the
+audio driven into clipping. The clean reel passes with every rule checked (`checked > 0`), and the same render checked
+twice gives the same `report_sha256`. The probe itself is tested on a small page in the renderer's Chrome (skipped
+when it is not cached). Mutation proofs (each rule's threshold or comparison broken in a copy of the checker; the
+suite must fail): 14 of 14 caught.
+
+`scripts/lib/geometry.test.mjs`: the face through the placer's camera (base x snap around the origin) and its age,
+the skipped windows, the hidden-caption reasons, joins / holds / outro, whole-frame graphic windows and the floor frame
+map. `byte-identity.mjs` hashes `build/geometry.json` for the run-to-run check but does not compare it with the
+golden file (recorded before it existed); every file the golden lists must still match.
+
+Real reels (2026-10-20, all built with this branch, renders as they were):
+- broadsheet base render (mac-42 `r1base-1`): `fail`, PX9 on the 8 blocks measured +22 to +38 px (cg0 578, cg5 572,
+  cg7 569, cg9 573, ...), the same blocks `meas.py` finds. The fixed render `r1br-1`: no PX9. `r1f9-1` (f9e87f7) did
+  not race on this render (`meas.py` agrees: 537-542 px): no PX9.
+- savoy overlays (m41b A, an older render): `fail`, the same 8 race blocks; PX1 / PX11 / PX12 clean (PX12 measured).
+- close-up inserts (m41c B1, older render): `fail`, PX9 cg8 +51 px (`meas.py` 590.5), PX11 cg7 (the lower-face block
+  is drawn 90 px tall at y 1425, the placer reserved 75: 15 px into the bottom band). Re-rendered with this branch:
+  PX9 gone, PX11 cg7 still there (a placer height estimate, not a render race). Insert fade-from-black exempt.
+- the m41 face-overlap reel (proj-g, `out.mp4`): PX1 pass. Its boxes end at y 620 and the face (grown box) starts at
+  y ~640 in this render; a frame at t = 10 s shows the card above the head. It is not the overlapping version.
 
 ## 8. Open questions (PC / owner)
 
-1. **`geometry.json`**: OK for `build.mjs` to write it (additive, byte-identical elsewhere)? The alternative is a
-   Python port of the placer's camera mapping, a second copy that can drift.
-2. **Room shrink and multi-source faces**: the placer does not model the `room: "below"` footage shrink, and per-
-   source face tracks are MULTIANGLE Gap 6. Should `geometry.face` include the room scale now (then captions and the
-   check disagree), or should PX1-PX4 skip room windows until the placer models them?
-3. **Right UI column**: `safezone.mjs` says the action column matters only for the lower half; `crossesUi` (GW7)
-   applies it at full height. PX11 follows GW7. Keep, or lower half only?
-4. **Thresholds** need sign-off: contrast 3.0 / 4.5, text 32 / 42 px, 25 chars/s, centre 8 / 16 px, face 2 % of the
-   box / any eyes-mouth pixel, freeze 0.5 / 1.0 s.
-5. **Exempt windows**: which beat types are static or dark by design (`stillOk` / `darkOk`): endcard, cover, pages?
-6. **Verdict policy**: does any warn block auto-publish? Is PX11 for an overlay graphic a warn (as GW7) or an error?
-7. **Audio**: keep silences and loudness in `qa.py`, or fold `qa.py`'s numbers into this report so the studio reads
-   one file?
-8. **Where**: the studio queue calls it after `tailhold.py` on staging; who owns the retry counter (studio or PC)?
+Answered by the lead (2026-10-19):
+
+1. **`geometry.json`**: yes, `build.mjs` writes it, one source of camera truth, additive; every other output stays
+   byte-identical (gate byte-identity + the style sweep). No Python port of the camera mapping.
+2. **Room shrink and multi-source faces**: skipped for now. `geometry.faceSkip` lists the windows; PX1-PX4 report
+   them under `not_checked` with the reason.
+3. **Right UI column**: PX11 follows `safezone.mjs` as the platforms draw it, the right-hand column in the lower half
+   only. GW7 and the planner are not changed.
+
+Pending owner (the proposed defaults are what is built):
+
+4. **Thresholds**: contrast 3.0 / 4.5, text 32 / 42 px, 25 chars/s, centre 8 / 16 px, face 2 % of the box / any
+   eyes-mouth pixel, freeze 0.5 / 1.0 s. *Pending owner.* (Real reels: 25 chars/s warns on one block in each of the
+   three reels; nothing else borderline.)
+5. **Exempt windows** (`stillOk` / `darkOk`): endcard and cover beats, holds, outro, insert hold tails, full-canvas
+   image layers; nothing dark. *Pending owner.*
+6. **Verdict policy**: warn does not block; PX11 for an overlay graphic is a warn. *Pending owner.*
+7. **Audio**: `qa.py` keeps loudness and silences; this report has only PX16. *Pending owner.*
+8. **Where**: after `tailhold.py` on staging; who owns the retry counter (studio or PC). *Pending owner.*
