@@ -38,6 +38,7 @@ import { GM_CSS } from "./lib/gadzhi.mjs";
 import { HZ_CSS, hzBeat } from "./lib/hormozi.mjs";
 import { createHash } from "node:crypto";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
+import { buildGeometry } from "./lib/geometry.mjs";
 import { matteThreads, cutMatteThreaded, writeAtomically } from "./lib/matte.mjs";
 import * as RL from "./lib/relight.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
@@ -1419,6 +1420,7 @@ const enter = (sel, t, kind = "pop") => kind === "slide"
 const exit = (sel, end) => `tl.to("${sel}", { autoAlpha: 0, scale: 0.9, duration: 0.18, ease: "power2.in" }, ${r3(end - 0.22)});`;
 const slotUsed = [];
 const hiddenCaps = [];
+const GEO_SPANS = [];   // build/geometry.json: every beat's window and element id (what hides the captions, the graphics)
 const CAP_FADE = 0.08;   // the captions' hide fade (the #caps tween below); a graphic's window starts it this much early
 const CAP_BACK = 0.05;   // the re-show starts this much before a hidden window's end; a graphic's window ends this much late
 for (const r of rampsAt) hiddenCaps.push([r.t0, r.end]);   // ramped action takes (premium kit) carry no captions
@@ -1573,6 +1575,7 @@ for (const b of beatsList) {
   if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(EB(o, "at") - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
   if (b.type === "graphic") t1 = b._graphic.t1;   // its resolved end: the default window, or shortened by after "cut"
   beatSpans.push({ t0, t1 });
+  GEO_SPANS.push({ t0, t1, type: b.type, label: `${b.type}:${b.id ?? id}`, elId: id, b });   // build/geometry.json only
   const dur = r3(t1 - t0);
   if (["endcard", "scene", "motion", "ground", "headpage", "photostack", "starflash"].includes(b.type) && (b.type !== "starflash" || b.field) && t0 <= SPEECH + 1e-3 && t1 >= TOTAL - 0.5 / FPS) outroCovered = true;
   const inSlot = ["emoji", "logo", "meme", "icon"].includes(b.type);
@@ -2504,6 +2507,7 @@ for (let i = 0; i < groups.length - 1; i++) {
 // appear only over scenes that cover them (e.g. an image scene)
 const complement = (wins) => { const out = []; let c = 0; for (const [a, b] of [...wins].sort((x, y) => x[0] - y[0])) { if (a > c) out.push([c, a]); c = Math.max(c, b); } if (c < TOTAL) out.push([c, TOTAL + 1]); return out; };
 // every caption style hides under full-screen scenes (editorial handles its own)
+let CAPS_HIDDEN = [];   // the merged #caps hide windows (build/geometry.json)
 if (cap.style !== "editorial" && cap.style !== "none") {
   const wins = cap.onlyInScenes ? complement(shownCaps) : hiddenCaps;
   const merged = [];
@@ -2511,6 +2515,7 @@ if (cap.style !== "editorial" && cap.style !== "none") {
   // frames and the tail hold froze a stray word over an end card); local times in a section build
   const speechL = SECTION_MODE ? SPEECH - SECTION_START : SPEECH, totalL = SECTION_MODE ? SECTION_TOTAL : TOTAL;
   for (const [a, b0] of [...wins].sort((x, y) => x[0] - y[0])) { const b = b0 >= speechL - 0.1 ? totalL + 1 : b0; if (merged.length && a <= merged.at(-1)[1] + 0.05) merged.at(-1)[1] = Math.max(merged.at(-1)[1], b); else merged.push([a, b]); }
+  CAPS_HIDDEN = merged;
   tl.push(`tl.set("#caps", { autoAlpha: 1 }, 0);`);
   for (const [a, b] of merged) { tl.push(`tl.to("#caps", { autoAlpha: 0, duration: 0.08 }, ${r3(a)});`); tl.push(`tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, ${r3(b - (cap.reshowLate ? -0.01 : 0.05))});`); }   // cap.reshowLate (opt-in; Explainer r2): back only after a hard-cut page is gone (no half-faded pill over its last frames)
 }
@@ -2879,6 +2884,7 @@ const typeHtml = cap.style !== "type" ? "" : (() => {
   });
   return html;
 })();
+const GEO_CAPS = [];   // the generic caption path's blocks as drawn (build/geometry.json); other styles are not described
 const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podcastHtml : cap.style === "cluster" ? clusterHtml : cap.style === "duo" ? duoHtml : cap.style === "glow" ? glowHtml : cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
   const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.05 : SPEECH;
@@ -2918,6 +2924,7 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   // composes rotate with the -50% translate, which lifts/lowers the box by half its width x sin(tilt), up to ~6 px;
   // moving the tilt inside would drop that and move every box vertically.)
   const clipping = cap.style === "clipping";
+  GEO_CAPS.push({ id: `cg${gi}`, t0: r3(s), t1: r3(r3(s) + r3(Math.max(0.1, e - s))), y: pl.y, h: capSize * (fy == null && ["pill", "box"].includes(cap.style) ? 1.6 : 1.3), mode: pl.mode, scale: pl.scale ?? 1, cx: W / 2, text: g.map((w) => caseOf(w.word)).join(" ") });
   return `<div id="cg${gi}" class="cap-group clip${clipping ? "" : look}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${clipping ? `<div id="cg${gi}in" class="cap-in${look}">${body}</div>` : body}</div>`;
 }).join("\n      ");
 
@@ -3915,6 +3922,30 @@ fs.writeFileSync(path.join(proj, "build", "words.edit.json"), JSON.stringify(wor
 if (OUTRO > 0 && !outroCovered && !spec.outroFade) fs.writeFileSync(path.join(proj, "build", "tail.json"), JSON.stringify({ speech: r3(SPEECH), total: TOTAL, fps: FPS, hold: true }));
 else fs.rmSync(path.join(proj, "build", "tail.json"), { force: true });
 fs.writeFileSync(path.join(proj, "build", "caption_layout.json"), JSON.stringify({ platform: placer.platform, safeTop: placer.safeTop, safeBottom: placer.safeBottom, blocks: placer.log }, null, 1));
+// build/geometry.json (references/pixel-check.md 2.2): the camera, caption and graphic truth the pixel check reads. Additive:
+// written last from values already resolved above; nothing else reads it.
+{
+  const genericCaps = !["type", "podcast", "cluster", "duo", "glow", "none"].includes(cap.style) && !edit;
+  const graphics = [
+    ...GEO_SPANS.filter((x) => x.type === "graphic" && x.b._graphic?.file).map((x) => {
+      const g = x.b._graphic;
+      return { id: String(x.b.id ?? x.elId), kind: "beat", mode: g.mode, by: x.b.by ?? "planner", file: g.file, fit: g.fit, opacity: g.opacity, box: g.box,
+        t0: g.t0, t1: g.t1, L: g.L, inF: g.inF, D: g.D, after: g.after, hideCaptions: g.hideCaptions, selector: `#${x.elId}-in`, hard: true };
+    }),
+    ...LAYERS.filter((l) => l.kind === "graphic" && l.graphic?.file).map((l) => ({ id: String(l.id), kind: "layer", mode: l.graphic.mode, by: l.by ?? "user", file: l.graphic.file,
+      fit: l.fit, opacity: l.opacity, box: l.box, t0: l.t0, t1: l.t1, L: l.graphic.L, inF: l.graphic.inF, D: l.graphic.D, after: l.graphic.after,
+      hideCaptions: l.hideCaptions === true, selector: `#ly-${l.id}_box`, hard: (l.enter ?? "none") === "none" && (l.exit ?? "none") === "none" })),
+  ];
+  const spans = [...GEO_SPANS.map((x) => ({ t0: x.t0, t1: x.t1, label: x.label })), ...LAYERS.map((l) => ({ t0: l.t0, t1: l.t1, label: `layer:${l.id}` })), ...rampsAt.map((r) => ({ t0: r.t0, t1: r.end, label: "ramp" }))];
+  const full = (b) => b && b.w * b.h >= 0.9 * W * H;
+  const stills = [...GEO_SPANS.filter((x) => ["endcard", "cover"].includes(x.type)).map((x) => [x.t0, x.t1, x.label]),
+    ...LAYERS.filter((l) => (l.kind === "image" || l.kind === "logo") && full(l.box)).map((l) => [l.t0, l.t1, `layer:${l.id}`])];
+  fs.writeFileSync(path.join(proj, "build", "geometry.json"), JSON.stringify(buildGeometry({
+    W, H, fps: FPS, total: TOTAL, speech: SPEECH, format: FORMAT, platform, zones: PLATFORMS[platform] || PLATFORMS.instagram,
+    screenFaceAt: placer.screenFaceAt, primarySrc: PRIMARY_SRC, takes, roomWins, captions: genericCaps ? GEO_CAPS : null, captionStyle: cap.style,
+    capsHidden: CAPS_HIDDEN, spans, graphics, stills,
+  })));
+}
 // Resolved edit-time motion events, for the style-study accuracy harness (A1). Beat times in
 // reel.json are SOURCE seconds; these are what the render actually contains, after E() maps them
 // through the takes. Ground truth must come from here, never from the input spec.

@@ -123,8 +123,9 @@ export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = 
     const own = faces && src != null ? faces[src] : null;
     return (own && own.samples) || (face ? face.samples : []);
   };
-  const faceAt = (orig, src) => {
-    // nearest sample, holding the last known face across short misses
+  // nearest sample and its distance in seconds (the age geometry.json reports), holding the last known face across
+  // short misses
+  const nearestFace = (orig, src) => {
     let best = null, bd = 1e9;
     for (const s of samplesFor(src)) {
       if (s[1] == null) continue;
@@ -132,7 +133,7 @@ export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = 
       if (d < bd) { bd = d; best = s; }
       if (s[0] > orig + 1) break;
     }
-    return bd < 1.5 ? best : null;
+    return bd < 1.5 ? { s: best, age: bd } : null;
   };
   // MULTIANGLE Gap 6: a crop/pad plan per source, same fallback shape as `faces`/`face` above.
   // `crops` is keyed by `take.src`; the single `cropScale`/`cropOffsetX`/`cropOffsetY` remain the
@@ -141,10 +142,13 @@ export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = 
   // ALL sources were mapped through whichever plan `cropScale` etc. held, i.e. the first source's
   // - invisible on 9:16 (identity) and on every fixture, which is exactly why it needed care.
   const cropFor = (src) => (crops && src != null && crops[src]) || { scale: cropScale, offsetX: cropOffsetX, offsetY: cropOffsetY };
-  const screenFace = (t) => {
+  // the face in SCREEN px at edit time t, with the take's source and the face sample's age (build/geometry.json and the
+  // pixel check read this; the placer's own screenFace is its .face)
+  const screenFaceAt = (t) => {
     const { k, orig } = locate(t);
-    const f = faceAt(orig, k.src);
-    if (!f) return null;
+    const n = nearestFace(orig, k.src);
+    if (!n) return { src: k.src, face: null, age: null };
+    const f = n.s;
     const s = camScale(t);
     const { scale: cs, offsetX: cox, offsetY: coy } = cropFor(k.src);
     // crop/pad mapping first (raw face.json pixel -> this format's canvas), then the existing
@@ -152,8 +156,9 @@ export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = 
     // both offsets are 0.
     const Y = (y) => oy + s * (y * cs + coy - oy);
     const X = (x) => ox + s * (x * cs + cox - ox);
-    return { top: Y(f[1]), bottom: Y(f[2]), left: X(f[3]), right: X(f[4]), eyes: Y(f[5] ?? f[1]), mouth: Y(f[6] ?? f[2]) };
+    return { src: k.src, age: n.age, face: { top: Y(f[1]), bottom: Y(f[2]), left: X(f[3]), right: X(f[4]), eyes: Y(f[5] ?? f[1]), mouth: Y(f[6] ?? f[2]) } };
   };
+  const screenFace = (t) => screenFaceAt(t).face;
   const span = (t0, t1) => {
     const r = { top: 1e9, bottom: -1e9, left: 1e9, right: -1e9, mouth: -1e9, eyes: 1e9, seen: false };
     for (let t = t0; t <= t1 + 1e-6; t += 0.1) {
@@ -236,5 +241,5 @@ export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = 
     if (sp.top - gap - h >= safeTop) return { x: Math.round(W / 2 - w / 2), y: Math.round(sp.top - gap - h) };
     return null;
   };
-  return { place, card, slot, span, log, platform: P, safeTop, safeBottom, sidePad: P.right };
+  return { place, card, slot, span, log, platform: P, safeTop, safeBottom, sidePad: P.right, screenFaceAt };
 }
