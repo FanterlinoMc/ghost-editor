@@ -1376,6 +1376,58 @@ rendered files. First data point (this spec): one 2 s 540x960 seek(t) page, two 
 60 of 60 frames. That it holds on this Mac for every category is to be proven in PM2 (one fixture per category,
 PM5 harness).
 
+### Frame preview CLI (`scripts/graphic-frames.mjs`, the planner's look-and-revise step)
+
+```
+node scripts/graphic-frames.mjs <graphic.html> --w W --h H --at 0.4,1.5,2.6 --out DIR [--mode overlay|insert] [--lock PATH]
+```
+
+Renders the graphic at exactly those times and writes `DIR/f-<t>.png` (`<t>` as `0.4`, `1.5`, `3`); stdout is ONE
+JSON line: `{"frames":[{"t":0.4,"file":"DIR/f-0.4.png"},...],"refused":null}` (exit 0), or
+`{"frames":[],"refused":"R1: graphic tried to load ... (no network): render refused"}` (exit 2: `<code>: <text>`, the
+texts word for word from the table below), or `{"frames":[],"refused":null,"error":"..."}` (exit 1: usage or an
+internal error). Progress goes to stderr. `--w/--h` are the reel canvas (default 1080x1920): an overlay renders at its
+`window.size` as an **RGBA PNG with a transparent background**, an insert at W x H, flattened onto its `#000`
+background (opaque, as its MP4 would be). A file at `<project>/assets/graphics/<name>.html` is checked as that
+project's (G1, media), any other file alone, as `graphic-determinism.mjs` does.
+
+- **Same sandbox as `renderGraphic`, same order** (`scripts/lib/graphic-frames.mjs` calls graphic-render.mjs's own
+  functions, it re-implements none): the static rules first (a refused file never starts Chrome); root:
+  `chromeUser` (R12n without GRAPHIC_CHROME_UID / GID or setpriv), the per-uid host lock, `sweepUid`, `chromeHome`;
+  the launcher shim with the lock flags (and the setpriv drop as root); the R12 probe through that shim and
+  GRAPHIC_SANDBOX; ONE `runRender` (offline preload, PID marker, timeout kill; `--format png-sequence`, the only
+  change to graphic-render.mjs: runRender takes a `format`); then `releaseChromeHome` and the lock release on every
+  path (a failed release: R12c, and no PNG is kept). The page is `wrapperHtml`'s (CSP, integrity pre-script,
+  navigation trap, R14 glyph check after every seek, post-script); the log goes through `scanLog` (R1-R5, R6 seek
+  order, R11, R14), plus R13 (launched through the shim, the probed version), R10 (exit, and exactly one PNG per
+  time) and R7 (budget `20 + 0.15 N`). Not run (a preview, not the cache gate): the second render + framemd5, R8,
+  R9 (a single frame may be blank). Nothing is cached.
+- **Exact times in one render.** The wrapper is built on a 1 ms grid (fps 1000, `D = duration * 1000 + 1`, so
+  `t = window.duration` is a frame) and hyperframes renders N frames at 1 fps. An engine script placed before the
+  pre-script registers the first `hf-seek` listener and sets frame i's `detail.time` to the i-th time; the
+  pre-script (unchanged) then calls `window.seek(t_i)`. Times are rounded to the millisecond, duplicates dropped.
+- **Times outside 0..window.duration are refused, not clamped** (before Chrome starts, exit 2):
+  `T1: time <t>s is outside 0..<duration>s (the graphic's window.duration): nothing rendered`. A clamped frame
+  would show the planner something it did not ask for.
+- **Speed** (Mac mini M4, 2026-10-20, pinned chrome-headless-shell 152.0.7977.30): 3 frames of a 400x200 box,
+  2.1-2.2 s wall for the whole CLI (render 1.0 s); 3 frames of `fixtures/graphics/shapes.html` (1080x1080), 2.3 s
+  (render 1.2 s). Two runs give byte-identical PNGs.
+- **Staging (root).** In the staging container, as root, exactly as `renderGraphic` there (the uid must be
+  dedicated and able to read + execute the headless shell's directory):
+  ```
+  GRAPHIC_CHROME_UID=65534 GRAPHIC_CHROME_GID=65534 \
+  GRAPHIC_CHROME_PATH=<abs path of the cached chrome-headless-shell 152.0.7977.30> \
+    node scripts/graphic-frames.mjs scripts/fixtures/graphics/shapes.html --w 1080 --h 1920 --at 0.4,1.5,2.6 --out /tmp/gf
+  ```
+  Without the two ids it prints `{"frames":[],"refused":"R12: network lock probe could not run: running as root: set GRAPHIC_CHROME_UID ..."}` and exits 2.
+  Root mode is tested on the Mac with stubs (`scripts/graphic-frames.test.mjs`: host lock, sweep, home, shim with
+  home + setpriv, probe as the user, render with the uid, release + unlock on success, probe refusal and a throw);
+  the shim's own setpriv drop is `graphic.test.mjs`'s fake-`id` / fake-`setpriv` rig.
+- Tests: `scripts/graphic-frames.test.mjs` (in the gate; the real renders skip without a POSIX shim, a cached
+  Chrome or hyperframes): a moving red box -> 3 PNGs with the box at `x = 100 t`, transparent around it; the same
+  times again -> identical bytes; a render-time image load -> R1, exit 2, no PNG; a static refusal and a T1 start
+  nothing.
+
 ### Problems, word for word (v2; the validator mirrors G1 to G28 and P1 to P3)
 
 - layer (`die()`): `layer <layer id>: graphic <html>: <reason>`
