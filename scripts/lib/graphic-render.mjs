@@ -158,10 +158,10 @@ export function probeNetwork({ launcher, shim, urls = PROBE_URLS, spawn: run = s
 let hfBin = null;
 // the hyperframes CLI entry of the pinned version, resolved once OUTSIDE the sandbox (npx needs the registry; inside the
 // sandbox npm waits ~70 s for it), then run as `node <bin>` inside the launcher
-export function resolveHyperframes() {
+export function resolveHyperframes({ timeout = 300000 } = {}) {
   if (hfBin) return hfBin;
   const [cmd, pre] = npx();
-  const r = spawnSync(cmd, [...pre, "-y", "-p", RENDERER, "-c", isWin ? "where hyperframes" : "command -v hyperframes"], { encoding: "utf8", timeout: 300000, env: cleanEnv({ ...RENDER_ENV, NODE_OPTIONS: "" }) });
+  const r = spawnSync(cmd, [...pre, "-y", "-p", RENDERER, "-c", isWin ? "where hyperframes" : "command -v hyperframes"], { encoding: "utf8", timeout, env: cleanEnv({ ...RENDER_ENV, NODE_OPTIONS: "" }) });
   const bin = String(r.stdout || "").trim().split(/\r?\n/)[0];
   if (r.status !== 0 || !bin) throw new Error(`cannot resolve ${RENDERER}: ${strip(r.stderr).trim().slice(-300)}`);
   let real = fs.realpathSync(bin);

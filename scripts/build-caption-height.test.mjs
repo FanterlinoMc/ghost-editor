@@ -20,7 +20,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { silentLibrary } from "./lib/silent-library.mjs";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
-import { clippingExtent, drawnExtent, EMOJI_EM } from "./lib/caption-metrics.mjs";
+import { findChrome as findPinnedChrome } from "./lib/graphic-render.mjs";
+import { clippingExtent, drawnExtent, wordPieces, EMOJI_EM } from "./lib/caption-metrics.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.join(HERE, "build.mjs");
@@ -46,6 +47,37 @@ test("model: the band reserved for a B1 cg7-shaped block covers the box Chrome d
   assert.ok(Math.abs(t.down - (40 + 40 * Math.cos(2 * Math.PI / 180) + 320 * Math.sin(2 * Math.PI / 180))) < 1e-9, JSON.stringify(t));
   // a group too wide for the line wraps: two lines of Gloock
   assert.equal(clippingExtent(["photographers", "recommended", "illustrations"], { size: 58, maxWidth: 820 }).lines, 2);
+});
+
+test("model: the line count is an upper bound over how Chromes wrap an emoji run (Windows drew 4 lines where packing gave 3)", () => {
+  // Windows Chrome (Segoe UI Emoji): "to be" + 22 emoji in one word drew 4 lines; greedy packing at every emoji gave 3.
+  // The model takes the worst over every set of break opportunities inside an emoji word: at 1.5 em that is 5 lines
+  // (chunks just over half a line, one per line), never fewer than any real Chrome
+  const run = "😂".repeat(22);
+  assert.equal(clippingExtent(["to", "be", run], { size: 58, maxWidth: 820 }).lines, 5);
+  assert.ok(clippingExtent(["to", "be", run], { size: 58, maxWidth: 820, emojiEm: 1.373 }).lines >= 4, "Segoe's advance: at least Windows' 4");
+  assert.equal(clippingExtent([run], { size: 58, maxWidth: 820 }).lines, 5);
+  // plain text: one piece per word, no choice, plain greedy (B1 shapes stay 1 line, a long group 2)
+  assert.equal(clippingExtent(["cats", "run", "fast"], { size: 58, maxWidth: 820 }).lines, 1);
+  assert.equal(clippingExtent(["photographers", "recommended", "illustrations"], { size: 58, maxWidth: 820 }).lines, 2);
+  // an emoji is one unbreakable unit (ZWJ sequences, flags, skin tones, VS16), and the punctuation Chrome never breaks
+  // beside sticks to it: "(😂)", "😂!", "“🔥”"
+  assert.deepEqual(wordPieces("a👨‍👩‍👧b🇺🇸👍🏽❤️x"), ["a", "👨‍👩‍👧", "b", "🇺🇸", "👍🏽", "❤️", "x"]);
+  assert.deepEqual(wordPieces("lol(😂),ok"), ["lol", "(😂),", "ok"]);
+  assert.deepEqual(wordPieces("“🔥”😂!"), ["“🔥”", "😂!"]);
+  assert.deepEqual(wordPieces("lol"), ["lol"]);
+});
+
+test("model: a long emoji run uses the cheap bound - fast, and never below the exact search", () => {
+  const t0 = performance.now();
+  const huge = clippingExtent(["😂".repeat(3000)], { size: 58, maxWidth: 820 });
+  const ms = performance.now() - t0;
+  assert.ok(ms < 50, `3000 emoji modelled in ${ms.toFixed(1)} ms`);
+  assert.ok(huge.lines >= Math.ceil(3000 * 1.5 * 58 / 820), `${huge.lines} lines`);
+  for (const words of [["😂".repeat(64)], ["to", "be", "😂🔥(✨)".repeat(16)], ["no", "👍👨‍👩‍👧🇺🇸".repeat(21), "ok"]]) {
+    const exact = clippingExtent(words, { size: 58, maxWidth: 820 }).lines, cheap = clippingExtent(words, { size: 58, maxWidth: 820, exactPieces: 0 }).lines;
+    assert.ok(cheap >= exact, `${words.join(" ").slice(0, 20)}: cheap ${cheap} < exact ${exact}`);
+  }
 });
 
 function build() {
@@ -90,9 +122,17 @@ test("build: B1's close-up - every clipping block's reserved band ends inside th
   assert.ok(cg7.h >= 91, `cg7 reserves ${cg7.h} px (drawn 91.05)`);
 });
 
+// CI=1 or REQUIRE_CHROME=1: no Chrome / puppeteer-core / GSAP is a FAILURE, not a skip (a skipped test still exits 0)
+const REQUIRED = process.env.CI === "1" || process.env.REQUIRE_CHROME === "1";
+const skipOrFail = (t, why) => { if (REQUIRED) throw new Error(`real Chrome required (CI / REQUIRE_CHROME): ${why}`); return t.skip(why); };
 test("real Chrome: every drawn caption box lies inside its reserved band, above the bottom UI band", { timeout: 120000 }, async (t) => {
   let puppeteer, chrome;
-  try { puppeteer = findPuppeteer(); chrome = findChrome(); } catch (e) { return t.skip(e.message); }
+  // Chrome: CHROME, else the pinned shell the graphic renderer uses (GRAPHIC_CHROME_PATH, HYPERFRAMES_BROWSER_PATH, the
+  // pinned build in the caches - the Linux server sets GRAPHIC_CHROME_PATH), else any cached headless shell
+  // Chrome FIRST (no Chrome: skip or fail at once), then puppeteer-core; required runs give the npx fallback 20 s, not npm's
+  // ~5 min offline wait
+  try { chrome = (process.env.CHROME && fs.existsSync(process.env.CHROME) && process.env.CHROME) || findPinnedChrome() || findChrome(); } catch (e) { return skipOrFail(t, e.message); }
+  try { puppeteer = findPuppeteer({ npxTimeout: REQUIRED ? 20000 : undefined }); } catch (e) { return skipOrFail(t, e.message); }
   const { dir, html, layout } = reel();
   const TYPES = { ".html": "text/html", ".woff2": "font/woff2", ".mp4": "video/mp4", ".js": "text/javascript" };
   const server = http.createServer((req, res) => {
@@ -108,7 +148,7 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
     await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: "load", timeout: 60000 });
     try { await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 }); }
-    catch { return t.skip("GSAP did not load (offline?)"); }
+    catch { return skipOrFail(t, "GSAP did not load (offline?)"); }
     const got = await page.evaluate(async (n) => {
       await document.fonts.load('58px "Gloock"', "cats run fast"); await document.fonts.ready;
       const tl = window.__timelines.main; tl.pause();
@@ -137,6 +177,32 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
     })), ["😂", "🔥", "👍", "🎉", "🚀", "🇺", "🏽"]);
     console.log(`emoji advance on this machine (em): ${JSON.stringify(Object.fromEntries(Object.entries(adv).map(([k, v]) => [k, +v.toFixed(3)])))}, model ${EMOJI_EM}`);
     for (const [e, v] of Object.entries(adv)) assert.ok(v <= EMOJI_EM, `${e}: this machine draws ${v} em, over the model's ${EMOJI_EM}`);
+    // randomized line breaking (mac-45 CP5): 420 seeded groups of words, emoji runs, ZWJ / flag / skin-tone units and
+    // punctuation glued to emoji ("(😂)", "😂!", "“🔥”"), laid out by the page's CSS. The model runs at THIS machine's
+    // own emoji advance (emojiEm = the widest measured above: Apple 1.0) - no 1.5 em slack - and must never count fewer
+    // lines than Chrome draws
+    let seed = 45;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const pick = (a) => a[Math.floor(rnd() * a.length)];
+    const W = ["lol", "ok", "wait", "what", "no", "yes", "this", "is", "fire", "so", "good", "really", "amazing", "photographers", "the"];
+    const E = ["😂", "🔥", "👍", "❤️", "🎉", "👨‍👩‍👧", "🇺🇸", "👍🏽", "✨", "💯"];
+    const OP = ["(", "“", '"', "¿", "["], CL = [")", "!", "?", ",", ".", "…", "”", '"', "]"];
+    const token = () => { const r = rnd(); if (r < 0.4) return pick(W); let e = ""; for (let n = 1 + Math.floor(rnd() * (rnd() < 0.3 ? 14 : 3)); n > 0; n--) e += pick(E); return (rnd() < 0.3 ? pick(OP) : "") + e + (rnd() < 0.35 ? pick(CL) : ""); };
+    const groups = Array.from({ length: 420 }, () => Array.from({ length: 1 + Math.floor(rnd() * 5) }, () => Array.from({ length: 1 + Math.floor(rnd() * (rnd() < 0.5 ? 1 : 3)) }, token).join("")));
+    const drawnLines = await page.evaluate((gs) => gs.map((ws) => {
+      const g = document.createElement("div"); g.className = "cap-group"; g.style.top = "100px";
+      const inn = document.createElement("div"); inn.className = "cap-in"; g.appendChild(inn);
+      inn.innerHTML = ws.map((w) => `<span class="w">${w.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</span>`).join("<wbr>");
+      document.getElementById("cg0").parentElement.appendChild(g);
+      const h = inn.getBoundingClientRect().height; g.remove();
+      return (h - 18) / (58 * 1.08);   // the box is 18 px of padding plus one 62.64 px line box per line
+    }), groups);
+    const emojiEm = Math.max(...Object.values(adv));
+    const under = [];
+    let over = 0;
+    groups.forEach((ws, i) => { const m = clippingExtent(ws, { size: 58, maxWidth: 820, emojiEm }).lines; if (m < drawnLines[i] - 0.02) under.push(`${ws.join(" ")}: model ${m}, drawn ${drawnLines[i]}`); else if (m > drawnLines[i] + 0.02) over++; });
+    console.log(`random wrap at emojiEm ${emojiEm.toFixed(3)}: ${groups.length} groups, ${under.length} under-counted, ${over} over-counted`);
+    assert.deepEqual(under, [], "the model never counts fewer lines than Chrome draws");
     for (const words of [["😂😂😂", "lol", "🔥🔥"], [Array(22).fill("😂").join("")], Array(22).fill("🔥")]) {
       const drawn = await page.evaluate((ws) => {
         const g = document.createElement("div"); g.className = "cap-group"; g.style.top = "100px";

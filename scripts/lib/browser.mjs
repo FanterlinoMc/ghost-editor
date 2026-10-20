@@ -2,24 +2,39 @@
 // scripts that drive the composition page directly (motion-determinism.mjs). The renderer itself is
 // `npx hyperframes@<pinned>`; this reuses the puppeteer-core and Chrome it already cached.
 //
-//   PUPPETEER_CORE_DIR  a node_modules/puppeteer-core directory
-//   CHROME              a chrome / chrome-headless-shell executable
+//   PUPPETEER_CORE_DIR  a node_modules/puppeteer-core directory (override); else the npx caches (~/.npm/_npx, the
+//                       npm_config_cache one, Windows' LOCALAPPDATA one), ~/node_modules, and last the puppeteer-core
+//                       the PINNED renderer itself loads (graphic-render.mjs resolveHyperframes: npx -p hyperframes@pin)
+//   CHROME              a chrome / chrome-headless-shell executable; else the hyperframes / puppeteer caches. (The
+//                       graphic renderer's pinned shell is graphic-render.mjs findChrome's alone: normal reels never
+//                       read its variable; a test that wants it asks graphic-render.mjs directly.)
 
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { resolveHyperframes } from "./graphic-render.mjs";
 
 function kids(dir) { try { return fs.readdirSync(dir).map((n) => path.join(dir, n)); } catch { return []; } }
 
-export function findPuppeteer() {
+// npxTimeout: how long the last fallback (npx resolving the pinned hyperframes) may take; offline, npm waits ~5 min
+export function findPuppeteer({ npxTimeout } = {}) {
   const cands = [];
   if (process.env.PUPPETEER_CORE_DIR) cands.push(process.env.PUPPETEER_CORE_DIR);
   const npxRoots = [path.join(process.env.LOCALAPPDATA || "", "npm-cache", "_npx"), path.join(os.homedir(), ".npm", "_npx")];
   for (const r of npxRoots) for (const d of kids(r)) cands.push(path.join(d, "node_modules", "puppeteer-core"));
+  if (process.env.npm_config_cache) for (const d of kids(path.join(process.env.npm_config_cache, "_npx"))) cands.push(path.join(d, "node_modules", "puppeteer-core"));
   cands.push(path.join(os.homedir(), "node_modules", "puppeteer-core"));
   for (const c of cands) if (fs.existsSync(path.join(c, "package.json"))) return createRequire(path.join(c, "package.json"))(c);
-  throw new Error("puppeteer-core not found: run `npx -y hyperframes@<pin> --version` once, or set PUPPETEER_CORE_DIR");
+  // the engine's own resolution: the pinned hyperframes CLI (as the graphic renderer finds it), and the puppeteer-core
+  // its package resolves (hoisted next to it in the npx tree)
+  try {
+    let dir = path.dirname(resolveHyperframes(npxTimeout ? { timeout: npxTimeout } : undefined));
+    while (dir !== path.dirname(dir) && !fs.existsSync(path.join(dir, "package.json"))) dir = path.dirname(dir);
+    return createRequire(path.join(dir, "package.json"))("puppeteer-core");
+  } catch (e) {
+    throw new Error(`puppeteer-core not found (npx caches, ~/node_modules, the pinned hyperframes: ${String(e.message).slice(0, 160)}): run \`npx -y hyperframes@<pin> --version\` once, or set PUPPETEER_CORE_DIR`);
+  }
 }
 
 export function findChrome() {
