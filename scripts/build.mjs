@@ -33,6 +33,7 @@ import { ROOM_SCALE, ROOM_EXIT_S, ROOM_FILL, normalizeRoom, ROOM_EASE_NAME, room
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 import { loadStyleChain, checkBrandName } from "./lib/style-path.mjs";
 import { takeEndAt } from "./lib/caption-span.mjs";
+import { needsCaptionFontGuard, captionFontGuardJs } from "./lib/caption-font-guard.mjs";
 import * as PK from "./lib/premium.mjs";
 import { GM_CSS } from "./lib/gadzhi.mjs";
 import { HZ_CSS, hzBeat } from "./lib/hormozi.mjs";
@@ -3859,7 +3860,7 @@ ${FX_ON ? `  #fx { position: absolute; inset: 0; transform-origin: 540px ${faceY
   // seek and wipe it out (pip, repeated push-ins)
   const based = new Set();
   const ft = (sel, from, to, at) => { if (!based.has(sel)) { based.add(sel); tl.set(sel, from, 0); } tl.fromTo(sel, from, { ...to, immediateRender: false }, Math.max(0, at)); };
-  ${tl.join("\n  ")}
+  ${needsCaptionFontGuard(tl) ? `${captionFontGuardJs()}\n  ` : ""}${tl.join("\n  ")}
   ${SOURCES.length > 1 || spec.origin === "blank" ? `// the timeline is as long as the reel, not as long as its last tween: a preview/player that reads tl.duration() would stop at the last caption and freeze the footage
   tl.set({}, {}, ${SECTION_MODE ? SECTION_TOTAL : TOTAL});
   ` : ""}window.__timelines["main"] = tl;
