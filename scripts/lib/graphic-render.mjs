@@ -470,33 +470,46 @@ export function maxAlpha(file) {
 }
 
 // ---------- killing a hung render, safely ----------
-// A PID from the shim's marker file is signalled only if it is > 1, still alive, and still Chrome (Linux: the
-// basename of /proc/<pid>/exe; elsewhere: `ps -o comm= -p <pid>`), so a PID that was reused by another process, or a
-// forged "1", is never touched. Its process group is killed only when that verified Chrome leads it (pgid == pid).
+// A PID from the shim's marker file is signalled only if it is > 1, still alive, and still Chrome, so a PID that was
+// reused by another process, or a forged "1", is never touched. Its process group is killed only when that verified
+// Chrome leads it (pgid == pid). Linux: the name is the basename of /proc/<pid>/exe, else (unreadable: root without
+// CAP_SYS_PTRACE cannot read it for a process of ANOTHER uid, i.e. the dropped Chrome in a container) of argv[0] from
+// /proc/<pid>/cmdline, else the 15-char comm from /proc/<pid>/stat (a truncated Chrome name counts); the real uid comes
+// from /proc/<pid>/status. Elsewhere: `ps -o pgid=,ruid=,comm= -p <pid>`. Root mode (killChromes' uid): the process's
+// real uid must also be GRAPHIC_CHROME_UID.
+const CHROME_NAMES = ["chrome-headless-shell", "chrome", "chromium", "chromium-browser", "headless_shell", "Google Chrome for Testing"];
 const CHROME_EXE = /^(chrome-headless-shell|chrome|chromium|chromium-browser|headless_shell|Google Chrome for Testing)$/;
-export function procInfo(pid) {
+const COMM_LEN = 15; // TASK_COMM_LEN - 1
+const chromeName = (i) => !!i && (CHROME_EXE.test(i.exe) || (i.via === "comm" && i.exe.length === COMM_LEN && CHROME_NAMES.some((n) => n.length > COMM_LEN && n.startsWith(i.exe))));
+const linuxIo = { read: (f) => fs.readFileSync(f, "utf8"), readlink: (f) => fs.readlinkSync(f) };
+export function procInfo(pid, { platform = process.platform, io = linuxIo, alive = (p) => process.kill(p, 0) } = {}) {
   if (!Number.isInteger(pid) || pid <= 1) return null;
-  try { process.kill(pid, 0); } catch { return null; }
-  if (process.platform === "linux") {
-    try {
-      const exe = path.basename(fs.readlinkSync(`/proc/${pid}/exe`)).replace(/ \(deleted\)$/, "");
-      const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
-      const pgid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[2]);
-      return { exe, pgid };
-    } catch { return null; }
+  try { alive(pid); } catch { return null; }
+  if (platform === "linux") {
+    let stat;
+    try { stat = io.read(`/proc/${pid}/stat`); } catch { return null; } // gone
+    const pgid = Number(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[2]);
+    const comm = stat.slice(stat.indexOf("(") + 1, stat.lastIndexOf(")"));
+    let uid = null;
+    try { const m = /^Uid:[ \t]*(\d+)/m.exec(io.read(`/proc/${pid}/status`)); uid = m ? Number(m[1]) : null; } catch {}
+    try { return { exe: path.basename(io.readlink(`/proc/${pid}/exe`)).replace(/ \(deleted\)$/, ""), pgid, uid, via: "exe" }; } catch {}
+    try { const a0 = io.read(`/proc/${pid}/cmdline`).split("\0")[0]; if (a0) return { exe: path.basename(a0), pgid, uid, via: "cmdline" }; } catch {}
+    return { exe: comm, pgid, uid, via: "comm" };
   }
-  const r = spawnSync("ps", ["-o", "pgid=,comm=", "-p", String(pid)], { encoding: "utf8", timeout: 5000 });
-  const m = /^\s*(\d+)\s+(.+?)\s*$/.exec(String(r.stdout || ""));
-  return m ? { exe: path.basename(m[2]), pgid: Number(m[1]) } : null;
+  const r = spawnSync("ps", ["-o", "pgid=,ruid=,comm=", "-p", String(pid)], { encoding: "utf8", timeout: 5000 });
+  const m = /^\s*(\d+)\s+(\d+)\s+(.+?)\s*$/.exec(String(r.stdout || ""));
+  return m ? { exe: path.basename(m[3]), pgid: Number(m[1]), uid: Number(m[2]), via: "ps" } : null;
 }
-export const isChrome = (pid, info = procInfo) => { const i = info(pid); return !!(i && CHROME_EXE.test(i.exe)); };
-// -> the signals sent, as ["pid" | "-pgid"] (for tests). kill and info are injectable.
-export function killChromes(pids, { kill = process.kill, info = procInfo } = {}) {
+export const isChrome = (pid, info = procInfo) => chromeName(info(pid));
+// -> the signals sent, as ["pid" | "-pgid"] (for tests). kill and info are injectable. uid: root mode only (the
+// dropped Chrome's GRAPHIC_CHROME_UID); null = not checked (non-root, as before).
+export function killChromes(pids, { kill = process.kill, info = procInfo, uid = null } = {}) {
   const sent = [];
   for (const pid of pids) {
     if (!Number.isInteger(pid) || pid <= 1) continue;
     const i = info(pid);
-    if (!i || !CHROME_EXE.test(i.exe)) continue;
+    if (!chromeName(i)) continue;
+    if (uid !== null && i.uid !== uid) continue;
     if (i.pgid === pid) { try { kill(-pid, "SIGKILL"); sent.push(`-${pid}`); } catch {} }
     try { kill(pid, "SIGKILL"); sent.push(String(pid)); } catch {}
   }
@@ -510,7 +523,7 @@ export function killChromes(pids, { kill = process.kill, info = procInfo } = {})
 // GRAPHIC_SANDBOX launcher the marked PIDs are skipped: a launcher may run the render in its own PID namespace, where
 // those numbers name other processes out here (GRAPHIC_SANDBOX must not create a PID namespace if you want them killed).
 // -> Promise<{ status, secs, log, timedOut, shimPids, killed }>
-export function runRender({ dir, out, mode, fps, workers, launcher, shim, logFile, markFile, timeoutMs = 600000, bin, kill = process.kill, info = procInfo }) {
+export function runRender({ dir, out, mode, fps, workers, launcher, shim, logFile, markFile, timeoutMs = 600000, bin, kill = process.kill, info = procInfo, chromeUid = null }) {
   const argv = [...launcher.argv, process.execPath, bin || resolveHyperframes(), "render", "--format", mode === "insert" ? "mp4" : "webm", "-f", String(fps), "-q", "looks", ...(workers ? ["--workers", String(workers)] : []), "-o", out, dir];
   const env = cleanEnv({ ...RENDER_ENV, NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --require "${PRELOAD}"`.trim() });
   if (shim) { env.HYPERFRAMES_BROWSER_PATH = shim; delete env.PRODUCER_HEADLESS_SHELL_PATH; }
@@ -524,7 +537,7 @@ export function runRender({ dir, out, mode, fps, workers, launcher, shim, logFil
     const onTimeout = () => {
       timedOut = true;
       if (!finished) { try { if (!isWin && cp.pid > 1) { kill(-cp.pid, "SIGKILL"); killed.push(`-${cp.pid}`); } else cp.kill("SIGKILL"); } catch {} }
-      if (!launcher.argv.length) killed.push(...killChromes(shimPids(), { kill, info }));
+      if (!launcher.argv.length) killed.push(...killChromes(shimPids(), { kill, info, uid: chromeUid }));
     };
     const timer = setTimeout(onTimeout, timeoutMs);
     cp.stdout.on("data", (d) => (log += d));
@@ -614,7 +627,7 @@ export async function renderGraphic(opts, deps = {}) {
     for (let n = 0; n < 2 && found.length === 0; n++) {
       log(`render ${n + 1}/2${n ? " (--workers 1)" : ""} ...`);
       const markFile = path.join(scratch, `shim-${n}.pids`);
-      const r = await D.runRender({ dir: wrap.dir, out: outs[n], mode, fps, workers: n ? 1 : null, launcher, shim, markFile, timeoutMs: Math.round((budget + 60) * 1000), logFile: path.join(wrap.dir, `render-${n ? "b" : "a"}.log`) });
+      const r = await D.runRender({ dir: wrap.dir, out: outs[n], mode, fps, workers: n ? 1 : null, launcher, shim, markFile, chromeUid: user.root ? user.uid : null, timeoutMs: Math.round((budget + 60) * 1000), logFile: path.join(wrap.dir, `render-${n ? "b" : "a"}.log`) });
       renders.push({ secs: r.secs, status: r.status });
       log(`render ${n + 1}/2: exit ${r.status}, ${r.secs}s`);
       found.push(...scanLog(r.log));

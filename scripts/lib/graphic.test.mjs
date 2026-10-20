@@ -897,6 +897,57 @@ test("killChromes: only live, verified Chrome PIDs > 1; a group only when Chrome
   assert.ok(RR.procInfo(process.pid) && RR.procInfo(process.pid).pgid > 0);
 });
 
+test("procInfo on Linux (stubbed /proc): exe unreadable to root (EACCES) -> argv[0], else the 15-char comm; real uid; killChromes checks the uid in root mode", () => {
+  const SHELL = "/opt/chrome/chrome-headless-shell/linux64-152.0.7977.30/chrome-headless-shell-linux64/chrome-headless-shell";
+  const eacces = () => { const e = new Error("EACCES: permission denied, readlink"); e.code = "EACCES"; throw e; };
+  const enoent = () => { const e = new Error("ENOENT"); e.code = "ENOENT"; throw e; };
+  // pid -> { exe?, cmdline?, comm, uid, pgid }; a missing key = that read throws (exe: EACCES, others: ENOENT)
+  const PROCS = {
+    101: { cmdline: `${SHELL}\0--headless\0`, comm: "chrome-headless", uid: 10101, pgid: 101 },      // dropped browser
+    102: { cmdline: `${SHELL}\0--type=renderer\0`, comm: "chrome-headless", uid: 10101, pgid: 101 }, // its renderer
+    103: { comm: "chrome-headless", uid: 10101, pgid: 103 },                                             // cmdline gone: comm
+    104: { cmdline: `${SHELL}\0`, comm: "chrome-headless", uid: 0, pgid: 104 },                         // a root Chrome
+    105: { cmdline: "/usr/bin/node\0x.js\0", comm: "node", uid: 10101, pgid: 105 },                     // reused PID
+    106: { exe: "/usr/lib/chromium/chromium", comm: "chromium", uid: 1000, pgid: 106 },                  // exe readable
+    107: { comm: "chrome", uid: 10101, pgid: 107 },                                                       // short comm: exact
+    108: { comm: "chrome-headles", uid: 10101, pgid: 108 },                                               // 14 chars: not a truncation
+  };
+  const io = {
+    read: (f) => {
+      const [, pid, what] = /^\/proc\/(\d+)\/(\w+)$/.exec(f);
+      const p = PROCS[pid];
+      if (!p) enoent();
+      if (what === "stat") return `${pid} (${p.comm}) S 1 ${p.pgid} ${p.pgid} 0 -1`;
+      if (what === "status") return `Name:\t${p.comm}\nUid:\t${p.uid}\t${p.uid}\t${p.uid}\t${p.uid}\nGroups:\t\nNStgid:\t${pid}\n`;
+      if (what === "cmdline" && p.cmdline) return p.cmdline;
+      enoent();
+    },
+    readlink: (f) => { const p = PROCS[/\/proc\/(\d+)\/exe/.exec(f)[1]]; if (p && p.exe) return p.exe; eacces(); },
+  };
+  const info = (pid) => RR.procInfo(pid, { platform: "linux", io, alive: (p) => { if (!PROCS[p]) throw new Error("ESRCH"); } });
+  assert.deepEqual(info(101), { exe: "chrome-headless-shell", pgid: 101, uid: 10101, via: "cmdline" });
+  assert.deepEqual(info(103), { exe: "chrome-headless", pgid: 103, uid: 10101, via: "comm" });
+  assert.deepEqual(info(106), { exe: "chromium", pgid: 106, uid: 1000, via: "exe" });
+  assert.equal(info(999), null, "dead");
+  assert.equal(info(1), null);
+  const sent = [];
+  const all = [1, 101, 102, 103, 104, 105, 106, 107, 108, 999, 0];
+  assert.deepEqual(RR.killChromes(all, { kill: (p) => sent.push(p), info }), ["-101", "101", "102", "-103", "103", "-104", "104", "-106", "106", "-107", "107"], "non-root: any verified Chrome (as before), found without /proc/<pid>/exe");
+  assert.deepEqual(RR.killChromes(all, { kill: () => {}, info, uid: 10101 }), ["-101", "101", "102", "-103", "103", "-107", "107"], "root mode: only Chromes of GRAPHIC_CHROME_UID (not the root one, not uid 1000)");
+  assert.deepEqual(RR.killChromes([105, 108], { kill: () => assert.fail("never"), info, uid: 10101 }), [], "a reused PID or a non-Chrome comm is never touched");
+  assert.equal(RR.isChrome(102, info), true);
+});
+
+test("renderGraphic passes the dropped uid to runRender (root) and nothing (non-root)", async () => {
+  const got = [];
+  const runRender = async (o) => { got.push(o.chromeUid); fs.writeFileSync(o.out, "video"); fs.writeFileSync(o.markFile, "4242\n"); return { status: 0, secs: 1, log: "[BrowserManager] Browser launched (HeadlessChrome/152.0.7977.30, screenshot)\n" }; };
+  const root = { root: true, uid: 10101, gid: 10101, setpriv: "/x/setpriv" };
+  const r = await rg({ runRender, chromeUser: () => root, hostLock: async () => ({ release: () => {} }), sweepUid: () => ({ ok: true, found: [] }), chromeHome: () => null });
+  assert.equal(r.r.ok, true, r.r.reasons.join());
+  await rg({ runRender });
+  assert.deepEqual(got, [10101, 10101, null, null]);
+});
+
 test("runRender: no inherited origins, the PID marker, a hung render is killed with its process group", { skip: process.platform === "win32" }, async () => {
   const dir = tmpd(path.join(os.tmpdir(), "graphic-run-"));
   const bin = path.join(dir, "fake-hf.cjs");
@@ -944,6 +995,16 @@ test("runRender: no inherited origins, the PID marker, a hung render is killed w
   assert.equal(sb.timedOut, true);
   assert.doesNotThrow(() => process.kill(chrome2, 0), "launcher set: marked PIDs skipped");
   process.kill(chrome2, "SIGKILL");
+  // root mode (chromeUid): a marked Chrome of another uid is left alone, one of the dropped uid is killed
+  const [mine, theirs] = [sleeper(), sleeper()];
+  fs.writeFileSync(markBin, `require("fs").writeFileSync(process.env.GRAPHIC_SHIM_MARK, "${mine}\\n${theirs}\\n"); setInterval(() => {}, 1000);`);
+  const info3 = (pid) => (pid === mine ? { exe: "chrome-headless-shell", pgid: 0, uid: 10101 } : pid === theirs ? { exe: "chrome-headless-shell", pgid: 0, uid: 0 } : null);
+  const ru = await RR.runRender({ dir, out: "--x", mode: "overlay", fps: 30, launcher: { argv: [] }, shim: null, markFile: path.join(dir, "m6"), bin: markBin, timeoutMs: 1500, kill: (p, sig) => process.kill(p, sig), info: info3, chromeUid: 10101 });
+  assert.deepEqual([ru.timedOut, ru.killed.slice(1)], [true, [String(mine)]], "only the dropped uid's Chrome");
+  await new Promise((ok) => setTimeout(ok, 300));
+  assert.throws(() => process.kill(mine, 0));
+  assert.doesNotThrow(() => process.kill(theirs, 0), "another uid's Chrome is alive");
+  process.kill(theirs, "SIGKILL");
 });
 
 test("rules.json is the source: parity with its cases.json, engine fonts = DESIGNER_FONTS", () => {
