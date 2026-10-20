@@ -128,9 +128,14 @@ export async function renderFrames(opts, deps = {}) {
     fs.mkdirSync(opts.outDir, { recursive: true });
     const frames = g.ts.map((t, i) => {
       const file = path.join(opts.outDir, `f-${fmtT(t)}.png`);
-      if (mode === "insert") D.flatten(pngs[i], `${file}.part`);
-      else fs.copyFileSync(pngs[i], `${file}.part`);
-      fs.renameSync(`${file}.part`, file);
+      // produce the final bytes inside our own scratch dir, then write them to --out with an exclusive, no-follow open:
+      // as root, a symlink planted at <file>.part is removed (not followed) and rename() replaces a link at <file>
+      const tmp = path.join(scratch, `out-${i}.png`), part = `${file}.part`;
+      if (mode === "insert") D.flatten(pngs[i], tmp); else fs.copyFileSync(pngs[i], tmp);
+      fs.rmSync(part, { force: true });
+      const fd = fs.openSync(part, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o644);
+      try { fs.writeSync(fd, fs.readFileSync(tmp)); } finally { fs.closeSync(fd); }
+      fs.renameSync(part, file);
       return { t, file };
     });
     return { ok: true, frames, refused: null, reasons: [], codes: [], stage: "done", secs: r.secs };
