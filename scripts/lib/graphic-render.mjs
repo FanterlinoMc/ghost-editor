@@ -25,7 +25,13 @@
 //      called setsid must not outlive the render), then its home is removed (releaseChromeHome). So two graphic renders
 //      must never run at the same time with the same uid: the engine runs a build's graphics one at a time (the
 //      awaited pre-pass in build.mjs), but nothing in the engine serialises two BUILDS on one host. Concurrent builds
-//      need a distinct uid each, or one host-wide lock around them (as the Mac's /tmp/phantasic-render.lock).
+//      need a distinct uid each; renderGraphic itself holds a per-uid HOST LOCK (hostLockPath:
+//      /run/graphic-chrome-<uid>.lock, else in os.tmpdir()) from before the home exists until after its release, so
+//      a second render with the same uid waits. It is a DIFFERENT file from the CLIs' render lock (--lock /
+//      GRAPHIC_RENDER_LOCK, /tmp/phantasic-render.lock on the Mac), so a caller holding the render lock never
+//      deadlocks with it (and the host lock is never taken around a child that takes it again). graphic-lock.mjs now
+//      says so when a --lock is already held (a CLI under `lockf` by hand AND with --lock on the same file waits for
+//      itself: use one or the other).
 //      Root renders also carry `launch` in the cache key (ROOT_LAUNCH): their pixels differ (--disable-gpu), so they
 //      never share a cached file with a non-root render; non-root keys are unchanged.
 // The probe is the safety net, before EVERY render: the shimmed Chrome (inside the same launcher) must FAIL to load

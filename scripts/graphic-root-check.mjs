@@ -20,7 +20,11 @@
 //      Also: a setsid + double-forked process of the uid survives a kill that does nothing or cannot start, and that
 //      is DETECTED (home kept); the real release kills it and removes the home. Phase 2 holds the uid's host lock.
 //   3b. while this check holds the uid's host lock, graphic-determinism waits (no render, no Chrome of the uid).
-// Last line: GRAPHIC ROOT CHECK: PASS | FAIL. Exit 0 / 1. Kills only the Chrome it started (by PID, verified).
+// CapAmb must be 0; CapBnd is reported (not cleared: harmless for a non-root uid with no_new_privs).
+// Every step is wrapped: a throw (e.g. the temp home cannot be made) is a FAIL line, never a crash.
+// Run it WITHOUT an outer lockf/flock on the --lock file if you also pass --lock (that waits for itself; the CLI says
+// so). The engine's host lock (graphic-chrome-<uid>.lock) is another file and never collides with it.
+// Last line: GRAPHIC ROOT CHECK: PASS | FAIL (<first failure>). Exit 0 / 1. Kills only the Chrome it started (by PID, verified).
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -33,11 +37,16 @@ holdRenderLock();
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
 const fixture = args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--lock") || path.join(ROOT, "scripts", "fixtures", "graphics", "charts.html");
-let fails = 0;
-const check = (ok, what) => { console.log(`${ok ? "ok  " : "FAIL"} ${what}`); if (!ok) fails++; return ok; };
-const finish = () => { console.log(`GRAPHIC ROOT CHECK: ${fails ? "FAIL" : "PASS"}`); process.exit(fails ? 1 : 0); };
-if (process.platform !== "linux" || process.getuid() !== 0) { console.log("run as root on Linux"); fails++; finish(); }
-const user = chromeUser();
+let fails = 0, firstFail = null;
+const check = (ok, what) => { console.log(`${ok ? "ok  " : "FAIL"} ${what}`); if (!ok) { fails++; firstFail ??= String(what).split("\n")[0].slice(0, 200); } return ok; };
+let cleanup = () => {};
+const finish = () => { try { cleanup(); } catch (e) { check(false, `cleanup threw: ${e.message}`); } console.log(`GRAPHIC ROOT CHECK: ${fails ? `FAIL (${firstFail}${fails > 1 ? `; ${fails} failures in all` : ""})` : "PASS"}`); process.exit(fails ? 1 : 0); };
+// every step is wrapped: a throw is a FAIL line and the verdict, never a stack trace
+const step = async (name, fn) => { try { return await fn(); } catch (e) { check(false, `${name} threw: ${e && e.message}`); return null; } };
+process.on("uncaughtException", (e) => { check(false, `uncaught: ${e && e.message}`); finish(); });
+process.on("unhandledRejection", (e) => { check(false, `unhandled: ${e && e.message}`); finish(); });
+if (process.platform !== "linux" || process.getuid() !== 0) { check(false, "run as root on Linux"); finish(); }
+const user = await step("chromeUser", () => chromeUser()) || { error: "chromeUser threw" };
 if (!check(!user.error, `drop configured: ${user.error || `${user.uid}:${user.gid} via ${user.setpriv}`}`)) finish();
 const CANARY = `canary-${process.pid}-${Date.now()}`;
 process.env.GRAPHIC_ROOT_CHECK_SECRET = CANARY;
@@ -55,23 +64,35 @@ const uidProcs = () => uidProcesses(user.uid); // live (non-zombie) processes wh
 if (!check(uidProcs().length === 0, `no process of uid ${user.uid} before the check (it must be a DEDICATED uid): ${uidProcs().join(",")}`)) finish();
 
 // 1. refusal without the ids
-{
+await step("refusal without the ids", async () => {
   const env = { ...process.env };
   delete env.GRAPHIC_CHROME_UID; delete env.GRAPHIC_CHROME_GID;
   const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "graphic-determinism.mjs"), fixture], { encoding: "utf8", env, timeout: 300000 });
   check(r.status === 1 && String(r.stdout + r.stderr).includes(ROOT_REFUSAL), `without GRAPHIC_CHROME_UID/GID: refused ("${ROOT_REFUSAL}")`);
-}
+});
 
 // 2. one Chrome through the shim, inspected in /proc
 // the shim lives in a root-only 0700 dir, standing in for a project dir the uid cannot enter
-const work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-root-check-"));
-const chrome = findChrome();
+let work = null, chrome = null, lock = null, home = null, shim = null, profile = null, released = false;
 const lockFile = hostLockPath(user.uid);
-let lock = await holdHostLock(lockFile); // as renderGraphic: the uid's host lock around the whole home lifecycle
-const home = chromeHome(user);
-const shim = chromeShim(path.join(work, "shim"), chrome, { home, setpriv: user.setpriv });
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-root-check-profile-")); // root 0700, like puppeteer's: overridden
+cleanup = () => {
+  if (home && !released) { const r = releaseChromeHome(home, user); if (!r.ok) console.log(`GRAPHIC RENDER UNSAFE: ${r.error}`); released = true; }
+  if (lock) { lock.release(); lock = null; }
+  for (const d of [work, profile]) if (d) fs.rmSync(d, { recursive: true, force: true });
+};
+const setupOk = await step("setup (chrome, host lock, home, shim)", async () => {
+  work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-root-check-"));
+  chrome = findChrome();
+  if (!chrome) throw new Error("no chrome-headless-shell (set GRAPHIC_CHROME_PATH)");
+  lock = await holdHostLock(lockFile); // as renderGraphic: the uid's host lock around the whole home lifecycle
+  home = chromeHome(user);
+  shim = chromeShim(path.join(work, "shim"), chrome, { home, setpriv: user.setpriv });
+  profile = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-root-check-profile-")); // root 0700, like puppeteer's: overridden
+  return true;
+});
+if (!setupOk) finish();
 const mark = path.join(work, "mark");
+await step("one Chrome through the shim", async () => {
 const cp = spawn(shim, ["--headless", "--remote-debugging-pipe", `--user-data-dir=${profile}`, "--no-first-run", "about:blank"], { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"], env: { ...process.env, GRAPHIC_SHIM_MARK: mark } });
 let err = "";
 cp.stderr.on("data", (d) => (err += d));
@@ -84,7 +105,8 @@ if (check(pid === cp.pid, `Chrome started through the shim, marked PID ${pid} = 
   check(field(st, "Uid") === Array(4).fill(user.uid).join("\t"), `Uid: ${field(st, "Uid")}`);
   check(field(st, "Gid") === Array(4).fill(user.gid).join("\t"), `Gid: ${field(st, "Gid")}`);
   check(field(st, "Groups") === "", `Groups: '${field(st, "Groups")}'`);
-  for (const c of ["CapInh", "CapPrm", "CapEff"]) check(/^0+$/.test(field(st, c)), `${c}: ${field(st, c)}`);
+  for (const c of ["CapInh", "CapPrm", "CapEff", "CapAmb"]) check(/^0+$/.test(field(st, c)), `${c}: ${field(st, c)}`);
+  console.log(`info CapBnd: ${field(st, "CapBnd")} (the bounding set is not cleared; with uid != 0, no_new_privs and no file caps it grants nothing)`);
   check(field(st, "NoNewPrivs") === "1", `NoNewPrivs: ${field(st, "NoNewPrivs")}`);
   const env = environ(pid);
   check(env.map((e) => e.split("=")[0]).sort().join(",") === ALLOWED.join(","), `environ keys: ${env.map((e) => e.split("=")[0]).sort().join(",")}`);
@@ -103,7 +125,8 @@ if (check(pid === cp.pid, `Chrome started through the shim, marked PID ${pid} = 
 try { cp.stdio[3].write(JSON.stringify({ id: 1, method: "Browser.close" }) + "\0"); } catch {}
 await new Promise((r) => { const t = setTimeout(r, 5000); cp.on("exit", () => { clearTimeout(t); r(); }); });
 if (pid && isChrome(pid)) { try { process.kill(pid, "SIGKILL"); } catch {} }
-{
+});
+await step("root-only file through the same drop", async () => {
   const secret = path.join(os.tmpdir(), `graphic-root-only-${process.pid}`), open = path.join(os.tmpdir(), `graphic-world-readable-${process.pid}`);
   fs.writeFileSync(secret, "ROOT-ONLY\n", { mode: 0o600 });
   fs.writeFileSync(open, "WORLD-READABLE\n", { mode: 0o644 });
@@ -117,10 +140,10 @@ if (pid && isChrome(pid)) { try { process.kill(pid, "SIGKILL"); } catch {} }
   check(!r.stdout.includes("ROOT-ONLY") && /Permission denied/.test(r.stderr) && r.stdout.includes("WORLD-READABLE"), `the same drop cannot read a root-only 0600 file, can read a 0644 one`);
   [secret, open].forEach((f) => fs.rmSync(f, { force: true }));
   fs.rmSync(rdir, { recursive: true, force: true });
-}
+});
 // a process of the uid that escaped (setsid + double fork): a kill that cannot run is DETECTED (home kept, ok false),
 // then the real release kills it and removes the home
-{
+await step("escaped process, failed kill detected, real release", async () => {
   const escaped = spawn(user.setpriv, [`--reuid=${user.uid}`, `--regid=${user.gid}`, "--clear-groups", "--", "/bin/sh", "-c", "setsid sh -c 'sleep 300 & exit 0' & exit 0"], { cwd: "/", stdio: "ignore" });
   await new Promise((r) => escaped.on("exit", r));
   await wait(500);
@@ -131,12 +154,13 @@ if (pid && isChrome(pid)) { try { process.kill(pid, "SIGKILL"); } catch {} }
   check(!f2.ok && fs.existsSync(home), `a kill that cannot start is detected: ${f2.error}`);
   const rel = releaseChromeHome(home, user);
   await wait(300);
+  released = rel.ok;
   check(before > 0 && rel.ok && uidProcs().length === 0 && !fs.existsSync(path.dirname(home)), `release: ${before} escaped uid process(es) killed, ${uidProcs().length} left; home removed: ${!fs.existsSync(path.dirname(home))}${rel.ok ? "" : " " + rel.error}`);
-  lock.release();
-}
+  lock.release(); lock = null; lock = null;
+});
 
 // 3. a real render, sampled
-{
+await step("a real render (waits for the host lock, then sampled)", async () => {
   const homes = () => fs.readdirSync(os.tmpdir()).filter((f) => f.startsWith("graphic-chrome-")).sort().join(",");
   const homesBefore = homes();
   const seen = new Map();
@@ -159,15 +183,13 @@ if (pid && isChrome(pid)) { try { process.kill(pid, "SIGKILL"); } catch {} }
   check(all.length > 0 && all.every((x) => x.uid === String(user.uid) && !x.canary && !x.project), `${all.length} Chrome process(es) seen during the render, uids {${[...new Set(all.map((x) => x.uid))].join(",")}}, canary in environ: ${all.filter((x) => x.canary).length}, argv naming the (root-only 0700) build dir: ${all.filter((x) => x.project).length}`);
   check(homes() === homesBefore, "the render's Chrome home under os.tmpdir() was removed");
   check(uidProcs().length === 0, `no process of uid ${user.uid} left after the render: ${uidProcs().join(",") || "none"}`);
-}
+});
 
 // 4. the isolation check (routes + R12 through the same shim)
-{
+await step("the isolation check", async () => {
   const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "graphic-isolation-check.mjs")], { encoding: "utf8", env: process.env, timeout: 1800000 });
   const last = String(r.stdout).trim().split("\n").filter((l) => /^(probe through|routes through|GRAPHIC ISOLATION)/.test(l));
   last.forEach((l) => console.log("     " + l));
   check(r.status === 0 && /GRAPHIC ISOLATION: PASS/.test(r.stdout), "graphic-isolation-check: GRAPHIC ISOLATION: PASS");
-}
-fs.rmSync(work, { recursive: true, force: true });
-fs.rmSync(profile, { recursive: true, force: true });
+});
 finish();

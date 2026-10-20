@@ -17,9 +17,20 @@ export function lockCommand(argv = process.argv, env = process.env, tools = { lo
   if (tools.flock) return ["flock", [p, ...rest]];
   throw new Error(`a render lock was asked for (${p}) but neither lockf nor flock is installed`);
 }
+// A held lock is reported before waiting: a CLI started under `lockf -k <path>` / `flock <path>` by hand AND given
+// `--lock <path>` (the same file) would wait for itself forever. Use one or the other (or set
+// GRAPHIC_RENDER_LOCK_HELD=<path>). The engine's own root-mode host lock (graphic-render.mjs hostLockPath,
+// graphic-chrome-<uid>.lock) is a different file, so holding this render lock never blocks it, nor the reverse.
+export function busyHint(p, tools = { lockf: has("lockf"), flock: has("flock") }) {
+  const probe = tools.lockf ? ["lockf", ["-t", "0", p, "true"]] : tools.flock ? ["flock", ["-n", p, "true"]] : null;
+  if (!probe || spawnSync(probe[0], probe[1], { stdio: "ignore", timeout: 10000 }).status === 0) return null;
+  return `render lock ${p} is held by another process: waiting. If this command was itself started under lockf / flock on ${p}, it waits for itself forever: use that outer lock or --lock, not both (or set GRAPHIC_RENDER_LOCK_HELD=${p}).`;
+}
 export function holdRenderLock(argv = process.argv, env = process.env) {
   const cmd = lockCommand(argv, env);
   if (!cmd) return;
+  const hint = busyHint(lockPathOf(argv, env));
+  if (hint) console.error(hint);
   const r = spawnSync(cmd[0], cmd[1], { stdio: "inherit", env: { ...env, GRAPHIC_RENDER_LOCK_HELD: lockPathOf(argv, env) } });
   process.exit(r.status ?? 1);
 }

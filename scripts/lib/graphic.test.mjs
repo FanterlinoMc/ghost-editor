@@ -3,7 +3,7 @@
 // the wrapper page (CSP, data-no-timeline, the hf-seek bridge run in a vm), the log rules, the cache key, the frame map,
 // the Node offline preload and the Chrome shim. No hyperframes render here (scripts/graphic-isolation-check.mjs and
 // scripts/graphic-determinism.mjs do real renders, outside the gate).
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -16,6 +16,15 @@ import * as G from "./graphic.mjs";
 import * as RR from "./graphic-render.mjs";
 import { DESIGNER_FONTS } from "./motion-graphics.mjs";
 import { goodGraphic, insertGraphic, fetchAtRender, throwsInSeek } from "./graphic-fixtures.mjs";
+// every temp dir a test makes is removed after the run (chmod first: some are made 0700 / 0711 on purpose)
+const TMP = [];
+const tmpd = (prefix) => { const d = fs.mkdtempSync(prefix); TMP.push(d); return d; };
+after(() => {
+  for (const d of TMP) {
+    try { spawnSync("chmod", ["-R", "u+rwx", d]); } catch {}
+    fs.rmSync(d, { recursive: true, force: true });
+  }
+});
 const NR = { root: false }; // probe tests: the same under any uid (the gate may run as root)
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -38,7 +47,7 @@ test("the good fixture passes, with its meta", () => {
 });
 
 test("G1-G4: src, file, size, document", () => {
-  const proj = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-test-"));
+  const proj = tmpd(path.join(os.tmpdir(), "graphic-test-"));
   fs.mkdirSync(path.join(proj, "assets", "graphics", "media"), { recursive: true });
   assert.equal(first(null, { projectDir: proj, html: "assets/graphics/../x.html" }), G.reason("G1", { html: "assets/graphics/../x.html" }));
   assert.equal(first(null, { projectDir: proj, html: "assets/graphics/Bad.html" }), G.reason("G1", { html: "assets/graphics/Bad.html" }));
@@ -179,7 +188,7 @@ test("wrapper: CSP, root, fonts, rng before the graphic, media inlined, insert b
   assert.ok(html.includes("background: transparent"));
   const ins = G.wrapperHtml({ html: insertGraphic(), meta: insp(insertGraphic(), { mode: "insert" }).meta, mode: "insert", fps: 30, L: 60, inF: 0, D: 60, after: "hold" });
   assert.ok(ins.includes("background: #000") && ins.includes('data-width="1080" data-height="1920"'));
-  const proj = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-wrap-"));
+  const proj = tmpd(path.join(os.tmpdir(), "graphic-wrap-"));
   fs.mkdirSync(path.join(proj, "assets/graphics/media"), { recursive: true });
   fs.writeFileSync(path.join(proj, "assets/graphics/media/p.png"), Buffer.from([1, 2, 3]));
   const withImg = doc({ body: '<img src="assets/graphics/media/p.png">' });
@@ -353,7 +362,7 @@ test("offline preload: non-loopback refused and logged, loopback open, render or
 
 test("Chrome shim: our flags LAST, only exact loopback origins, the PID marker; probe (stubbed): R12 texts", () => {
   if (process.platform === "win32") return;
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-shim-"));
+  const dir = tmpd(path.join(os.tmpdir(), "graphic-shim-"));
   const fake = path.join(dir, "fake-chrome");
   fs.writeFileSync(fake, '#!/bin/sh\nfor a in "$@"; do echo "$a"; done\n', { mode: 0o755 });
   const shim = RR.chromeShim(path.join(dir, "s"), fake, { uid: 1000 });
@@ -407,7 +416,7 @@ test("Chrome shim: our flags LAST, only exact loopback origins, the PID marker; 
 // enterable by the dropped uid); the home is a separate temp dir, as chromeHome makes it.
 const PERL = ["/usr/bin/perl", "/bin/perl"].find((p) => fs.existsSync(p));
 function rootRig({ id = "0", setpriv = true, lock = true, home: withHome = true } = {}) {
-  const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "graphic-root-")));
+  const dir = fs.realpathSync(tmpd(path.join(os.tmpdir(), "graphic-root-")));
   const bin = path.join(dir, "bin"), rec = (n) => path.join(dir, `${n}.rec`);
   fs.mkdirSync(bin);
   const sh = (name, body) => fs.writeFileSync(path.join(bin, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
@@ -475,7 +484,7 @@ test("root drop: refused without valid ids, setpriv or a home, nothing started",
   assert.deepEqual([fs.statSync(target).mode, fs.statSync(target).uid], [before.mode, before.uid], "the link's target is untouched");
   assert.doesNotMatch(fs.readFileSync(g.shim, "utf8"), /\b(chown|chmod|chgrp|command -v)\b/, "the shim changes no owner or mode and looks nothing up on PATH");
   // the Node side: the same refusals, before anything is written
-  const spDir = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-sp-"));
+  const spDir = tmpd(path.join(os.tmpdir(), "graphic-sp-"));
   fs.writeFileSync(path.join(spDir, "setpriv"), "#!/bin/sh\n", { mode: 0o755 });
   assert.deepEqual(RR.chromeUser({ ...IDS, PATH: spDir }, 1000), { root: false });
   assert.deepEqual(RR.chromeUser({ ...IDS, PATH: spDir }, 0), { root: true, uid: 1234, gid: 5678, setpriv: path.join(spDir, "setpriv") });
@@ -531,7 +540,7 @@ test("chromeHome: root only; <root 0711 mkdtemp>/home 0700, lchown'd (never chow
   assert.equal(RR.chromeHome({ root: false }), null);
   if (process.platform === "win32") return;
   const me = { root: true, uid: process.getuid(), gid: process.getgid() }; // chown to ourselves works without root
-  const base = fs.mkdtempSync("/tmp/graphic-home-base-"); // /tmp: every parent searchable (the macOS user temp dir is 0700)
+  const base = tmpd("/tmp/graphic-home-base-"); // /tmp: every parent searchable (the macOS user temp dir is 0700)
   fs.chmodSync(base, 0o755);
   const calls = [];
   const [lchown, chown] = [fs.lchownSync, fs.chownSync];
@@ -560,7 +569,7 @@ test("chromeHome: root only; <root 0711 mkdtemp>/home 0700, lchown'd (never chow
 
 test("releaseChromeHome: kills every process of the uid (as the uid) BEFORE removing the home; only our own dirs", () => {
   const user = { root: true, uid: 1234, gid: 5678, setpriv: "/x/setpriv" };
-  const mk = () => { const p = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-chrome-")); fs.mkdirSync(path.join(p, "home")); return path.join(p, "home"); };
+  const mk = () => { const p = tmpd(path.join(os.tmpdir(), "graphic-chrome-")); fs.mkdirSync(path.join(p, "home")); return path.join(p, "home"); };
   const h = mk();
   const seen = [];
   const scans = [];
@@ -573,7 +582,7 @@ test("releaseChromeHome: kills every process of the uid (as the uid) BEFORE remo
   const h2 = mk();
   assert.deepEqual(RR.releaseChromeHome(h2, { root: false }, { spawn: () => assert.fail("no kill when not root"), scan: () => assert.fail("no scan") }), { ok: true, kill: null, left: [] });
   assert.equal(fs.existsSync(path.dirname(h2)), false);
-  const other = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-other-"));
+  const other = tmpd(path.join(os.tmpdir(), "graphic-other-"));
   RR.releaseChromeHome(other, { root: false });
   assert.equal(fs.existsSync(other), true, "a dir that is not ours stays");
   assert.deepEqual(RR.releaseChromeHome(null, user, { spawn: () => assert.fail() }), { ok: true, kill: null, left: [] });
@@ -601,7 +610,7 @@ test("releaseChromeHome: kills every process of the uid (as the uid) BEFORE remo
   assert.match(RR.releaseChromeHome(hn, { ...user, setpriv: null }, { scan: () => [] }).error, /no setpriv to kill/);
   assert.equal(fs.existsSync(hn), true);
   // the killer: the system kill (absolute, executable), else this node
-  const kd = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-kill-"));
+  const kd = tmpd(path.join(os.tmpdir(), "graphic-kill-"));
   fs.writeFileSync(path.join(kd, "noexec"), "", { mode: 0o644 });
   fs.writeFileSync(path.join(kd, "kill"), "#!/bin/sh\n", { mode: 0o755 });
   assert.deepEqual(RR.uidKiller([path.join(kd, "missing"), path.join(kd, "noexec"), path.join(kd, "kill")]), [path.join(kd, "kill"), "-9", "-1"]);
@@ -614,7 +623,7 @@ test("uidProcesses: live processes of a real uid", { skip: process.platform === 
 });
 
 test("holdHostLock: exclusive, released on release() and when the holder crashes; refuses a symlink; hostLockPath", { skip: process.platform === "win32" }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-lock-"));
+  const dir = tmpd(path.join(os.tmpdir(), "graphic-lock-"));
   const file = path.join(dir, "graphic-chrome-1234.lock");
   const a = await RR.holdHostLock(file);
   assert.equal(fs.statSync(file).mode & 0o777, 0o600);
@@ -637,7 +646,7 @@ test("holdHostLock: exclusive, released on release() and when the holder crashes
   await assert.rejects(RR.holdHostLock(file, { timeoutMs: 300 }).then(async (l) => { const d = RR.holdHostLock(file, { timeoutMs: 300 }); try { await d; } finally { l.release(); } }), /not free after 0 s/);
   const link = path.join(dir, "link.lock");
   fs.symlinkSync(path.join(dir, "target"), link);
-  await assert.rejects(RR.holdHostLock(link), /cannot use the host lock .*link\.lock/);
+  await assert.rejects(RR.holdHostLock(link).then((l) => l.release()), /cannot use the host lock .*link\.lock/); // (released if it ever resolves: no hang)
   assert.equal(fs.existsSync(path.join(dir, "target")), false, "nothing created through the link");
   assert.equal(RR.hostLockPath(1234, { run: path.join(dir, "no-run"), tmp: "/t" }), "/t/graphic-chrome-1234.lock");
   assert.equal(RR.hostLockPath(1234, { run: dir, tmp: "/t" }), path.join(dir, "graphic-chrome-1234.lock"));
@@ -650,7 +659,7 @@ test("renderGraphic as root: refused before anything when the drop is not set up
   assert.deepEqual([bad.r.ok, bad.r.codes, bad.r.reasons, bad.r.stage, bad.calls, calls], [false, ["R12"], [G.reason("R12n", { message: RR.ROOT_REFUSAL })], "setup", { render: 0, probe: 0 }, []]);
   assert.equal(fs.existsSync(path.join(bad.work, "build")), false, "nothing written");
   const root = { root: true, uid: 1234, gid: 5678, setpriv: "/x/setpriv" };
-  const lockFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "graphic-lock-")), "graphic-chrome-1234.lock");
+  const lockFile = path.join(tmpd(path.join(os.tmpdir(), "graphic-lock-")), "graphic-chrome-1234.lock");
   const plain = await rg({});
   for (const [name, over, ok] of [
     ["clean", {}, true],
@@ -661,7 +670,7 @@ test("renderGraphic as root: refused before anything when the drop is not set up
   ]) {
     let home = null, got = null, user = null;
     const order = [];
-    const deps = { chromeUser: () => root, chromeHome: (u) => { order.push("home"); assert.equal(u, root); home = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-chrome-")) + "/home"; fs.mkdirSync(home); return home; },
+    const deps = { chromeUser: () => root, chromeHome: (u) => { order.push("home"); assert.equal(u, root); home = tmpd(path.join(os.tmpdir(), "graphic-chrome-")) + "/home"; fs.mkdirSync(home); return home; },
       hostLock: async (u) => { assert.equal(u, root); const l = await RR.holdHostLock(lockFile); order.push("lock"); return { release: () => { order.push("unlock"); l.release(); } }; },
       releaseChromeHome: (h, u) => { order.push("release"); assert.equal(u, root); return RR.releaseChromeHome(h, u, { scan: () => [], spawn: () => { order.push("kill"); return { status: 0 }; } }); },
       chromeShim: (d, exe, o) => { got = o; return "/fake/shim"; }, probeNetwork: (o) => { user = o.user; return { ok: true, lines: [] }; }, ...over };
@@ -681,7 +690,7 @@ test("renderGraphic as root: refused before anything when the drop is not set up
     const err = console.error; const said = []; console.error = (m) => said.push(m);
     let x;
     try {
-      x = await rg({ chromeUser: () => root, chromeHome: () => { home = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-chrome-")) + "/home"; fs.mkdirSync(home); return home; },
+      x = await rg({ chromeUser: () => root, chromeHome: () => { home = tmpd(path.join(os.tmpdir(), "graphic-chrome-")) + "/home"; fs.mkdirSync(home); return home; },
         hostLock: async () => ({ release: () => { unlocked = true; } }),
         releaseChromeHome: (h, u) => RR.releaseChromeHome(h, u, { scan: () => [999], spawn: () => ({ status: 0 }) }) });
     } finally { console.error = err; }
@@ -702,7 +711,7 @@ test("renderGraphic as root: refused before anything when the drop is not set up
   {
     const spans = [];
     const one = (tag) => rg({ chromeUser: () => root, hostLock: () => RR.holdHostLock(lockFile),
-      chromeHome: () => { spans.push(`${tag}+`); const h = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-chrome-")) + "/home"; fs.mkdirSync(h); return h; },
+      chromeHome: () => { spans.push(`${tag}+`); const h = tmpd(path.join(os.tmpdir(), "graphic-chrome-")) + "/home"; fs.mkdirSync(h); return h; },
       releaseChromeHome: (h, u) => { spans.push(`${tag}-`); return RR.releaseChromeHome(h, u, { scan: () => [], spawn: () => ({ status: 0 }) }); },
       runRender: async ({ out, markFile }) => { await new Promise((r) => setTimeout(r, 150)); fs.writeFileSync(out, "video"); fs.writeFileSync(markFile, "4242\n"); return { status: 0, secs: 1, log: "[BrowserManager] Browser launched (HeadlessChrome/152.0.7977.30, screenshot)\n" }; } });
     const [a, b] = await Promise.all([one("A"), one("B")]);
@@ -715,7 +724,7 @@ test("renderGraphic as root: refused before anything when the drop is not set up
 });
 
 test("findChrome: the pinned build, else the highest cached build not above its major", () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-home-"));
+  const home = tmpd(path.join(os.tmpdir(), "graphic-home-"));
   const base = path.join(home, ".cache", "hyperframes", "chrome", "chrome-headless-shell");
   const mk = (v) => { const d = path.join(base, `mac_arm-${v}`, "sub"); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell"), ""); return path.join(d, process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell"); };
   mk("153.0.1.1"); const v99 = mk("99.10.0.1"); mk("99.9.0.1"); const pin = mk(RR.PINNED_CHROME);
@@ -726,7 +735,7 @@ test("findChrome: the pinned build, else the highest cached build not above its 
 });
 
 test("findChrome: GRAPHIC_CHROME_PATH first, and a broken one refuses instead of falling back", async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-home-"));
+  const home = tmpd(path.join(os.tmpdir(), "graphic-home-"));
   const exeName = process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
   const cached = path.join(home, ".cache", "hyperframes", "chrome", "chrome-headless-shell", `mac_arm-${RR.PINNED_CHROME}`, "sub", exeName);
   fs.mkdirSync(path.dirname(cached), { recursive: true }); fs.writeFileSync(cached, "");
@@ -760,7 +769,7 @@ test("findChrome: GRAPHIC_CHROME_PATH first, and a broken one refuses instead of
   assert.equal(RR.findChrome({ GRAPHIC_CHROME_PATH: "" }, home), cached);
   assert.equal(RR.findChrome({}, home), cached);
   // renderGraphic: the throw is a setup refusal (R12n with the text), nothing probed or rendered
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-rg-"));
+  const work = tmpd(path.join(os.tmpdir(), "graphic-rg-"));
   const calls = { probe: 0, render: 0, shim: 0 };
   const r = await RR.renderGraphic({ content: goodGraphic(), html: "assets/graphics/good.html", outDir: path.join(work, "out"), buildDir: path.join(work, "build") }, {
     chromeUser: () => ({ root: false }),
@@ -793,7 +802,7 @@ function fakeDeps(over = {}) {
   return { deps, calls };
 }
 async function rg(over, opts = {}) {
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-rg-"));
+  const work = tmpd(path.join(os.tmpdir(), "graphic-rg-"));
   const { deps, calls } = fakeDeps(over);
   const r = await RR.renderGraphic({ content: goodGraphic(), html: "assets/graphics/good.html", outDir: path.join(work, "out"), buildDir: path.join(work, "build"), ...opts }, deps);
   const files = (d) => (fs.existsSync(d) ? fs.readdirSync(d).filter((f) => /\.(webm|mp4)$/.test(f)) : []);
@@ -853,7 +862,7 @@ test("killChromes: only live, verified Chrome PIDs > 1; a group only when Chrome
 });
 
 test("runRender: no inherited origins, the PID marker, a hung render is killed with its process group", { skip: process.platform === "win32" }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-run-"));
+  const dir = tmpd(path.join(os.tmpdir(), "graphic-run-"));
   const bin = path.join(dir, "fake-hf.cjs");
   fs.writeFileSync(bin, `const { spawn } = require("child_process");
     console.log("ORIGINS=" + process.env.GRAPHIC_RENDER_ORIGINS + " MARK=" + (process.env.GRAPHIC_SHIM_MARK ? "set" : "unset"));
@@ -955,4 +964,15 @@ test("CLI render lock: --lock / GRAPHIC_RENDER_LOCK re-run under lockf or flock,
   assert.equal(L.lockCommand(argv, { GRAPHIC_RENDER_LOCK_HELD: "/tmp/x.lock" }, { lockf: true }), null, "already held: run");
   assert.equal(L.lockCommand(argv.slice(0, 3), {}, { lockf: true }), null, "no lock asked for");
   assert.throws(() => L.lockCommand(argv, {}, { lockf: false, flock: false }), /neither lockf nor flock/);
+});
+
+test("CLI render lock: a lock already held is reported (an outer lockf + --lock on one file would wait forever); the host lock is another file", { skip: process.platform === "win32" }, async () => {
+  const L = await import("./graphic-lock.mjs");
+  const dir = tmpd(path.join(os.tmpdir(), "graphic-busy-"));
+  const p = path.join(dir, "render.lock");
+  assert.equal(L.busyHint(p), null, "free: no hint");
+  const held = await RR.holdHostLock(p); // stands in for an outer `lockf -k <p>`
+  try { assert.match(L.busyHint(p) || "", /is held by another process: waiting\. If this command was itself started under lockf \/ flock on .*render\.lock, it waits for itself forever/); } finally { held.release(); }
+  assert.notEqual(path.basename(RR.hostLockPath(0)), "phantasic-render.lock");
+  assert.match(path.basename(RR.hostLockPath(1234)), /^graphic-chrome-1234\.lock$/, "the engine's host lock never names the CLIs' render lock");
 });
