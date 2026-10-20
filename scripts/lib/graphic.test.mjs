@@ -717,7 +717,7 @@ test("renderGraphic as root: refused before anything when the drop is not set up
     assert.equal(x.r.ok, false);
     assert.equal(x.r.stage, "release");
     assert.deepEqual(x.r.codes, ["R12"]);
-    assert.match(x.r.reasons[0], /^network lock probe could not run: running as root: 1 process\(es\) of uid 1234 still alive \(999\); the graphic Chrome's home is KEPT at /);
+    assert.match(x.r.reasons[0], /^graphic Chrome could not be cleaned up safely: running as root: 1 process\(es\) of uid 1234 still alive \(999\); the graphic Chrome's home is KEPT at /);
     assert.deepEqual([x.out, x.r.file], [[], null], "no final file kept from this render");
     assert.equal(fs.existsSync(home), true, "the home is kept");
     assert.equal(unlocked, true, "the lock is released anyway");
@@ -968,7 +968,7 @@ test("REASONS are word for word the spec's tables (references/reel-json.md)", ()
   const PH = { html: "<html>", match: "<match>", bytes: "<bytes>", path: "<path>", n: "<n>", name: "<name>", value: "<value>", W: "<W>", H: "<H>", w: "<w>", h: "<h>",
     v: "<v>", s: "<s>", url: "<url>", message: "<message>", t: "<t>", a: "<a>", b: "<b>", i: "<i>", L: "<L>", code: "<code>", line: "<last log line>", k: "<k>",
     duration: "<duration>", platform: "<platform name>" };
-  const MORE = { G16: ["G16o"], G17: ["G17n"], R4: ["R4p"], R6: ["R6n", "R6L", "R6o"], R12: ["R12n"] };
+  const MORE = { G16: ["G16o"], G17: ["G17n"], R4: ["R4p"], R6: ["R6n", "R6L", "R6o"], R12: ["R12n", "R12c"] };
   const seen = new Set(), diffs = [];
   for (const line of sec.split("\n")) {
     const m = /^\| (G\d+|P\d+|R\d+|GW\d+)(?: \(v[\d.]+\))? \|/.exec(line);

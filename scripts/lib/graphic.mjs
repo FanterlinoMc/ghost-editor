@@ -78,6 +78,7 @@ export const REASONS = {
   R11: () => `graphic navigated away from its page: render refused`,
   R12: ({ url }) => `network lock is not in place (${url} was reachable from the render browser): graphic renders refused`,
   R12n: ({ message }) => `network lock probe could not run: ${message}`,
+  R12c: ({ message }) => `graphic Chrome could not be cleaned up safely: ${message}`,
   R13: ({ v, k }) => `the render used Chrome ${v}, the cache key says ${k}: nothing cached`,
   GW1: ({ v, duration }) => `graphic in ${v}s is outside 0..${duration}s, clamped`,
   GW2: ({ a, b }) => `graphic after cut: shortened from ${a}s to ${b}s (the graphic's length)`,
