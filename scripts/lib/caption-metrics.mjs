@@ -71,12 +71,12 @@ export const EMOJI_EM = 1.5;
 const PICTO = /[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}]/u;
 // a family's faces in @font-face order (latin, then latin-ext: the unicode-ranges do not overlap); the em advance of a
 // code point no face covers (the browser falls back to Noto Sans Arabic / Georgia) is `fallbackEm`, an emoji's EMOJI_EM
-function family(files, fallbackEm) {
-  const k = files.join("|");
+function family(files, fallbackEm, emojiEm = EMOJI_EM) {
+  const k = files.join("|") + `|${fallbackEm}|${emojiEm}`;
   if (!cache.has(k)) {
     const faces = files.map(face), memo = new Map();
     cache.set(k, (cp) => {
-      if (!memo.has(cp)) { let a = null; for (const f of faces) { a = f(cp); if (a != null) break; } memo.set(cp, a ?? (PICTO.test(String.fromCodePoint(cp)) ? EMOJI_EM : fallbackEm)); }
+      if (!memo.has(cp)) { let a = null; for (const f of faces) { a = f(cp); if (a != null) break; } memo.set(cp, a ?? (PICTO.test(String.fromCodePoint(cp)) ? emojiEm : fallbackEm)); }
       return memo.get(cp);
     });
   }
@@ -87,8 +87,9 @@ function family(files, fallbackEm) {
 // each one, the last included). Advances only: no kerning (GPOS), which Gloock applies as small negative pairs, so the
 // estimate runs at or over the drawn width (measured on a real reel's 12 blocks: +3..+23 px, 1-3%) - the safe side for
 // the tilt term, and a wrap only ever comes a little early, never late.
-export function textWidth(text, size, { files, fallbackEm = 0.6, letterSpacing = 0 }) {
-  const adv = family(files, fallbackEm);
+// `emojiEm` overrides EMOJI_EM (tests only: modelling one platform's real emoji advance; builds never pass it).
+export function textWidth(text, size, { files, fallbackEm = 0.6, letterSpacing = 0, emojiEm = EMOJI_EM }) {
+  const adv = family(files, fallbackEm, emojiEm);
   let em = 0;
   for (const ch of text) em += adv(ch.codePointAt(0)) + letterSpacing;
   return em * size;
@@ -97,18 +98,38 @@ export function textWidth(text, size, { files, fallbackEm = 0.6, letterSpacing =
 // One emoji as Chrome shapes it: a ZWJ sequence (👨‍👩‍👧), a flag (two regional indicators), a skin-tone or VS16 variant -
 // one unit, never broken inside. Its width is still the sum of its code points' (an over-estimate, the safe side).
 const EMOJI_UNIT = /(\p{Regional_Indicator}{1,2}|\p{Extended_Pictographic}[️⃣\p{Emoji_Modifier}]*(?:‍\p{Extended_Pictographic}[️⃣\p{Emoji_Modifier}]*)*|\p{Emoji_Modifier})/u;
-// a word's unbreakable pieces: the text between emoji, and each emoji unit
-export const wordPieces = (w) => w.split(EMOJI_UNIT).filter(Boolean);
+// a word's unbreakable pieces: the text between emoji, and each emoji unit - with the punctuation UAX #14 forbids a
+// break beside glued on: opening punctuation / quotes (OP, QU: "(", "[", "{", "“", "‘", "«", "¿", "¡", '"', "'") to the
+// emoji after them, closing ones (CL, CP, EX, IS, QU: ")", "]", "}", "”", "’", "»", "!", "?", ",", ".", ":", ";", "…",
+// '"', "'") to the emoji before them. "(😂)" is one piece: Chrome never breaks between "(" and the emoji.
+const OPEN = /[(\[{“‘«¿¡"']+$/u, CLOSE = /^[)\]}”’»!?,.:;…"']+/u;
+export const wordPieces = (w) => {
+  const parts = w.split(EMOJI_UNIT).filter(Boolean);
+  const emoji = (t) => EMOJI_UNIT.test(t) && t.replace(EMOJI_UNIT, "") === "";
+  const out = [];
+  for (let i = 0; i < parts.length; i++) {
+    let t = parts[i];
+    if (!emoji(t)) { out.push(t); continue; }
+    const prev = out.length && !emoji(out[out.length - 1]) ? out[out.length - 1].match(OPEN) : null;
+    if (prev) { out[out.length - 1] = out[out.length - 1].slice(0, -prev[0].length); if (!out[out.length - 1]) out.pop(); t = prev[0] + t; }
+    const next = i + 1 < parts.length && !emoji(parts[i + 1]) ? parts[i + 1].match(CLOSE) : null;
+    if (next) { t += next[0]; parts[i + 1] = parts[i + 1].slice(next[0].length); }
+    out.push(t);
+  }
+  return out.filter(Boolean);
+};
 
-// Line breaking -> line widths in px, for a width: max-content box clamped by max-width. Break opportunities: between
-// word spans (<wbr>, no space characters) and around an emoji inside a word (line-break class ID). Each word is
-// `wordPad` em wider for its side margins (half each side); a single over-long piece stays on its own line.
-// The count is an UPPER bound over how Chromes break a word that holds an emoji run (mac-45 CP5: Windows Chrome put
-// "to be 😂 x 22" on 4 lines where greedy packing gives 3), so two policies run and the one with more lines wins:
-//   packed: greedy over every piece (the run starts on the line before it, as macOS Chrome does)
-//   whole:  a word that does not fit the rest of the line starts a new one; if it is wider than a line it is then
-//           split greedily at its own pieces (the run moves down first, then wraps, as Windows Chrome did)
-// A word without emoji is one piece, so both policies agree on every plain-text caption.
+// Line breaking -> line widths in px, for a width: max-content box clamped by max-width. Each word is `wordPad` em
+// wider for its side margins (half each side). Between words (<wbr>) Chrome can always break. INSIDE a word that holds
+// emoji, where it can break is not something the model can know: it depends on Chrome's ICU line-break data, not on
+// UAX #14 alone (Chrome 152 breaks between 😂😂 but never between ✨✨, 💯💯, ⭐⭐, ✅✅, ❌❌ or ⚡⚡, and between 😂 and ✨
+// it does), and on Windows "to be 😂 x 22" took 4 lines where greedy packing gives 3 (mac-45 CP5). So the count is the
+// WORST over every set of break opportunities inside such words: the adversary may glue any run of consecutive
+// pieces into one unbreakable chunk, and Chrome then fills each line greedily (it breaks at the last opportunity that
+// fits; a chunk wider than a line overflows on its own line). Exact by dynamic programming over (piece, line start).
+// The pieces (wordPieces) are only ever split where Chrome may break or finer, which keeps it an upper bound; glued
+// punctuation just trims choices Chrome never has. A word without emoji is one piece: no choice, plain greedy, so
+// every plain-text caption counts exactly as before.
 export function wrapLines(words, size, maxWidth, opts) {
   const pad = (opts.wordPad ?? 0) * size / 2;
   const ws = words.map((w) => {
@@ -116,21 +137,27 @@ export function wrapLines(words, size, maxWidth, opts) {
     if (!parts.length) return [2 * pad];
     return parts.map((t, i) => textWidth(t, size, opts) + (i === 0 ? pad : 0) + (i === parts.length - 1 ? pad : 0));
   });
-  const run = (whole) => {
-    const lines = [];
-    let cur = 0;
-    const put = (pw) => { if (cur > 0 && cur + pw > maxWidth) { lines.push(cur); cur = pw; } else cur += pw; };
-    for (const ps of ws) {
-      const ww = ps.reduce((x, y) => x + y, 0);
-      if (!whole || ps.length === 1 || cur + ww <= maxWidth) { ps.forEach(put); continue; }
-      if (cur > 0) { lines.push(cur); cur = 0; }
-      ps.forEach(put);
+  const flat = [], wordEnd = [];
+  ws.forEach((ps) => { const e = flat.length + ps.length; ps.forEach((x) => { flat.push(x); wordEnd.push(e); }); });
+  const total = flat.reduce((x, y) => x + y, 0), n = flat.length;
+  const pre = [0]; flat.forEach((x) => pre.push(pre[pre.length - 1] + x));
+  // best(i, s): most line BREAKS still to come, with the next chunk starting at piece i and the current line holding
+  // pieces s..i-1 (s === i: an empty line). A chunk is i..j-1, j at most the end of i's word.
+  const memo = new Map();
+  const best = (i, s) => {
+    if (i >= n) return 0;
+    const k = i * (n + 1) + s;
+    if (memo.has(k)) return memo.get(k);
+    let r = 0;
+    for (let j = i + 1; j <= wordEnd[i]; j++) {
+      const c = pre[j] - pre[i], cur = pre[i] - pre[s];
+      r = Math.max(r, cur > 0 && cur + c > maxWidth ? 1 + best(j, i) : best(j, s));
     }
-    if (cur > 0 || !lines.length) lines.push(cur);
-    return lines;
+    memo.set(k, r);
+    return r;
   };
-  const packed = run(false), whole = run(true);
-  return whole.length > packed.length ? whole : packed;
+  const lines = 1 + best(0, 0);
+  return lines === 1 ? [total] : Array(lines).fill(maxWidth);
 }
 
 // How far a box drawn by an element of `w` x `h` (outer group, origin at its centre unless `scale` < 1, which sets
@@ -155,8 +182,8 @@ export function drawnExtent({ w, h, deg = 0, scale = 1, padX = 0 }) {
 // margin 0 0.12em; inner .cap-in padding 6px 20px 12px, margin 0 -20px; tilt as `rotate` on the outer group).
 // -> { up, down, h: up + down, lines, w }: the band [top - up, top + down] the drawn box covers.
 export const CLIPPING = { files: ["gloock-latin.woff2", "gloock-latin-ext.woff2"], fallbackEm: 0.6, letterSpacing: -0.01, wordPad: 0.24, lineHeight: 1.08, padTop: 6, padBottom: 12, padX: 20 };
-export function clippingExtent(words, { size, maxWidth, deg = 0, scale = 1 }) {
-  const m = CLIPPING;
+export function clippingExtent(words, { size, maxWidth, deg = 0, scale = 1, emojiEm }) {
+  const m = emojiEm ? { ...CLIPPING, emojiEm } : CLIPPING;
   const lines = wrapLines(words, size, maxWidth, m);
   // the group is width: max-content clamped by max-width, so a block that wraps is max-width wide (Chrome: 820 px on a
   // 2- and a 3-line block whose longest line is ~640), not its longest line: the tilt term uses that width

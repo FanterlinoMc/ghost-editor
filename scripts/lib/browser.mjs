@@ -17,7 +17,8 @@ import { resolveHyperframes } from "./graphic-render.mjs";
 
 function kids(dir) { try { return fs.readdirSync(dir).map((n) => path.join(dir, n)); } catch { return []; } }
 
-export function findPuppeteer() {
+// npxTimeout: how long the last fallback (npx resolving the pinned hyperframes) may take; offline, npm waits ~5 min
+export function findPuppeteer({ npxTimeout } = {}) {
   const cands = [];
   if (process.env.PUPPETEER_CORE_DIR) cands.push(process.env.PUPPETEER_CORE_DIR);
   const npxRoots = [path.join(process.env.LOCALAPPDATA || "", "npm-cache", "_npx"), path.join(os.homedir(), ".npm", "_npx")];
@@ -28,7 +29,7 @@ export function findPuppeteer() {
   // the engine's own resolution: the pinned hyperframes CLI (as the graphic renderer finds it), and the puppeteer-core
   // its package resolves (hoisted next to it in the npx tree)
   try {
-    let dir = path.dirname(resolveHyperframes());
+    let dir = path.dirname(resolveHyperframes(npxTimeout ? { timeout: npxTimeout } : undefined));
     while (dir !== path.dirname(dir) && !fs.existsSync(path.join(dir, "package.json"))) dir = path.dirname(dir);
     return createRequire(path.join(dir, "package.json"))("puppeteer-core");
   } catch (e) {
