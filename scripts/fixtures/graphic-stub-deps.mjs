@@ -10,6 +10,7 @@ import { execFileSync } from "node:child_process";
 const V = "0.0.0-stub";
 const frames = (dir) => { const m = /data-duration="([\d.]+)"/.exec(fs.readFileSync(path.join(dir, "index.html"), "utf8")); return m ? +m[1] : 1; };
 export const deps = {
+  chromeUser: () => ({ root: false }), // the stub never launches Chrome, so it runs the same under any uid
   findChrome: () => "/stub/chrome",
   chromeShim: () => "/stub/shim",
   chromeVersion: () => V,
