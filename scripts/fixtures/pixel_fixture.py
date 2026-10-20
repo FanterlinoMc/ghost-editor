@@ -43,7 +43,7 @@ def scene(v):
         "face": dict(FACE), "dets_shift": 0, "black": [], "freeze": None, "clip_audio": False,
         "takes": [{"a": 0.0, "b": 2.0}, {"a": 3.0, "b": 5.0}],
         "words": [["hello", 0.2, 0.6], ["there", 0.7, 1.2], ["second", 1.6, 1.95], ["line", 3.1, 3.5], ["end", 3.6, 3.9]],
-        "size": (W, H), "extra_text": None, "draw_shift": 0, "skip_ink": set(), "early_graphic": False, "box_white": False,
+        "size": (W, H), "extra_text": None, "blob": False, "ink": INK, "box": BOX, "draw_shift": 0, "skip_ink": set(), "early_graphic": False, "box_white": False,
     }
     if v == "px0":
         s["size"] = (W, H - 2)
@@ -56,7 +56,7 @@ def scene(v):
     elif v == "px4":
         s["caps"][0] = caption("cg0", 0.2, 1.4, "HELLO THERE", 160)
     elif v == "px5":
-        s["box_white"] = True
+        s["box_white"], s["box"] = True, (240, 240, 236)
     elif v == "px6":
         s["caps"][0]["fs"] = 30.0
     elif v == "px7":
@@ -69,6 +69,14 @@ def scene(v):
         s["caps"].append(caption("cg2", 2.5, 3.7, "UNDER INSERT", 270))
     elif v == "px9":
         s["draw_shift"] = 30
+    elif v == "px9-blob":   # CP4 regression: a bright blob (a pearl necklace) beside a CENTRED caption is not the caption
+        s["blob"] = True
+    elif v == "px5-close":   # CP4 regression: ink #808080 on a box #6e6e6e (inside the old 40-level ink tolerance)
+        s["ink"], s["box"] = (128, 128, 128), (110, 110, 110)
+    elif v == "px14-caps":   # CP4 regression: a frozen picture still shows the previous caption: PX14 only
+        s["caps"][1] = caption("cg1", 1.6, 2.2, "SECOND LINE", 270)
+        s["caps"].append(caption("cg2", 2.25, 2.9, "THIRD ONE", 270))
+        s["freeze"] = (60, 90)
     elif v == "px10":
         s["extra_text"] = {"el": "#lyr-t", "text": "OFF THE LEFT EDGE", "cap": False, "lines": [[-50.0, 200.0, 120.0, 30.0]], "clip": None, "op": 1}
     elif v == "px11":
@@ -118,15 +126,29 @@ def caps_visible(s, c, t):
 
 
 def draw_caption(img, c, s):
-    gx, gy, gw, gh = c["group"]
     dx = s["draw_shift"]
-    if s["box_white"]:   # white captions on a white card, no outline
-        img[gy - 16:gy + gh + 16, gx - 16 + dx:gx + gw + 16 + dx] = (240, 240, 236)
-    else:
-        img[gy:gy + gh, gx + dx:gx + gw + dx] = BOX
+    bx = box_rect(c, s)
+    img[bx[1]:bx[1] + bx[3], bx[0] + dx:bx[0] + bx[2] + dx, :3] = s["box"]
+    if img.shape[2] == 4:
+        img[bx[1]:bx[1] + bx[3], bx[0] + dx:bx[0] + bx[2] + dx, 3] = 255
     for (x, y, w, h) in c["words"]:
-        for lx in range(x + 1, x + w - 4, 9):   # "letters": 6 px strokes, 3 px apart
-            img[y + 4:y + h - 4, lx + dx:lx + 6 + dx] = INK
+        for lx in range(x + 1 + (y % 3), x + w - 4, 9 + (x % 2)):   # "letters": 6 px strokes, uneven gaps (a pattern to match)
+            img[y + 4:y + h - 4, lx + dx:lx + 6 + dx, :3] = s["ink"]
+
+
+def box_rect(c, s):
+    gx, gy, gw, gh = c["group"]
+    return [gx - 16, gy - 16, gw + 32, gh + 32] if s["box_white"] else [gx, gy, gw, gh]
+
+
+def template(c, s):
+    """the probe's image of the block alone (transparent around it), clip = group rect grown 16 px"""
+    gx, gy, gw, gh = c["group"]
+    x, y, w, h = max(0, gx - 16), max(0, gy - 16), gw + 32, gh + 32
+    im = np.zeros((H, W, 4), np.uint8)
+    s2 = dict(s, draw_shift=0)
+    draw_caption(im, c, s2)
+    return [x, y, w, h], im[y:y + h, x:x + w]
 
 
 def render(s, d):
@@ -137,8 +159,9 @@ def render(s, d):
     for n in range(N):
         t = n / FPS
         img = background(n)
-        if s["freeze"] and s["freeze"][0] <= n < s["freeze"][1]:
-            img = background(s["freeze"][0])
+        if s["freeze"] and s["freeze"][0] < n < s["freeze"][1]:   # the whole picture, captions included, held
+            frames.append(frames[s["freeze"][0]].copy())
+            continue
         fy0, fx0 = max(0, s["face"]["top"]), max(0, s["face"]["left"])
         if s["face"]["right"] > 0:
             img[fy0:s["face"]["bottom"], fx0:s["face"]["right"]] = (200, 160, 130)
@@ -153,11 +176,14 @@ def render(s, d):
                 continue
             draw_caption(img, c, s)
         lo = f0 - 1 if s["early_graphic"] else f0
-        if lo <= n < f1 and not (s["freeze"] and s["freeze"][0] <= n < s["freeze"][1]):
+        if lo <= n < f1:
             gf = gframe(max(0, n - f0)).astype(np.float32)
             a = gf[..., 3:4] / 255.0
             reg = img[g["y"]:g["y"] + 60, g["x"]:g["x"] + 80].astype(np.float32)
             img[g["y"]:g["y"] + 60, g["x"]:g["x"] + 80] = (gf[..., :3] * a + reg * (1 - a)).round().astype(np.uint8)
+        if s["blob"]:   # bright blobs in the ink colour beside the caption's box, like pearls on a necklace
+            for cx in (55, 70, 205, 218):
+                img[278:290, cx:cx + 10] = s["ink"]
         if n in s["black"]:
             img = np.zeros_like(img)
         frames.append(np.ascontiguousarray(img[:h, :w]))
@@ -236,8 +262,10 @@ def main():
         for c in s["caps"]:
             if not (c["t0"] <= t < c["t1"]):
                 continue
-            words = [{"id": f"{c['id']}w{i}", "rect": [float(x) for x in r], "op": 1, "color": "rgb(255, 255, 255)", "fs": c["fs"]} for i, r in enumerate(c["words"])]
-            groups.append({"id": c["id"], "rect": [float(x) for x in c["group"]], "op": 1, "words": words})
+            ic, bc = s["ink"], s["box"]
+            words = [{"id": f"{c['id']}w{i}", "rect": [float(x) for x in r], "op": 1, "color": f"rgb({ic[0]}, {ic[1]}, {ic[2]})", "fs": c["fs"]} for i, r in enumerate(c["words"])]
+            groups.append({"id": c["id"], "rect": [float(x) for x in c["group"]], "op": 1, "words": words,
+                           "box": {"color": f"rgb({bc[0]}, {bc[1]}, {bc[2]})", "alpha": 1, "rect": [float(x) for x in box_rect(c, s)]}})
             if not hidden:
                 for wd, word in zip(words, c["text"].split(" ", 1)):
                     text.append({"el": "#" + wd["id"], "text": word, "cap": True, "lines": [wd["rect"]], "clip": None, "op": 1})
@@ -246,7 +274,17 @@ def main():
         graphics = {x["id"]: {"rect": [float(x["box"][k]) for k in ("x", "y", "w", "h")], "op": 1 if x["f0"] <= n < x["f1"] else 0} for x in gr}
         samples[str(n)] = {"capsOp": 0 if hidden else 1, "groups": groups, "graphics": graphics, "text": text, "covers": []}
         dets[str(n)] = [fc["top"], fc["bottom"], fc["left"] + s["dets_shift"], fc["right"] + s["dets_shift"]]
-    probe = {"v": 1, "chrome": "fixture", "geometry_sha256": hashlib.sha256(gbytes).hexdigest(), "html_sha256": None, "frames": plan["frames"], "samples": samples}
+    templates = {}
+    os.makedirs(b("pixel_probe_caps"), exist_ok=True)
+    import cv2
+    for c in s["caps"]:
+        n = plan["caps"][c["id"]][1]
+        clip, im = template(c, s)
+        name = f"{n}-{c['id']}.png"
+        cv2.imwrite(b(os.path.join("pixel_probe_caps", name)), cv2.cvtColor(im, cv2.COLOR_RGBA2BGRA))
+        templates[c["id"]] = {"frame": n, "file": f"pixel_probe_caps/{name}", "clip": clip}
+    probe = {"v": 1, "chrome": "fixture", "geometry_sha256": hashlib.sha256(gbytes).hexdigest(), "html_sha256": None, "frames": plan["frames"],
+             "refused": [], "samples": samples, "templates": templates}
     open(b("pixel_probe.json"), "w").write(pixel_check.canon(probe))
     json.dump(dets, open(b("test_detections.json"), "w"))
     write_graphics(s, d)

@@ -300,10 +300,6 @@ def rel_lum(rgb):
     return 0.2126 * c[..., 0] + 0.7152 * c[..., 1] + 0.0722 * c[..., 2]
 
 
-def ink_mask(img, color):
-    return np.abs(img.astype(np.int16) - color).max(axis=-1) <= 40
-
-
 def zones_of(geo):
     W, H, z = geo["W"], geo["H"], geo["zones"]
     # owner answer 3 (2026-10-19): the action column is the right-hand column in the LOWER half only (safezone.mjs)
@@ -576,12 +572,19 @@ class Check:
 
     def run_probe(self):
         fd, fpath = tempfile.mkstemp(suffix=".json")
+        tm = {}
+        for cid, fs_ in self.plan["caps"].items():
+            tm.setdefault(str(fs_[1]), []).append(cid)   # PX9: each block's middle sample
         with os.fdopen(fd, "w") as f:
-            json.dump({"frames": self.plan["frames"]}, f)
+            json.dump({"frames": self.plan["frames"], "templates": tm}, f)
         try:
             r = subprocess.run(["node", os.path.join(HERE, "pixel_probe.mjs"), self.proj, "--frames", fpath], capture_output=True, text=True)
             if r.returncode:
-                why = ((r.stderr or r.stdout).strip().splitlines() or ["(no output)"])[-1].replace("pixel_probe: ", "")[:300]
+                lines = [ln.strip() for ln in (r.stderr + "\n" + r.stdout).splitlines() if ln.strip()]
+                # the probe's own message (its last "pixel_probe: ..." line), else a thrown "Error: ..." line, never a stack frame
+                why = next((ln[len("pixel_probe: "):] for ln in reversed(lines) if ln.startswith("pixel_probe: ")), None) \
+                    or next((ln for ln in lines if re.match(r"^\w*Error\b", ln)), None) or (lines[-1] if lines else f"exit {r.returncode}, no output")
+                why = why[:300]
                 if r.returncode == 4:
                     raise ProbeUnavailable(why)
                 raise RuntimeError(why)
@@ -705,12 +708,11 @@ class Check:
                 area = sum(w["rect"][2] * w["rect"][3] for w in vis_words)
                 inkpx, inks = 0, []
                 for w in vis_words:
-                    col = parse_color(w["color"])
+                    col, tol = self.ink_tol(w, gr)
                     x0, y0, x1, y1 = rect_int(w["rect"], W, H)
                     if col is None or x1 <= x0 or y1 <= y0:
                         continue
-                    m = ink_mask(img[y0:y1, x0:x1], col)
-                    inkpx += int(m.sum())
+                    inkpx += int((np.abs(img[y0:y1, x0:x1].astype(np.int16) - col).max(axis=-1) <= tol).sum())
                 cov = inkpx / max(1.0, area)
                 self.m["px8a"].setdefault(cid, {})[f] = (r2(cov), k)
                 # PX5 contrast at all three samples
@@ -727,7 +729,7 @@ class Check:
                 self.m["px11c"].setdefault(cid, {})[f] = (int(zpx), zn)
                 if k == 1:
                     self.m["px6"][cid] = (f, min(w["fs"] for w in vis_words))
-                    self.m["px9"][cid] = (f, self.centre(img, gr, vis_words))
+                    self.m["px9"][cid] = (f, self.centre(img, gr, cid))
 
         # ---- captions inside a hidden window ----
         for wi in self.hidden_samples.get(f, []):
@@ -752,11 +754,11 @@ class Check:
                     area = sum(w["rect"][2] * w["rect"][3] for w in gr["words"]) or 1.0
                     inkpx = 0
                     for w in gr["words"]:
-                        col = parse_color(w["color"])
+                        col, tol = self.ink_tol(w, gr)
                         wx0, wy0, wx1, wy1 = rect_int(w["rect"], W, H)
                         if col is None or wx1 <= wx0 or wy1 <= wy0:
                             continue
-                        inkpx += int(ink_mask(img[wy0:wy1, wx0:wx1], col).sum())
+                        inkpx += int((np.abs(img[wy0:wy1, wx0:wx1].astype(np.int16) - col).max(axis=-1) <= tol).sum())
                     self.m["px8b"].setdefault((gr["id"], wi), {})[f] = ("ink", r2(inkpx / area), why)
 
         # ---- PX3 face in frame (grid) ----
@@ -808,7 +810,19 @@ class Check:
         d = float(np.abs(img[y0:y0 + h, x0:x0 + w].astype(np.int16) - rgb)[solid].mean())
         return (r2(d) <= 12, r2(d), r2(share), op)
 
+    def ink_tol(self, w, gr):
+        """the ink colour tolerance: 40 levels, but under half the distance to the caption's own box colour, so a box
+        close to the ink is never counted as ink"""
+        col = parse_color(w["color"])
+        box = gr.get("box")
+        bc = parse_color(box["color"]) if box else None
+        if col is None or bc is None:
+            return col, 40
+        return col, max(2, min(40, int(np.abs(col - bc).max()) // 2 - 1))
+
     def contrast(self, img, gr, vis_words, cov):
+        """PX5: median luminance of the ink vs of what is behind it. With an opaque box (the probe gives its colour): the
+        box's own pixels (inside its rect, closer to the box colour than to the ink). Else the halo, 4-12 px from the ink."""
         import cv2
         if cov < 0.02:
             return None
@@ -817,59 +831,63 @@ class Check:
         crop = img[y0:y1, x0:x1]
         ink = np.zeros(crop.shape[:2], bool)
         for w in vis_words:
-            col = parse_color(w["color"])
+            col, tol = self.ink_tol(w, gr)
             wx0, wy0, wx1, wy1 = rect_int(w["rect"], W, H)
             wx0, wy0, wx1, wy1 = max(wx0, x0), max(wy0, y0), min(wx1, x1), min(wy1, y1)
             if col is None or wx1 <= wx0 or wy1 <= wy0:
                 continue
-            ink[wy0 - y0:wy1 - y0, wx0 - x0:wx1 - x0] |= ink_mask(img[wy0:wy1, wx0:wx1], col)
+            ink[wy0 - y0:wy1 - y0, wx0 - x0:wx1 - x0] |= np.abs(img[wy0:wy1, wx0:wx1].astype(np.int16) - col).max(axis=-1) <= tol
         if not ink.any():
             return None
-        dist = cv2.distanceTransform((~ink).astype(np.uint8), cv2.DIST_L2, 3)
-        halo = (dist >= 4) & (dist <= 12)
-        if not halo.any():
-            return None
-        li, lb = float(np.median(rel_lum(crop[ink]))), float(np.median(rel_lum(crop[halo])))
+        box = gr.get("box")
+        bg = None
+        if box and box.get("alpha", 1) >= 0.99:
+            bc = parse_color(box["color"])
+            bx0, by0, bx1, by1 = rect_int(box["rect"], W, H, grow=-3)
+            if bx1 > bx0 and by1 > by0:
+                sub = img[by0:by1, bx0:bx1].astype(np.int16)
+                ink_c = parse_color(vis_words[0]["color"])
+                near_box = np.abs(sub - bc).max(axis=-1) < np.abs(sub - ink_c).max(axis=-1)
+                if near_box.sum() >= 20:
+                    bg = sub[near_box]
+        if bg is None:
+            dist = cv2.distanceTransform((~ink).astype(np.uint8), cv2.DIST_L2, 3)
+            halo = (dist >= 4) & (dist <= 12)
+            if not halo.any():
+                return None
+            bg = crop[halo]
+        li, lb = float(np.median(rel_lum(crop[ink]))), float(np.median(rel_lum(bg)))
         return r2((max(li, lb) + 0.05) / (min(li, lb) + 0.05))
 
-    def centre(self, img, gr, vis_words):
-        """PX9: the ink's horizontal centre in the group's band (grown 64 px each side: a race moves the drawn text, not
-        the probe's layout, by up to ~50 px)"""
-        W, H = self.geo["W"], self.geo["H"]
-        G = 64
-        x0, y0, x1, y1 = rect_int(gr["rect"], W, H, grow=12, growx=G)
-        crop = img[y0:y1, x0:x1]
-        ink = np.zeros(crop.shape[:2], bool)
-        for col in {tuple(parse_color(w["color"]).tolist()) for w in vis_words if parse_color(w["color"]) is not None}:
-            ink |= ink_mask(crop, np.array(col, np.int16))
-        inkcol = ink.sum(axis=0) >= 3
-        # where the words are drawn: the shift (within +-G px) that best lays the probe's word columns over the ink
-        # columns; then only the ink inside the group's rect at that shift counts (light footage beside a caption is
-        # not the caption)
-        n = inkcol.shape[0]
-        exp = np.zeros(n + 2 * G, bool)
-        for w in vis_words:
-            a, b = int(math.floor(w["rect"][0])) - x0 + G, int(math.ceil(w["rect"][0] + w["rect"][2])) - x0 + G
-            exp[max(0, a):max(0, b)] = True
-        best = None
-        for dx in range(-G, G + 1):
-            sc = int((inkcol & exp[G - dx:G - dx + n]).sum())
-            key = (sc, -abs(dx), dx)
-            if best is None or key > best[0]:
-                best = (key, dx)
-        dx = best[1]
-        gx0, gx1 = int(math.floor(gr["rect"][0])) - x0 + dx - 4, int(math.ceil(gr["rect"][0] + gr["rect"][2])) - x0 + dx + 4
-        keep = np.zeros(n, bool)
-        keep[max(0, gx0):max(0, gx1)] = True
-        cols = np.where(inkcol & keep)[0]
-        if not len(cols):
+    def centre(self, img, gr, cid):
+        """PX9: where the caption is drawn. The probe's image of the block alone (box, text, shadow, as Chrome draws it)
+        is matched against the render in a band +-64 px around the probe's place (a race moves the drawn block, not the
+        layout); light footage beside it (a pearl necklace) is not the caption and does not move the match.
+        -> the drawn centre x, or None (no template, or no confident match: 'not checked')"""
+        import cv2
+        t = (self.probe.get("templates") or {}).get(cid)
+        if not t:
             return None
-        cl_ = np.split(cols, np.where(np.diff(cols) > 25)[0] + 1)
-        while len(cl_) > 1 and cl_[0][-1] - cl_[0][0] < 14:
-            cl_ = cl_[1:]
-        while len(cl_) > 1 and cl_[-1][-1] - cl_[-1][0] < 14:
-            cl_ = cl_[:-1]
-        return x0 + (int(cl_[0][0]) + int(cl_[-1][-1])) / 2
+        tp = os.path.join(self.build, t["file"])
+        im = cv2.imread(tp, cv2.IMREAD_UNCHANGED)
+        if im is None or im.ndim != 3 or im.shape[2] != 4:
+            return None
+        x, y, w, h = t["clip"]
+        G, V = 64, 8
+        W, H = self.geo["W"], self.geo["H"]
+        bx0, by0, bx1, by1 = max(0, x - G), max(0, y - V), min(W, x + w + G), min(H, y + h + V)
+        band = cv2.cvtColor(np.ascontiguousarray(img[by0:by1, bx0:bx1]), cv2.COLOR_RGB2GRAY).astype(np.float32)
+        tg = cv2.cvtColor(im[..., :3], cv2.COLOR_BGR2GRAY).astype(np.float32)
+        mask = (im[..., 3] >= 128).astype(np.float32)
+        if band.shape[0] < tg.shape[0] or band.shape[1] < tg.shape[1] or mask.sum() < 50:
+            return None
+        res = cv2.matchTemplate(band, tg, cv2.TM_CCOEFF_NORMED, mask=mask)
+        res = np.nan_to_num(res, nan=-1.0, posinf=-1.0, neginf=-1.0)
+        _, best, _, loc = cv2.minMaxLoc(res)
+        if best < 0.5:
+            return None
+        dx = bx0 + loc[0] - x
+        return gr["rect"][0] + gr["rect"][2] / 2 + dx
 
     def wants_face(self, f):
         return not self.cover.get(f) and self.face_at(f) is not None and (self.test_dets is not None or self.det_path is not None)
@@ -913,6 +931,32 @@ class Check:
             R["PX11"].notes.append(f"captions and text not checked ({self.no_probe}); graphics from geometry boxes")
             for rid in ("PX1", "PX12"):
                 R[rid].notes.append(f"graphic rects and opacity from geometry.json ({self.no_probe})")
+
+        # a frozen or black frame shows an older picture (or none): the caption pixel rules (PX5, PX8, PX9) do not read
+        # it; PX13 / PX14 report the frames themselves
+        gp0 = res.get("grey_pass")
+        if isinstance(gp0, tuple):
+            bad = set()
+            for a, b in list(gp0[0]) + list(gp0[1]) + ([(gp0[2], g["total"])] if gp0[2] is not None else []):
+                bad |= set(range(rnd(a * fps), rnd(b * fps) + 1))
+            dropped = set()
+            for key in ("px5", "px8a", "px8b"):
+                for sub in self.m[key].values():
+                    for f in [f for f in sub if f in bad]:
+                        del sub[f]
+                        dropped.add(f)
+            for cid, (f, x) in list(self.m["px9"].items()):
+                if f in bad:
+                    del self.m["px9"][cid]
+                    dropped.add(f)
+            for sub in self.m["px12"].values():   # a held picture cannot show a graphic's next frame either
+                for f in [f for f in sub if f in bad]:
+                    del sub[f]
+                    dropped.add(f)
+            if dropped:
+                fr = sorted(dropped)
+                for rid in ("PX5", "PX8", "PX9", "PX12"):
+                    R[rid].notes.append(f"frame frozen or black: {len(fr)} sample(s) not checked, t={fr[0] / fps:.3f}s-{fr[-1] / fps:.3f}s")
 
         # PX2 first: it sets the face rules' confidence
         p2 = R["PX2"]
@@ -1071,6 +1115,7 @@ class Check:
         if p9.status != "skipped":
             for cid, (f, x) in sorted(self.m["px9"].items()):
                 if x is None:
+                    p9.notes.append(f"caption {cid}: no confident match of the probe's image of the block (not checked)")
                     continue
                 p9.checked += 1
                 c = self.cap_by_id[cid]

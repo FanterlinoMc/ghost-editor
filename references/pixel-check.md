@@ -53,9 +53,26 @@ pixel_check.py <project> --print-samples FILE        the sample list (2.4) as {"
 **(built)** `--probe auto` (default) runs `pixel_probe.mjs` itself for the sample list; `--probe use` reads an existing
 `build/pixel_probe.json` (PX0 when it was made for another `geometry.json` or sample list). The face model is
 `library/models/face_detection_yunet_2023mar.onnx` (`face_track.py`'s pinned file, sha256 checked; never downloaded
-here), or `--yunet` / `$PIXEL_CHECK_YUNET`; without it PX2 is `skipped` with the reason. Offline: the probe answers the
-page's CDN GSAP from a vendor folder (`$PIXEL_PROBE_VENDOR`, or the engine's `vendor/` once the mac/bundle-gsap layout
-is merged: `manifest.json` url -> file, sha256 checked) and refuses every other non-file request.
+here), or `--yunet` / `$PIXEL_CHECK_YUNET`; without it PX2 is `skipped` with the reason.
+
+**(built, CP3) Network and GSAP.** Nothing is vendored or shipped. The probe serves the project folder itself on
+127.0.0.1 (media refused: layout does not need it) and aborts every other request, except the runtime libraries
+`scripts/lib/runtime-libs.mjs` lists: GSAP at exactly the URL build.mjs writes (`GSAP_URL`, the same constant) and its
+pinned sha256. Node gets those bytes BEFORE Chrome starts: from `$PIXEL_PROBE_VENDOR` (optional local override, a
+folder with a `manifest.json`; must match the same sha), else a cache in `$PIXEL_PROBE_CACHE` / `os.tmpdir()` keyed by
+the sha, else the CDN (8 s timeout), and answers Chrome's request with them. A sha mismatch exits 3 (PX0, nothing
+served). Not reachable, or a remote script the probe may not fetch, exits 4: "probe unavailable", and the checker
+runs its pixel-only rules (PX4-PX6, PX8-PX10 `skipped` with the reason; PX1 / PX11 / PX12 use the geometry boxes;
+`report.probe = { status: "unavailable", reason }`). A missing dependency fails before Chrome starts or at the load
+event (~0.1 s), never after a long wait. Aborted URLs are listed in `pixel_probe.json` `refused`. A probe failure's
+PX0 message is the probe's own message line, not a stack frame.
+
+**(built, CP3) Chrome.** As the renderer launches it: `--no-sandbox` only on Linux (hyperframes passes it on Linux
+only). As root (the server): the graphic render's uid drop from `lib/graphic-render.mjs`, unchanged (GRAPHIC_CHROME_UID
+/ GID via setpriv, the per-uid host lock, the lingering-process sweep, a fresh uid-owned home, its network-lock flags,
+every process of the uid killed afterwards). Chrome never runs as root. The main reel renderer itself runs Chrome as
+root with `--no-sandbox` on Linux; the probe is stricter because it opens a user's page outside a render. The root path
+is written to the graphic render's tested functions but has not run on the Linux server yet.
 
 Exit 0 = `pass` or `warn`, 2 = `fail`, 3 = could not check (PX0 failed; the report is still written).
 `--frames-dir` writes a PNG of each error's worst frame with the boxes drawn (for the reviewer; not part of the
@@ -253,6 +270,12 @@ pixel inside the group rect grown by 12 px (an outline, shadow or caption box is
 it). Ratio = `(max + 0.05) / (min + 0.05)`; the block's value is its worst sample. Caption text is >= 32 px, so the
 bar is WCAG's large-text one. Error: < 3.0. Warn: < 4.5. Skipped (not failed) when the ink is under 2 % of the word
 rects (PX8 owns that case).
+**(built, CP4)** The probe gives the caption's own box (the nearest element from the words up to the group with a
+background alpha >= 0.5: its colour, alpha, rect). Ink = pixels in the word rects within `min(40, half the ink-to-box
+colour distance - 1)` of the ink colour, so a box close to the ink is never ink (CP4: ink #808080 on #6e6e6e read
+1.00:1, now 1.29-1.31:1, truth 1.29). With an opaque box, `L_bg` = the median of the box's own pixels (inside its rect
+shrunk 3 px, closer to the box colour than to the ink); without one (or a translucent one), the halo as above. PX8
+uses the same ink tolerance.
 `PX5 caption <id> "<text>" contrast <r>:1 at t=<t>s (min <thr>:1)`, `<thr>` 3.00 for the error, 4.50 for the warn.
 
 **PX6 caption text size.** From the probe at each block's middle sample: the smallest visible word's font size in
@@ -277,10 +300,19 @@ clusters at gaps > 25 px, end clusters narrower than 14 px dropped (stray specks
 intended centre). Warn: `|d| > 8`. Error: `|d| > 16`. (mac-42: good renders measured within +-4 px of 540, the
 race +22 to +50.)
 `PX9 caption <id> "<text>" is <d> px off centre at t=<t>s (<x_ink> vs <cx>)`.
-**(built)** A render race moves the drawn text, not the probe's layout, so the ink is searched in the group's band
-grown 64 px each side, and only the ink inside the group's rect at the best shift (the shift, within +-64 px, that lays
-the probe's word columns over the most ink columns) counts: light footage beside a caption is not the caption.
-Checked against `m42w-cp4/meas.py` on the mac-42 renders: the same 8 blocks, within 0-7 px.
+**(built, CP4)** Not ink columns: light footage in the ink colour beside a caption (CP4: a pearl necklace) moved the
+ink extent and reported centred captions at -62, -48 and -10 px. The probe now draws each block alone at its middle
+sample (everything else hidden, transparent page: box, text and shadow exactly as Chrome draws them; PNGs in
+`build/pixel_probe_caps/`, listed in `pixel_probe.json` `templates`, not hashed into it), and the checker matches that
+image (masked by its alpha, normalised cross-correlation on grey) against the render within +-64 px horizontally and
++-8 px vertically: a race moves the drawn block, not the layout. `x_ink` = the probe's group centre + the best shift.
+A best score under 0.5 is "not checked" for that block, never a finding. Checked on the mac-42 renders: the same 8
+race blocks as `m42w-cp4/meas.py` (+21 to +39 px, within 1-7 px of it), none on the fixed render, none on the CP4
+pearl reels. Cost: the screenshots are shared over 4 tabs (~0.4 s for 22 blocks).
+
+**(built, CP4) Frozen or black frames.** A sample inside a `freezedetect` or `blackdetect` run (before the `stillOk`
+exemptions) shows an older picture or none: PX5, PX8, PX9 and PX12 do not read it (`not_checked`, with the span);
+PX13 / PX14 report the frames.
 
 **PX10 text off the canvas or clipped.** At every probe sample, for every probe text line rect: outside
 `[0, W] x [0, H]` by > 2 px, or outside its clip rect by > 2 px, on two consecutive samples. Error.
@@ -421,7 +453,13 @@ shown one frame early. PX13 3 black frames. PX14 1.1 s frozen inside a take. PX1
 audio driven into clipping. The clean reel passes with every rule checked (`checked > 0`), and the same render checked
 twice gives the same `report_sha256`. The probe itself is tested on a small page in the renderer's Chrome (skipped
 when it is not cached). Mutation proofs (each rule's threshold or comparison broken in a copy of the checker; the
-suite must fail): 14 of 14 caught.
+suite must fail): 18 of 18 caught, including PX9 put back to the ink extent (the CP4 pearl bug), PX5's ink
+tolerance put back to 40 levels, and the frozen-frame skip removed. CP3 / CP4 additions: the probe with real GSAP
+through the fetch path (network; skipped with the reason when offline), a sha mismatch (exit 3, under 3 s, nothing
+written), GSAP not reachable (exit 4, under 3 s), a remote script the probe may not fetch, a vendor copy with the wrong
+sha, an unknown URL aborted and listed, the checker's pixel-only run when the probe is unavailable, the geometry
+`error` field, and three regression fixtures: bright blobs beside a centred caption (no PX9), ink #808080 on a box
+#6e6e6e (PX5 about 1.29:1), a frozen picture over a caption change (PX14 only).
 
 `scripts/lib/geometry.test.mjs`: the face through the placer's camera (base x snap around the origin) and its age,
 the skipped windows, the hidden-caption reasons, joins / holds / outro, whole-frame graphic windows and the floor frame

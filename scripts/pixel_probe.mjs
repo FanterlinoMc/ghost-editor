@@ -100,7 +100,8 @@ async function main() {
   const geoBytes = fs.readFileSync(path.join(proj, "build", "geometry.json"));
   const geo = JSON.parse(geoBytes);
   if (geo.error) stop(2, `build/geometry.json has no geometry: ${geo.error}`);
-  const frames = JSON.parse(fs.readFileSync(framesFile, "utf8")).frames;
+  const req = JSON.parse(fs.readFileSync(framesFile, "utf8"));
+  const frames = req.frames, templates = req.templates || {};   // templates: { "<frame>": ["cg4", ...] } (PX9)
   const html = path.join(proj, "index.html");
   const htmlText = fs.readFileSync(html, "utf8");
   // the page's remote scripts: each must be a listed runtime library, verified now (no Chrome yet: a failure is fast)
@@ -128,36 +129,44 @@ async function main() {
     const puppeteer = findPuppeteer();
     browser = await puppeteer.launch({ executablePath: exe, headless: "shell", args, defaultViewport: { width: geo.W, height: geo.H, deviceScaleFactor: 1 },
       env: { ...process.env, GRAPHIC_RENDER_ORIGINS: origin } });
-    const page = await browser.newPage();
-    await page.setRequestInterception(true);
     const refused = new Set();
-    page.on("request", (r) => {
-      const u = r.url();
-      if (u.startsWith(`http://${origin}/`) && !MEDIA.test(new URL(u).pathname)) return r.continue();
-      if (/^(data|blob):/.test(u)) return r.continue();
-      const b = libs.get(u);
-      if (b) return r.respond({ status: 200, contentType: "application/javascript", body: b });
-      if (!MEDIA.test(u.split("?")[0])) refused.add(u);
-      return r.abort();
-    });
-    await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
-    await page.goto(`http://${origin}/index.html`, { waitUntil: "load", timeout: 60000 });
-    // a missing dependency shows at the load event: fail now, not after a wait
-    const ready = () => page.evaluate(() => !!(window.__timelines && window.__timelines.main && window.gsap));
-    if (!(await ready())) {
-      await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: refused.size ? 500 : 5000 })
-        .catch(() => stop(4, `probe unavailable: the page has no timeline / GSAP after load${refused.size ? ` (refused: ${[...refused].sort().join(", ")})` : ""}`));
-    }
-  await page.evaluate(() => document.fonts.ready.then(() => 0));
+    // one page = the composition loaded, paused, footage paused, window.__pxSeek(t) seeking the way the renderer does
+    const openPage = async () => {
+      const page = await browser.newPage();
+      await page.setRequestInterception(true);
+      page.on("request", (r) => {
+        const u = r.url();
+        if (u.startsWith(`http://${origin}/`) && !MEDIA.test(new URL(u).pathname)) return r.continue();
+        if (/^(data|blob):/.test(u)) return r.continue();
+        const b = libs.get(u);
+        if (b) return r.respond({ status: 200, contentType: "application/javascript", body: b });
+        if (!MEDIA.test(u.split("?")[0])) refused.add(u);
+        return r.abort();
+      });
+      await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
+      await page.goto(`http://${origin}/index.html`, { waitUntil: "load", timeout: 60000 });
+      // a missing dependency shows at the load event: fail now, not after a wait
+      const ready = () => page.evaluate(() => !!(window.__timelines && window.__timelines.main && window.gsap));
+      if (!(await ready())) {
+        await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: refused.size ? 500 : 5000 })
+          .catch(() => stop(4, `probe unavailable: the page has no timeline / GSAP after load${refused.size ? ` (refused: ${[...refused].sort().join(", ")})` : ""}`));
+      }
+      await page.evaluate(() => document.fonts.ready.then(() => 0));
+      await page.evaluate(() => {
+        const tl = window.__timelines.main; tl.pause();
+        for (const m of document.querySelectorAll("video, audio")) { m.pause(); m.removeAttribute("autoplay"); }
+        const clips = [...document.querySelectorAll(".clip[data-start]")];
+        window.__pxSeek = (t) => {
+          tl.totalTime(t + 0.001, true); tl.totalTime(t, false);
+          for (const c of clips) { const s = +c.dataset.start, d = +c.dataset.duration; c.style.visibility = t >= s - 1e-6 && t < s + d - 1e-6 ? "" : "hidden"; }
+        };
+      });
+      return page;
+    };
+    const page = await openPage();
     const chrome = await browser.version();
     const result = await page.evaluate((frames, fps, W, H, graphics) => {
-    const tl = window.__timelines.main; tl.pause();
-    for (const m of document.querySelectorAll("video, audio")) { m.pause(); m.removeAttribute("autoplay"); }
-    const clips = [...document.querySelectorAll(".clip[data-start]")];
-    const seek = (t) => {
-      tl.totalTime(t + 0.001, true); tl.totalTime(t, false);
-      for (const c of clips) { const s = +c.dataset.start, d = +c.dataset.duration; c.style.visibility = t >= s - 1e-6 && t < s + d - 1e-6 ? "" : "hidden"; }
-    };
+    const seek = window.__pxSeek;
     const q = (x) => Math.round(x * 100) / 100;
     const R = (r) => [q(r.left), q(r.top), q(r.width), q(r.height)];
     const root = document.getElementById("root") || document.body;
@@ -203,7 +212,15 @@ async function main() {
           const r = w.getBoundingClientRect(), cs = getComputedStyle(w), oh = w.offsetHeight || r.height || 1;
           words.push({ id: w.id, rect: R(r), op: effOp(w), color: cs.color, fs: q(parseFloat(cs.fontSize) * (r.height / oh)) });
         }
-        s.groups.push({ id: g.id, rect: R(g.getBoundingClientRect()), op: go, words });
+        // the caption's own box: the nearest element from the first word up to the group with an opaque-ish background
+        let box = null;
+        for (let x = g.querySelector(".w"); x; x = x === g ? null : x.parentElement) {
+          if (x === g || x.contains(g.querySelector(".w"))) {
+            const m = getComputedStyle(x).backgroundColor.match(/rgba?\(([^)]+)\)/), p = m ? m[1].split(",").map(Number) : [0, 0, 0, 0];
+            if ((p.length < 4 ? 1 : p[3]) >= 0.5) { box = { color: `rgb(${p[0]}, ${p[1]}, ${p[2]})`, alpha: p.length < 4 ? 1 : p[3], rect: R(x.getBoundingClientRect()) }; break; }
+          }
+        }
+        s.groups.push({ id: g.id, rect: R(g.getBoundingClientRect()), op: go, words, ...(box ? { box } : {}) });
       }
       for (const [id, e] of graphicEls) if (e) s.graphics[id] = { rect: R(e.getBoundingClientRect()), op: effOp(e) };
       const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: (t) => t.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT });
@@ -229,7 +246,46 @@ async function main() {
     }
     return out;
   }, frames, geo.fps, geo.W, geo.H, geo.graphics.map((g) => ({ id: g.id, selector: g.selector })));
-    const doc = { v: 1, chrome, geometry_sha256: sha(geoBytes), html_sha256: sha(Buffer.from(htmlText)), frames, refused: [...refused].sort(), samples: result };
+    // PX9 templates: each requested caption group alone (everything else hidden, transparent background), as Chrome
+    // draws it at that frame: box, text and shadow. PNGs beside the JSON; the JSON lists the files, not their bytes
+    // (a screenshot can differ by an anti-aliasing level run to run; the checker's result is the integer shift).
+    const tdir = path.join(path.dirname(out), "pixel_probe_caps");
+    fs.rmSync(tdir, { recursive: true, force: true });
+    const tmpl = {};
+    const want = Object.entries(templates).flatMap(([n, ids]) => ids.map((id) => [+n, id])).sort((p, q) => p[0] - q[0] || (p[1] < q[1] ? -1 : 1));
+    if (want.length) {
+      // a screenshot waits for a frame (~50 ms each): the blocks are shared over up to 4 tabs, each its own page
+      const tabs = [page, ...(await Promise.all(Array.from({ length: Math.min(3, want.length - 1) }, openPage)))];
+      fs.mkdirSync(tdir, { recursive: true });
+      await Promise.all(tabs.map(async (pg, k) => {
+        // everything but the captions hidden ONCE, the page background transparent; per block: seek, only that group shown
+        const cdp = await pg.createCDPSession();
+        await cdp.send("Emulation.setDefaultBackgroundColorOverride", { color: { r: 0, g: 0, b: 0, a: 0 } });   // once per tab
+        await pg.evaluate(() => {
+          const st = document.createElement("style"); st.id = "__pxtmpl";
+          st.textContent = "html, body, #root { background: transparent !important; } #root > *:not(#caps):not(#ecaps) { visibility: hidden !important; }";
+          document.head.appendChild(st);
+        });
+        for (let i = k; i < want.length; i += tabs.length) {
+          const [n, id] = want[i];
+          const rect = await pg.evaluate((t, id) => {
+            window.__pxSeek(t);
+            for (const g of document.querySelectorAll(".cap-group")) if (g.id !== id) g.style.visibility = "hidden";
+            const e = document.getElementById(id); if (!e) return null;
+            const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height];
+          }, n / geo.fps, id);
+          if (!rect) continue;
+          const x = Math.max(0, Math.floor(rect[0] - 16)), y = Math.max(0, Math.floor(rect[1] - 16));
+          const w = Math.min(geo.W, Math.ceil(rect[0] + rect[2] + 16)) - x, h = Math.min(geo.H, Math.ceil(rect[1] + rect[3] + 16)) - y;
+          if (w <= 0 || h <= 0) continue;
+          const file = `${n}-${id}.png`;
+          const shot = await cdp.send("Page.captureScreenshot", { format: "png", clip: { x, y, width: w, height: h, scale: 1 }, optimizeForSpeed: true });
+          fs.writeFileSync(path.join(tdir, file), Buffer.from(shot.data, "base64"));
+          tmpl[id] = { frame: n, file: `pixel_probe_caps/${file}`, clip: [x, y, w, h] };
+        }
+      }));
+    }
+    const doc = { v: 1, chrome, geometry_sha256: sha(geoBytes), html_sha256: sha(Buffer.from(htmlText)), frames, refused: [...refused].sort(), samples: result, templates: tmpl };
     fs.mkdirSync(path.dirname(out), { recursive: true });
     fs.writeFileSync(out, canon(doc));
     console.log(`pixel_probe: ${frames.length} frames in ${Date.now() - t0} ms -> ${out}`);

@@ -94,6 +94,26 @@ test("PX11: the right-hand action column counts in the lower half only (safezone
   assert.equal(f.frame, 30);
 });
 
+test("PX9 regression (CP4): bright blobs in the ink colour beside a centred caption are not the caption", { skip }, () => {
+  const { rep, rule } = check("px9-blob");
+  assert.equal(rep.verdict, "pass", JSON.stringify(rep.summary));
+  assert.equal(rule("PX9").checked, 2);
+});
+
+test("PX5 regression (CP4): ink #808080 on a box #6e6e6e is 1.29:1, not 1.00:1", { skip }, () => {
+  const { rule } = check("px5-close");
+  const f = rule("PX5").findings[0];
+  assert.equal(rule("PX5").status, "error");
+  assert.ok(f.value >= 1.25 && f.value <= 1.35, f.message);   // truth 1.29 (WCAG on the two colours); the encode moves it a little
+});
+
+test("PX14 regression (CP4): a frozen picture over a caption change is PX14 only; caption pixel rules not checked there", { skip }, () => {
+  const { rep, rule } = check("px14-caps");
+  assert.equal(rule("PX14").status, "error");
+  for (const o of rep.rules) if (o.id !== "PX14") assert.equal(o.status, "pass", `${o.id}: ${JSON.stringify(o.findings)}`);
+  for (const id of ["PX8", "PX9"]) assert.ok((rule(id).not_checked || []).some((n) => /frame frozen or black/.test(n)), id);
+});
+
 test("PX8 clean insert: captions under a full-frame insert stay hidden", { skip }, () => {
   const { rep, rule } = check("insert");
   assert.equal(rep.verdict, "pass", JSON.stringify(rep.summary));
