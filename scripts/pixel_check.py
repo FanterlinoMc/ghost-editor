@@ -87,13 +87,14 @@ def sha256_file(p):
 
 
 # ---------------------------------------------------------------- sampling (2.4) -----------------------------------
-def sample_plan(geo):
-    """The fixed frame list, a pure function of geometry.json, plus which samples each rule family uses."""
+def sample_plan(geo, grid_s=0.5):
+    """The fixed frame list, a pure function of geometry.json (and the grid step), plus which samples each rule family
+    uses. grid: seconds between grid samples (--grid; 0.5 by default, 1.0 halves the grid where the cost demands it)."""
     fps, N = geo["fps"], geo["frames"]
     clamp = lambda f: min(max(f, 0), N - 1)
     grid, k = [], 0
     while True:
-        f = rnd(k * 0.5 * fps)
+        f = rnd(k * grid_s * fps)
         if f >= N:
             break
         grid.append(f)
@@ -502,7 +503,7 @@ class Check:
         if msgs:
             return self.finish_px0(msgs, T0)
         g = self.geo
-        self.plan = sample_plan(g)
+        self.plan = sample_plan(g, self.a.grid)
         fps, W, H = g["fps"], g["W"], g["H"]
         # ---- in parallel: the probe (Chrome), the grey pass, the audio, the graphic files ----
         res = {}
@@ -1161,11 +1162,16 @@ class Check:
             if self.templates_problem:
                 p9.notes.append(self.templates_problem)
             for cid, (f, x) in sorted(self.m["px9"].items()):
+                c = self.cap_by_id[cid]
                 if x is None:
-                    p9.notes.append(f"caption {cid}: no confident match of the probe's image of the block (not checked)")
+                    if (self.m["px8a"].get(cid, {}).get(f) or (1, 0))[0] < 0.02:
+                        p9.notes.append(f"caption {cid}: not drawn at t={tt(f):.3f}s (PX8 reports it)")
+                        continue
+                    # a drawn block that cannot be found is not a pass: a race that re-wraps the text would look like this
+                    p9.add("warn", cid, tt(f), f, None, 0.5, "score",
+                           f"PX9 caption {cid} \"{c['text']}\" could not be located at t={tt(f):.3f}s (no match of the probe's image of the block above 0.50): not checked")
                     continue
                 p9.checked += 1
-                c = self.cap_by_id[cid]
                 d = rnd(x - c["cx"])
                 if abs(d) > 8:
                     sev, thr = ("error", 16) if abs(d) > 16 else ("warn", 8)
@@ -1439,14 +1445,24 @@ class Check:
         rep = self.base_report()
         plan = getattr(self, "plan", None)
         if plan:
-            rep["sampling"] = {"grid_s": 0.5, "frames": len(plan["frames"]), "list_sha256": sha256_bytes(canon(plan["frames"]).encode())}
+            rep["sampling"] = {"grid_s": self.a.grid, "frames": len(plan["frames"]), "list_sha256": sha256_bytes(canon(plan["frames"]).encode())}
         rules = [self.rules[rid].out() for rid, _ in RULES]
         errs = sum(1 for r in rules for f in r["findings"] if f["severity"] == "error")
         wrns = sum(1 for r in rules for f in r["findings"] if f["severity"] == "warn")
         rep["verdict"] = "fail" if errs else "warn" if wrns else "pass"
-        if not px0:
-            rep["probe"] = {"status": "unavailable", "reason": self.no_probe} if getattr(self, "no_probe", None) else {"status": "ok"}
         rep["summary"] = {"errors": errs, "warnings": wrns, "rules": {r["id"]: r["status"] for r in rules}}
+        rep["complete"] = True
+        if px0:
+            rep["complete"], rep["incomplete_reason"] = False, "PX0: the inputs could not be checked"
+        else:
+            rep["probe"] = {"status": "unavailable", "reason": self.no_probe} if getattr(self, "no_probe", None) else {"status": "ok"}
+            if getattr(self, "no_probe", None):
+                # a report without the page's layout is never a clean pass: the studio / PC must not read it as one
+                k = sum(1 for r in rules if r["status"] == "skipped" and self.no_probe in " ".join(r.get("not_checked", [])))
+                rep["complete"], rep["incomplete_reason"] = False, f"probe unavailable: {k} caption/text rules not checked ({self.no_probe})"
+                rep["summary"]["note"] = f"probe unavailable: {k} caption/text rules not checked"
+                if rep["verdict"] == "pass":
+                    rep["verdict"] = "warn"
         rep["rules"] = rules
         rep["report_sha256"] = sha256_bytes(canon(rep).encode())
         total = int(round((time.time() - T0) * 1000))
@@ -1514,17 +1530,20 @@ def main(argv=None):
     ap.add_argument("--probe", choices=["auto", "use"], default="auto")
     ap.add_argument("--yunet")
     ap.add_argument("--print-samples", metavar="FILE")
+    ap.add_argument("--grid", type=float, default=0.5, help="seconds between grid samples (0.5; 1.0 if the measured cost exceeds the budget)")
     a = ap.parse_args(argv)
     if a.print_samples:
         geo = json.load(open(os.path.join(a.project, "build", "geometry.json")))
         with open(a.print_samples, "w") as f:
-            json.dump({"frames": sample_plan(geo)["frames"]}, f)
+            json.dump({"frames": sample_plan(geo, a.grid)["frames"]}, f)
         return 0
     if not a.render:
         ap.error("render.mp4 is required")
     rep = Check(a).run()
     v = rep["verdict"]
     s = rep["summary"]
+    if not rep.get("complete", True):
+        print(f"pixel check: INCOMPLETE: {rep['incomplete_reason']}")
     print(f"pixel check: {v} ({s['errors']} errors, {s['warnings']} warnings) in {rep['timing']['total_ms']} ms"
           + (f" = {rep['timing']['budget_pct']}% of the render" if "budget_pct" in rep["timing"] else ""))
     for r in rep["rules"]:

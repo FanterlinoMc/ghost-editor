@@ -39,7 +39,9 @@ grid step (0.5 s to 1.0 s), never the event samples.
 **(built) Measured** on the Mac mini (M4, 10 CPUs), process wall time including Python start, against the hyperframes
 `rendered in` time of the same reel (15.5-16.0 s for these 13-18 s reels). CP2 (before the caption images): 1.18-1.50 s,
 7.3-9.6 %. CP4 (with them, 2026-10-20): 1.54-1.56 s = 9.5-9.6 % with the box at load ~5 from other sessions, 1.6-2.1 s
-= 10.5-13.6 % at load 5-7. **Over budget under load**: the knob is the grid step (0.5 -> 1.0 s), not applied yet. The
+= 10.5-13.6 % at load 5-7; the CP4 verifier measured 9.2-10.7 % at load 5-6. Over budget under load, so the grid
+step is a CLI option (`--grid`, default 0.5 s, unchanged): the PC sets 1.0 on staging if the server's own measurement
+exceeds 10 %. The
 probe's layout samples (~0.45 s), the graphic files, the grey pass and the audio run in parallel; the decode starts when
 the probe's samples are written while the probe draws the caption images (PX9) over 4 tabs; YuNet runs on 4 threads
 beside the decode (one detector per thread, `cv2.setNumThreads(1)`).
@@ -50,7 +52,13 @@ beside the decode (one detector per thread, `cv2.setNumThreads(1)`).
 pixel_check.py <project> <render.mp4> [--out <project>/build/pixel_check.json] [--render-ms N] [--frames-dir DIR]
                [--probe auto|use] [--yunet MODEL.onnx]
 pixel_check.py <project> --print-samples FILE        the sample list (2.4) as {"frames": [...]}
+               [--grid S]                            seconds between grid samples, default 0.5
 ```
+
+**(built)** `--grid S` (default 0.5) is the cost knob of section 1: the grid samples of 2.4 at `round(k * S * fps)`.
+The event samples (captions, graphics, joins, hidden windows) never change. The default stays 0.5; the PC sets 1.0 on
+staging only if the server's measured cost exceeds 10 %. The report records it in `sampling.grid_s`; a probe made for
+another grid is a stale probe (PX0).
 
 **(built)** `--probe auto` (default) runs `pixel_probe.mjs` itself for the sample list; `--probe use` reads an existing
 `build/pixel_probe.json` (PX0 when it was made for another `geometry.json` or sample list). The face model is
@@ -61,8 +69,14 @@ here), or `--yunet` / `$PIXEL_CHECK_YUNET`; without it PX2 is `skipped` with the
 127.0.0.1 (media refused: layout does not need it) and aborts every other request, except the runtime libraries
 `scripts/lib/runtime-libs.mjs` lists: GSAP at exactly the URL build.mjs writes (`GSAP_URL`, the same constant) and its
 pinned sha256. Node gets those bytes BEFORE Chrome starts: from `$PIXEL_PROBE_VENDOR` (optional local override, a
-folder with a `manifest.json`; must match the same sha), else a cache in `$PIXEL_PROBE_CACHE` / `os.tmpdir()` keyed by
-the sha, else the CDN (8 s timeout), and answers Chrome's request with them. A sha mismatch exits 3 (PX0, nothing
+folder with a `manifest.json`; must match the same sha), else the cache, else the CDN (8 s timeout), and answers
+Chrome's request with them. **(built, CP3 security)** The cache (`scripts/lib/probe-cache.mjs`) never exists as root
+(the bytes stay in memory for the run). Otherwise it is a directory WE own, mode 0700, not a symlink, never group- or
+other-writable (`$PIXEL_PROBE_CACHE`, else `<tmpdir>/pixel-probe-cache-<uid>`); a directory that fails any check is
+not used. Reads open with O_NOFOLLOW | O_NONBLOCK and fstat (a regular file we own, at most 4 MB), so a planted link is
+never followed and a FIFO never hangs. Writes create a fresh random name with O_CREAT | O_EXCL | O_NOFOLLOW (mode
+0600) and rename() it over the final name, which replaces a planted link, never its target. The sha is checked on
+every read. A sha mismatch exits 3 (PX0, nothing
 served). Not reachable, or a remote script the probe may not fetch, exits 4: "probe unavailable", and the checker
 runs its pixel-only rules (PX4-PX6, PX8-PX10 `skipped` with the reason; PX1 / PX11 / PX12 use the geometry boxes;
 `report.probe = { status: "unavailable", reason }`). A missing dependency fails before Chrome starts or at the load
@@ -72,7 +86,9 @@ PX0 message is the probe's own message line, not a stack frame.
 **(built, CP3) Chrome.** As the renderer launches it: `--no-sandbox` only on Linux (hyperframes passes it on Linux
 only). As root (the server): the graphic render's uid drop from `lib/graphic-render.mjs`, unchanged (GRAPHIC_CHROME_UID
 / GID via setpriv, the per-uid host lock, the lingering-process sweep, a fresh uid-owned home, its network-lock flags,
-every process of the uid killed afterwards). Chrome never runs as root. The main reel renderer itself runs Chrome as
+every process of the uid killed afterwards), and first the R12 network probe through that shim (`probeNetwork`, as
+before every graphic render): the dropped Chrome and Node must fail to reach the probe URLs before the probe opens a
+user's page. Chrome never runs as root. The main reel renderer itself runs Chrome as
 root with `--no-sandbox` on Linux; the probe is stricter because it opens a user's page outside a render. The root path
 is written to the graphic render's tested functions but has not run on the Linux server yet.
 
@@ -308,7 +324,9 @@ sample (everything else hidden, transparent page: box, text and shadow exactly a
 `build/pixel_probe_caps/`, listed in `pixel_probe.json` `templates`, not hashed into it), and the checker matches that
 image (masked by its alpha, normalised cross-correlation on grey) against the render within +-64 px horizontally and
 +-8 px vertically: a race moves the drawn block, not the layout. `x_ink` = the probe's group centre + the best shift.
-A best score under 0.5 is "not checked" for that block, never a finding. Checked on the mac-42 renders: the same 8
+A best score under 0.5 means the drawn block could not be located: a `warn` finding ("could not be located ... not
+checked"), never a silent pass (a race that re-wraps the text would look like this). A block PX8 found not drawn at
+that sample is left to PX8. Checked on the mac-42 renders: the same 8
 race blocks as `m42w-cp4/meas.py` (+21 to +39 px, within 1-7 px of it), none on the fixed render, none on the CP4
 pearl reels. Cost: the screenshots are shared over 4 tabs (~0.4 s for 22 blocks).
 
@@ -397,6 +415,17 @@ Error: >= 3 runs. Warn: 1 or 2 runs.
 }
 ```
 
+**(built)** Top-level fields beyond the sketch above:
+- `complete` (bool) and, when false, `incomplete_reason`. A report is incomplete when PX0 failed ("PX0: the inputs could
+  not be checked", verdict `fail`, exit 3) or when the probe was unavailable ("probe unavailable: N caption/text rules
+  not checked (<why>)", N = 6: PX4, PX5, PX6, PX8, PX9, PX10). An incomplete report is never `pass`: its verdict is at
+  least `warn`, `summary.note` says "probe unavailable: N caption/text rules not checked", and the CLI prints
+  `pixel check: INCOMPLETE: ...` first. The studio / PC must not read `complete: false` as a full pass.
+- `probe`: `{ "status": "ok" }` or `{ "status": "unavailable", "reason": ... }` (absent on a PX0 stop).
+- `sampling.grid_s`: the `--grid` step used.
+- A rule's `not_checked`: why some of its samples or subjects were not checked (face-skip windows, frozen frames,
+  untestable PX12 edges, ...).
+
 One finding per (rule, subject, run of consecutive hits): `t` and `value` are the worst sample, `t_from` / `t_to`
 the run, `samples` its length. A rule keeps at most 50 findings, then `"truncated": <n>`.
 
@@ -455,7 +484,8 @@ shown one frame early. PX13 3 black frames. PX14 1.1 s frozen inside a take. PX1
 audio driven into clipping. The clean reel passes with every rule checked (`checked > 0`), and the same render checked
 twice gives the same `report_sha256`. The probe itself is tested on a small page in the renderer's Chrome (skipped
 when it is not cached). Mutation proofs (each rule's threshold or comparison broken in a copy of the checker; the
-suite must fail): 18 of 18 caught, including PX9 put back to the ink extent (the CP4 pearl bug), PX5's ink
+suite must fail): 18 of 18 caught (plus 8 of 8 on the probe cache's guards and PX9's unmatched-block warn: each
+guard removed in a copy, `lib/probe-cache.test.mjs` / the suite fails; a FIFO read without O_NONBLOCK hangs it), including PX9 put back to the ink extent (the CP4 pearl bug), PX5's ink
 tolerance put back to 40 levels, and the frozen-frame skip removed. CP3 / CP4 additions: the probe with real GSAP
 through the fetch path (network; skipped with the reason when offline), a sha mismatch (exit 3, under 3 s, nothing
 written), GSAP not reachable (exit 4, under 3 s), a remote script the probe may not fetch, a vendor copy with the wrong

@@ -14,8 +14,9 @@
 // Network: the page is served from 127.0.0.1 by this process (the project folder only). Every other request is
 // aborted, except the runtime libraries the page loads from a CDN that lib/runtime-libs.mjs lists (GSAP, the URL
 // build.mjs writes): Node gets those bytes BEFORE Chrome starts, from $PIXEL_PROBE_VENDOR (a folder with a
-// manifest.json, optional), else a cache in $PIXEL_PROBE_CACHE / os.tmpdir() keyed by sha256, else the CDN (8 s
-// timeout), checks the pinned sha256 and answers Chrome's request with them. Nothing is shipped or vendored.
+// manifest.json, optional), else a cache keyed by sha256 (lib/probe-cache.mjs: our own 0700 dir, no-follow reads and
+// exclusive writes; none at all as root), else the CDN (8 s timeout), checks the pinned sha256 and answers Chrome's
+// request with them. Nothing is shipped or vendored.
 //
 // Exit 0 = written. 3 = the library's bytes are not the pinned ones (integrity: the checker's PX0). 4 = unavailable
 // (a library not reachable, or the page needs a URL it may not load: the checker runs its pixel-only rules). 2 = other.
@@ -24,7 +25,8 @@
 // Chrome: as the renderer launches it (--no-sandbox only on Linux, where hyperframes passes it too). Running as root
 // (the server): through the graphic render's uid drop (lib/graphic-render.mjs: GRAPHIC_CHROME_UID / GID, setpriv, the
 // per-uid host lock, the lingering-process sweep, a fresh uid-owned home, the network-lock flags, every process of the
-// uid killed after), never Chrome as root.
+// uid killed after), never Chrome as root; and, as before every graphic render, the R12 network probe through that
+// shim first.
 // Output: rects in canvas px rounded to 0.01, sorted keys; deterministic for one index.html and one Chrome.
 
 import fs from "node:fs";
@@ -35,7 +37,8 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
 import { RUNTIME_LIBS } from "./lib/runtime-libs.mjs";
-import { chromeUser, chromeHome, chromeShim, releaseChromeHome, hostLock, sweepUid } from "./lib/graphic-render.mjs";
+import { cacheDir, cacheRead, cacheWrite } from "./lib/probe-cache.mjs";
+import { chromeUser, chromeHome, chromeShim, releaseChromeHome, hostLock, sweepUid, probeNetwork, sandboxLauncher } from "./lib/graphic-render.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -51,7 +54,6 @@ const stop = (code, msg) => { throw new Stop(code, msg); };
 const canon = (v) => Array.isArray(v) ? `[${v.map(canon).join(",")}]` : v && typeof v === "object" ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canon(v[k])}`).join(",")}}` : JSON.stringify(v);
 
 // ---- the runtime libraries, verified before Chrome starts ----
-const cacheDir = () => process.env.PIXEL_PROBE_CACHE || os.tmpdir();
 async function fetchBytes(url) {
   // tests only (node --test): PIXEL_PROBE_TEST_FETCH = a file whose bytes the "CDN" returns, or "fail"
   if (process.env.PIXEL_PROBE_TEST_FETCH && process.env.NODE_TEST_CONTEXT) {
@@ -73,12 +75,13 @@ export async function libraryBytes(url, want) {
       return { bytes: b, from: "vendor" };
     }
   }
-  const cached = path.join(cacheDir(), `pixel-probe-${want}.js`);
-  try { const b = fs.readFileSync(cached); if (sha(b) === want) return { bytes: b, from: "cache" }; } catch {}
+  const dir = cacheDir();   // null as root (no disk cache) or when no safe dir: memory only (lib/probe-cache.mjs)
+  const c = cacheRead(dir, want);
+  if (c && sha(c) === want) return { bytes: c, from: "cache" };
   let b;
   try { b = await fetchBytes(url); } catch (e) { stop(4, `probe unavailable: ${url} not reachable (${String(e.cause?.code || e.message).slice(0, 120)})`); }
   if (sha(b) !== want) stop(3, `${url}: fetched bytes have sha256 ${sha(b)}, pinned ${want} (not served)`);
-  try { const tmp = `${cached}.${process.pid}.tmp`; fs.writeFileSync(tmp, b); fs.renameSync(tmp, cached); } catch {}
+  cacheWrite(dir, want, b);
   return { bytes: b, from: "cdn" };
 }
 
@@ -123,6 +126,10 @@ async function main() {
       home = chromeHome(user);
       scratch = fs.mkdtempSync(path.join(os.tmpdir(), "pixel-probe-"));
       exe = chromeShim(path.join(scratch, "chrome"), exe, { home, setpriv: user.setpriv });
+      // R12, as before every graphic render: the dropped Chrome (and Node) must FAIL to reach the probe URLs before the
+      // probe opens a user's page through the same shim
+      const net = probeNetwork({ launcher: sandboxLauncher(process.env), shim: exe, user });
+      if (!net.ok) stop(2, `network lock not proven: ${net.refusal}`);
     } else if (process.platform === "linux") args.unshift("--no-sandbox");   // as hyperframes launches it on Linux
     server = await serve(fs.realpathSync(proj));
     const origin = `127.0.0.1:${server.address().port}`;

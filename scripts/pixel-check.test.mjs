@@ -44,6 +44,19 @@ test("clean reel: pass, every rule checked, exit 0", { skip }, () => {
   for (const r of rep.rules) { assert.equal(r.status, "pass", `${r.id}: ${JSON.stringify(r.findings)}`); assert.ok(r.checked > 0, `${r.id} checked nothing`); }
 });
 
+test("--grid 1.0 halves the grid samples (the cost knob); the default is 0.5 s", { skip }, () => {
+  const dir = path.join(ROOT, "grid");
+  const a = check("clean", { dir }).rep;
+  const r = spawnSync(PY, [CHECK, dir, path.join(dir, "render.mov"), "--probe", "use", "--grid", "1.0", "--out", path.join(dir, "g1.json")], { encoding: "utf8" });
+  assert.equal(a.sampling.grid_s, 0.5); assert.equal(a.complete, true);
+  // the probe was made for the 0.5 s list: a different list is a stale probe (PX0), so check the plan itself
+  const p = spawnSync(PY, [CHECK, dir, "--print-samples", path.join(dir, "s1.json"), "--grid", "1.0"], { encoding: "utf8" });
+  assert.equal(p.status, 0, p.stderr);
+  const n05 = a.sampling.frames, n10 = JSON.parse(fs.readFileSync(path.join(dir, "s1.json"), "utf8")).frames.length;
+  assert.ok(n10 < n05, `${n10} vs ${n05}`);
+  assert.match(JSON.parse(fs.readFileSync(path.join(dir, "g1.json"), "utf8")).rules[0].findings[0].message, /stale/);
+});
+
 test("determinism: the same render checked twice gives the same report_sha256", { skip }, () => {
   const dir = path.join(ROOT, "det");
   const a = check("clean", { dir }).rep, b = check("clean", { dir, make: false }).rep;
@@ -100,6 +113,20 @@ test("PX9 regression (CP4): bright blobs in the ink colour beside a centred capt
   const { rep, rule } = check("px9-blob");
   assert.equal(rep.verdict, "pass", JSON.stringify(rep.summary));
   assert.equal(rule("PX9").checked, 2);
+});
+
+test("PX9: a block whose image cannot be found in the render is a warn, never a silent pass", { skip }, () => {
+  const dir = path.join(ROOT, "px9-nomatch");
+  check("clean", { dir });
+  const idx = path.join(dir, "build", "pixel_probe_caps", "index.json"), t = JSON.parse(fs.readFileSync(idx, "utf8"));
+  const im = path.join(dir, "build", t.cg1.file);
+  // a caption image that is not what the render drew (a re-wrap): an unrelated pattern
+  spawnSync(PY, ["-c", `import cv2,numpy as np; r=np.random.default_rng(7); im=r.integers(0,255,(70,124,4),dtype=np.uint8); im[...,3]=255; cv2.imwrite(${JSON.stringify(im)}, im)`]);
+  const { rule } = check("clean", { dir, make: false });
+  const f = rule("PX9").findings.find((x) => x.subject === "cg1");
+  assert.equal(rule("PX9").status, "warn");
+  assert.ok(f && f.severity === "warn" && /could not be located/.test(f.message), JSON.stringify(rule("PX9")));
+  assert.equal(rule("PX9").checked, 1);
 });
 
 test("PX5 regression (CP4): ink #808080 on a box #6e6e6e is 1.29:1, not 1.00:1", { skip }, () => {
@@ -265,7 +292,20 @@ test("checker: probe unavailable -> the pixel-only rules still run, layout rules
   const rep = JSON.parse(fs.readFileSync(path.join(dir, "build", "pixel_check.json"), "utf8"));
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.equal(rep.probe.status, "unavailable"); assert.match(rep.probe.reason, /not reachable/);
+  // never readable as a clean pass
+  assert.equal(rep.complete, false); assert.match(rep.incomplete_reason, /^probe unavailable: 6 caption\/text rules not checked/);
+  assert.equal(rep.verdict, "warn"); assert.equal(rep.summary.note, "probe unavailable: 6 caption/text rules not checked");
+  assert.match(r.stdout, /^pixel check: INCOMPLETE: probe unavailable/m);
   const st = Object.fromEntries(rep.rules.map((x) => [x.id, x.status]));
   for (const id of ["PX4", "PX5", "PX6", "PX8", "PX9", "PX10"]) assert.equal(st[id], "skipped", id);
   for (const id of ["PX0", "PX1", "PX2", "PX3", "PX7", "PX11", "PX12", "PX13", "PX14", "PX15", "PX16"]) assert.equal(st[id], "pass", id);
+});
+
+test("probe: a symlink planted in its GSAP cache is never followed (victim untouched)", { skip: process.platform === "win32" ? "POSIX only" : chrome ? false : "no cached Chrome" }, () => {
+  const dir = probeDir("cache-link", gsapPage), cache = fs.mkdtempSync(path.join(ROOT, "cache-")), victim = path.join(ROOT, "victim.txt");
+  fs.writeFileSync(victim, "VICTIM");
+  fs.symlinkSync(victim, path.join(cache, `pixel-probe-${GSAP_SHA256}.js`));
+  const r = probe(dir, { PIXEL_PROBE_CACHE: cache, PIXEL_PROBE_TEST_FETCH: "fail" });
+  assert.equal(r.status, 4, r.stderr);
+  assert.equal(fs.readFileSync(victim, "utf8"), "VICTIM");
 });
