@@ -284,19 +284,92 @@ export function chromeHome(user, base = os.tmpdir()) {
   } catch (e) { fs.rmSync(parent, { recursive: true, force: true }); throw e; }
   return home;
 }
-// The end of a root render, on every path: first every process of the uid is killed (as the uid, kill(-1) reaches only
-// that uid's processes, and never the caller itself), then the home's root-owned parent is removed. Not root, or no
-// home: nothing. -> { kill: argv | null } (for tests; spawn is injectable)
-export function releaseChromeHome(home, user, { spawn: run = spawnSync } = {}) {
-  if (!home) return { kill: null };
-  let kill = null;
-  if (user && user.root && user.setpriv) {
-    kill = [user.setpriv, `--reuid=${user.uid}`, `--regid=${user.gid}`, "--clear-groups", "--inh-caps=-all", "--no-new-privs", "--", process.execPath, "-e", "try { process.kill(-1, 'SIGKILL'); } catch {}"];
-    run(kill[0], kill.slice(1), { cwd: "/", env: { PATH: "/usr/bin:/bin" }, stdio: "ignore", timeout: 30000, killSignal: "SIGKILL" });
+// The live processes of a REAL uid (zombies are dead and cannot run: skipped). Linux: /proc/*/status; elsewhere: ps.
+export function uidProcesses(uid) {
+  if (process.platform === "linux") {
+    const out = [];
+    for (const d of fs.readdirSync("/proc")) {
+      if (!/^\d+$/.test(d)) continue;
+      let st; try { st = fs.readFileSync(`/proc/${d}/status`, "utf8"); } catch { continue; }
+      const u = /^Uid:\s*(\d+)/m.exec(st), state = /^State:\s*(\S)/m.exec(st);
+      if (u && Number(u[1]) === uid && !(state && /[ZX]/.test(state[1]))) out.push(Number(d));
+    }
+    return out;
   }
+  const r = spawnSync("ps", ["-A", "-o", "pid=,ruid=,stat="], { encoding: "utf8", timeout: 10000 });
+  return String(r.stdout || "").split("\n").map((l) => l.trim().split(/\s+/)).filter((f) => f.length >= 3 && Number(f[1]) === uid && !/^Z/.test(f[2])).map((f) => Number(f[0]));
+}
+// The kill run as the uid: the system kill (absolute path, checked like setpriv), else this node (which the uid may not
+// be able to run, e.g. under /root: then the kill fails and the release says so).
+export function uidKiller(cands = ["/bin/kill", "/usr/bin/kill"]) {
+  const k = cands.find((f) => { try { fs.accessSync(f, fs.constants.X_OK); return fs.statSync(f).isFile(); } catch { return false; } });
+  return k ? [k, "-9", "-1"] : [process.execPath, "-e", "try { process.kill(-1, 'SIGKILL'); } catch {}"];
+}
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+// The end of a root render, on every path: every process of the uid is killed AS the uid (kill -9 -1 reaches only that
+// uid's processes, never the caller itself), then the uid must have no live process left (rescanned for up to 2 s);
+// only then is the home's root-owned parent removed. The kill not running (no setpriv, exec failure, exit other than
+// 0 / 1; 1 = nothing left to signal, the scan decides) or a survivor: the home is KEPT and ok is false.
+// Not root: the home (if any) is removed. -> { ok, kill: argv | null, left: [pid], error? } (spawn, scan injectable)
+export function releaseChromeHome(home, user, { spawn: run = spawnSync, scan = uidProcesses, killer = uidKiller() } = {}) {
+  if (!home) return { ok: true, kill: null, left: [] };
+  let kill = null, left = [];
+  const errors = [];
+  if (user && user.root) {
+    if (!user.setpriv) errors.push("no setpriv to kill the uid's processes");
+    else {
+      kill = [user.setpriv, `--reuid=${user.uid}`, `--regid=${user.gid}`, "--clear-groups", "--inh-caps=-all", "--no-new-privs", "--", ...killer];
+      const r = run(kill[0], kill.slice(1), { cwd: "/", env: { PATH: "/usr/bin:/bin" }, stdio: "ignore", timeout: 30000, killSignal: "SIGKILL" });
+      if (r.error || r.status === null || (r.status !== 0 && r.status !== 1)) errors.push(`the kill (${kill.join(" ")}) failed: ${r.error ? r.error.message : r.status === null ? `signal ${r.signal}` : `exit ${r.status}`}`);
+    }
+    left = scan(user.uid);
+    for (let i = 0; i < 20 && left.length; i++) { sleepSync(100); left = scan(user.uid); }
+    if (left.length) errors.push(`${left.length} process(es) of uid ${user.uid} still alive (${left.slice(0, 10).join(",")})`);
+  }
+  if (errors.length) return { ok: false, kill, left, error: `running as root: ${errors.join("; ")}; the graphic Chrome's home is KEPT at ${home}` };
   const parent = path.dirname(home);
   if (path.basename(home) === "home" && /^graphic-chrome-/.test(path.basename(parent))) fs.rmSync(parent, { recursive: true, force: true });
-  return { kill };
+  return { ok: true, kill, left };
+}
+// The per-uid host lock of root renders: /run/graphic-chrome-<uid>.lock when /run is writable, else in os.tmpdir().
+export function hostLockPath(uid, { run = "/run", tmp = os.tmpdir() } = {}) {
+  let dir = tmp;
+  try { fs.accessSync(run, fs.constants.W_OK); if (fs.statSync(run).isDirectory()) dir = run; } catch {}
+  return path.join(dir, `graphic-chrome-${uid}.lock`);
+}
+// Holds an exclusive lock on `file` until release(): a child `flock <file>` (Linux) or `lockf -k <file>` (macOS) runs
+// `sh -c 'echo L; exec cat'`; its stdin is our pipe, so the lock goes when we release, exit or crash (the pipe closes).
+// The file is opened first with O_NOFOLLOW (a symlink planted there refuses) and must be a regular file owned by us,
+// mode 0600. -> Promise<{ release(), file }>; rejects after timeoutMs (another render holding it too long) or on error.
+export function holdHostLock(file, { timeoutMs = 1800000, tool = null } = {}) {
+  return new Promise((resolve, reject) => {
+    let fd;
+    try {
+      fd = fs.openSync(file, fs.constants.O_RDWR | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW || 0), 0o600);
+      const st = fs.fstatSync(fd);
+      if (!st.isFile() || st.uid !== process.getuid()) throw new Error(`${file} is not a regular file owned by this user`);
+      fs.fchmodSync(fd, 0o600);
+    } catch (e) { if (fd !== undefined) fs.closeSync(fd); return reject(new Error(`running as root: cannot use the host lock ${file}: ${e.message}`)); }
+    fs.closeSync(fd);
+    const has = (t) => spawnSync("sh", ["-c", `command -v ${t}`], { encoding: "utf8" }).status === 0;
+    const t = tool || (has("flock") ? "flock" : has("lockf") ? "lockf" : null);
+    if (!t) return reject(new Error(`running as root: neither flock nor lockf is installed for the host lock ${file}`));
+    const argv = t === "flock" ? ["flock", "-x", file] : ["lockf", "-k", file];
+    const cp = spawn(argv[0], [...argv.slice(1), "sh", "-c", "echo L; exec cat >/dev/null"], { stdio: ["pipe", "pipe", "pipe"] });
+    let done = false, err = "";
+    const fail = (m) => { if (done) return; done = true; clearTimeout(timer); try { cp.kill("SIGKILL"); } catch {} reject(new Error(`running as root: host lock ${file}: ${m}`)); };
+    const timer = setTimeout(() => fail(`not free after ${Math.round(timeoutMs / 1000)} s (another graphic render with this uid?)`), timeoutMs);
+    cp.stderr.on("data", (d) => (err += d));
+    cp.on("error", (e) => fail(e.message));
+    cp.on("exit", (c) => fail(`${t} exited ${c} ${err.trim()}`));
+    cp.stdin.on("error", () => {});
+    cp.stdout.once("data", () => {
+      if (done) return;
+      done = true; clearTimeout(timer);
+      cp.removeAllListeners("exit");
+      resolve({ file, pid: cp.pid, release: () => { try { cp.stdin.end(); } catch {} } });
+    });
+  });
 }
 
 // ---------- versions for the key (v2) ----------
@@ -445,7 +518,7 @@ export function runRender({ dir, out, mode, fps, workers, launcher, shim, logFil
 //         probeNetwork, runRender, frameMd5, maxAlpha, chromeUser, chromeHome, releaseChromeHome }
 // -> Promise<{ ok, reasons[], codes[], file?, cached?, key, L, renders: [{secs, status}], probe }>
 export async function renderGraphic(opts, deps = {}) {
-  const D = { chromeUser, chromeHome, releaseChromeHome, findChrome, chromeShim, chromeVersion, ffmpegVersion, probeNetwork, runRender, frameMd5, maxAlpha, ...deps };
+  const D = { chromeUser, chromeHome, releaseChromeHome, hostLock: (u) => holdHostLock(hostLockPath(u.uid)), findChrome, chromeShim, chromeVersion, ffmpegVersion, probeNetwork, runRender, frameMd5, maxAlpha, ...deps };
   const { html: htmlPath = "assets/graphics/graphic.html", projectDir = null, mode = "overlay", W = 1080, H = 1920, fps = 30, inS = 0, after = "hold", frames, log = () => {} } = opts;
   let html = opts.content ?? null;
   if (html == null && projectDir) { const abs = path.join(projectDir, htmlPath); if (fs.existsSync(abs)) html = fs.readFileSync(abs); }
@@ -464,10 +537,17 @@ export async function renderGraphic(opts, deps = {}) {
   if (user.error) return { ok: false, reasons: [reason("R12n", { message: user.error })], codes: ["R12"], stage: "setup" };
   fs.mkdirSync(path.join(buildDir, "graphics"), { recursive: true });
   const scratch = fs.mkdtempSync(path.join(buildDir, "graphics", ".sandbox-")); // per call: concurrent renders never share a shim
-  let home = null;
-  try {
+  let home = null, lock = null, res, thrown = null;
+  try { res = await (async () => {
     let exe; // a set-but-broken GRAPHIC_CHROME_PATH throws: refuse here, never wrap another browser
     try { exe = D.findChrome(); } catch (e) { return { ok: false, reasons: [reason("R12n", { message: e.message })], codes: ["R12"], stage: "setup" }; }
+    // root: one render per uid on this host, from the home's creation to its release (the release kills every process
+    // of the uid, so a second render with the same uid must not be running): a per-uid host lock, held by a child
+    // `flock` (Linux) / `lockf` (macOS) whose stdin is our pipe, so it is released on every exit, a crash included
+    if (user.root) {
+      log(`running as root: Chrome as ${user.uid}:${user.gid}; waiting for the host lock of uid ${user.uid} ...`);
+      try { lock = await D.hostLock(user); } catch (e) { return { ok: false, reasons: [reason("R12n", { message: e.message })], codes: ["R12"], stage: "setup" }; }
+    }
     // root: the dropped Chrome's home is a fresh dir under os.tmpdir(), never in the project (the uid may not enter it)
     let shim;
     try { home = D.chromeHome(user); shim = D.chromeShim(path.join(scratch, "chrome"), exe, { home, setpriv: user.setpriv || null }); } catch (e) { return { ok: false, reasons: [reason("R12n", { message: e.message })], codes: ["R12"], stage: "setup" }; }
@@ -525,8 +605,19 @@ export async function renderGraphic(opts, deps = {}) {
     fs.renameSync(part, final);
     clean();
     return { ok: true, cached: false, reasons: [], codes: [], renders, probe, wrapper: wrap.file, ...base };
-  } finally {
-    fs.rmSync(scratch, { recursive: true, force: true });
-    if (home) D.releaseChromeHome(home, user);
+  })(); } catch (e) { thrown = e; }
+  fs.rmSync(scratch, { recursive: true, force: true });
+  // root, every path (clean, refused, failed, timed out, thrown): kill the uid's processes, then remove the home; if
+  // any survive (or the kill could not run) the home is KEPT and the render FAILS, loudly
+  let rel = null;
+  try { if (home) rel = D.releaseChromeHome(home, user); } finally { if (lock) lock.release(); }
+  if (rel && !rel.ok) {
+    const msg = `GRAPHIC RENDER UNSAFE: ${rel.error}`;
+    log(msg); console.error(msg);
+    if (res && res.ok && !res.cached && res.file) fs.rmSync(res.file, { force: true }); // this call's file: not kept
+    if (thrown) throw thrown;
+    return { ok: false, reasons: [reason("R12n", { message: rel.error })], codes: ["R12"], stage: "release", ...(res && res.key ? { key: res.key, L: res.L } : {}), file: null };
   }
+  if (thrown) throw thrown;
+  return res;
 }

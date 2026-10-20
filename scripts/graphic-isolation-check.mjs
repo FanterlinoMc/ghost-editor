@@ -16,7 +16,7 @@ import dgram from "node:dgram";
 import path from "node:path";
 import { wrapperHtml, graphicFrames } from "./lib/graphic.mjs";
 import { holdRenderLock } from "./lib/graphic-lock.mjs";
-import { runRender, chromeShim, chromeUser, chromeHome, releaseChromeHome, findChrome, probeNetwork, sandboxLauncher, scanLog, PROBE_URLS } from "./lib/graphic-render.mjs";
+import { runRender, chromeShim, chromeUser, chromeHome, releaseChromeHome, holdHostLock, hostLockPath, findChrome, probeNetwork, sandboxLauncher, scanLog, PROBE_URLS } from "./lib/graphic-render.mjs";
 
 holdRenderLock(); // --lock <path> / GRAPHIC_RENDER_LOCK: re-run under lockf / flock (the shared Mac)
 const args = process.argv.slice(2);
@@ -97,9 +97,12 @@ if (user.error) { console.log(`GRAPHIC ISOLATION: FAIL  (${user.error})`); proce
 console.log(user.root ? `running as root: Chrome dropped to ${user.uid}:${user.gid} with ${user.setpriv}` : "not root: Chrome runs as this user");
 let chrome, shim, bareShim, home = null;
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-isolation-"));
-const dropHome = () => releaseChromeHome(home, user); // root: kills every process of the uid, then removes the home
+let lock = null;
+// root: kills every process of the uid, then removes the home (kept, and FAIL, if any survives); then the host lock
+const dropHome = () => { const r = releaseChromeHome(home, user); if (lock) lock.release(); if (!r.ok) console.log(`GRAPHIC RENDER UNSAFE: ${r.error}`); return r.ok; };
 try {
   chrome = findChrome();
+  if (user.root) lock = await holdHostLock(hostLockPath(user.uid)); // the uid's host lock, as renderGraphic
   home = chromeHome(user); // root: the dropped Chrome's home, under os.tmpdir(); null otherwise
   shim = chromeShim(path.join(work, "shim"), chrome, { home, setpriv: user.setpriv || null });
   bareShim = chromeShim(path.join(work, "bare"), chrome, { lock: false, home, setpriv: user.setpriv || null });
@@ -147,8 +150,8 @@ pShim.lines.forEach((l) => console.log("  " + l));
 console.log(`probe through the bare Chrome: ${pBare.ok ? "PASS (all failed: the probe would be vacuous here)" : bareReached ? "REFUSED (expected, the listener was reached): " + pBare.refusal : "REFUSED, but the listener was NOT reached (the baseline did not run): " + pBare.refusal}; listener hits ${hits.length}`);
 pBare.lines.forEach((l) => console.log("  " + l));
 tcp.close(); udp.close(); lo4.close(); lo6.close();
-dropHome();
-const ok = leaks === 0 && pShim.ok && shimProbeHits === 0 && !pBare.ok && bareReached;
+const released = dropHome();
+const ok = leaks === 0 && pShim.ok && shimProbeHits === 0 && !pBare.ok && bareReached && released;
 console.log(`routes through the shim with hits: ${leaks} of ${ROUTES.length}`);
 console.log(`GRAPHIC ISOLATION: ${ok ? "PASS" : "FAIL"}  (work dir ${work})`);
 process.exit(ok ? 0 : 1);
