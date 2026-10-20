@@ -19,6 +19,8 @@ const skip = deps ? false : "needs python3 with numpy + opencv and ffmpeg with l
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "pixel-check-"));
 // the network test's reachability check runs before any test is registered (a test's spawnSync blocks the event loop)
 const { GSAP_URL, GSAP_SHA256 } = await import("./lib/runtime-libs.mjs");
+let chrome = null;
+try { const b = await import("./lib/browser.mjs"); b.findPuppeteer(); chrome = b.findChrome(); } catch {}
 let online = false;
 try { online = (await fetch(GSAP_URL, { method: "HEAD", signal: AbortSignal.timeout(4000) })).ok; } catch {}
 process.on("exit", () => fs.rmSync(ROOT, { recursive: true, force: true }));
@@ -146,6 +148,16 @@ test("PX0: a geometry.json the build could not write (its error field) is report
   assert.equal(rule("PX0").findings[0].message, "PX0 build/geometry.json: the build could not write it (g.L is undefined)");
 });
 
+test("PX0: a probe that fails carries the probe's own message, not a stack frame", { skip: skip || (chrome ? false : "no cached Chrome") }, () => {
+  const dir = path.join(ROOT, "probefail");
+  check("clean", { dir });   // no index.html in the fixture: the probe cannot open the page
+  const r = spawnSync(PY, [CHECK, dir, path.join(dir, "render.mov")], { encoding: "utf8", env: { ...process.env, PIXEL_CHECK_TEST_DETECTIONS: path.join(dir, "build", "test_detections.json") } });
+  const m = JSON.parse(fs.readFileSync(path.join(dir, "build", "pixel_check.json"), "utf8")).rules[0].findings[0].message;
+  assert.equal(r.status, 3);
+  assert.match(m, /^PX0 pixel_probe\.mjs failed: ENOENT: no such file or directory, open '.*index\.html'$/);
+  assert.doesNotMatch(m, /\s+at\s|\.js:\d+/);
+});
+
 test("PX0: a probe made for another geometry.json is stale", { skip }, () => {
   const dir = path.join(ROOT, "stale");
   check("clean", { dir });
@@ -157,8 +169,6 @@ test("PX0: a probe made for another geometry.json is stale", { skip }, () => {
 });
 
 // ---- the DOM probe on a real page in headless Chrome (skipped when the renderer's Chrome is not cached) ----
-let chrome = null;
-try { const b = await import("./lib/browser.mjs"); b.findPuppeteer(); chrome = b.findChrome(); } catch {}
 test("pixel_probe.mjs: caption, word, graphic and text rects as Chrome lays them out, offline", { skip: chrome ? false : "no cached chrome-headless-shell / puppeteer-core" }, () => {
   const dir = path.join(ROOT, "probe");
   fs.mkdirSync(path.join(dir, "build"), { recursive: true });
