@@ -55,10 +55,20 @@ function face(file) {
 }
 
 const cache = new Map();
-// an emoji no caption face covers falls back to the colour emoji font, drawn ~1.2 em wide (Chrome, Apple Color Emoji:
-// "😂😂😂 lol 🔥🔥" at 58 px). 1.25 em keeps the model at or over it; other uncovered text keeps `fallbackEm` (0.6 em
-// measured on the safe side for Arabic, which falls back to Noto Sans Arabic)
-const PICTO = /\p{Extended_Pictographic}/u, EMOJI_EM = 1.25;
+// An emoji no caption face covers is drawn by whatever the OS has, so its advance differs by platform. EMOJI_EM is an
+// upper bound over all of them (measured or published, 1 em = the caption's font-size; mac-45 follow-up):
+//   Apple Color Emoji (macOS, Chrome 152, measured)                1.000 em
+//   Noto Color Emoji (Linux/Android; published, 2550/2048 = 1.245)  ~1.275 em
+//   Segoe UI Emoji (Windows; from the PC's real-Chrome test, +108.2 px over 5 emoji at 58 px vs the Mac) ~1.373 em
+//   no emoji font (the Linux server): Chrome draws the .notdef box of the primary font - Gloock 0.565 em,
+//   Noto Sans Arabic 0.600 em (hmtx glyph 0); Apple's LastResort, the macOS last resort, measured 1.000 em
+// 1.5 em clears the widest (Segoe) by 0.127 em (7 px a glyph at 58 px). Regional indicators (a flag is two) and
+// skin-tone modifiers count as emoji too: Segoe draws a regional indicator as its own boxed letter, and a tofu
+// server draws each as a box. A constant, never this machine's font, so a build is the same on every OS; the
+// real-Chrome test checks it bounds the drawn width on whichever OS runs it. Other uncovered text keeps
+// `fallbackEm` (0.6 em, measured on the safe side for Arabic, which falls back to Noto Sans Arabic).
+export const EMOJI_EM = 1.5;
+const PICTO = /[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Modifier}]/u;
 // a family's faces in @font-face order (latin, then latin-ext: the unicode-ranges do not overlap); the em advance of a
 // code point no face covers (the browser falls back to Noto Sans Arabic / Georgia) is `fallbackEm`, an emoji's EMOJI_EM
 function family(files, fallbackEm) {
@@ -130,7 +140,9 @@ export const CLIPPING = { files: ["gloock-latin.woff2", "gloock-latin-ext.woff2"
 export function clippingExtent(words, { size, maxWidth, deg = 0, scale = 1 }) {
   const m = CLIPPING;
   const lines = wrapLines(words, size, maxWidth, m);
-  const w = Math.min(maxWidth, Math.max(...lines));
+  // the group is width: max-content clamped by max-width, so a block that wraps is max-width wide (Chrome: 820 px on a
+  // 2- and a 3-line block whose longest line is ~640), not its longest line: the tilt term uses that width
+  const w = lines.length > 1 ? maxWidth : Math.min(maxWidth, lines[0]);
   const h = lines.length * size * m.lineHeight + m.padTop + m.padBottom;
   const { up, down } = drawnExtent({ w, h, deg, scale, padX: m.padX });
   return { up, down, h: up + down, lines: lines.length, w };

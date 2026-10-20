@@ -20,7 +20,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { silentLibrary } from "./lib/silent-library.mjs";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
-import { clippingExtent, drawnExtent } from "./lib/caption-metrics.mjs";
+import { clippingExtent, drawnExtent, EMOJI_EM } from "./lib/caption-metrics.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.join(HERE, "build.mjs");
@@ -126,8 +126,17 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
       assert.ok(g.y0 >= b.y - 0.05 && g.y1 <= b.y + b.h + 0.05, `cg${g.i}: drawn ${g.y0}..${g.y1}, reserved ${b.y}..${b.y + b.h}`);
     }
     assert.ok(got[7].y1 - got[7].y0 > 90, `cg7 is drawn ${got[7].y1 - got[7].y0} px tall`);
-    // emoji fall back to the colour emoji font (~1.2 em each): an untilted clipping block of them, laid out by the page's
-    // own CSS, is modelled at or over its drawn height (and line count)
+    // emoji fall back to whatever emoji font this OS has (Apple 1.0 em, Segoe ~1.37, Noto ~1.275, none: a .notdef box):
+    // the model's constant EMOJI_EM bounds THIS machine's advance, and an untilted clipping block of them, laid out by
+    // the page's own CSS, is modelled at or over its drawn height (and line count)
+    const adv = await page.evaluate((em) => Object.fromEntries(em.map((e) => {
+      const g = document.createElement("div"); g.className = "cap-group"; g.style.top = "100px";
+      g.innerHTML = `<span style="letter-spacing:0">${e.repeat(10)}</span>`;
+      document.getElementById("cg0").parentElement.appendChild(g);
+      const w = g.firstChild.getBoundingClientRect().width / 10 / 58; g.remove(); return [e, w];
+    })), ["😂", "🔥", "👍", "🎉", "🚀", "🇺", "🏽"]);
+    console.log(`emoji advance on this machine (em): ${JSON.stringify(Object.fromEntries(Object.entries(adv).map(([k, v]) => [k, +v.toFixed(3)])))}, model ${EMOJI_EM}`);
+    for (const [e, v] of Object.entries(adv)) assert.ok(v <= EMOJI_EM, `${e}: this machine draws ${v} em, over the model's ${EMOJI_EM}`);
     for (const words of [["😂😂😂", "lol", "🔥🔥"], [Array(22).fill("😂").join("")], Array(22).fill("🔥")]) {
       const drawn = await page.evaluate((ws) => {
         const g = document.createElement("div"); g.className = "cap-group"; g.style.top = "100px";
@@ -140,6 +149,27 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
       const e = clippingExtent(words, { size: 58, maxWidth: 820 });
       assert.ok(e.h >= drawn.h - 0.05, `${words.join(" ").slice(0, 30)}: modelled ${e.h} (${e.lines} line(s)), drawn ${drawn.h}`);
       assert.ok(e.w >= drawn.w - 0.05 || e.lines > 1, `${words.join(" ").slice(0, 30)}: modelled width ${e.w}, drawn ${drawn.w}`);
+    }
+    // wrapped blocks at both tilt signs (a wrapped group is max-width wide, so its tilt reaches further than its longest
+    // line): placed the way build.mjs places one - band at Y, the group's top ceil(up) into it - the drawn box stays in
+    // [Y, Y + ceil(up) + ceil(down)]
+    const Y = 300, maxWidth = 1080 - 2 * 130;
+    const cases = [["photographers", "recommended", "illustrations"], ["extraordinary", "photographers", "recommended", "illustrations", "everywhere"], ["to", "be", Array(22).fill("😂").join("")]];
+    for (const words of cases) for (const deg of [-1.6, 1.6 * 0.7]) {
+      const e = clippingExtent(words, { size: 58, maxWidth, deg });
+      const top = Y + Math.ceil(e.up), end = Y + Math.ceil(e.up) + Math.ceil(e.down);
+      const d = await page.evaluate((ws, top, deg) => {
+        const g = document.createElement("div"); g.className = "cap-group"; g.style.cssText = `top:${top}px;rotate:${deg}deg`;
+        const inn = document.createElement("div"); inn.className = "cap-in"; g.appendChild(inn);
+        inn.innerHTML = ws.map((w) => `<span class="w">${w}</span>`).join("<wbr>");
+        document.getElementById("cg0").parentElement.appendChild(g);
+        const r = inn.getBoundingClientRect(), lines = Math.round((g.offsetHeight - 18) / (58 * 1.08)), w = g.offsetWidth; g.remove();
+        return { y0: r.top, y1: r.bottom, lines, w };
+      }, words, top, deg);
+      const tag = `${words.join(" ").slice(0, 24)} @ ${deg}deg (${d.lines} line(s) drawn, ${e.lines} modelled, group ${d.w} px)`;
+      if (d.lines > 1) assert.equal(d.w, maxWidth, `${tag}: a wrapped group is max-width wide`);
+      assert.ok(d.y1 <= end + 0.05, `${tag}: drawn to ${d.y1}, band ends ${end}`);
+      assert.ok(d.y0 >= Y - 0.05, `${tag}: drawn from ${d.y0}, band starts ${Y}`);
     }
   } finally { await browser.close(); server.close(); }
 });
