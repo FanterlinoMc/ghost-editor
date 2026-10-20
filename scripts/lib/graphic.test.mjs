@@ -617,14 +617,25 @@ test("releaseChromeHome: kills every process of the uid (as the uid) BEFORE remo
   assert.deepEqual(RR.uidKiller([path.join(kd, "missing")]).slice(0, 2), [process.execPath, "-e"]);
 });
 
-test("uidProcesses: live processes of a real uid", { skip: process.platform === "win32" }, () => {
+test("uidProcesses: live processes of a real uid, zombies skipped", { skip: process.platform === "win32" }, async () => {
   assert.ok(RR.uidProcesses(process.getuid()).includes(process.pid));
   assert.deepEqual(RR.uidProcesses(4242424), []);
+  // a zombie of ours: sh starts `sleep 0` and execs into a sleep that never reaps it
+  const z = spawn("/bin/sh", ["-c", "sleep 0 & echo $!; exec sleep 5"], { stdio: ["ignore", "pipe", "ignore"] });
+  const zpid = Number(await new Promise((r) => z.stdout.once("data", (d) => r(String(d).trim()))));
+  let state = "";
+  for (let i = 0; i < 30 && !state.startsWith("Z"); i++) { await new Promise((r) => setTimeout(r, 100)); state = spawnSync("ps", ["-o", "stat=", "-p", String(zpid)], { encoding: "utf8" }).stdout.trim(); }
+  try {
+    assert.match(state, /^Z/, "the child is a zombie");
+    assert.ok(!RR.uidProcesses(process.getuid()).includes(zpid), "a zombie is not a live process");
+    assert.ok(RR.uidProcesses(process.getuid()).includes(z.pid), "its live parent is");
+  } finally { z.kill("SIGKILL"); }
 });
 
 test("holdHostLock: exclusive, released on release() and when the holder crashes; refuses a symlink; hostLockPath", { skip: process.platform === "win32" }, async () => {
   const dir = tmpd(path.join(os.tmpdir(), "graphic-lock-"));
   const file = path.join(dir, "graphic-chrome-1234.lock");
+  fs.writeFileSync(file, "", { mode: 0o644 }); // an existing lock file with a wider mode is made 0600
   const a = await RR.holdHostLock(file);
   assert.equal(fs.statSync(file).mode & 0o777, 0o600);
   let got = false;
