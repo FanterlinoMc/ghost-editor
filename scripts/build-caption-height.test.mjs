@@ -20,7 +20,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { silentLibrary } from "./lib/silent-library.mjs";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
-import { clippingExtent, drawnExtent } from "./lib/caption-metrics.mjs";
+import { clippingExtent, drawnExtent, EMOJI_EM } from "./lib/caption-metrics.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.join(HERE, "build.mjs");
@@ -126,8 +126,17 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
       assert.ok(g.y0 >= b.y - 0.05 && g.y1 <= b.y + b.h + 0.05, `cg${g.i}: drawn ${g.y0}..${g.y1}, reserved ${b.y}..${b.y + b.h}`);
     }
     assert.ok(got[7].y1 - got[7].y0 > 90, `cg7 is drawn ${got[7].y1 - got[7].y0} px tall`);
-    // emoji fall back to the colour emoji font (~1.2 em each): an untilted clipping block of them, laid out by the page's
-    // own CSS, is modelled at or over its drawn height (and line count)
+    // emoji fall back to whatever emoji font this OS has (Apple 1.0 em, Segoe ~1.37, Noto ~1.275, none: a .notdef box):
+    // the model's constant EMOJI_EM bounds THIS machine's advance, and an untilted clipping block of them, laid out by
+    // the page's own CSS, is modelled at or over its drawn height (and line count)
+    const adv = await page.evaluate((em) => Object.fromEntries(em.map((e) => {
+      const g = document.createElement("div"); g.className = "cap-group"; g.style.top = "100px";
+      g.innerHTML = `<span style="letter-spacing:0">${e.repeat(10)}</span>`;
+      document.getElementById("cg0").parentElement.appendChild(g);
+      const w = g.firstChild.getBoundingClientRect().width / 10 / 58; g.remove(); return [e, w];
+    })), ["😂", "🔥", "👍", "🎉", "🚀", "🇺", "🏽"]);
+    console.log(`emoji advance on this machine (em): ${JSON.stringify(Object.fromEntries(Object.entries(adv).map(([k, v]) => [k, +v.toFixed(3)])))}, model ${EMOJI_EM}`);
+    for (const [e, v] of Object.entries(adv)) assert.ok(v <= EMOJI_EM, `${e}: this machine draws ${v} em, over the model's ${EMOJI_EM}`);
     for (const words of [["😂😂😂", "lol", "🔥🔥"], [Array(22).fill("😂").join("")], Array(22).fill("🔥")]) {
       const drawn = await page.evaluate((ws) => {
         const g = document.createElement("div"); g.className = "cap-group"; g.style.top = "100px";
