@@ -643,7 +643,10 @@ const RESTRAINED_DROP = /type tick|fly3d word|chip|list line|card pill|badge in|
 // Music keeps its named, fatal error (A10) because a missing music bed IS structural.
 // Every miss is collected and reported once at the end rather than per occurrence.
 const missingSfx = new Map();
-const sfxOk_ = (r) => !!(sfxManifest[r] && fs.existsSync(path.join(LIB, "sfx", sfxManifest[r].file)));
+// an entry with duration null is an id record with no source yet (library/SOURCES.md): it counts as no entry at all, even
+// when a file of that name is on disk (it has no measured length to play it with), so a reel builds exactly as without it
+const sfxEntry = (r) => { const m = sfxManifest[r]; return m && m.duration != null ? m : undefined; };
+const sfxOk_ = (r) => !!(sfxEntry(r) && fs.existsSync(path.join(LIB, "sfx", sfxEntry(r).file)));
 const addSfx = (t, id, why, { db = 0, lead = 0 } = {}) => {
   if (!id || id === "none") return;
   if (SFX_PROFILE === "restrained" && RESTRAINED_DROP.test(why)) return;
@@ -659,10 +662,10 @@ const addSfx = (t, id, why, { db = 0, lead = 0 } = {}) => {
     return;
   }
   let real = pick(id);
-  let m = sfxManifest[real];
+  let m = sfxEntry(real);
   // ---- spec.sfxFallback (opt-in; Folio, mini2): { "<id>": "<other id>" | "none" } - a sound whose file is not on this machine plays
   // the named stand-in instead (when that one is there), else it is skipped and reported below as before.
-  if (spec.sfxFallback && !sfxOk_(real)) { const alt = spec.sfxFallback[real]; if (alt && alt !== "none" && sfxOk_(alt)) { real = alt; m = sfxManifest[alt]; } }
+  if (spec.sfxFallback && !sfxOk_(real)) { const alt = spec.sfxFallback[real]; if (alt && alt !== "none" && sfxOk_(alt)) { real = alt; m = sfxEntry(alt); } }
   if (!m) { missingSfx.set(real, (missingSfx.get(real) ?? 0) + 1); return; }
   const srcFile = path.join(LIB, "sfx", m.file);
   if (!fs.existsSync(srcFile)) { missingSfx.set(`${real} (${m.file})`, (missingSfx.get(`${real} (${m.file})`) ?? 0) + 1); return; }
@@ -1768,7 +1771,7 @@ for (const b of beatsList) {
         inner = `<div id="${id}-in" class="ov meme-img" style="left:${x}px;top:${y}px;width:${w}px"><img src="${dst}"/></div>`;
         tl.push(`ft("#${id}-in", { autoAlpha: 0, scale: 0.5, rotation: ${tilt + 14} }, { autoAlpha: 1, scale: 1, rotation: ${tilt}, duration: 0.32, ease: "back.out(2)" }, ${t0});`);
         // default punch: vine boom when the (private) rip kit has it, else a licensed impact
-        const memeDefault = meta.sfx && sfxManifest[meta.sfx] ? meta.sfx : sfxManifest["vine-boom"] ? "vine-boom" : "cinematic-deep-boom" in sfxManifest ? "cinematic-deep-boom" : "impact";
+        const memeDefault = meta.sfx && sfxEntry(meta.sfx) ? meta.sfx : sfxManifest["vine-boom"] ? "vine-boom" : "cinematic-deep-boom" in sfxManifest ? "cinematic-deep-boom" : "impact";
         beatSfx(b, t0, memeDefault, "meme image");
       }
       break;

@@ -29,8 +29,10 @@ def main():
             if v["role"] != role:
                 continue
             flag = f'<span class="flag">{html.escape(v["review"])}</span>' if v.get("review") else ""
+            dur = "?" if v.get("duration") is None else f'{v["duration"]:.2f}s'   # null until a file is added and measured
             rows.append(f'<tr><td><b>{k}</b>{flag}</td><td>{role}</td><td><audio controls preload="none" src="sfx/{v["file"]}"></audio></td>'
-                        f'<td>{v["duration"]:.2f}s</td><td>{", ".join(v["tags"])}</td><td class="src">{html.escape(v["source"])}<br><i>{html.escape(v["licence"])}</i></td></tr>')
+                        f'<td>{dur}</td><td>{", ".join(v.get("tags", []))}</td>'
+                        f'<td class="src">{html.escape(v.get("source") or "")}<br><i>{html.escape(v.get("licence") or "")}</i></td></tr>')
     cards = []
     mdir = os.path.join(LIB, "memes")
     for d in sorted(os.listdir(mdir)):

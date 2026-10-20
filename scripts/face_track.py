@@ -20,14 +20,70 @@ frame the largest wins. Frames with no face are null; build.mjs holds the last
 known box for short gaps. Needs python opencv (pip install opencv-python).
 """
 import argparse
+import hashlib
 import json
 import os
+import secrets
 import sys
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL = os.path.join(HERE, "..", "library", "models", "face_detection_yunet_2023mar.onnx")
-MODEL_URL = "https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx"
+# pinned to one opencv_zoo commit and checked by size + sha256, so a moved branch or a corrupt download never loads
+MODEL_URL = ("https://github.com/opencv/opencv_zoo/raw/f12e12798e8314f7c074a6656816c048dcc95b7a"
+             "/models/face_detection_yunet/face_detection_yunet_2023mar.onnx")
+MODEL_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
+MODEL_SIZE = 232589
+
+
+class ModelError(Exception):
+    pass
+
+
+def _download(url, dest):
+    urllib.request.urlretrieve(url, dest)
+
+
+def model_problem(path, size=MODEL_SIZE, sha256=MODEL_SHA256):
+    """None when the file at path is the pinned model, else what is wrong with it."""
+    n = os.path.getsize(path)
+    if n != size:
+        return f"size {n} bytes, expected {size}"
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 16), b""):
+            h.update(chunk)
+    if h.hexdigest() != sha256:
+        return f"sha256 {h.hexdigest()}, expected {sha256}"
+    return None
+
+
+def ensure_model(path=MODEL, url=MODEL_URL, size=MODEL_SIZE, sha256=MODEL_SHA256):
+    """Make path the pinned model. A present file is verified; one that fails is downloaded again, once. The download
+    goes to a temporary .part file next to path and is renamed into place only after it verifies; on any failure the
+    partial file is deleted and ModelError says why."""
+    if os.path.exists(path):
+        bad = model_problem(path, size, sha256)
+        if bad is None:
+            return path
+        print(f"face model {path} is not the pinned file ({bad}); downloading it again", file=sys.stderr)
+        os.remove(path)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    part = f"{path}.{secrets.token_hex(4)}.part"
+    os.close(os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666))   # a fresh name; the umask sets its mode, as for open()
+    try:
+        try:
+            _download(url, part)
+        except Exception as e:
+            raise ModelError(f"face model download failed ({url}): {e}") from e
+        bad = model_problem(part, size, sha256)
+        if bad is not None:
+            raise ModelError(f"face model download from {url} is not the pinned file ({bad}); deleted it")
+        os.replace(part, path)
+    finally:
+        if os.path.exists(part):
+            os.remove(part)
+    return path
 
 
 def main():
@@ -40,9 +96,10 @@ def main():
         import cv2
     except ImportError:
         sys.exit("opencv missing: pip install opencv-python")
-    if not os.path.exists(MODEL):
-        os.makedirs(os.path.dirname(MODEL), exist_ok=True)
-        urllib.request.urlretrieve(MODEL_URL, MODEL)
+    try:
+        ensure_model()
+    except ModelError as e:
+        sys.exit(str(e))
     cap = cv2.VideoCapture(a.src)
     fps, n = cap.get(cv2.CAP_PROP_FPS), int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     W, H = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))

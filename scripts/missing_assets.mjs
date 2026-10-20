@@ -100,9 +100,9 @@ for (const id of MEMES) ref("meme", id);
 const PROPOSED_FROM_PACK = new Set(["whoosh-1", "whoosh-2", "whoosh-3", "whoosh-cine", "burn-whoosh-fast", "burn-whoosh-tunnel", "tech-digital-whoosh", "pop-whoosh-light",
   "riser-1", "cinematic-rumble-riser", "tech-camera-flash", "click-1", "tick-1", "pop-1", "pop-2", "pop-3", "typing-1", "zoom-sweep-small", "zoom-sweep-short"]);
 const sourceOf = (kind, id) => ({
-  sfx: () => PROPOSED_FROM_PACK.has(id) ? "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); Mixkit entry is a record only"
-    : "needs a licensed source (no pack category matches); Mixkit entry is a record only, licence unresolved",
-  music: () => "needs a licensed bed (Mixkit music not OK for this use); a reel can pass music.src instead",
+  sfx: () => PROPOSED_FROM_PACK.has(id) ? "licensed pack candidate: one of its 12 sounds may be processed into this id (category match, not yet heard); the manifest entry is an id record only (source none)"
+    : "needs a licensed source (no pack category matches); the manifest entry is an id record only (source none)",
+  music: () => "needs a licensed bed; the manifest entry is an id record only (source none); a reel can pass music.src instead",
   art: () => `public domain (${/^[a-z]+-\d+$/.test(id) ? "The Met Open Access, CC0: scripts/art_fetch.py" : "Wikimedia Commons, pre-1900: scripts/art_famous.py"}); gitignored, fetched per machine`,
   engraving: () => "public domain (Wikimedia Commons sources in engravings/manifest.json) or generated (engravings/gen/urls.txt -> scripts/engravings_process.py); no processed png",
   object: () => "CC0 (3dicons v1, see gm-objects/SOURCES.md)",

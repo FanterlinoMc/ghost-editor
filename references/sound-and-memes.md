@@ -33,7 +33,7 @@ Here:
 
 ## Kit (library/sfx)
 
-Editing layer (ids first designed around Mixkit sounds, which are not used: the
+Editing layer (ids kept from the kit the engine was first designed around, with no source of their own: the
 files come from the licensed pack, see `library/SOURCES.md`): whoosh-1/2/3, whoosh-cine,
 pop-1/2/3, click-1, tick-1, typing-1, impact-1/2, riser-1, ding-1, buzzer-1,
 kaching-1, shutter-1.

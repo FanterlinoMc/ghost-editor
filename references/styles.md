@@ -39,7 +39,7 @@ recording (`examples/gallery/`) to check that they read as different.
 still open for all five - a follow-up, not part of that port. `alif.json`'s
 `openFlash`/`packs`/`leaks` degrade to an asset-free CSS flash without
 `library/packs/`, and its `music` is `null` (no cleared track) rather than
-main's Mixkit reference - see the style file's `_about`.
+main's unlicensed track - see the style file's `_about`.
 
 `editorial-collage`, `ak-consulting-content` and `broadsheet` were ported the
 same way, in BRANCH-AUDIT.md R1b (main added them after R1's port landed), so

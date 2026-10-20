@@ -2,15 +2,14 @@
 """Rebuild the memes the repo does not track (it keeps only their meta.json):
 every meme from its meta.json source + args. Existing files are kept.
 
-    library_restore.py [--memes-only] [--licensed-only]
+    library_restore.py [--memes-only]
 
 Sound effects and music are NOT restored here, and nothing in this repo downloads them: they come
-from a licensed pack restored by the deployment outside git (library/SOURCES.md). The old Mixkit
-download paths (the music `url`s and the old sound-effect fetch script) are retired;
-scripts/no-mixkit-fetch.test.mjs fails if one comes back. --sfx-only and --music-only are kept only
-to say so and exit non-zero.
+from a licensed pack restored by the deployment outside git (library/SOURCES.md); the manifests carry
+no download URL, and scripts/no-mixkit-fetch.test.mjs fails if a download path comes back.
 
---licensed-only is the public build: no meme clips (they are unlicensed rips), so nothing to do.
+Meme clips are rips, not licensed media: the public edition (export_public.py) ships none, so a
+public install does not run this at all.
 """
 import argparse
 import json
@@ -20,23 +19,13 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIB = os.path.join(HERE, "..", "library")
-RETIRED = ("library_restore.py: sound effects and music are not downloaded by this repo; "
-           "restore the licensed pack instead (see library/SOURCES.md)")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--memes-only", action="store_true", help="the default now: memes are all this restores")
-    ap.add_argument("--sfx-only", action="store_true", help="retired (see library/SOURCES.md)")
-    ap.add_argument("--music-only", action="store_true", help="retired (see library/SOURCES.md)")
-    ap.add_argument("--licensed-only", action="store_true", help="skip memes (public build)")
     a = ap.parse_args()
-    if a.sfx_only or a.music_only:
-        sys.exit(RETIRED)
     print("skip sfx and music: not downloaded by this repo (see library/SOURCES.md)")
-    if a.licensed_only:
-        print("skip memes (--licensed-only: meme clips are unlicensed rips)")
-        sys.exit(0)
     bad = 0
     mdir = os.path.join(LIB, "memes")
     for d in sorted(os.listdir(mdir)):
