@@ -6,7 +6,7 @@
 // Node preload, exactly as renderGraphic does, and counts what reaches the listener. The routes bypass the static scan
 // on purpose (the scan is hygiene; the lock is what must hold). --baseline also renders each route WITHOUT the shim,
 // to show the route is real. Then the R12 probe, with the listener's URL added: through the shim it must fail, through
-// the bare Chrome it must REACH the listener. Exit 0 only if every route had 0 hits through the shim and the probe behaved.
+// the bare Chrome the listener must see it. Exit 0 only if every route had 0 hits through the shim and the probe behaved.
 // "Bare" is a shim without the lock flags (chromeShim lock: false): the same launch otherwise, so as root it is the same
 // setpriv drop to GRAPHIC_CHROME_UID (a root Chrome would not start at all and the baseline would be vacuous).
 import fs from "node:fs";
@@ -141,7 +141,7 @@ const shimProbeHits = hits.length;
 hits.length = 0;
 const pBare = probeNetwork({ launcher, shim: bareShim, urls: probeUrls, user });
 await settle();
-const bareReached = pBare.lines.includes(`probe chrome: REACHED ${U}/probe`);
+const bareReached = hits.some((h) => h.startsWith("TCP")); // the listener saw the bare Chrome: the baseline really ran
 console.log(`probe through the shim: ${pShim.ok ? "PASS (all failed)" : "REFUSED: " + pShim.refusal}; listener hits ${shimProbeHits}`);
 pShim.lines.forEach((l) => console.log("  " + l));
 console.log(`probe through the bare Chrome: ${pBare.ok ? "PASS (all failed: the probe would be vacuous here)" : bareReached ? "REFUSED (expected, the listener was reached): " + pBare.refusal : "REFUSED, but the listener was NOT reached (the baseline did not run): " + pBare.refusal}; listener hits ${hits.length}`);
