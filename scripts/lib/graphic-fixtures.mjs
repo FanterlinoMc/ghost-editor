@@ -1,5 +1,6 @@
 // Prompt Motion graphic fixtures (PM2): one good graphic and the deliberately bad ones the render proofs refuse.
 // Used by graphic.test.mjs (static rules, no render) and graphic-render-check.mjs (real renders, not in the gate).
+import zlib from "node:zlib";
 export const RNG = `window.rng = window.rng || function (seed) {
     var a = seed >>> 0;
     return function () {
@@ -64,3 +65,35 @@ export const insertGraphic = () => goodGraphic({ w: 1080, h: 1920 });
 export const statefulSeek = () => goodGraphic({ extraScript: "var calls = 0;", seekExtra: `calls++; d.style.borderRadius = (calls % 7) * 6 + "px";` });
 // R9: renders, deterministic, but nothing is ever visible
 export const invisible = () => goodGraphic({ seekExtra: `document.getElementById("stage").style.opacity = "0";` });
+
+// A minimal font for the glyph-coverage tests (R14): an sfnt with ONLY a cmap table (one (3,10) format-12 subtable,
+// glyph ids from 1), or that sfnt as a WOFF 1.0 (zlib) when woff is true. ranges: [[first, last], ...].
+export function tinyFont(ranges, { woff = false, format = 12 } = {}) {
+  let sub;
+  if (format === 12) {
+    sub = Buffer.alloc(16 + 12 * ranges.length);
+    sub.writeUInt16BE(12, 0); sub.writeUInt32BE(sub.length, 4); sub.writeUInt32BE(ranges.length, 12);
+    let gid = 1;
+    ranges.forEach(([a, b], i) => { sub.writeUInt32BE(a, 16 + 12 * i); sub.writeUInt32BE(b, 20 + 12 * i); sub.writeUInt32BE(gid, 24 + 12 * i); gid += b - a + 1; });
+  } else { // format 4, BMP only, idDelta segments (+ the final 0xFFFF one)
+    const segs = [...ranges, [0xffff, 0xffff]], n = segs.length;
+    sub = Buffer.alloc(16 + 8 * n);
+    sub.writeUInt16BE(4, 0); sub.writeUInt16BE(sub.length, 2); sub.writeUInt16BE(2 * n, 6);
+    segs.forEach(([a, b], i) => {
+      sub.writeUInt16BE(b, 14 + 2 * i); sub.writeUInt16BE(a, 16 + 2 * n + 2 * i);
+      sub.writeInt16BE(a === 0xffff ? 1 : ((1 - a) << 16) >> 16, 16 + 4 * n + 2 * i); // glyph = c + delta = 1.. (0xffff -> 0)
+    });
+  }
+  const cmap = Buffer.concat([Buffer.from([0, 0, 0, 1, 0, 3, 0, format === 12 ? 10 : 1, 0, 0, 0, 12]), sub]);
+  if (!woff) {
+    const head = Buffer.alloc(28);
+    head.writeUInt32BE(0x00010000, 0); head.writeUInt16BE(1, 4);
+    head.write("cmap", 12, "latin1"); head.writeUInt32BE(28, 20); head.writeUInt32BE(cmap.length, 24);
+    return Buffer.concat([head, cmap]);
+  }
+  const z = zlib.deflateSync(cmap);
+  const head = Buffer.alloc(64);
+  head.write("wOFF", 0, "latin1"); head.writeUInt32BE(0x00010000, 4); head.writeUInt32BE(64 + z.length, 8); head.writeUInt16BE(1, 12);
+  head.write("cmap", 44, "latin1"); head.writeUInt32BE(64, 48); head.writeUInt32BE(z.length, 52); head.writeUInt32BE(cmap.length, 56);
+  return Buffer.concat([head, z]);
+}

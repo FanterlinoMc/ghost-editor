@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Glyph check: accents</title>
+<style>
+  #root { position: relative; width: 1080px; height: 1080px; overflow: hidden; font-family: Inter, sans-serif; }
+  .bubble { position: absolute; left: 120px; padding: 28px 40px; border-radius: 40px; background: #2b6cf6; color: #fff; font-size: 52px; font-weight: 600; }
+  #cv { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="root">
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; opacity: 0; font-family: Inter; font-weight: 600">Aa Привет Łódź – ½ ™ —</div>
+<div class="bubble" id="b1" style="top: 200px">Café — naïve résumé “ok” 5 €</div>
+<canvas id="cv" width="1080" height="1080"></canvas>
+</div>
+<script>
+  window.duration = 2;
+  window.size = { w: 1080, h: 1080 };
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  var g = document.getElementById("cv").getContext("2d");
+  window.seek = function (t) {
+    document.getElementById("b1").style.opacity = clamp(t * 2, 0, 1);
+    g.clearRect(0, 0, 1080, 1080);
+    g.fillStyle = "#fff";
+    g.font = "600 64px Inter";
+    g.fillText("Привет · Łódź – ½ ™ " + String.fromCodePoint(0x2014), 120, 700);
+  };
+</script>
+</body>
+</html>

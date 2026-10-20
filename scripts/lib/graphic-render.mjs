@@ -418,6 +418,14 @@ export const launchedChrome = (log) => { const m = /Browser launched \(HeadlessC
 // render server's own origin, blocked by the CSP anyway), so it is skipped, and ONLY when the port is one the preload
 // recorded for this render's server: any other CSP line, or this text on another origin, still refuses (R1).
 export const HF_BLOB_WORKER = /^\[Browser:ERROR\] Creating a worker from 'blob:http:\/\/localhost:(\d{1,5})\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' violates the following Content Security Policy directive: "script-src 'unsafe-inline'"\. Note that 'worker-src' was not explicitly set, so 'script-src' is used as a fallback\. The action has been blocked\.$/;
+// R14: the bridge's `glyph {"cp","font","text"}` -> the reason's args (the snippet's whitespace collapsed), or null
+export function glyphArgs(json) {
+  let o;
+  try { o = JSON.parse(json); } catch { return null; }
+  const c = parseInt(o && o.cp, 16);
+  if (!(c >= 0 && c <= 0x10ffff) || typeof o.text !== "string") return null;
+  return { cp: c.toString(16).toUpperCase().padStart(4, "0"), ch: String.fromCodePoint(c), snippet: o.text.replace(/\s+/g, " ").trim(), font: String(o.font || "").trim() || "(no font-family)" };
+}
 export function scanLog(log) {
   const out = [];
   const seen = new Set();
@@ -435,13 +443,14 @@ export function scanLog(log) {
     else if ((m = /\[Browser:PAGEERROR\]\s*(.*)$/.exec(line))) add("R2", reason("R2", { message: m[1] }));
     else if ((m = new RegExp(REFUSED + "(.*)$").exec(line))) {
       const r = m[1].trim();
-      let x;
+      let x, g;
       if (r.startsWith("window.seek is not a function")) add("R3", reason("R3"));
       else if ((x = /^seek\(([^)]*)\) threw: (.*)$/.exec(r))) add("R4", reason("R4", { t: x[1], message: x[2] }));
       else if ((x = /^seek\(([^)]*)\) returned a Promise/.exec(r))) add("R4", reason("R4p", { t: x[1] }));
       else if ((x = /^window\.duration \/ window\.size changed at load \(static (.*), at load (.*)\)$/.exec(r))) add("R5", reason("R5", { a: x[1], b: x[2] }));
       else if ((x = /^seek order: frame (\d+) \(t=([^)]*)s\)/.exec(r))) add("R6", reason("R6o", { k: x[1], t: x[2] }));
       else if (r.startsWith("navigated")) add("R11", reason("R11"));
+      else if ((x = /^glyph (\{.*\})$/.exec(r)) && (g = glyphArgs(x[1]))) add("R14", reason("R14", g));
       else add("R2", reason("R2", { message: r }));
     }
   }

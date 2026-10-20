@@ -8,10 +8,11 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { scopes } from "../graphic-rules/rules.mjs";
+import { scopes, g36 } from "../graphic-rules/rules.mjs";
+import { familyCoverage, declaredCoverage, mergeRanges } from "./font-coverage.mjs";
 
 export const RENDERER = "hyperframes@0.8.81";
-export const KEY_VERSION = 3; // bumped when the wrapper / bridge / CSP / lock changes (it is in the cache key)
+export const KEY_VERSION = 4; // bumped when the wrapper / bridge / CSP / lock changes (it is in the cache key; 4: the R14 glyph check)
 export const QUALITY = "looks";
 export const LIMITS = {
   htmlBytes: 2097152, mediaBytes: 4194304, mediaFiles: 8, fileBytes: 52428800,
@@ -58,6 +59,7 @@ export const REASONS = {
   G33: ({ html, match }) => `graphic file ${html} uses a script URL (${match})`,
   G34: ({ html, match }) => `graphic file ${html} has ${match} (no math, noscript, xmp, noembed, noframes, plaintext, textarea or template elements, and no <script> or <style> inside <svg>)`,
   G35: ({ html, match }) => `graphic file ${html} starts a ${match} inside another tag (a < inside an attribute value)`,
+  G36: ({ html, cp, ch }) => `graphic file ${html} has the character U+${cp} '${ch}' (an emoji or symbol: no engine font has a glyph for it, it renders as a box)`,
   P1: ({ v }) => `graphic mode '${v}' is not overlay or insert`,
   P2: ({ s }) => `graphic window ${s}s is outside 0.1..60s`,
   P3: ({ W, H }) => `graphic box shows less than 20% inside the ${W}x${H} canvas`,
@@ -80,6 +82,7 @@ export const REASONS = {
   R12n: ({ message }) => `network lock probe could not run: ${message}`,
   R12c: ({ message }) => `graphic Chrome could not be cleaned up safely: ${message}`,
   R13: ({ v, k }) => `the render used Chrome ${v}, the cache key says ${k}: nothing cached`,
+  R14: ({ cp, ch, snippet, font }) => `character U+${cp} '${ch}' in "${snippet}" isn't in ${font} (no glyph; renders as a box)`,
   GW1: ({ v, duration }) => `graphic in ${v}s is outside 0..${duration}s, clamped`,
   GW2: ({ a, b }) => `graphic after cut: shortened from ${a}s to ${b}s (the graphic's length)`,
   GW3: ({ v }) => `graphic after '${v}' is not hold, loop or cut, using hold`,
@@ -177,7 +180,8 @@ export function staticChecks(S, { W = 1080, H = 1920 } = {}, stage = "all") {
       return ok ? null : { code: "G23" }; },
   ];
   const C = [() => regexHit(25, 25), () => (rx(M.G26).test(s) ? { code: "G26" } : null), () => regexHit(27, 34),
-    () => (S.insideTag ? { code: "G35", match: S.insideTag } : null)];
+    () => (S.insideTag ? { code: "G35", match: S.insideTag } : null),
+    () => { const g = g36(S.WHOLE); return g ? { code: "G36", cp: g.cp, ch: g.ch } : null; }];
   const list = stage === "A" ? A : stage === "B" ? B : stage === "C" ? C : [...A, ...B, ...C];
   for (const c of list) { const r = c(); if (r) return { ...r, out }; }
   return { code: null, out };
@@ -188,6 +192,7 @@ export function staticFirst(html, opts) {
   if (!r.code) return null;
   if (r.code === "G18") return `G18:${JSON.stringify(r.name)}`;
   if (r.code === "G35") return `G35:${JSON.stringify(r.match)}`;
+  if (r.code === "G36") return `G36:U+${r.cp}`;
   return r.scope ? `${r.code}:${r.scope}:${JSON.stringify(r.match)}` : r.code;
 }
 
@@ -202,7 +207,7 @@ export function inspectGraphic(content, opts = {}) {
   const { html = "assets/graphics/graphic.html", projectDir = null, W = 1080, H = 1920, mode = "overlay" } = opts;
   const meta = { duration: null, size: null, fonts: [], media: [] };
   const fail = (code, args = {}) => ({ ok: false, reasons: [reason(code, { html, W, H, ...args })], codes: [code], meta });
-  const failS = (r) => fail(r.code, r.code === "G18" ? { name: r.name } : { match: r.match });
+  const failS = (r) => fail(r.code, r.code === "G18" ? { name: r.name } : r.code === "G36" ? { cp: r.cp, ch: r.ch } : { match: r.match });
   let root = null;
   if (projectDir) {
     root = path.resolve(projectDir);
@@ -310,20 +315,61 @@ export const FONT_NAMES = { "instrument-serif": "Instrument Serif", "caveat-brus
 export const RANGES = {
   latin: "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
   cyrillic: "U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116",
+  arabic: "U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1",
   "latin-ext": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF",
 };
+// every bundled face: { family, file, range (its unicode-range), italic }, in file order
+export function engineFaces(fontDir = FONT_DIR) {
+  return fs.readdirSync(fontDir).filter((f) => /-(latin-ext|latin|cyrillic|arabic)(-italic)?\.woff2$/.test(f)).sort().map((f) => {
+    const m = /^(.*)-(latin-ext|latin|cyrillic|arabic)(-italic)?\.woff2$/.exec(f);
+    return { family: FONT_NAMES[m[1]] || m[1].split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" "), file: path.join(fontDir, f), range: RANGES[m[2]], italic: !!m[3] };
+  });
+}
+// Arabic (v3.3): the bundled Noto Sans Arabic face (OFL, templates/fonts/LICENSE-NotoSansArabic.txt), whenever the
+// graphic uses an engine family: as "Noto Sans Arabic" and under the name of every engine family the graphic uses, so
+// Arabic in `font-family: Inter, ...` text is drawn from the vendored font, never a system one. Its unicode-range keeps
+// it unloaded until an Arabic character is drawn, and it is declared FIRST: where its range overlaps a later face's
+// (U+200C-200E, U+2010-2011) the later face is tried first (CSS Fonts: the last rule defined is checked first).
+export const ARABIC_FAMILY = "Noto Sans Arabic";
+export const arabicAliases = (families) => (families.length ? [ARABIC_FAMILY, ...[...families].sort()] : []);
 export function fontFaceCss(families, fontDir = FONT_DIR) {
   const want = new Set(families);
-  const files = fs.readdirSync(fontDir).filter((f) => /-(latin-ext|latin|cyrillic)(-italic)?\.woff2$/.test(f)).sort();
   const out = [];
-  for (const f of files) {
-    const m = /^(.*)-(latin-ext|latin|cyrillic)(-italic)?\.woff2$/.exec(f);
-    const fam = FONT_NAMES[m[1]] || m[1].split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
-    if (!want.has(fam)) continue;
-    const b64 = fs.readFileSync(path.join(fontDir, f)).toString("base64");
-    out.push(`@font-face { font-family: "${fam}"; src: url(data:font/woff2;base64,${b64}) format("woff2"); font-weight: 100 900;${m[3] ? " font-style: italic;" : ""} unicode-range: ${RANGES[m[2]]}; }`);
+  const faces = engineFaces(fontDir);
+  for (const { family: fam, file, range } of faces.filter((f) => f.family === ARABIC_FAMILY)) {
+    const b64 = fs.readFileSync(file).toString("base64");
+    for (const alias of arabicAliases(families)) out.push(`@font-face { font-family: "${alias}"; src: url(data:font/woff2;base64,${b64}) format("woff2"); font-weight: 100 900; unicode-range: ${range}; }`);
+  }
+  for (const { family: fam, file, range, italic } of faces) {
+    if (!want.has(fam) || fam === ARABIC_FAMILY) continue;
+    const b64 = fs.readFileSync(file).toString("base64");
+    out.push(`@font-face { font-family: "${fam}"; src: url(data:font/woff2;base64,${b64}) format("woff2"); font-weight: 100 900;${italic ? " font-style: italic;" : ""} unicode-range: ${range}; }`);
   }
   return out.join("\n");
+}
+// R14's coverage (spec "Glyph coverage"): the REPERTOIRE = every code point some engine font (rules.json fonts.engine)
+// has a glyph for, each face clipped to its unicode-range: what a graphic may show in ANY font stack (an engine font,
+// or the system fallback a generic family reaches, trusted only that far); plus, per family the graphic declares with
+// its own data: @font-face, that font's cmap. -> { rep: [[a, b]...], fams: { <lower-case family>: [[a, b]...] } }
+const repCache = new Map();
+export function engineRepertoire(fontDir = FONT_DIR) {
+  if (!repCache.has(fontDir)) {
+    const engine = new Set(J.fonts.engine);
+    const by = familyCoverage(engineFaces(fontDir).filter((f) => engine.has(f.family)));
+    repCache.set(fontDir, mergeRanges([...by.values()].flat()));
+  }
+  return repCache.get(fontDir);
+}
+export function arabicCoverage(fontDir = FONT_DIR) {
+  return familyCoverage(engineFaces(fontDir).filter((f) => f.family === ARABIC_FAMILY)).get(ARABIC_FAMILY) || [];
+}
+// families: the engine families the wrapper inlines (meta.fonts); each of them, and "Noto Sans Arabic", also covers
+// the Arabic face's code points (fontFaceCss's aliases)
+export function glyphCoverage(text, fontDir = FONT_DIR, families = []) {
+  const fams = declaredCoverage(scopes(text).STYLE);
+  const ar = arabicCoverage(fontDir);
+  for (const f of arabicAliases(families)) { const k = f.toLowerCase(); fams.set(k, mergeRanges([...(fams.get(k) || []), ...ar])); }
+  return { rep: engineRepertoire(fontDir), fams: Object.fromEntries(fams) };
 }
 // the engine's seeded random, defined before the graphic's scripts (spec: the same mulberry32 the templates carry)
 export const RNG_SNIPPET = `window.rng = function (seed) {
@@ -345,7 +391,15 @@ const fmtT = (t) => String(+t.toFixed(3));
 // window "hf-seek" with detail.time = j / fps; the listener maps j to the graphic's frame k and calls window.seek(k / fps).
 // Problems go to the saved console.error (HyperFrames prints them as [Browser:ERROR] ...), once per page.
 export const ORDER_SAMPLES = 8;
-export function preScript({ fps, L, inF, D, after }) {
+// R14 (glyph coverage, v3.3) also lives here: canvas fillText / strokeText are wrapped (non-writable) before any graphic
+// script, so every string drawn on a canvas is checked with the context's font; after each hf-seek's seek(t) the
+// root's visible text nodes and ::before / ::after strings are checked with their computed font-family. A character
+// is fine when it is whitespace / a control or format character / a variation selector, or in the engine repertoire
+// (glyphCoverage), or in the cmap of a data: @font-face family in its stack; else the page is refused with
+// `glyph {"cp","font","text"}` (scanLog -> R14). Draws during the seek-order check are not checked (those frames may
+// not be shown); everything else is, from load on. glyphs = glyphCoverage(...) (null: no check, the vm tests).
+const flatCov = (g) => (g ? { rep: g.rep.flat(), fams: Object.fromEntries(Object.entries(g.fams).map(([k, v]) => [k, v.flat()])) } : null);
+export function preScript({ fps, L, inF, D, after, glyphs = null }) {
   return `(function () {
   var err = console.error.bind(console), add = EventTarget.prototype.addEventListener, round = Math.round, min = Math.min;
   var toFixed = Number.prototype.toFixed, split = String.prototype.split, Str = String;
@@ -357,6 +411,94 @@ export function preScript({ fps, L, inF, D, after }) {
   function fmt(t) { try { return Str(+toFixed.call(t, 3)); } catch (x) { return "?"; } }
   function msg(x) { try { return split.call(Str(x && x.message !== undefined ? x.message : x), "\\n")[0]; } catch (y) { return "(unreadable error)"; } }
   Object.defineProperty(window, "__graphicRefuse", { value: refuse, writable: false, configurable: false, enumerable: false });
+  // R14 glyph coverage (see glyphCoverage): every native it uses is saved here, before any graphic script runs
+  var GL = ${JSON.stringify(flatCov(glyphs))}, inOrder = false, seenTxt = Object.create(null), rApply = Reflect.apply, jsonStr = JSON.stringify;
+  var cpAt = String.prototype.codePointAt, ccAt = String.prototype.charCodeAt, sSlice = String.prototype.slice, sLower = String.prototype.toLowerCase;
+  var sTrim = String.prototype.trim, sIndex = String.prototype.indexOf, sUpper = String.prototype.toUpperCase, numStr = Number.prototype.toString, hasOwn = Object.prototype.hasOwnProperty;
+  function getter(C, p) { try { return Object.getOwnPropertyDescriptor(C.prototype, p).get || null; } catch (x) { return null; } }
+  function proto(n) { try { return typeof window[n] === "function" ? window[n].prototype : null; } catch (x) { return null; } }
+  var mkWalker = proto("Document") && Document.prototype.createTreeWalker, nextNode = proto("TreeWalker") && TreeWalker.prototype.nextNode;
+  var getCS = window.getComputedStyle, cssVal = proto("CSSStyleDeclaration") && CSSStyleDeclaration.prototype.getPropertyValue;
+  var parentGet = proto("Node") && getter(Node, "parentElement"), dataGet = proto("CharacterData") && getter(CharacterData, "data");
+  var tagGet = proto("Element") && getter(Element, "tagName"), visible = proto("Element") && Element.prototype.checkVisibility, elQsa = proto("Element") && Element.prototype.querySelectorAll;
+  // off-viewport text (its box wholly outside the root's) is not drawn: skipped. Overflow clipping by an inner box is not.
+  var mkRange = proto("Document") && Document.prototype.createRange, selContents = proto("Range") && Range.prototype.selectNodeContents;
+  var rangeRect = proto("Range") && Range.prototype.getBoundingClientRect, elRect = proto("Element") && Element.prototype.getBoundingClientRect;
+  var boxOn = !!(mkRange && selContents && rangeRect && elRect);
+  function outside(r, v) { return (r.width === 0 && r.height === 0) || r.right <= v.left || r.bottom <= v.top || r.left >= v.right || r.top >= v.bottom; }
+  var domOn = !!(GL && mkWalker && nextNode && getCS && cssVal && parentGet && dataGet && tagGet && elQsa), VIS = { visibilityProperty: true, opacityProperty: true };
+  function inR(r, c) { var lo = 0, hi = (r.length >> 1) - 1, m; while (lo <= hi) { m = (lo + hi) >> 1; if (c < r[2 * m]) hi = m - 1; else if (c > r[2 * m + 1]) lo = m + 1; else return true; } return false; }
+  // exempt: C0/C1 controls and spaces, soft hyphen, Ogham space, Mongolian vowel separator, U+2000-200F spaces and
+  // format marks, U+2028-202F, U+205F-206F, ideographic space, BOM, variation selectors (U+FE00-FE0F, U+E0100-E01EF)
+  function skip(c) { return c <= 32 || (c >= 127 && c <= 160) || c === 173 || c === 5760 || c === 6158 || (c >= 8192 && c <= 8207) || (c >= 8232 && c <= 8239) || (c >= 8287 && c <= 8303) || c === 12288 || c === 65279 || (c >= 65024 && c <= 65039) || (c >= 917760 && c <= 917999); }
+  function fams(stack) {
+    var p = split.call(stack, ","), out = [], i, f, q;
+    for (i = 0; i < p.length; i++) { f = sTrim.call(p[i]); q = sSlice.call(f, 0, 1); if ((q === '"' || q === "'") && f.length > 1 && sSlice.call(f, -1) === q) f = sTrim.call(sSlice.call(f, 1, -1)); out[out.length] = sLower.call(f); }
+    return out;
+  }
+  function snip(t, i, w) {
+    var a = i - 30, b = i + w + 30, x;
+    if (a < 0) a = 0; if (b > t.length) b = t.length;
+    x = ccAt.call(t, a); if (x >= 56320 && x <= 57343) a++;
+    x = ccAt.call(t, b - 1); if (x >= 55296 && x <= 56319) b--;
+    return (a > 0 ? "\\u2026" : "") + sSlice.call(t, a, b) + (b < t.length ? "\\u2026" : "");
+  }
+  function checkText(txt, stack) {
+    if (said || !txt) return;
+    var key = stack + "\\u0000" + txt;
+    if (seenTxt[key]) return;
+    seenTxt[key] = 1;
+    var fl = null, n = txt.length, i = 0, c, w, k, ok;
+    while (i < n) {
+      c = cpAt.call(txt, i); w = c > 65535 ? 2 : 1;
+      if (!skip(c) && !inR(GL.rep, c)) {
+        if (!fl) fl = fams(stack);
+        for (ok = false, k = 0; k < fl.length && !ok; k++) if (rApply(hasOwn, GL.fams, [fl[k]]) && inR(GL.fams[fl[k]], c)) ok = true;
+        if (!ok) { refuse("glyph " + jsonStr({ cp: sUpper.call(numStr.call(c, 16)), font: stack, text: snip(txt, i, w) })); return; }
+      }
+      i += w;
+    }
+  }
+  // a canvas context's font (CSS font shorthand as Chrome serialises it: "italic 700 48px/1.2 \"My 12px Font\", serif")
+  // -> its family list: everything after the FIRST size token that comes before any quote (style / variant / weight /
+  // stretch keywords never hold a quote or a length, a quoted family may hold both)
+  var rxExec = RegExp.prototype.exec, SIZE = /^[^"']*?(?:^|\\s)[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:e[+-]?\\d+)?(?:px|pt|pc|in|cm|mm|q|em|rem|ex|ch|lh|vw|vh|vmin|vmax|%)(?:\\s*\\/\\s*[^\\s"']+)?\\s+/i;
+  function canvasStack(font) { var m = rxExec.call(SIZE, font); return m ? sTrim.call(sSlice.call(font, m[0].length)) : font; }
+  function wrapText(P) {
+    var fontGet = P && getter({ prototype: P }, "font"), names = ["fillText", "strokeText"], q;
+    if (!fontGet) return;
+    for (q = 0; q < 2; q++) (function (orig) {
+      Object.defineProperty(P, names[q], { value: function (text) { if (!inOrder && !said) { try { checkText(Str(text), canvasStack(fontGet.call(this))); } catch (x) {} } return rApply(orig, this, arguments); }, writable: false, configurable: false, enumerable: true });
+    })(P[names[q]]);
+  }
+  if (GL) { wrapText(proto("CanvasRenderingContext2D")); wrapText(proto("OffscreenCanvasRenderingContext2D")); }
+  // the strings of a computed content value ('"a" counter(x) "b"'), CSS escapes reduced to the escaped character
+  function cssStrings(v) {
+    var out = "", i, ch, inQ = false;
+    for (i = 0; i < v.length; i++) { ch = v[i]; if (!inQ) { if (ch === '"') inQ = true; continue; } if (ch === "\\\\") { out += v[++i] || ""; continue; } if (ch === '"') { inQ = false; continue; } out += ch; }
+    return out;
+  }
+  function scanDom() {
+    var root = getById.call(document, "graphic-root"), wk, node, el, tg, els, i, j, st, ct, PS = ["::before", "::after"], vp = null, rg = null;
+    if (!root) return;
+    if (boxOn) { vp = elRect.call(root); rg = mkRange.call(document); }
+    wk = mkWalker.call(document, root, 4);
+    while (!said && (node = nextNode.call(wk))) {
+      el = parentGet.call(node);
+      if (!el) continue;
+      tg = sUpper.call(tagGet.call(el));
+      if (tg === "SCRIPT" || tg === "STYLE" || tg === "TITLE") continue;
+      if (visible && !visible.call(el, VIS)) continue;
+      if (rg) { selContents.call(rg, node); if (outside(rangeRect.call(rg), vp)) continue; }
+      checkText(dataGet.call(node), cssVal.call(getCS.call(window, el), "font-family"));
+    }
+    els = elQsa.call(root, "*");
+    for (i = 0; i < els.length && !said; i++) for (j = 0; j < 2; j++) {
+      st = getCS.call(window, els[i], PS[j]); ct = cssVal.call(st, "content");
+      if (!ct || sIndex.call(ct, '"') < 0 || (visible && !visible.call(els[i], VIS)) || (vp && outside(elRect.call(els[i]), vp))) continue;
+      checkText(cssStrings(ct), cssVal.call(st, "font-family"));
+    }
+  }
   // R11 navigation trap. Not pagehide/beforeunload: measured, pagehide also fires when HyperFrames closes the page at
   // the end of a NORMAL render. The Navigation API's navigate event fires only for navigations the page starts
   // (location =, link clicks, form submits, refreshes) and is cancelled here.
@@ -373,7 +515,8 @@ export function preScript({ fps, L, inF, D, after }) {
     for (var i = 0; i < cs.length; i++) { try { out += "\u0000" + toURL.call(cs[i]); } catch (x) { out += "\u0000(unreadable canvas)"; } }
     return out;
   }
-  function orderCheck() {
+  function orderCheck() { inOrder = true; try { orderRun(); } finally { inOrder = false; } }
+  function orderRun() {
     var n = min(D, SAMPLES), ks = [], i, o, k;
     for (i = 0; i < n; i++) ks[i] = n === 1 ? 0 : round(i * (D - 1) / (n - 1));
     var fwd = [], back = [], mix = [];
@@ -397,7 +540,8 @@ export function preScript({ fps, L, inF, D, after }) {
     try {
       var r = window.seek(t);
       if (r && typeof r.then === "function") refuse("seek(" + fmt(t) + ") returned a Promise");
-    } catch (x) { refuse("seek(" + fmt(t) + ") threw: " + msg(x)); }
+    } catch (x) { refuse("seek(" + fmt(t) + ") threw: " + msg(x)); return; }
+    if (domOn && !said) { try { scanDom(); } catch (x) {} }
   });
 })();`;
 }
@@ -425,7 +569,7 @@ export function inlineMedia(text, media) {
   return out;
 }
 // The wrapper HTML for one render: { html (graphic text), meta (inspectGraphic), mode, fps, L, inF, D, after, W, H }
-export function wrapperHtml({ html, meta, mode = "overlay", fps = 30, L, inF = 0, D, after = "hold", W = 1080, H = 1920, fontDir }) {
+export function wrapperHtml({ html, meta, mode = "overlay", fps = 30, L, inF = 0, D, after = "hold", W = 1080, H = 1920, fontDir = FONT_DIR }) {
   const text = Buffer.isBuffer(html) ? html.toString("utf8") : String(html);
   const { w, h } = renderedSize(meta, mode, W, H);
   const src = inlineMedia(text, meta.media);
@@ -441,7 +585,7 @@ html, body { margin: 0; padding: 0; width: ${w}px; height: ${h}px; overflow: hid
 #graphic-root { position: relative; width: ${w}px; height: ${h}px; overflow: hidden; background: ${bg}; }
 </style>
 <script>
-${preScript({ fps, L, inF, D, after })}
+${preScript({ fps, L, inF, D, after, glyphs: glyphCoverage(text, fontDir, meta.fonts) })}
 ${RNG_SNIPPET}
 </script>
 ${headOf(src)}
