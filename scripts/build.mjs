@@ -3230,7 +3230,11 @@ if (spec.sceneFlash && spec.openFlash) {
   }
 }
 if (spec.openFlash) {
-  const f = spec.openFlash, t = E(f.at ?? 0, "open flash"), dur = f.dur ?? 0.4;
+  // default = the reel's first frame: the start of the first take in OUTPUT order. It used to be E(0) (source
+  // time 0), which threw "not inside any take" when the first take starts after 0 (e.g. a = 0.05) and
+  // pointed at the wrong take on a reordered edit. inTake(takes[0], a) is exactly what E(0) returned whenever
+  // the first take starts at source 0, so those reels build byte-identically.
+  const f = spec.openFlash, t = f.at == null ? +inTake(takes[0], takes[0].a).toFixed(3) : E(f.at, "open flash"), dur = f.dur ?? 0.4;
   const [c1, c2] = f.color ?? ["255,92,40", "255,150,120"];
   leakHtml += `<div id="oflash" class="clip" data-start="${r3(t)}" data-duration="${r3(dur)}" data-track-index="11" style="position:absolute;inset:0;z-index:8;pointer-events:none;mix-blend-mode:screen;opacity:0;background:radial-gradient(ellipse 70% 55% at 4% 74%, rgba(${c1},1) 0%, rgba(${c1},.85) 40%, rgba(${c1},0) 100%), radial-gradient(ellipse 45% 70% at 0% 30%, rgba(${c2},.85) 0%, rgba(${c2},0) 100%), linear-gradient(90deg, rgba(${c1},.55) 0%, rgba(${c1},0) 45%)"></div>`;
   tl.push(`ft("#oflash", { opacity: 0.6, xPercent: -25 }, { opacity: 1, xPercent: 0, duration: ${r3(dur * 0.25)}, ease: "power2.out" }, ${r3(t)});`);
