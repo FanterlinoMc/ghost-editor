@@ -1,5 +1,15 @@
 # Pixel check (A5): spec, built (CP2: `mac/pixel-check`)
 
+> **Status: parked 20 Oct (owner: editor + motion graphics first).** Branch `mac/pixel-check`, last code commit
+> 8ca4c06 (GATE: PASS; style sweep 210/210 x 2 identical to engine/release-1020 731a0de, `geometry.json` the only new
+> file). Done: `build/geometry.json` (additive, written last, never fails the build), `pixel_probe.mjs` (GSAP fetched by
+> Node and sha-pinned, safe cache, fail fast, root mode through the graphic uid drop + R12, refuses GRAPHIC_SANDBOX as
+> root, `cleanEnv()`), `pixel_check.py` with PX0-PX16, `complete` / `incomplete_reason`, `--grid`; tests 38 + 7 + 5,
+> mutation proofs 18/18 + 8/8; CP3 and CP4 passed through ef41948 (the GRAPHIC_SANDBOX / cleanEnv SHOULD is in
+> 8ca4c06, not yet re-verified by CP4). Open: owner items 4-8 (section 8: thresholds, exempt windows, verdict policy,
+> audio, retry owner), the first root-mode run on the Linux server (not done), and the cost under load (9.2-13.6 %
+> measured; `--grid 1.0` is the knob, default unchanged).
+
 Built: `scripts/lib/geometry.mjs` + `build.mjs` (writes `build/geometry.json`), `scripts/pixel_probe.mjs` (the DOM probe),
 `scripts/pixel_check.py` (the checker), `scripts/pixel-check.test.mjs` + `scripts/fixtures/pixel_fixture.py` (one
 synthetic reel, clean and with one planted defect per rule), `scripts/lib/geometry.test.mjs`. Where the build had to
