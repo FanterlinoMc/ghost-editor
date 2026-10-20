@@ -1,0 +1,120 @@
+{
+ "segments": [
+  {
+   "start": 0,
+   "end": 8,
+   "words": [
+    {
+     "word": "This",
+     "start": 0.3,
+     "end": 0.57
+    },
+    {
+     "word": "is",
+     "start": 0.63,
+     "end": 0.9
+    },
+    {
+     "word": "the",
+     "start": 0.96,
+     "end": 1.23
+    },
+    {
+     "word": "emoji",
+     "start": 1.3,
+     "end": 1.56
+    },
+    {
+     "word": "check",
+     "start": 1.63,
+     "end": 1.89
+    },
+    {
+     "word": "we",
+     "start": 1.96,
+     "end": 2.22
+    },
+    {
+     "word": "launch",
+     "start": 2.29,
+     "end": 2.56
+    },
+    {
+     "word": "it",
+     "start": 2.62,
+     "end": 2.89
+    },
+    {
+     "word": "now",
+     "start": 2.95,
+     "end": 3.22
+    },
+    {
+     "word": "and",
+     "start": 3.29,
+     "end": 3.55
+    },
+    {
+     "word": "watch",
+     "start": 3.62,
+     "end": 3.88
+    },
+    {
+     "word": "the",
+     "start": 3.95,
+     "end": 4.22
+    },
+    {
+     "word": "rocket",
+     "start": 4.28,
+     "end": 4.55
+    },
+    {
+     "word": "then",
+     "start": 4.61,
+     "end": 4.88
+    },
+    {
+     "word": "the",
+     "start": 4.95,
+     "end": 5.21
+    },
+    {
+     "word": "caption",
+     "start": 5.28,
+     "end": 5.54
+    },
+    {
+     "word": "says",
+     "start": 5.61,
+     "end": 5.87
+    },
+    {
+     "word": "this",
+     "start": 5.94,
+     "end": 6.21
+    },
+    {
+     "word": "deal",
+     "start": 6.27,
+     "end": 6.54
+    },
+    {
+     "word": "is",
+     "start": 6.6,
+     "end": 6.87
+    },
+    {
+     "word": "fire",
+     "start": 6.94,
+     "end": 7.2
+    },
+    {
+     "word": "okay",
+     "start": 7.27,
+     "end": 7.53
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,16 @@
+{
+  "title": "emoji-check",
+  "source": "assets/talk.mp4",
+  "words": "build/words.whisper.json",
+  "face": "build/face.json",
+  "fps": 30,
+  "style": "clean",
+  "outro": 0,
+  "music": null,
+  "takes": [{ "a": 0, "b": 8 }],
+  "zoom": {},
+  "captions": { "fixes": { "fire": "🔥" } },
+  "beats": [
+    { "type": "emoji", "emoji": "🚀", "at": 1.5, "to": 4.0, "x": 360, "y": 260, "sfx": "none" }
+  ]
+}
