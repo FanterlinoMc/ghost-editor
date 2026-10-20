@@ -2657,6 +2657,7 @@ const duoHtml = cap.style !== "duo" ? "" : (() => {
   const bareOf = (w) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
   const serifSet = new Set((cap.serif || []).map(bareOf));
   const inSpan = (xs, t) => xs.some(([a, b]) => t >= a - 0.02 && t < b);
+  let faceBandPrev = null;
   return words.map((w, i) => {
     const next = words[i + 1];
     const s = r3(Math.max(0, w.start - 0.03));
@@ -2678,6 +2679,26 @@ const duoHtml = cap.style !== "duo" ? "" : (() => {
       ms.sort((a, b) => a - b);
       const mouth = ms.length ? ms[Math.floor(ms.length * 0.75)] : -1;
       if (mouth > 0) pl.y = Math.min(placer.safeBottom - size * 1.1, Math.max(pl.y, Math.ceil((mouth + cap.dodgeMouth) / 40) * 40));
+    }
+    // the fixed chest line on a close face: a word whose box would cross the eyes-to-chin band (eyes less a quarter of the
+    // brow, to the chin, camera-mapped over the word) moves under the chin, else above the eyes, 40 px steps. A word that
+    // already clears the band never moves. Opt-in (cap.faceBand: true, pitch); cap.dodgeMouth keeps its own rule
+    if (cap.fixedY && !cap.dodgeMouth && cap.faceBand === true) {
+      const sp = placer.span(s, e), bh = Math.round(size * 1.25);
+      const b0 = sp.eyes - (sp.eyes - sp.top) * 0.25, b1 = sp.bottom, clear = (y) => y + bh <= b0 - 24 || y >= b1 + 24;
+      if (sp.seen && pl.y < b1 && pl.y + bh > b0) {
+        const under = Math.ceil((b1 + 24) / 40) * 40, over = Math.floor((b0 - 24 - bh) / 40) * 40;
+        // hold the previous dodged height while it still clears this word's face, so consecutive words do not jitter
+        if (faceBandPrev != null && clear(faceBandPrev) && faceBandPrev >= placer.safeTop && faceBandPrev + bh <= placer.safeBottom) pl.y = faceBandPrev;
+        else if (under + bh <= placer.safeBottom) pl.y = under;
+        else if (over >= placer.safeTop) pl.y = over;
+        else {
+          // neither side of the face fits inside the safe area (a face filling the frame): the safe top is the least bad place
+          pl.y = placer.safeTop;
+          console.warn(`WARN caption "${w.word}" at ${s.toFixed(2)}s: the face fills the frame, no room above or below it; placed at the safe top (${pl.y}px)`);
+        }
+        faceBandPrev = pl.y === under || pl.y === over || pl.y === faceBandPrev ? pl.y : null;
+      } else faceBandPrev = null;
     }
     if (cap.fixedY) placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: pl.y, h: Math.round(size * 1.25), mode: "duo", scale: 1, face: null });
     tl.push(`ft("#dw${i}", { autoAlpha: 0.2, filter: "blur(${big ? 8 : 5}px)" }, { autoAlpha: 1, filter: "blur(0px)", duration: ${big ? 0.12 : 0.08}, ease: "power2.out" }, ${s});`);
