@@ -531,9 +531,10 @@ export function killChromes(pids, { kill = process.kill, info = procInfo, uid = 
 // then the shim-marked PIDs that are still verified Chrome (puppeteer detaches Chrome into its own group). With a
 // GRAPHIC_SANDBOX launcher the marked PIDs are skipped: a launcher may run the render in its own PID namespace, where
 // those numbers name other processes out here (GRAPHIC_SANDBOX must not create a PID namespace if you want them killed).
+// format: mp4 / webm by mode (renderGraphic); graphic-frames.mjs passes png-sequence (out is then a directory).
 // -> Promise<{ status, secs, log, timedOut, shimPids, killed }>
-export function runRender({ dir, out, mode, fps, workers, launcher, shim, logFile, markFile, timeoutMs = 600000, bin, kill = process.kill, info = procInfo, chromeUid = null }) {
-  const argv = [...launcher.argv, process.execPath, bin || resolveHyperframes(), "render", "--format", mode === "insert" ? "mp4" : "webm", "-f", String(fps), "-q", "looks", ...(workers ? ["--workers", String(workers)] : []), "-o", out, dir];
+export function runRender({ dir, out, mode, fps, format = mode === "insert" ? "mp4" : "webm", workers, launcher, shim, logFile, markFile, timeoutMs = 600000, bin, kill = process.kill, info = procInfo, chromeUid = null }) {
+  const argv = [...launcher.argv, process.execPath, bin || resolveHyperframes(), "render", "--format", format, "-f", String(fps), "-q", "looks", ...(workers ? ["--workers", String(workers)] : []), "-o", out, dir];
   const env = cleanEnv({ ...RENDER_ENV, NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --require "${PRELOAD}"`.trim() });
   if (shim) { env.HYPERFRAMES_BROWSER_PATH = shim; delete env.PRODUCER_HEADLESS_SHELL_PATH; }
   if (markFile) { fs.writeFileSync(markFile, ""); env.GRAPHIC_SHIM_MARK = markFile; }
