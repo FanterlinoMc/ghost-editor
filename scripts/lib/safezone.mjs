@@ -202,9 +202,11 @@ export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = 
         if (alt) { mode = alt; y = opts[alt]; }
       }
     }
-    // hysteresis: keep the previous height when the move would be small
+    // hysteresis: keep the previous height when the move would be small - and only while this block, at that height,
+    // still ends inside the safe area: blocks are not all the same height (mac-45: a tilted Broadsheet block reserves
+    // 81-96 px by its width), so a taller block held at a shorter one's lower-face y ran into the bottom UI band
     if (prev && prev.mode === mode && Math.abs(prev.y - y) < 70) {
-      const ok = mode === "below" ? prev.y >= bottom + gap && prev.y <= maxY : mode === "above" ? prev.y + h <= top - gap && prev.y >= safeTop : true;
+      const ok = prev.y <= maxY && (mode === "below" ? prev.y >= bottom + gap : mode === "above" ? prev.y + h <= top - gap && prev.y >= safeTop : true);
       if (ok) y = prev.y;
     }
     y = Math.round(y);
