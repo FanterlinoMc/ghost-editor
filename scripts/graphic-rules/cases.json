@@ -1,5 +1,5 @@
 {
- "_": "Cases for scripts/graphic-rules/parity.mjs: html in, expect = the first failure (rules.mjs format) or null. bypass/fp: the CP3 reviewer's sets; meta: G18/G21-G26; v3: the CP3 re-review. mine: the CP3 re-reviewer's 11 extra cases; v31: line endings. pc: the PC reviewer's four v3.2 probe files verbatim (OK = the base script) plus the octal control; v32: siblings and controls. v321: the CP3 v3.2 re-reviewer's must-pass controls and the content escape.",
+ "_": "Cases for scripts/graphic-rules/parity.mjs: html in, expect = the first failure (rules.mjs format) or null. bypass/fp: the CP3 reviewer's sets; meta: G18/G21-G26; v3: the CP3 re-review. mine: the CP3 re-reviewer's 11 extra cases; v31: line endings. pc: the PC reviewer's four v3.2 probe files verbatim (OK = the base script) plus the octal control; v32: siblings and controls. v321: the CP3 v3.2 re-reviewer's must-pass controls and the content escape. glyph: G36 (v3.3), the emoji / pictograph ranges and their edges.",
  "cases": {
   "bypass.fetchConcat": {
    "html": "<script>window['fe'+'tch']('https://x')</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
@@ -800,6 +800,134 @@
   },
   "v321.ctlCssContentChar": {
    "html": "<html><head><style>.d::before{content:\"—\"}</style></head><body><script>window.duration = 2;\nwindow.seek = function (t) {};</script></body></html>",
+   "expect": null
+  },
+  "glyph.emojiMarkup": {
+   "html": "<p>See you at 5 👋</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+1F44B"
+  },
+  "glyph.emojiScript": {
+   "html": "<script>var s = 'Sent 🚀';</script><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+1F680"
+  },
+  "glyph.emojiStyle": {
+   "html": "<style>p::after { content: '✅' }</style><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+2705"
+  },
+  "glyph.heartVS16": {
+   "html": "<p>love ❤️</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+2764"
+  },
+  "glyph.vs16Alone": {
+   "html": "<p>x️</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+FE0F"
+  },
+  "glyph.playTriangle": {
+   "html": "<p>▶ Play</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+25B6"
+  },
+  "glyph.star": {
+   "html": "<p>⭐ 5.0</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+2B50"
+  },
+  "glyph.watch": {
+   "html": "<p>⌚</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+231A"
+  },
+  "glyph.accentsDashes": {
+   "html": "<p>Café — naïve “ok” € ™ ↑ Привет Łódź</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "glyph.below": {
+   "html": "<p>⋿ ■■</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+22FF"
+  },
+  "glyph.edgesOut": {
+   "html": "<p>↑ ↓ − ∕ ␀ ⟀ ⫿ Ⰰ ︎ 𞿿 🰀</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "glyph.ncrDec": {
+   "html": "<p>Published &#10003;</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+2713"
+  },
+  "glyph.ncrHex": {
+   "html": "<p>hi &#x1f44b</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+1F44B"
+  },
+  "glyph.ncrOk": {
+   "html": "<p>caf&#233; &#x2014;</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "glyph.ncrAmp": {
+   "html": "<p>&amp;#10003;</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "glyph.ncrSurrogate": {
+   "html": "<p>&#xD83D;&#xDC4B;</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "glyph.ncrTooBig": {
+   "html": "<p>&#99999999;</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": null
+  },
+  "glyph.arrowRight": {
+   "html": "<p>x →</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+2192"
+  },
+  "glyph.arrowLeft": {
+   "html": "<p>x ←</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+2190"
+  },
+  "glyph.arrowNE": {
+   "html": "<p>x ↗</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+2197"
+  },
+  "glyph.implies": {
+   "html": "<p>x ⇒</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+21D2"
+  },
+  "glyph.le": {
+   "html": "<p>x ≤</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+2264"
+  },
+  "glyph.ge": {
+   "html": "<p>x ≥</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+2265"
+  },
+  "glyph.ne": {
+   "html": "<p>x ≠</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+2260"
+  },
+  "glyph.approx": {
+   "html": "<p>x ≈</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+2248"
+  },
+  "glyph.infinity": {
+   "html": "<p>x ∞</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+221E"
+  },
+  "glyph.sqrt": {
+   "html": "<p>x √</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+221A"
+  },
+  "glyph.handHeart": {
+   "html": "<p>x 🫶</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+1FAF6"
+  },
+  "glyph.wand": {
+   "html": "<p>x 🪄</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+1FA84"
+  },
+  "glyph.salute": {
+   "html": "<p>x 🫡</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+1FAE1"
+  },
+  "glyph.legacy": {
+   "html": "<p>x 🯿</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
+   "expect": "G36:U+1FBFF"
+  },
+  "glyph.arabic": {
+   "html": "<p>x مرحبا</p><script>window.duration = 3.5;\nwindow.seek = function (t) {};</script>",
    "expect": null
   }
  }

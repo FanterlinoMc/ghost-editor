@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import * as G from "./graphic.mjs";
 import * as RR from "./graphic-render.mjs";
 import { DESIGNER_FONTS } from "./motion-graphics.mjs";
-import { goodGraphic, insertGraphic, fetchAtRender, throwsInSeek } from "./graphic-fixtures.mjs";
+import { goodGraphic, insertGraphic, fetchAtRender, throwsInSeek, tinyFont } from "./graphic-fixtures.mjs";
 // every temp dir a test makes is removed after the run (chmod first: some are made 0700 / 0711 on purpose)
 const TMP = [];
 const tmpd = (prefix) => { const d = fs.mkdtempSync(prefix); TMP.push(d); return d; };
@@ -284,6 +284,161 @@ test("bridge: frame map, refusals (R3, R4, R5, R11), integrity against the graph
   assert.deepEqual(nav2.errors, ["GRAPHIC-REFUSED: navigated"]);
 });
 
+// R14 in a vm: a fake DOM (text nodes under #graphic-root with a font-family, visibility, ::before / ::after) and a
+// fake canvas 2d context, then the real preScript with the real coverage (glyphCoverage of the graphic's text)
+function glyphPage({ texts = [], pseudo = null, draw = null, style = "", graphic = "", D = 60, families = [], boxes = false } = {}) {
+  const errors = [], listeners = {};
+  const ctx = vm.createContext({ console: { error: (m) => errors.push(m) } });
+  vm.runInContext(`
+    function EventTarget() {} function Node() {} function CharacterData() {} function Element() {} function Document() {}
+    function HTMLCanvasElement() {} function TreeWalker() {} function CSSStyleDeclaration() {} function CanvasRenderingContext2D() {}
+    Object.setPrototypeOf(Element.prototype, Node.prototype); Object.setPrototypeOf(CharacterData.prototype, Node.prototype);
+    Object.defineProperty(Node.prototype, "parentElement", { get: function () { return this._parent; } });
+    Object.defineProperty(CharacterData.prototype, "data", { get: function () { return this._data; } });
+    Object.defineProperty(Element.prototype, "tagName", { get: function () { return this._tag; } });
+    Object.defineProperty(Element.prototype, "innerHTML", { get: function () { return ""; } });
+    Element.prototype.getAttribute = function () { return null; };
+    Element.prototype.checkVisibility = function (o) { return !(o && o.opacityProperty && this._hidden); };
+    Element.prototype.querySelectorAll = function () { return this._els; };
+    HTMLCanvasElement.prototype.toDataURL = function () { return ""; };
+    TreeWalker.prototype.nextNode = function () { return this._list[this._i++] || null; };
+    Document.prototype.createTreeWalker = function (root, what) { var w = Object.create(TreeWalker.prototype); w._list = what === 4 ? root._texts : []; w._i = 0; return w; };
+    Document.prototype.getElementById = function (id) { return id === "graphic-root" ? root : null; };
+    Document.prototype.querySelectorAll = function () { return []; };
+    CSSStyleDeclaration.prototype.getPropertyValue = function (p) { return this._p[p] || ""; };
+    function getComputedStyle(el, ps) { var s = Object.create(CSSStyleDeclaration.prototype); s._p = ps ? ((el._pseudo || {})[ps] || { content: "none", "font-family": el._font }) : { "font-family": el._font }; return s; }
+    Object.defineProperty(CanvasRenderingContext2D.prototype, "font", { get: function () { return this._font || "10px sans-serif"; }, set: function (v) { this._font = v; } });
+    var drawn = [];
+    CanvasRenderingContext2D.prototype.fillText = function (t) { drawn.push(String(t)); };
+    CanvasRenderingContext2D.prototype.strokeText = function (t) { drawn.push(String(t)); };
+    var root = Object.create(Element.prototype); root._tag = "DIV"; root._texts = []; root._els = [];
+    var document = Object.create(Document.prototype); document.documentElement = root; document.body = root;
+    var g = Object.create(CanvasRenderingContext2D.prototype);
+    var window = this;`, ctx);
+  if (boxes) vm.runInContext(`
+    function Range() {}
+    Range.prototype.selectNodeContents = function (n) { this._n = n; };
+    Range.prototype.getBoundingClientRect = function () { return this._n._rect || { left: 10, top: 10, right: 100, bottom: 60, width: 90, height: 50 }; };
+    Document.prototype.createRange = function () { return Object.create(Range.prototype); };
+    Element.prototype.getBoundingClientRect = function () { return this === root ? { left: 0, top: 0, right: 1080, bottom: 1080, width: 1080, height: 1080 } : this._rect || { left: 10, top: 10, right: 100, bottom: 60, width: 90, height: 50 }; };`, ctx);
+  for (const t of texts) {
+    const el = Object.create(ctx.Element.prototype);
+    Object.assign(el, { _tag: t.tag || "SPAN", _font: t.font || "Inter, sans-serif", _hidden: !!t.hidden, _pseudo: t.pseudo || null });
+    const node = Object.create(ctx.CharacterData.prototype);
+    Object.assign(node, { _parent: el, _data: t.text, _rect: t.rect });
+    if (t.rect) el._rect = t.rect;
+    ctx.root._texts.push(node); ctx.root._els.push(el);
+  }
+  ctx.EventTarget.prototype.addEventListener = function (n, f) { if (this === ctx.window) listeners[n] = f; };
+  ctx.navigation = {};
+  Object.assign(ctx, { duration: 2, size: { w: 1080, h: 1080 } });
+  ctx.seek = (t) => { if (draw) draw(ctx, t); };
+  const page = `<!doctype html><html><head><style>${style}</style></head><body></body></html>`;
+  vm.runInContext(G.preScript({ fps: 30, L: 60, inF: 0, D, after: "hold", glyphs: G.glyphCoverage(page, undefined, families) }), ctx);
+  if (graphic) vm.runInContext(graphic, ctx);
+  return { fire: (time) => listeners["hf-seek"]({ detail: { time } }), errors, ctx };
+}
+test("R14 bridge: DOM text, ::before / ::after, canvas fillText / strokeText against the engine fonts' coverage", () => {
+  const R14 = (line) => RR.scanLog(`[Browser:ERROR] ${line}`).map((x) => x.text);
+  // the staging bug: a message bubble ending in an emoji
+  const dom = glyphPage({ texts: [{ text: "Got it" }, { text: "See you at 5 \u{1F44B}" }] });
+  dom.fire(0);
+  assert.deepEqual(dom.errors, ['GRAPHIC-REFUSED: glyph {"cp":"1F44B","font":"Inter, sans-serif","text":"See you at 5 \u{1F44B}"}']);
+  assert.deepEqual(R14(dom.errors[0]), ["character U+1F44B '\u{1F44B}' in \"See you at 5 \u{1F44B}\" isn't in Inter, sans-serif (no glyph; renders as a box)"]);
+  // fine: accents, dashes, quotes, euro, Cyrillic, Polish, arrows the fonts have, whitespace, ZWJ, VS16, NBSP
+  const ok = glyphPage({ texts: [{ text: "Café — naïve “ok” 5 € ½ ™ · ↑ Привет Łódź" }, { text: "a\u200db\ufe0f\u00a0c\n\t" }, { text: "x", font: '"Instrument Serif", serif' }] });
+  ok.fire(0); ok.fire(1);
+  assert.deepEqual(ok.errors, []);
+  // a symbol no engine font has (→ U+2192, ✓ U+2713) is refused like an emoji
+  const arrow = glyphPage({ texts: [{ text: "Record → Post" }] });
+  arrow.fire(0);
+  assert.deepEqual(R14(arrow.errors[0]), ["character U+2192 '→' in \"Record → Post\" isn't in Inter, sans-serif (no glyph; renders as a box)"]);
+  // invisible text and <script> / <style> text are not drawn: not checked
+  const hid = glyphPage({ texts: [{ text: "\u{1F44B}", hidden: true }, { text: "var s = '\u{1F680}';", tag: "SCRIPT" }, { text: "p{}\u{1F680}", tag: "style" }] });
+  hid.fire(0);
+  assert.deepEqual(hid.errors, []);
+  // ::after content
+  const ps = glyphPage({ texts: [{ text: "Done", pseudo: { "::after": { content: '"  \\"ok\\" \u2705"', "font-family": "Montserrat" } } }] });
+  ps.fire(0);
+  assert.deepEqual(R14(ps.errors[0]), ["character U+2705 '\u2705' in \"\"ok\" \u2705\" isn't in Montserrat (no glyph; renders as a box)"]);
+  // canvas: the context's font, fillText and strokeText; drawn as before (the original still runs)
+  const cv = glyphPage({ draw: (c, t) => { c.g.font = "600 64px Inter"; c.g.fillText("Sent", 0, 0); if (t > 0.5) c.g.strokeText("Sent \u{1F680}", 0, 0); } });
+  cv.fire(0);
+  assert.deepEqual(cv.errors, [], "frame 0 draws no emoji (the seek-order check's draws are not checked)");
+  cv.fire(1);
+  assert.deepEqual(R14(cv.errors[0]), ["character U+1F680 '\u{1F680}' in \"Sent \u{1F680}\" isn't in Inter (no glyph; renders as a box)"]);
+  assert.ok(cv.ctx.drawn.includes("Sent \u{1F680}"));
+  // the graphic cannot unwrap fillText
+  const un = glyphPage({ graphic: "CanvasRenderingContext2D.prototype.fillText = function () {}; try { Object.defineProperty(CanvasRenderingContext2D.prototype, 'fillText', { value: function () {} }); } catch (e) {}", draw: (c) => c.g.fillText("\u{1F680}", 0, 0) });
+  un.fire(0); un.fire(0.1);
+  assert.equal(un.errors.length, 1);
+  // a data: @font-face that HAS the glyph: fine in that family, refused in another
+  const emo = `@font-face { font-family: "Emo"; src: url(data:font/ttf;base64,${tinyFont([[0x1f44b, 0x1f44b]]).toString("base64")}); }`;
+  const own = glyphPage({ style: emo, texts: [{ text: "hi \u{1F44B}", font: "Emo, sans-serif" }] });
+  own.fire(0);
+  assert.deepEqual(own.errors, []);
+  const other = glyphPage({ style: emo, texts: [{ text: "hi \u{1F44B}", font: "Inter" }] });
+  other.fire(0);
+  assert.equal(other.errors.length, 1);
+  // a long line: the snippet is 30 code units each side, cut with an ellipsis, never through a surrogate pair
+  const long = glyphPage({ texts: [{ text: "\u{1F600}".repeat(20) + "x".repeat(40) + "\u{1F44B}" + "y".repeat(40) }] });
+  long.fire(0);
+  const a = RR.glyphArgs(long.errors[0].slice("GRAPHIC-REFUSED: glyph ".length));
+  assert.equal(a.cp, "1F600");
+  assert.equal(a.snippet, "\u{1F600}".repeat(16) + "…", "30 code units after the character's 2");
+  const cut = glyphPage({ texts: [{ text: "→x" + "\u{1F600}".repeat(20) }] });
+  cut.fire(0);
+  assert.equal(RR.glyphArgs(cut.errors[0].slice("GRAPHIC-REFUSED: glyph ".length)).snippet, "→x" + "\u{1F600}".repeat(14) + "…", "the cut at 31 would split a pair: one less");
+  assert.equal(RR.glyphArgs("{bad json"), null);
+  assert.deepEqual(RR.scanLog('[Browser:ERROR] GRAPHIC-REFUSED: glyph {bad').map((x) => x.code), ["R2"], "an unreadable glyph line is still a refusal");
+});
+
+test("R14 bridge: Arabic from the bundled face, canvas font parsing, off-viewport text", () => {
+  const ar = "مرحبا بالعالم";
+  const inInter = glyphPage({ families: ["Inter"], texts: [{ text: ar }, { text: ar, font: '"Noto Sans Arabic"' }] });
+  inInter.fire(0);
+  assert.deepEqual(inInter.errors, [], "Arabic in an engine family the page loads: the aliased Noto Sans Arabic face has it");
+  const generic = glyphPage({ families: ["Inter"], texts: [{ text: ar, font: "sans-serif" }] });
+  generic.fire(0);
+  assert.match(generic.errors[0] || "", /"cp":"645","font":"sans-serif"/, "a generic-only stack would need a system font: refused");
+  const none = glyphPage({ texts: [{ text: ar }] });
+  none.fire(0);
+  assert.equal(none.errors.length, 1, "no engine family inlined: no Arabic face either");
+  // canvas: the family list after the size, a quoted family holding "12px " included
+  const q = glyphPage({ draw: (c) => { c.g.font = 'italic 700 48px "My 12px Font", serif'; c.g.fillText("\u{1F680}", 0, 0); } });
+  q.fire(0.5);
+  assert.match(q.errors[0] || "", /"font":"\\"My 12px Font\\", serif"/);
+  const em = glyphPage({ draw: (c) => { c.g.font = "bold 3em/1.2 Inter, sans-serif"; c.g.fillText("\u{1F680}", 0, 0); } });
+  em.fire(0.5);
+  assert.match(em.errors[0] || "", /"font":"Inter, sans-serif"/, "any CSS length and a line-height, not only 'px '");
+  // off-viewport (wholly outside the root's box) or empty boxes are not drawn: skipped; partly inside: checked
+  const off = glyphPage({ boxes: true, texts: [{ text: "\u{1F44B}", rect: { left: 1200, top: 10, right: 1300, bottom: 60, width: 100, height: 50 } }, { text: "\u{1F680}", rect: { left: 0, top: -90, right: 50, bottom: 0, width: 50, height: 90 } }] });
+  off.fire(0);
+  assert.deepEqual(off.errors, []);
+  const part = glyphPage({ boxes: true, texts: [{ text: "\u{1F44B}", rect: { left: 1050, top: 10, right: 1150, bottom: 60, width: 100, height: 50 } }] });
+  part.fire(0);
+  assert.equal(part.errors.length, 1);
+  const pseudoOff = glyphPage({ boxes: true, texts: [{ text: "ok", rect: { left: -500, top: 0, right: -10, bottom: 50, width: 490, height: 50 }, pseudo: { "::after": { content: '"\u2705"', "font-family": "Inter" } } }] });
+  pseudoOff.fire(0);
+  assert.deepEqual(pseudoOff.errors, []);
+});
+
+test("wrapper: the Arabic face first, as Noto Sans Arabic and under each used engine family, only with an engine family", () => {
+  const meta = insp(goodGraphic()).meta;
+  const html = G.wrapperHtml({ html: goodGraphic(), meta, fps: 30, L: 60, inF: 0, D: 60 });
+  const iAr = html.indexOf('@font-face { font-family: "Noto Sans Arabic"'), iMa = html.indexOf('@font-face { font-family: "Montserrat"; src');
+  assert.ok(iAr > 0 && iAr < iMa, "declared before the Latin faces");
+  assert.equal((html.match(/unicode-range: U\+0600-06FF/g) || []).length, 2, "Noto Sans Arabic + Montserrat");
+  assert.equal(G.fontFaceCss([]), "", "no engine family: nothing inlined");
+});
+
+test("G36: an emoji / pictograph written in the file is refused before any render; accents pass", () => {
+  assert.equal(first(doc({ body: "<p>See you at 5 \u{1F44B}</p>" })), R("G36", { cp: "1F44B", ch: "\u{1F44B}" }));
+  assert.equal(first(doc({ script: "var s = 'love \u2764\ufe0f';" })), R("G36", { cp: "2764", ch: "\u2764" }));
+  assert.equal(first(doc({ body: "<p>Café — naïve “ok” € ½ ↑ Привет</p>" })), "OK");
+  assert.equal(R("G36", { cp: "1F44B", ch: "x" }), "graphic file assets/graphics/graphic.html has the character U+1F44B 'x' (an emoji or symbol: no engine font has a glyph for it, it renders as a box)");
+});
+
 test("log rules: R1, R2, R3, R4, R5, R11, R13 lines", () => {
   const log = [
     "\x1b[31m[Browser:ERROR] Refused to load the image 'https://example.com/a.png' because it violates the following Content Security Policy directive: \"img-src data:\".\x1b[0m",
@@ -319,10 +474,10 @@ test("log rules: R1, R2, R3, R4, R5, R11, R13 lines", () => {
   assert.equal(RR.budgetFor(900), 155);
 });
 
-test("cache key v3: canonical JSON, stable, sensitive to every field, media order free", () => {
+test("cache key v4: canonical JSON, stable, sensitive to every field, media order free", () => {
   const base = { html: "<html>x</html>", media: [["assets/graphics/media/b.png", "bb"], ["assets/graphics/media/a.png", "aa"]], fonts: ["Oswald", "Inter"], chrome: "152.0.7977.30", ffmpeg: "7.1.1", platform: "darwin-arm64", fps: 30, w: 1080, h: 1080, mode: "overlay", frames: 60, inF: 0, after: "hold" };
   const k = G.graphicKey(base);
-  assert.equal(k.json, `{"after":"hold","chrome":"152.0.7977.30","ffmpeg":"7.1.1","fonts":["Inter","Oswald"],"fps":30,"frames":60,"h":1080,"html":"${G.sha256("<html>x</html>")}","in":0,"media":[["assets/graphics/media/a.png","aa"],["assets/graphics/media/b.png","bb"]],"mode":"overlay","platform":"darwin-arm64","quality":"looks","renderer":"hyperframes@0.8.81","v":3,"w":1080}`);
+  assert.equal(k.json, `{"after":"hold","chrome":"152.0.7977.30","ffmpeg":"7.1.1","fonts":["Inter","Oswald"],"fps":30,"frames":60,"h":1080,"html":"${G.sha256("<html>x</html>")}","in":0,"media":[["assets/graphics/media/a.png","aa"],["assets/graphics/media/b.png","bb"]],"mode":"overlay","platform":"darwin-arm64","quality":"looks","renderer":"hyperframes@0.8.81","v":4,"w":1080}`);
   assert.equal(k.key, G.sha256(k.json));
   assert.equal(G.graphicKey({ ...base, media: [...base.media].reverse(), fonts: ["Inter", "Oswald"] }).key, k.key);
   for (const [f, v] of Object.entries({ html: "<html>y</html>", media: [], fonts: ["Inter"], chrome: "153.0.0.1", ffmpeg: "7.1.2", platform: "linux-x64", quality: "draft", fps: 25, w: 1078, h: 1078, mode: "insert", frames: 61, inF: 1, after: "loop" }))
@@ -1028,7 +1183,7 @@ test("REASONS are word for word the spec's tables (references/reel-json.md)", ()
   const sec = md.slice(md.indexOf("## Prompt Motion graphic"), md.indexOf("\n## ", md.indexOf("## Prompt Motion graphic") + 5));
   const PH = { html: "<html>", match: "<match>", bytes: "<bytes>", path: "<path>", n: "<n>", name: "<name>", value: "<value>", W: "<W>", H: "<H>", w: "<w>", h: "<h>",
     v: "<v>", s: "<s>", url: "<url>", message: "<message>", t: "<t>", a: "<a>", b: "<b>", i: "<i>", L: "<L>", code: "<code>", line: "<last log line>", k: "<k>",
-    duration: "<duration>", platform: "<platform name>" };
+    duration: "<duration>", platform: "<platform name>", cp: "<hex>", ch: "<char>", snippet: "<snippet>", font: "<font>" };
   const MORE = { G16: ["G16o"], G17: ["G17n"], R4: ["R4p"], R6: ["R6n", "R6L", "R6o"], R12: ["R12n", "R12c"] };
   const seen = new Set(), diffs = [];
   for (const line of sec.split("\n")) {

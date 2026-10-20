@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Glyph check: dom-emoji</title>
+<style>
+  #root { position: relative; width: 1080px; height: 1080px; overflow: hidden; font-family: Inter, sans-serif; }
+  .bubble { position: absolute; left: 120px; padding: 28px 40px; border-radius: 40px; background: #2b6cf6; color: #fff; font-size: 52px; font-weight: 600; }
+  #cv { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="root">
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; opacity: 0; font-family: Inter; font-weight: 600">Aa</div>
+<div class="bubble" id="b1" style="top: 300px">Got it, thanks</div>
+<div class="bubble" id="b2" style="top: 460px"></div>
+</div>
+<script>
+  window.duration = 2;
+  window.size = { w: 1080, h: 1080 };
+  function clamp(x, a, b) { return x < a ? a : x > b ? b : x; }
+  
+  window.seek = function (t) {
+    var p = clamp((t - 0.5) / 0.5, 0, 1);
+    document.getElementById("b2").style.opacity = p;
+    document.getElementById("b2").textContent = "See you at 5 " + String.fromCodePoint(0x1F44B);
+  };
+</script>
+</body>
+</html>

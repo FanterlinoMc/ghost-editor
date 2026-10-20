@@ -1,6 +1,6 @@
 // Prompt Motion graphic static rules (spec: references/reel-json.md, "Prompt Motion graphic"), node side.
 // The regex sources live in rules.json, shared with rules.py (the Python mirror); parity.mjs checks both agree.
-// Covers the regex rules (G5-G34), G35 (a raw-text element starting inside another tag), G18 (fonts) and G21/G22/G23/G26 (literal assignments). G1-G4, G15-G17, G24
+// Covers the regex rules (G5-G34), G35 (a raw-text element starting inside another tag), G36 (a character no engine font has), G18 (fonts) and G21/G22/G23/G26 (literal assignments). G1-G4, G15-G17, G24
 // and P1-P3 need the file system or the placement and are not here.
 import fs from "node:fs";
 import path from "node:path";
@@ -47,6 +47,19 @@ function g18(S) {
   return null;
 }
 
+// G36: the first code point of WHOLE inside one of rules.json's glyphs.G36 ranges, as "U+<hex>" (4+ upper-case digits).
+// Numeric character references (&#10003; / &#x2713;, the ';' optional) count as the character they name (when it is a
+// scalar value, U+0000-10FFFF without surrogates); named references (&check;) are not decoded.
+const NCR = new RegExp(J.glyphs.ncr, "g");
+export function g36(whole) {
+  const text = whole.replace(NCR, (m, h, d) => { const c = h !== undefined ? parseInt(h, 16) : parseInt(d, 10); return c <= 0x10ffff && !(c >= 0xd800 && c <= 0xdfff) ? String.fromCodePoint(c) : m; });
+  for (const ch of text) {
+    const c = ch.codePointAt(0);
+    if (J.glyphs.G36.some(([a, b]) => c >= a && c <= b)) return { cp: c.toString(16).toUpperCase().padStart(4, "0"), ch };
+  }
+  return null;
+}
+
 /** First failing rule in spec table order, as "Gn:<SCOPE>:<match>" (or "Gn" / "G18:<family>"), or null. */
 export function firstFail(html, { W = 1080, H = 1920 } = {}) {
   const S = scopes(html), M = J.meta, s = S.SCRIPT;
@@ -71,6 +84,7 @@ export function firstFail(html, { W = 1080, H = 1920 } = {}) {
     () => (re(M.G26).test(s) ? "G26" : null),
     () => regexHit(27, 34),
     () => (S.insideTag ? `G35:${JSON.stringify(S.insideTag)}` : null),
+    () => { const g = g36(S.WHOLE); return g ? `G36:U+${g.cp}` : null; },
   ];
   for (const c of checks) { const r = c(); if (r) return r; }
   return null;
