@@ -78,6 +78,7 @@ export const REASONS = {
   R11: () => `graphic navigated away from its page: render refused`,
   R12: ({ url }) => `network lock is not in place (${url} was reachable from the render browser): graphic renders refused`,
   R12n: ({ message }) => `network lock probe could not run: ${message}`,
+  R12c: ({ message }) => `graphic Chrome could not be cleaned up safely: ${message}`,
   R13: ({ v, k }) => `the render used Chrome ${v}, the cache key says ${k}: nothing cached`,
   GW1: ({ v, duration }) => `graphic in ${v}s is outside 0..${duration}s, clamped`,
   GW2: ({ a, b }) => `graphic after cut: shortened from ${a}s to ${b}s (the graphic's length)`,
@@ -283,13 +284,16 @@ export const canonicalJson = (v) => Array.isArray(v) ? `[${v.map(canonicalJson).
 export const sha256 = (b) => crypto.createHash("sha256").update(b).digest("hex");
 export const platformTag = (p = process.platform, a = process.arch) => `${p}-${a}`;
 // html: bytes or text; media: [[path, sha256 hex]]; fonts: engine families; w, h: the RENDERED size; chrome, ffmpeg: versions
-export function graphicKey({ html, media = [], fonts = [], chrome, ffmpeg, quality = QUALITY, platform = platformTag(), fps, w, h, mode, frames, inF = 0, after = "hold" }) {
+// launch: how Chrome was started when that changes pixels (graphic-render's ROOT_LAUNCH for a root render, which drops
+// Chrome to another uid with extra flags); absent / empty = the plain launch, and the key is exactly what it was.
+export function graphicKey({ html, media = [], fonts = [], chrome, ffmpeg, quality = QUALITY, platform = platformTag(), fps, w, h, mode, frames, inF = 0, after = "hold", launch }) {
   for (const [k, v] of Object.entries({ fps, w, h, frames, inF })) if (!Number.isInteger(v)) throw new Error(`graphicKey: ${k} must be an integer (got ${v})`);
   if (!chrome || !ffmpeg) throw new Error("graphicKey: chrome and ffmpeg versions are required");
   const obj = {
     v: KEY_VERSION, html: sha256(Buffer.isBuffer(html) ? html : Buffer.from(String(html), "utf8")),
     media: [...media].map(([p, s]) => [p, s]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
     fonts: [...fonts].sort(), renderer: RENDERER, chrome, ffmpeg, quality, platform, fps, w, h, mode, frames, in: inF, after,
+    ...(launch ? { launch: String(launch) } : {}),
   };
   const json = canonicalJson(obj);
   return { key: sha256(Buffer.from(json, "utf8")), json };

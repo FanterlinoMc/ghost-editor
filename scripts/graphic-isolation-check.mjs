@@ -6,7 +6,9 @@
 // Node preload, exactly as renderGraphic does, and counts what reaches the listener. The routes bypass the static scan
 // on purpose (the scan is hygiene; the lock is what must hold). --baseline also renders each route WITHOUT the shim,
 // to show the route is real. Then the R12 probe, with the listener's URL added: through the shim it must fail, through
-// the bare Chrome it must reach. Exit 0 only if every route had 0 hits through the shim and the probe behaved.
+// the bare Chrome the listener must see it. Exit 0 only if every route had 0 hits through the shim and the probe behaved.
+// "Bare" is a shim without the lock flags (chromeShim lock: false): the same launch otherwise, so as root it is the same
+// setpriv drop to GRAPHIC_CHROME_UID (a root Chrome would not start at all and the baseline would be vacuous).
 import fs from "node:fs";
 import os from "node:os";
 import net from "node:net";
@@ -14,7 +16,7 @@ import dgram from "node:dgram";
 import path from "node:path";
 import { wrapperHtml, graphicFrames } from "./lib/graphic.mjs";
 import { holdRenderLock } from "./lib/graphic-lock.mjs";
-import { runRender, chromeShim, findChrome, probeNetwork, sandboxLauncher, scanLog, PROBE_URLS } from "./lib/graphic-render.mjs";
+import { runRender, chromeShim, chromeUser, chromeHome, releaseChromeHome, hostLock, sweepUid, findChrome, probeNetwork, sandboxLauncher, scanLog, PROBE_URLS } from "./lib/graphic-render.mjs";
 
 holdRenderLock(); // --lock <path> / GRAPHIC_RENDER_LOCK: re-run under lockf / flock (the shared Mac)
 const args = process.argv.slice(2);
@@ -90,10 +92,26 @@ const graphic = (code, markup = "") => `<!doctype html><html><head><meta charset
   };
 </script></body></html>`;
 
-let chrome;
-try { chrome = findChrome(); } catch (e) { console.log(`GRAPHIC ISOLATION: FAIL  (${e.message})`); process.exit(1); }
+const user = chromeUser();
+if (user.error) { console.log(`GRAPHIC ISOLATION: FAIL  (${user.error})`); process.exit(1); }
+console.log(user.root ? `running as root: Chrome dropped to ${user.uid}:${user.gid} with ${user.setpriv}` : "not root: Chrome runs as this user");
+let chrome, shim, bareShim, home = null;
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-isolation-"));
-const shim = chromeShim(path.join(work, "shim"), chrome);
+let lock = null;
+// root: kills every process of the uid, then removes the home (kept, and FAIL, if any survives); then the host lock
+const dropHome = () => { const r = releaseChromeHome(home, user); if (lock) lock.release(); if (!r.ok) console.log(`GRAPHIC RENDER UNSAFE: ${r.error}`); return r.ok; };
+try {
+  chrome = findChrome();
+  if (user.root) { // the uid's host lock and the sweep of an earlier render's leftovers, as renderGraphic
+    lock = await hostLock(user);
+    const sw = sweepUid(user);
+    if (!sw.ok) throw new Error(sw.error);
+  }
+  home = chromeHome(user); // root: the dropped Chrome's home, under os.tmpdir(); null otherwise
+  shim = chromeShim(path.join(work, "shim"), chrome, { home, setpriv: user.setpriv || null });
+  bareShim = chromeShim(path.join(work, "bare"), chrome, { lock: false, home, setpriv: user.setpriv || null });
+} catch (e) { dropHome(); console.log(`GRAPHIC ISOLATION: FAIL  (${e.message})`); process.exit(1); }
+if (!shim) { console.log("GRAPHIC ISOLATION: FAIL  (no chrome-headless-shell, or no POSIX shim)"); process.exit(1); }
 const launcher = sandboxLauncher();
 const fps = 30, meta = { duration: 1, size: { w: 320, h: 320 }, fonts: [], media: [] };
 const fr = graphicFrames({ duration: 1, fps });
@@ -110,7 +128,7 @@ for (const [name, code, markup] of ROUTES) {
     if (args.includes("--no-trap")) page = page.replace(`add.call(window.navigation, "navigate"`, `(function () {})(window.navigation, "navigate"`);
     fs.writeFileSync(path.join(dir, "index.html"), page);
     hits.length = 0;
-    const r = await runRender({ dir, out: path.join(dir, "out.webm"), mode: "overlay", fps, workers: null, launcher, shim: variant === "shim" ? shim : null, logFile: path.join(dir, "render.log") });
+    const r = await runRender({ dir, out: path.join(dir, "out.webm"), mode: "overlay", fps, workers: null, launcher, shim: variant === "shim" ? shim : bareShim, logFile: path.join(dir, "render.log") });
     await settle();
     const refused = scanLog(r.log).map((x) => x.code);
     row[variant] = { hits: [...hits], exit: r.status, refused: [...new Set(refused)] };
@@ -124,18 +142,20 @@ for (const [name, code, markup] of ROUTES) {
 // the R12 probe, with the listener's URL added
 const probeUrls = [...PROBE_URLS, `${U}/probe`];
 hits.length = 0;
-const pShim = probeNetwork({ launcher, shim, urls: probeUrls });
+const pShim = probeNetwork({ launcher, shim, urls: probeUrls, user });
 await settle();
 const shimProbeHits = hits.length;
 hits.length = 0;
-const pBare = probeNetwork({ launcher, shim: chrome, urls: probeUrls });
+const pBare = probeNetwork({ launcher, shim: bareShim, urls: probeUrls, user });
 await settle();
+const bareReached = hits.some((h) => h.startsWith("TCP")); // the listener saw the bare Chrome: the baseline really ran
 console.log(`probe through the shim: ${pShim.ok ? "PASS (all failed)" : "REFUSED: " + pShim.refusal}; listener hits ${shimProbeHits}`);
 pShim.lines.forEach((l) => console.log("  " + l));
-console.log(`probe through the bare Chrome: ${pBare.ok ? "PASS (all failed: the probe would be vacuous here)" : "REFUSED (expected): " + pBare.refusal}; listener hits ${hits.length}`);
+console.log(`probe through the bare Chrome: ${pBare.ok ? "PASS (all failed: the probe would be vacuous here)" : bareReached ? "REFUSED (expected, the listener was reached): " + pBare.refusal : "REFUSED, but the listener was NOT reached (the baseline did not run): " + pBare.refusal}; listener hits ${hits.length}`);
 pBare.lines.forEach((l) => console.log("  " + l));
 tcp.close(); udp.close(); lo4.close(); lo6.close();
-const ok = leaks === 0 && pShim.ok && shimProbeHits === 0 && !pBare.ok;
+const released = dropHome();
+const ok = leaks === 0 && pShim.ok && shimProbeHits === 0 && !pBare.ok && bareReached && released;
 console.log(`routes through the shim with hits: ${leaks} of ${ROUTES.length}`);
 console.log(`GRAPHIC ISOLATION: ${ok ? "PASS" : "FAIL"}  (work dir ${work})`);
 process.exit(ok ? 0 : 1);

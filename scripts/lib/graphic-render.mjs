@@ -14,6 +14,28 @@
 //      `vendor: blocked <url>` (R1). The page itself has the CSP meta and the navigation trap (wrapper).
 //   3. Optional GRAPHIC_SANDBOX: an extra launcher command around the whole render (a JSON array, or words split on
 //      spaces; e.g. `sandbox-exec -f <profile>` on a Mac, `unshare -rn` where allowed). Unset: none.
+//   4. Running as root (the production container: uid 0, no CAP_SYS_ADMIN, no user namespaces, so Chrome's own sandbox
+//      cannot start and Chrome refuses root without --no-sandbox): the shim drops Chrome to GRAPHIC_CHROME_UID /
+//      GRAPHIC_CHROME_GID with setpriv (no groups, no capabilities, no_new_privs), an EMPTY environment (PATH, HOME,
+//      TMPDIR, LANG only: no API keys, no database URL), cwd, HOME, TMPDIR and profile in a fresh uid-owned dir under
+//      os.tmpdir() (never the project dir: the uid may not be able to enter it), and adds ROOT_FLAGS
+//      (--no-sandbox is safe only because Chrome no longer runs as root). Unset or invalid ids, or no setpriv: R12n.
+//      GRAPHIC_CHROME_UID must be a DEDICATED uid, used by nothing else on the host: at the end of every render (clean,
+//      failed, timed out, refused after launch) every process of that uid is killed (a renderer that double-forked or
+//      called setsid must not outlive the render), then its home is removed (releaseChromeHome). So two graphic renders
+//      must never run at the same time with the same uid: the engine runs a build's graphics one at a time (the
+//      awaited pre-pass in build.mjs), but nothing in the engine serialises two BUILDS on one host. Concurrent builds
+//      need a distinct uid each; renderGraphic itself holds a per-uid HOST LOCK (hostLockPath:
+//      graphic-chrome-<uid>.lock in /run, else /var/lock, else root's home: root-only dirs, never the shared temp dir)
+//      from before the home exists until after its release, so a second render with the same uid waits; under it,
+//      before the home, any process of the uid left by an earlier render (its Node SIGKILLed) is killed, and a
+//      survivor refuses the render (sweepUid). It is a DIFFERENT file from the CLIs' render lock (--lock /
+//      GRAPHIC_RENDER_LOCK, /tmp/phantasic-render.lock on the Mac), so a caller holding the render lock never
+//      deadlocks with it (and the host lock is never taken around a child that takes it again). graphic-lock.mjs now
+//      says so when a --lock is already held (a CLI under `lockf` by hand AND with --lock on the same file waits for
+//      itself: use one or the other).
+//      Root renders also carry `launch` in the cache key (ROOT_LAUNCH): their pixels differ (--disable-gpu), so they
+//      never share a cached file with a non-root render; non-root keys are unchanged.
 // The probe is the safety net, before EVERY render: the shimmed Chrome (inside the same launcher) must FAIL to load
 // http://1.1.1.1/ and http://169.254.169.254/, and the preloaded Node must fail to fetch them; else the render is
 // refused (R12) and nothing starts. The Chrome half runs in graphic-probe.mjs (CDP over a pipe, real timers).
@@ -39,6 +61,16 @@ export const CHROME_FLAGS = [
   "--disable-background-networking",
   "--no-pings",
 ];
+// Root only, after the caller's arguments and BEFORE the lock flags (which stay last). Measured on the Mac mini
+// (2026-10-19, charts fixture, 120 frames, non-root): + --disable-gpu changed 119 of 120 frames; + --disable-dev-shm-usage
+// alone changed none (hyperframes passes it already). So the non-root launch stays exactly as it was.
+export const ROOT_FLAGS = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"];
+// the whole environment the dropped Chrome gets (besides HOME and TMPDIR = its home dir)
+export const ROOT_ENV = ["PATH=/usr/bin:/bin", "LANG=C.UTF-8"];
+// the cache key's `launch` for a root render (absent for non-root, so those keys stay what they were)
+export const ROOT_LAUNCH = `root-drop ${ROOT_FLAGS.join(" ")}`;
+export const ROOT_REFUSAL = "running as root: set GRAPHIC_CHROME_UID and GRAPHIC_CHROME_GID (positive integers, not 0) to an unprivileged user for the graphic Chrome";
+export const SETPRIV_REFUSAL = "running as root: setpriv (util-linux) not found; it drops the graphic Chrome to GRAPHIC_CHROME_UID";
 // R12 texts come from REASONS; the Node half of the probe (not in the spec) reuses them
 const SANDBOX_REFUSED = (url) => reason("R12", { url });
 const SANDBOX_UNPROVEN = (message) => reason("R12n", { message });
@@ -69,6 +101,25 @@ export function sandboxLauncher(env = process.env) {
   if (!Array.isArray(argv) || !argv.length || !argv.every((x) => typeof x === "string" && x)) return { error: `GRAPHIC_SANDBOX is not a command (a JSON array of strings, or words): ${v.slice(0, 80)}` };
   return { argv, label: `GRAPHIC_SANDBOX=${argv.join(" ")}` };
 }
+// Who the graphic Chrome runs as. Not root: { root: false } (the shim execs Chrome as is). Root: GRAPHIC_CHROME_UID and
+// GRAPHIC_CHROME_GID must be positive integers (no leading 0) and setpriv must be on PATH -> { root: true, uid, gid,
+// setpriv }, else { root: true, error } (an R12n refusal before anything runs). The shim checks the same at launch.
+const ID_RE = /^[1-9][0-9]{0,9}$/;
+export function chromeUser(env = process.env, uid = process.getuid?.()) {
+  if (uid !== 0) return { root: false };
+  const u = String(env.GRAPHIC_CHROME_UID ?? ""), g = String(env.GRAPHIC_CHROME_GID ?? "");
+  if (!ID_RE.test(u) || !ID_RE.test(g) || Number(u) > 4294967294 || Number(g) > 4294967294) return { root: true, error: ROOT_REFUSAL };
+  const setpriv = String(env.PATH || "").split(path.delimiter).filter((d) => path.isAbsolute(d)).map((d) => path.join(d, "setpriv")).find((f) => { try { fs.accessSync(f, fs.constants.X_OK); return fs.statSync(f).isFile(); } catch { return false; } });
+  if (!setpriv) return { root: true, error: SETPRIV_REFUSAL };
+  return { root: true, uid: Number(u), gid: Number(g), setpriv };
+}
+// the first directory from `dir` up to / that other users cannot search (mode without o+x), or null
+export function unsearchable(dir) {
+  for (let d = path.resolve(dir); ; d = path.dirname(d)) {
+    try { if (!(fs.statSync(d).mode & 0o001)) return d; } catch { return d; }
+    if (d === path.dirname(d)) return null;
+  }
+}
 // the environment of every process of a graphic render (probe, Node half, hyperframes): never an inherited
 // GRAPHIC_RENDER_ORIGINS (only the preload inside THIS render's hyperframes may set it)
 export const cleanEnv = (extra = {}) => { const e = { ...process.env, ...extra }; delete e.GRAPHIC_RENDER_ORIGINS; delete e.GRAPHIC_SHIM_MARK; delete e.GRAPHIC_CHROME_PATH; return e; };
@@ -79,8 +130,9 @@ const PROBE_CHILD = path.join(HERE, "graphic-probe.mjs");
 const NODE_PROBE = `Promise.all(process.argv.slice(1).map((u) => fetch(u, { signal: AbortSignal.timeout(3000) }).then(() => "REACHED " + u, (e) => (e && e.name === "TypeError" ? "FAILED " : "UNKNOWN ") + u + " " + (e && e.name)))).then((r) => console.log(r.join("|")));`;
 // Chrome (the shim, inside the launcher) and the preloaded Node must both REFUSE every url (TypeError), and Chrome must
 // not reach a listener the probe opens on a second localhost port. -> { ok, lines[], refusal? }
-export function probeNetwork({ launcher, shim, urls = PROBE_URLS, spawn: run = spawnSync }) {
+export function probeNetwork({ launcher, shim, urls = PROBE_URLS, spawn: run = spawnSync, user = chromeUser() }) {
   const lines = [];
+  if (user.error) return { ok: false, lines, refusal: SANDBOX_UNPROVEN(user.error) };
   if (launcher.error) return { ok: false, lines, refusal: SANDBOX_UNPROVEN(launcher.error) };
   if (!shim) return { ok: false, lines, refusal: SANDBOX_UNPROVEN("no Chrome launcher shim (chrome-headless-shell not found, or Windows)") };
   const r = run(process.execPath, [PROBE_CHILD, JSON.stringify({ bin: shim, launcher: launcher.argv, urls, loopback: true })], { encoding: "utf8", timeout: 60000, killSignal: "SIGKILL", env: cleanEnv({ NODE_OPTIONS: "" }) });
@@ -165,11 +217,27 @@ export function findChrome(env = process.env, home = os.homedir()) {
 // recorded by the preload inside hyperframes); anything else there ("*", a host, a wildcard) is dropped. With
 // GRAPHIC_SHIM_MARK set, the shim appends its PID (= Chrome's, after exec) to that file: proof the render's Chrome came
 // through the shim, and the PIDs to kill when a render is stopped. Written atomically (temp + rename).
-export function chromeShim(dir, chrome) {
+// Root (`id -u` = 0, checked at every launch): GRAPHIC_CHROME_UID / GRAPHIC_CHROME_GID valid, `setpriv` (the absolute
+// path chromeUser found, written into the shim: no PATH lookup) executable, and a `home` (chromeHome: <root 0711
+// mkdtemp under os.tmpdir()>/home, owned by the uid; NEVER under the project, which the uid may not be able to enter),
+// else it refuses (stderr, exit 78) and starts nothing. The shim changes NO owner or mode (a root chown of a path the
+// uid controls could be raced into a symlink); Node did that once, at creation. Then, still as root: cwd = home, the
+// PID marker,
+//   exec /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 HOME=<home> TMPDIR=<home> <setpriv> --reuid=<uid> --regid=<gid>
+//     --clear-groups --inh-caps=-all --no-new-privs -- <chrome> <caller args> ROOT_FLAGS CHROME_FLAGS <bypass list>
+//     --user-data-dir=<home>/profile-<pid>
+// The last --user-data-dir wins (Chrome keeps the last copy of a switch), so puppeteer's root-owned 0700 temp profile
+// is never used (or touched); one profile per launch, because two Chromes on one profile hand over to each other.
+// sh, env and setpriv each exec (never fork) the next, so the PID in the marker is the final Chrome's. Chrome writes no
+// output file (frames come back over CDP; Node, as root, encodes and writes them) and loads the page from hyperframes'
+// localhost server, so it never needs the project dir. The shim itself runs as root and may stay in the project.
+// lock: false = no lock flags (ONLY the isolation check's baseline, which must show a route is real).
+export function chromeShim(dir, chrome, { lock = true, home = null, setpriv = null } = {}) {
   if (isWin || !chrome) return null;
   fs.mkdirSync(dir, { recursive: true });
   const shim = path.join(dir, "chrome-headless-shell");
   const q = (s) => `'${s.replace(/'/g, `'\\''`)}'`;
+  const flags = lock ? ` ${CHROME_FLAGS.map(q).join(" ")} "--proxy-bypass-list=$BYPASS"` : "";
   const tmp = `${shim}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, `#!/bin/sh
 BYPASS='<-loopback>'
@@ -184,11 +252,157 @@ for o in $GRAPHIC_RENDER_ORIGINS; do
 done
 IFS=$OLDIFS
 set +f
+if [ "$(id -u)" = 0 ]; then
+  refuse() { echo "graphic chrome shim: $1" >&2; exit 78; }
+  U=$GRAPHIC_CHROME_UID; G=$GRAPHIC_CHROME_GID
+  for v in "$U" "$G"; do
+    case "$v" in ''|0*|*[!0-9]*) refuse ${q(ROOT_REFUSAL)} ;; esac
+    if [ \${#v} -gt 10 ] || [ "$v" -gt 4294967294 ]; then refuse ${q(ROOT_REFUSAL)}; fi
+  done
+  SP=${setpriv ? q(setpriv) : "''"}
+  case "$SP" in /?*) ;; *) refuse ${q(SETPRIV_REFUSAL)} ;; esac
+  if [ ! -f "$SP" ] || [ ! -x "$SP" ]; then refuse ${q(SETPRIV_REFUSAL)}; fi
+  H=${home ? q(home) : "''"}
+  case "$H" in /?*) ;; *) refuse "running as root: no home dir for the graphic Chrome (chromeShim needs one)" ;; esac
+  if [ -L "$H" ] || [ ! -d "$H" ]; then refuse "running as root: the graphic Chrome's home is not a directory: $H"; fi
+  cd "$H" || refuse "running as root: cannot enter $H"
+  if [ -n "$GRAPHIC_SHIM_MARK" ]; then echo $$ >> "$GRAPHIC_SHIM_MARK"; fi
+  exec /usr/bin/env -i ${ROOT_ENV.join(" ")} HOME="$H" TMPDIR="$H" "$SP" --reuid="$U" --regid="$G" --clear-groups --inh-caps=-all --no-new-privs -- ${q(chrome)} "$@" ${ROOT_FLAGS.join(" ")}${flags} "--user-data-dir=$H/profile-$$"
+fi
 if [ -n "$GRAPHIC_SHIM_MARK" ]; then echo $$ >> "$GRAPHIC_SHIM_MARK"; fi
-exec ${q(chrome)} "$@" ${CHROME_FLAGS.map(q).join(" ")} "--proxy-bypass-list=$BYPASS"
+exec ${q(chrome)} "$@"${flags}
 `, { mode: 0o755 });
   fs.renameSync(tmp, shim);
   return shim;
+}
+// Root only: the dropped Chrome's home (also its TMPDIR, cwd and profiles): <base>/graphic-chrome-XXXXXX (root, 0711:
+// the uid may pass through it but not rename, replace or add anything in it) / home (0700, lchown'd to user.uid:gid
+// right after mkdir, so no symlink is ever followed). Every directory above must be searchable by others (/tmp is
+// 1777), else this throws. The caller releases it with releaseChromeHome. -> the home path, or null when not root.
+export function chromeHome(user, base = os.tmpdir()) {
+  if (!user || !user.root) return null;
+  const bad = unsearchable(base);
+  if (bad) throw new Error(`running as root: ${bad} is not searchable by other users, so GRAPHIC_CHROME_UID cannot reach the graphic Chrome's home`);
+  const parent = fs.mkdtempSync(path.join(base, "graphic-chrome-"));
+  const home = path.join(parent, "home");
+  try {
+    fs.chmodSync(parent, 0o711);
+    fs.mkdirSync(home, { mode: 0o700 });
+    fs.lchownSync(home, user.uid, user.gid);
+  } catch (e) { fs.rmSync(parent, { recursive: true, force: true }); throw e; }
+  return home;
+}
+// The live processes of a REAL uid (zombies are dead and cannot run: skipped). Linux: /proc/*/status; elsewhere: ps.
+export function uidProcesses(uid) {
+  if (process.platform === "linux") {
+    const out = [];
+    for (const d of fs.readdirSync("/proc")) {
+      if (!/^\d+$/.test(d)) continue;
+      let st; try { st = fs.readFileSync(`/proc/${d}/status`, "utf8"); } catch { continue; }
+      const u = /^Uid:\s*(\d+)/m.exec(st), state = /^State:\s*(\S)/m.exec(st);
+      if (u && Number(u[1]) === uid && !(state && /[ZX]/.test(state[1]))) out.push(Number(d));
+    }
+    return out;
+  }
+  const r = spawnSync("ps", ["-A", "-o", "pid=,ruid=,stat="], { encoding: "utf8", timeout: 10000 });
+  return String(r.stdout || "").split("\n").map((l) => l.trim().split(/\s+/)).filter((f) => f.length >= 3 && Number(f[1]) === uid && !/^Z/.test(f[2])).map((f) => Number(f[0]));
+}
+// The kill run as the uid: the system kill (absolute path, checked like setpriv), else this node (which the uid may not
+// be able to run, e.g. under /root: then the kill fails and the release says so).
+export function uidKiller(cands = ["/bin/kill", "/usr/bin/kill"]) {
+  const k = cands.find((f) => { try { fs.accessSync(f, fs.constants.X_OK); return fs.statSync(f).isFile(); } catch { return false; } });
+  return k ? [k, "-9", "-1"] : [process.execPath, "-e", "try { process.kill(-1, 'SIGKILL'); } catch {}"];
+}
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+// The end of a root render, on every path: every process of the uid is killed AS the uid (kill -9 -1 reaches only that
+// uid's processes, never the caller itself), then the uid must have no live process left (rescanned for up to 2 s);
+// only then is the home's root-owned parent removed. The kill not running (no setpriv, exec failure, exit other than
+// 0 / 1; 1 = nothing left to signal, the scan decides) or a survivor: the home is KEPT and ok is false.
+// Not root: the home (if any) is removed. -> { ok, kill: argv | null, left: [pid], error? } (spawn, scan injectable)
+// Kill every process of the uid AS the uid, then rescan (up to 2 s): -> { ok, kill, found, left, errors[] }.
+// found = the uid's live processes before the kill. Used before a root render (sweepUid) and at its end (release).
+export function killUid(user, { spawn: run = spawnSync, scan = uidProcesses, killer = uidKiller() } = {}) {
+  let kill = null;
+  const errors = [];
+  const found = scan(user.uid);
+  if (!user.setpriv) errors.push("no setpriv to kill the uid's processes");
+  else {
+    kill = [user.setpriv, `--reuid=${user.uid}`, `--regid=${user.gid}`, "--clear-groups", "--inh-caps=-all", "--no-new-privs", "--", ...killer];
+    const r = run(kill[0], kill.slice(1), { cwd: "/", env: { PATH: "/usr/bin:/bin" }, stdio: "ignore", timeout: 30000, killSignal: "SIGKILL" });
+    if (r.error || r.status === null || (r.status !== 0 && r.status !== 1)) errors.push(`the kill (${kill.join(" ")}) failed: ${r.error ? r.error.message : r.status === null ? `signal ${r.signal}` : `exit ${r.status}`}`);
+  }
+  let left = scan(user.uid);
+  for (let i = 0; i < 20 && left.length; i++) { sleepSync(100); left = scan(user.uid); }
+  if (left.length) errors.push(`${left.length} process(es) of uid ${user.uid} still alive (${left.slice(0, 10).join(",")})`);
+  return { ok: errors.length === 0, kill, found, left, errors };
+}
+export const LINGERING = "processes of GRAPHIC_CHROME_UID are still running from an earlier render";
+// Before a root render, under the host lock and BEFORE the home: an earlier render whose Node was SIGKILLed freed the
+// lock but may have left Chromes of the uid running. They are killed; any survivor (or a kill that cannot run)
+// refuses the render. -> { ok, found, error? }
+export function sweepUid(user, opts = {}) {
+  const k = killUid(user, opts);
+  return k.ok ? { ok: true, found: k.found } : { ok: false, found: k.found, error: `${LINGERING} (${k.errors.join("; ")})` };
+}
+export function releaseChromeHome(home, user, opts = {}) {
+  if (!home) return { ok: true, kill: null, left: [] };
+  let kill = null, left = [], errors = [];
+  if (user && user.root) ({ kill, left, errors } = killUid(user, opts));
+  if (errors.length) return { ok: false, kill, left, error: `running as root: ${errors.join("; ")}; the graphic Chrome's home is KEPT at ${home}` };
+  const parent = path.dirname(home);
+  if (path.basename(home) === "home" && /^graphic-chrome-/.test(path.basename(parent))) fs.rmSync(parent, { recursive: true, force: true });
+  return { ok: true, kill, left };
+}
+// The per-uid host lock of root renders, in a ROOT-ONLY directory (never the shared temp dir, where any user could
+// squat the name): the first of /run, /var/lock, and root's own home (only when this process is root) that is a
+// directory (symlinks followed: /var/lock -> /run/lock 1777 is rejected), owned by `owner` (root), not group- or
+// world-writable, and writable by us. None: null (the render is refused).
+export function hostLockPath(uid, { dirs = ["/run", "/var/lock", ...(process.getuid?.() === 0 ? [os.homedir()] : [])], owner = 0 } = {}) {
+  for (const d of dirs) {
+    try {
+      const st = fs.statSync(d);
+      if (!st.isDirectory() || st.uid !== owner || (st.mode & 0o022)) continue;
+      fs.accessSync(d, fs.constants.W_OK);
+      return path.join(d, `graphic-chrome-${uid}.lock`);
+    } catch {}
+  }
+  return null;
+}
+export const NO_LOCK_DIR = "running as root: no root-only directory for the host lock (/run, /var/lock or root's home: owned by root, not group/world-writable)";
+export const hostLock = (user) => { const f = hostLockPath(user.uid); if (!f) return Promise.reject(new Error(NO_LOCK_DIR)); return holdHostLock(f); };
+// Holds an exclusive lock on `file` until release(): a child `flock <file>` (Linux) or `lockf -k <file>` (macOS) runs
+// `sh -c 'echo L; exec cat'`; its stdin is our pipe, so the lock goes when we release, exit or crash (the pipe closes).
+// The file is opened first with O_NOFOLLOW (a symlink planted there refuses) and must be a regular file owned by us,
+// mode 0600. -> Promise<{ release(), file }>; rejects after timeoutMs (another render holding it too long) or on error.
+export function holdHostLock(file, { timeoutMs = 1800000, tool = null } = {}) {
+  return new Promise((resolve, reject) => {
+    let fd;
+    try {
+      fd = fs.openSync(file, fs.constants.O_RDWR | fs.constants.O_CREAT | (fs.constants.O_NOFOLLOW || 0), 0o600);
+      const st = fs.fstatSync(fd);
+      if (!st.isFile() || st.uid !== process.getuid()) throw new Error(`${file} is not a regular file owned by this user`);
+      fs.fchmodSync(fd, 0o600);
+    } catch (e) { if (fd !== undefined) fs.closeSync(fd); return reject(new Error(`running as root: cannot use the host lock ${file}: ${e.message}`)); }
+    fs.closeSync(fd);
+    const has = (t) => spawnSync("sh", ["-c", `command -v ${t}`], { encoding: "utf8" }).status === 0;
+    const t = tool || (has("flock") ? "flock" : has("lockf") ? "lockf" : null);
+    if (!t) return reject(new Error(`running as root: neither flock nor lockf is installed for the host lock ${file}`));
+    const argv = t === "flock" ? ["flock", "-x", file] : ["lockf", "-k", file];
+    const cp = spawn(argv[0], [...argv.slice(1), "sh", "-c", "echo L; exec cat >/dev/null"], { stdio: ["pipe", "pipe", "pipe"] });
+    let done = false, err = "";
+    const fail = (m) => { if (done) return; done = true; clearTimeout(timer); try { cp.kill("SIGKILL"); } catch {} reject(new Error(`running as root: host lock ${file}: ${m}`)); };
+    const timer = setTimeout(() => fail(`not free after ${Math.round(timeoutMs / 1000)} s (another graphic render with this uid?)`), timeoutMs);
+    cp.stderr.on("data", (d) => (err += d));
+    cp.on("error", (e) => fail(e.message));
+    cp.on("exit", (c) => fail(`${t} exited ${c} ${err.trim()}`));
+    cp.stdin.on("error", () => {});
+    cp.stdout.once("data", () => {
+      if (done) return;
+      done = true; clearTimeout(timer);
+      cp.removeAllListeners("exit");
+      resolve({ file, pid: cp.pid, release: () => { try { cp.stdin.end(); } catch {} } });
+    });
+  });
 }
 
 // ---------- versions for the key (v2) ----------
@@ -334,10 +548,10 @@ export function runRender({ dir, out, mode, fps, workers, launcher, shim, logFil
 // opts: { content (the file's bytes; or read from projectDir + html), html (the reel.json field), projectDir, mode, W, H,
 //         fps, inS, after, frames, outDir, buildDir, budget (seconds, override), probeUrls, log(fn) }
 // deps (tests inject these; defaults are the real ones): { findChrome, chromeShim, chromeVersion, ffmpegVersion,
-//         probeNetwork, runRender, frameMd5, maxAlpha }
+//         probeNetwork, runRender, frameMd5, maxAlpha, chromeUser, chromeHome, releaseChromeHome }
 // -> Promise<{ ok, reasons[], codes[], file?, cached?, key, L, renders: [{secs, status}], probe }>
 export async function renderGraphic(opts, deps = {}) {
-  const D = { findChrome, chromeShim, chromeVersion, ffmpegVersion, probeNetwork, runRender, frameMd5, maxAlpha, ...deps };
+  const D = { chromeUser, chromeHome, releaseChromeHome, hostLock, sweepUid, findChrome, chromeShim, chromeVersion, ffmpegVersion, probeNetwork, runRender, frameMd5, maxAlpha, ...deps };
   const { html: htmlPath = "assets/graphics/graphic.html", projectDir = null, mode = "overlay", W = 1080, H = 1920, fps = 30, inS = 0, after = "hold", frames, log = () => {} } = opts;
   let html = opts.content ?? null;
   if (html == null && projectDir) { const abs = path.join(projectDir, htmlPath); if (fs.existsSync(abs)) html = fs.readFileSync(abs); }
@@ -351,16 +565,33 @@ export async function renderGraphic(opts, deps = {}) {
   const name = graphicName(htmlPath);
   const outDir = opts.outDir || (projectDir ? path.join(projectDir, "assets", "graphics") : path.join(os.tmpdir(), "graphics"));
   const buildDir = opts.buildDir || (projectDir ? path.join(projectDir, "build") : path.join(os.tmpdir(), "graphic-build"));
+  // running as root: refuse before anything is written unless Chrome can be dropped to an unprivileged uid
+  const user = D.chromeUser();
+  if (user.error) return { ok: false, reasons: [reason("R12n", { message: user.error })], codes: ["R12"], stage: "setup" };
   fs.mkdirSync(path.join(buildDir, "graphics"), { recursive: true });
   const scratch = fs.mkdtempSync(path.join(buildDir, "graphics", ".sandbox-")); // per call: concurrent renders never share a shim
-  try {
+  let home = null, lock = null, res, thrown = null;
+  try { res = await (async () => {
     let exe; // a set-but-broken GRAPHIC_CHROME_PATH throws: refuse here, never wrap another browser
     try { exe = D.findChrome(); } catch (e) { return { ok: false, reasons: [reason("R12n", { message: e.message })], codes: ["R12"], stage: "setup" }; }
-    const shim = D.chromeShim(path.join(scratch, "chrome"), exe);
+    // root: one render per uid on this host, from the home's creation to its release (the release kills every process
+    // of the uid, so a second render with the same uid must not be running): a per-uid host lock, held by a child
+    // `flock` (Linux) / `lockf` (macOS) whose stdin is our pipe, so it is released on every exit, a crash included
+    if (user.root) {
+      log(`running as root: Chrome as ${user.uid}:${user.gid}; waiting for the host lock of uid ${user.uid} ...`);
+      try { lock = await D.hostLock(user); } catch (e) { return { ok: false, reasons: [reason("R12n", { message: e.message })], codes: ["R12"], stage: "setup" }; }
+      // a render whose Node died mid-way freed the lock, but its Chromes (the uid's) may still run: kill them first
+      const sw = D.sweepUid(user);
+      if (sw.found.length) log(`killed ${sw.found.length} lingering process(es) of uid ${user.uid} before the render`);
+      if (!sw.ok) return { ok: false, reasons: [reason("R12n", { message: sw.error })], codes: ["R12"], stage: "setup" };
+    }
+    // root: the dropped Chrome's home is a fresh dir under os.tmpdir(), never in the project (the uid may not enter it)
+    let shim;
+    try { home = D.chromeHome(user); shim = D.chromeShim(path.join(scratch, "chrome"), exe, { home, setpriv: user.setpriv || null }); } catch (e) { return { ok: false, reasons: [reason("R12n", { message: e.message })], codes: ["R12"], stage: "setup" }; }
     const chrome = shim ? D.chromeVersion(shim) : null; // the version as the launcher runs it (the shim forwards --version)
     const ffmpeg = D.ffmpegVersion();
     if (!chrome || !ffmpeg) return { ok: false, reasons: [reason("R12n", { message: !chrome ? (shim ? "the Chrome shim gave no --version" : "no chrome-headless-shell, or no POSIX shim (Windows)") : "ffmpeg -version gave no version" })], codes: ["R12"], stage: "setup" };
-    const { key } = graphicKey({ html, media, fonts: meta.fonts, chrome, ffmpeg, fps, w, h, mode, frames: fr.L, inF: fr.inF, after: fr.after });
+    const { key } = graphicKey({ html, media, fonts: meta.fonts, chrome, ffmpeg, fps, w, h, mode, frames: fr.L, inF: fr.inF, after: fr.after, launch: user.root ? ROOT_LAUNCH : undefined });
     const id = name; // the render folder is build/graphics/<name>-<key16>/
     const ext = mode === "insert" ? "mp4" : "webm";
     const final = path.join(outDir, outputName(name, key, mode));
@@ -369,7 +600,7 @@ export async function renderGraphic(opts, deps = {}) {
 
     // the safety net first (R12): no render unless the probe, through the same shim and launcher, is refused everywhere
     const launcher = sandboxLauncher(process.env);
-    const probe = D.probeNetwork({ launcher, shim, urls: opts.probeUrls || PROBE_URLS });
+    const probe = D.probeNetwork({ launcher, shim, urls: opts.probeUrls || PROBE_URLS, user });
     probe.lines.forEach((l) => log(l));
     if (!probe.ok) return { ok: false, reasons: [probe.refusal], codes: ["R12"], stage: "probe", probe, ...base, file: null };
 
@@ -411,7 +642,19 @@ export async function renderGraphic(opts, deps = {}) {
     fs.renameSync(part, final);
     clean();
     return { ok: true, cached: false, reasons: [], codes: [], renders, probe, wrapper: wrap.file, ...base };
-  } finally {
-    fs.rmSync(scratch, { recursive: true, force: true });
+  })(); } catch (e) { thrown = e; }
+  fs.rmSync(scratch, { recursive: true, force: true });
+  // root, every path (clean, refused, failed, timed out, thrown): kill the uid's processes, then remove the home; if
+  // any survive (or the kill could not run) the home is KEPT and the render FAILS, loudly
+  let rel = null;
+  try { if (home) rel = D.releaseChromeHome(home, user); } finally { if (lock) lock.release(); }
+  if (rel && !rel.ok) {
+    const msg = `GRAPHIC RENDER UNSAFE: ${rel.error}`;
+    log(msg); console.error(msg);
+    if (res && res.ok && !res.cached && res.file) fs.rmSync(res.file, { force: true }); // this call's file: not kept
+    if (thrown) throw thrown;
+    return { ok: false, reasons: [reason("R12c", { message: rel.error })], codes: ["R12"], stage: "release", ...(res && res.key ? { key: res.key, L: res.L } : {}), file: null };
   }
+  if (thrown) throw thrown;
+  return res;
 }
