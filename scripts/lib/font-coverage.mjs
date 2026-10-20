@@ -18,7 +18,10 @@ const over = (what) => { throw new FontLimit(`font over the ${what} limit`); };
 const W2TAGS = ["cmap", "head", "hhea", "hmtx", "maxp", "name", "OS/2", "post", "cvt ", "fpgm", "glyf", "loca", "prep", "CFF ", "VORG", "EBDT", "EBLC", "gasp", "hdmx", "kern", "LTSH", "PCLT", "VDMX", "vhea", "vmtx", "BASE", "GDEF", "GPOS", "GSUB", "EBSC", "JSTF", "MATH", "CBDT", "CBLC", "COLR", "CPAL", "SVG ", "sbix", "acnt", "avar", "bdat", "bloc", "bsln", "cvar", "fdsc", "feat", "fmtx", "fvar", "gvar", "hsty", "just", "lcar", "mort", "morx", "opbd", "prop", "trak", "Zapf", "Silf", "Glat", "Gloc", "Feat", "Sill"];
 
 // -> the cmap table's bytes, or throws
-export function cmapTable(buf) {
+export const cmapTable = (buf) => fontTable(buf, "cmap");
+// -> the bytes of table `want` ("cmap", "hmtx", "head", ...), or throws. WOFF2's transformed tables (glyf/loca, and a
+// transformed hmtx) are refused: reading them needs the reconstruction this parser does not do.
+export function fontTable(buf, want) {
   if (buf.length > LIMITS.inputBytes) over("input size");
   const sig = tag(buf, 0);
   if (sig === "wOF2") {
@@ -33,35 +36,38 @@ export function cmapTable(buf) {
       const ver = flags >> 6, orig = b128();
       const transformed = t === "glyf" || t === "loca" ? ver !== 3 : ver !== 0;
       const len = transformed ? b128() : orig;
-      dir.push({ t, len });
+      dir.push({ t, len, transformed });
     }
     let data;
     try { data = zlib.brotliDecompressSync(buf.subarray(o, o + compLen), { maxOutputLength: LIMITS.decompressedBytes }); } catch (e) { if (e && e.code === "ERR_BUFFER_TOO_LARGE") over("decompressed size"); throw e; }
     let off = 0;
-    for (const d of dir) { if (d.t === "cmap") return data.subarray(off, off + d.len); off += d.len; }
-    throw new Error("no cmap");
+    for (const d of dir) {
+      if (d.t === want) { if (d.transformed) throw new Error(`${want} is transformed`); return data.subarray(off, off + d.len); }
+      off += d.len;
+    }
+    throw new Error(`no ${want}`);
   }
   if (sig === "wOFF") {
     const n = buf.readUInt16BE(12);
     if (n > LIMITS.tables) over("table count");
     for (let i = 0; i < n; i++) {
       const e = 44 + 20 * i;
-      if (tag(buf, e) !== "cmap") continue;
+      if (tag(buf, e) !== want) continue;
       const off = buf.readUInt32BE(e + 4), comp = buf.readUInt32BE(e + 8), orig = buf.readUInt32BE(e + 12);
       const raw = buf.subarray(off, off + comp);
       if (comp >= orig) return raw;
       try { return zlib.inflateSync(raw, { maxOutputLength: LIMITS.decompressedBytes }); } catch (e) { if (e && e.code === "ERR_BUFFER_TOO_LARGE") over("decompressed size"); throw e; }
     }
-    throw new Error("no cmap");
+    throw new Error(`no ${want}`);
   }
   if (buf.readUInt32BE(0) === 0x00010000 || sig === "OTTO" || sig === "true") {
     const n = buf.readUInt16BE(4);
     if (n > LIMITS.tables) over("table count");
     for (let i = 0; i < n; i++) {
       const e = 12 + 16 * i;
-      if (tag(buf, e) === "cmap") { const off = buf.readUInt32BE(e + 8); return buf.subarray(off, off + buf.readUInt32BE(e + 12)); }
+      if (tag(buf, e) === want) { const off = buf.readUInt32BE(e + 8); return buf.subarray(off, off + buf.readUInt32BE(e + 12)); }
     }
-    throw new Error("no cmap");
+    throw new Error(`no ${want}`);
   }
   throw new Error(`not a font (signature ${JSON.stringify(sig)})`);
 }
