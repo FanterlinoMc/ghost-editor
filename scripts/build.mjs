@@ -2692,6 +2692,11 @@ const duoHtml = cap.style !== "duo" ? "" : (() => {
         if (faceBandPrev != null && clear(faceBandPrev) && faceBandPrev >= placer.safeTop && faceBandPrev + bh <= placer.safeBottom) pl.y = faceBandPrev;
         else if (under + bh <= placer.safeBottom) pl.y = under;
         else if (over >= placer.safeTop) pl.y = over;
+        else {
+          // neither side of the face fits inside the safe area (a face filling the frame): the safe top is the least bad place
+          pl.y = placer.safeTop;
+          console.warn(`WARN caption "${w.word}" at ${s.toFixed(2)}s: the face fills the frame, no room above or below it; placed at the safe top (${pl.y}px)`);
+        }
         faceBandPrev = pl.y === under || pl.y === over || pl.y === faceBandPrev ? pl.y : null;
       } else faceBandPrev = null;
     }
