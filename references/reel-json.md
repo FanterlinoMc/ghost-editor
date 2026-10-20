@@ -1334,6 +1334,11 @@ ASCII: `html` and media paths are `[a-z0-9-]` by G1/G15). Every number is an int
   "after": "hold" }
 ```
 
+Only when the renderer runs as root (it drops Chrome to GRAPHIC_CHROME_UID with `--no-sandbox --disable-dev-shm-usage
+--disable-gpu`, which changes pixels) the object also has `"launch": "root-drop --no-sandbox --disable-dev-shm-usage
+--disable-gpu"`, so a root render and a plain one never share a file. A plain (non-root) render has no `launch`: its
+key is unchanged.
+
 A render whose log line `Browser launched (HeadlessChrome/<version>, ...` names another version than the key's
 `chrome` is refused (R13): nothing is cached.
 

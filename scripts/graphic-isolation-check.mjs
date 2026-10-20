@@ -16,7 +16,7 @@ import dgram from "node:dgram";
 import path from "node:path";
 import { wrapperHtml, graphicFrames } from "./lib/graphic.mjs";
 import { holdRenderLock } from "./lib/graphic-lock.mjs";
-import { runRender, chromeShim, chromeUser, chromeHome, findChrome, probeNetwork, sandboxLauncher, scanLog, PROBE_URLS } from "./lib/graphic-render.mjs";
+import { runRender, chromeShim, chromeUser, chromeHome, releaseChromeHome, findChrome, probeNetwork, sandboxLauncher, scanLog, PROBE_URLS } from "./lib/graphic-render.mjs";
 
 holdRenderLock(); // --lock <path> / GRAPHIC_RENDER_LOCK: re-run under lockf / flock (the shared Mac)
 const args = process.argv.slice(2);
@@ -97,12 +97,12 @@ if (user.error) { console.log(`GRAPHIC ISOLATION: FAIL  (${user.error})`); proce
 console.log(user.root ? `running as root: Chrome dropped to ${user.uid}:${user.gid} with ${user.setpriv}` : "not root: Chrome runs as this user");
 let chrome, shim, bareShim, home = null;
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-isolation-"));
-const dropHome = () => { if (home) fs.rmSync(home, { recursive: true, force: true }); };
+const dropHome = () => releaseChromeHome(home, user); // root: kills every process of the uid, then removes the home
 try {
   chrome = findChrome();
   home = chromeHome(user); // root: the dropped Chrome's home, under os.tmpdir(); null otherwise
-  shim = chromeShim(path.join(work, "shim"), chrome, { home });
-  bareShim = chromeShim(path.join(work, "bare"), chrome, { lock: false, home });
+  shim = chromeShim(path.join(work, "shim"), chrome, { home, setpriv: user.setpriv || null });
+  bareShim = chromeShim(path.join(work, "bare"), chrome, { lock: false, home, setpriv: user.setpriv || null });
 } catch (e) { dropHome(); console.log(`GRAPHIC ISOLATION: FAIL  (${e.message})`); process.exit(1); }
 if (!shim) { console.log("GRAPHIC ISOLATION: FAIL  (no chrome-headless-shell, or no POSIX shim)"); process.exit(1); }
 const launcher = sandboxLauncher();

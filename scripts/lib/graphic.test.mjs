@@ -319,6 +319,12 @@ test("cache key v3: canonical JSON, stable, sensitive to every field, media orde
   for (const [f, v] of Object.entries({ html: "<html>y</html>", media: [], fonts: ["Inter"], chrome: "153.0.0.1", ffmpeg: "7.1.2", platform: "linux-x64", quality: "draft", fps: 25, w: 1078, h: 1078, mode: "insert", frames: 61, inF: 1, after: "loop" }))
     assert.notEqual(G.graphicKey({ ...base, [f]: v }).key, k.key, `key changes with ${f}`);
   assert.throws(() => G.graphicKey({ ...base, fps: 29.97 }), /integer/);
+  // launch: only a root render has it; absent / empty leaves the key exactly as above
+  assert.equal(G.graphicKey({ ...base, launch: undefined }).json, k.json);
+  assert.equal(G.graphicKey({ ...base, launch: "" }).key, k.key);
+  const rk = G.graphicKey({ ...base, launch: RR.ROOT_LAUNCH });
+  assert.equal(rk.json, k.json.replace(',"media"', `,"launch":"root-drop --no-sandbox --disable-dev-shm-usage --disable-gpu","media"`));
+  assert.notEqual(rk.key, k.key);
   assert.equal(G.outputName("counter", k.key, "overlay"), `counter-${k.key.slice(0, 16)}.webm`);
   assert.equal(G.canonicalJson({ b: "é", a: [1, { d: 1, c: 2 }] }), '{"a":[1,{"c":2,"d":1}],"b":"\\u00e9"}');
 });
@@ -408,7 +414,7 @@ function rootRig({ id = "0", setpriv = true, lock = true, home: withHome = true 
   sh("id", `echo ${id}`);
   sh("chown", `echo "$*" >> '${rec("chown")}'`);
   fs.symlinkSync(spawnSync("/bin/sh", ["-c", "command -v chmod"], { encoding: "utf8" }).stdout.trim(), path.join(bin, "chmod"));
-  if (setpriv) fs.writeFileSync(path.join(bin, "setpriv"), `#!${PERL}
+  fs.writeFileSync(path.join(bin, "setpriv"), `#!${PERL}
 open(my $f, ">>", "${rec("setpriv")}"); print $f join("\\n", @ARGV), "\\n"; close($f);
 my ($i) = grep { $ARGV[$_] eq "--" } 0..$#ARGV; my @c = @ARGV[$i + 1 .. $#ARGV]; exec { $c[0] } @c or exit 127;
 `, { mode: 0o755 });
@@ -418,9 +424,11 @@ require("fs").writeFileSync(${JSON.stringify(rec("chrome"))}, JSON.stringify({ a
 `, { mode: 0o755 });
   const project = path.join(dir, "project");
   fs.mkdirSync(path.join(project, "build", "graphics"), { recursive: true });
-  const home = path.join(dir, "chrome-home");
-  fs.mkdirSync(home, { mode: 0o700 });
-  const shim = RR.chromeShim(path.join(project, "build", "graphics", "shim"), chrome, { lock, home: withHome ? home : null });
+  const parent = path.join(dir, "graphic-chrome-test"); // as chromeHome makes it: root 0711 parent, uid 0700 home
+  const home = path.join(parent, "home");
+  fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+  fs.chmodSync(parent, 0o711);
+  const shim = RR.chromeShim(path.join(project, "build", "graphics", "shim"), chrome, { lock, home: withHome ? home : null, setpriv: setpriv === true ? path.join(bin, "setpriv") : setpriv || null });
   fs.chmodSync(project, 0o700);
   const profile = path.join(dir, "puppeteer-profile");
   fs.mkdirSync(profile, { mode: 0o700 });
@@ -430,7 +438,7 @@ require("fs").writeFileSync(${JSON.stringify(rec("chrome"))}, JSON.stringify({ a
     const read = (n, f = (x) => x) => (fs.existsSync(rec(n)) ? f(fs.readFileSync(rec(n), "utf8")) : null);
     return { status: r.status, stderr: r.stderr, chown: read("chown", (x) => x.trim().split("\n")), setpriv: read("setpriv", (x) => x.trim().split("\n")), chrome: read("chrome", JSON.parse), mark: read("mark", (x) => x.trim()) };
   };
-  return { dir, chrome, shim, home, profile, project, run };
+  return { dir, bin, chrome, shim, home, profile, project, run };
 }
 const IDS = { GRAPHIC_CHROME_UID: "1234", GRAPHIC_CHROME_GID: "5678" };
 
@@ -447,11 +455,25 @@ test("root drop: refused without valid ids, setpriv or a home, nothing started",
     refused(g.run({ ...IDS, GRAPHIC_CHROME_GID: bad }), RR.ROOT_REFUSAL, `gid '${bad}'`);
   }
   refused(g.run({ GRAPHIC_CHROME_UID: "1234" }), RR.ROOT_REFUSAL, "uid without gid");
-  refused(rootRig({ setpriv: false }).run(IDS), RR.SETPRIV_REFUSAL, "no setpriv on PATH");
+  refused(rootRig({ setpriv: false }).run(IDS), RR.SETPRIV_REFUSAL, "no setpriv path given to the shim");
+  refused(rootRig({ setpriv: "relative/setpriv" }).run(IDS), RR.SETPRIV_REFUSAL, "a relative setpriv path");
+  refused(rootRig({ setpriv: "/nonexistent/setpriv" }).run(IDS), RR.SETPRIV_REFUSAL, "a setpriv path that is not there");
+  const ne = rootRig();
+  fs.chmodSync(path.join(ne.bin, "setpriv"), 0o644);
+  refused(ne.run(IDS), RR.SETPRIV_REFUSAL, "a setpriv that is not executable");
   refused(rootRig({ home: false }).run(IDS), "running as root: no home dir for the graphic Chrome (chromeShim needs one)", "no home");
+  // the attack: the uid swaps its home for a symlink to a root file between launches. The shim refuses, and it never
+  // chowns or chmods anything (it has no chown / chmod at all), so nothing is handed over through the link.
+  const target = path.join(g.dir, "passwd");
+  fs.writeFileSync(target, "root:x:0:0\n", { mode: 0o644 });
+  const before = fs.statSync(target);
   fs.rmSync(g.home, { recursive: true });
-  fs.symlinkSync(g.dir, g.home);
-  refused(g.run(IDS), `running as root: the graphic Chrome's home is not a directory: ${g.home}`, "home is a symlink");
+  fs.symlinkSync(target, g.home);
+  refused(g.run(IDS), `running as root: the graphic Chrome's home is not a directory: ${g.home}`, "home swapped for a symlink to a file");
+  fs.rmSync(g.home); fs.symlinkSync(g.dir, g.home);
+  refused(g.run(IDS), `running as root: the graphic Chrome's home is not a directory: ${g.home}`, "home swapped for a symlink to a dir");
+  assert.deepEqual([fs.statSync(target).mode, fs.statSync(target).uid], [before.mode, before.uid], "the link's target is untouched");
+  assert.doesNotMatch(fs.readFileSync(g.shim, "utf8"), /\b(chown|chmod|chgrp|command -v)\b/, "the shim changes no owner or mode and looks nothing up on PATH");
   // the Node side: the same refusals, before anything is written
   const spDir = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-sp-"));
   fs.writeFileSync(path.join(spDir, "setpriv"), "#!/bin/sh\n", { mode: 0o755 });
@@ -476,10 +498,16 @@ test("root drop: setpriv to the ids, empty env, cwd = home, our profile last, PI
   assert.deepEqual(r.chrome.env, { PATH: "/usr/bin:/bin", LANG: "C.UTF-8", HOME: g.home, TMPDIR: g.home }, "nothing inherited: no SECRET_TOKEN, no DATABASE_URL, no GRAPHIC_*");
   assert.equal(r.chrome.cwd, g.home, "cwd: the home (the caller's cwd was the project)");
   assert.equal(r.mark, String(r.chrome.pid), "the marked PID is the final Chrome's (sh -> env -> setpriv -> chrome, all exec)");
-  assert.deepEqual(r.chown, [`1234:5678 ${g.home}`], "only the home is handed over; puppeteer's profile is never touched");
+  assert.equal(r.chown, null, "the shim chowns nothing (Node handed the home over at creation); puppeteer's profile is never touched");
   assert.equal(fs.statSync(g.home).mode & 0o777, 0o700);
   const inProject = [...r.chrome.argv, ...Object.values(r.chrome.env), r.chrome.cwd].filter((x) => x.includes(g.project));
   assert.deepEqual(inProject, [], "no argv, env or cwd of Chrome points into the project dir (the uid may not enter it)");
+  // a decoy setpriv first on PATH is never run: the shim runs the absolute path Node found
+  const decoy = path.join(g.dir, "decoy");
+  fs.mkdirSync(decoy);
+  fs.writeFileSync(path.join(decoy, "setpriv"), `#!/bin/sh\necho DECOY > '${path.join(g.dir, "decoy.rec")}'\nexit 1\n`, { mode: 0o755 });
+  const d = g.run({ ...IDS, PATH: `${decoy}:${g.bin}` });
+  assert.deepEqual([d.status, fs.existsSync(path.join(g.dir, "decoy.rec")), d.chrome && d.chrome.argv.at(-1)], [0, false, `--user-data-dir=${g.home}/profile-${d.chrome && d.chrome.pid}`]);
   // lock: false (the isolation check's baseline only): the same drop, no lock flags
   const bg = rootRig({ lock: false });
   const b = bg.run(IDS, ["--headless"]);
@@ -499,48 +527,84 @@ test("root drop: not root, the launch is what it was (no setpriv, no extra flags
   assert.deepEqual(rootRig({ id: "501", lock: false }).run({}, ["a"]).chrome.argv, ["a"]);
 });
 
-test("chromeHome: root only, a fresh 0700 dir under the temp dir owned by the uid; refused when others cannot reach it", () => {
+test("chromeHome: root only; <root 0711 mkdtemp>/home 0700, lchown'd (never chown), refused when others cannot reach it", () => {
   assert.equal(RR.chromeHome({ root: false }), null);
   if (process.platform === "win32") return;
   const me = { root: true, uid: process.getuid(), gid: process.getgid() }; // chown to ourselves works without root
   const base = fs.mkdtempSync("/tmp/graphic-home-base-"); // /tmp: every parent searchable (the macOS user temp dir is 0700)
   fs.chmodSync(base, 0o755);
-  const h = RR.chromeHome(me, base);
-  assert.equal(path.dirname(h), base);
-  assert.match(path.basename(h), /^graphic-chrome-/);
-  assert.deepEqual([fs.statSync(h).mode & 0o777, fs.statSync(h).uid], [0o700, process.getuid()]);
+  const calls = [];
+  const [lchown, chown] = [fs.lchownSync, fs.chownSync];
+  fs.lchownSync = (...a) => { calls.push(["lchown", ...a]); return lchown(...a); };
+  fs.chownSync = (...a) => { calls.push(["chown", ...a]); return chown(...a); };
+  let h;
+  try { h = RR.chromeHome(me, base); } finally { Object.assign(fs, { lchownSync: lchown, chownSync: chown }); }
+  const parent = path.dirname(h);
+  assert.deepEqual([path.basename(h), path.dirname(parent)], ["home", base]);
+  assert.match(path.basename(parent), /^graphic-chrome-/);
+  assert.deepEqual([fs.statSync(parent).mode & 0o777, fs.statSync(parent).uid], [0o711, process.getuid()], "the parent: the caller's (root's), searchable, not writable by the uid");
+  assert.deepEqual([fs.lstatSync(h).isDirectory(), fs.statSync(h).mode & 0o777], [true, 0o700]);
+  assert.deepEqual(calls, [["lchown", h, me.uid, me.gid]], "one lchown of the fresh home, no chown (which follows links)");
+  RR.releaseChromeHome(h, { root: false });
+  assert.equal(fs.existsSync(parent), false, "release removes the parent");
   fs.chmodSync(base, 0o700);
   assert.throws(() => RR.chromeHome(me, base), new RegExp(`^Error: running as root: ${base} is not searchable by other users`));
   assert.equal(RR.unsearchable(base), base);
   fs.chmodSync(base, 0o755);
   if (process.getuid() !== 0) {
-    const before = fs.readdirSync(base).length;
-    assert.throws(() => RR.chromeHome({ root: true, uid: 1, gid: 1 }, base), /EPERM/, "a failed chown throws");
-    assert.equal(fs.readdirSync(base).length, before, "and leaves no dir behind");
+    assert.throws(() => RR.chromeHome({ root: true, uid: 1, gid: 1 }, base), /EPERM/, "a failed lchown throws");
+    assert.deepEqual(fs.readdirSync(base), [], "and leaves no dir behind");
   }
   fs.rmSync(base, { recursive: true, force: true });
 });
 
-test("renderGraphic as root: refused before anything when the drop is not set up; the home is made, passed, removed", async () => {
+test("releaseChromeHome: kills every process of the uid (as the uid) BEFORE removing the home; only our own dirs", () => {
+  const user = { root: true, uid: 1234, gid: 5678, setpriv: "/x/setpriv" };
+  const mk = () => { const p = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-chrome-")); fs.mkdirSync(path.join(p, "home")); return path.join(p, "home"); };
+  const h = mk();
+  const seen = [];
+  const r = RR.releaseChromeHome(h, user, { spawn: (cmd, argv, o) => { seen.push({ argv: [cmd, ...argv], homeThere: fs.existsSync(h), env: o.env, cwd: o.cwd }); return { status: 0 }; } });
+  assert.deepEqual(seen.map((x) => x.argv), [["/x/setpriv", "--reuid=1234", "--regid=5678", "--clear-groups", "--inh-caps=-all", "--no-new-privs", "--", process.execPath, "-e", "try { process.kill(-1, 'SIGKILL'); } catch {}"]]);
+  assert.deepEqual([seen[0].homeThere, seen[0].env, seen[0].cwd, r.kill[0]], [true, { PATH: "/usr/bin:/bin" }, "/", "/x/setpriv"], "the kill runs first, with no inherited env, from /");
+  assert.equal(fs.existsSync(path.dirname(h)), false, "then the home's parent is gone");
+  // not root: no kill; a path that is not <graphic-chrome-*>/home is never removed
+  const h2 = mk();
+  assert.deepEqual(RR.releaseChromeHome(h2, { root: false }, { spawn: () => assert.fail("no kill when not root") }), { kill: null });
+  assert.equal(fs.existsSync(path.dirname(h2)), false);
+  const other = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-other-"));
+  RR.releaseChromeHome(other, { root: false });
+  assert.equal(fs.existsSync(other), true, "a dir that is not ours stays");
+  assert.deepEqual(RR.releaseChromeHome(null, user, { spawn: () => assert.fail() }), { kill: null });
+});
+
+test("renderGraphic as root: refused before anything when the drop is not set up; home made, passed, released on every path; own cache key", async () => {
   const calls = [];
   const bad = await rg({ chromeUser: () => ({ root: true, error: RR.ROOT_REFUSAL }), findChrome: () => { calls.push("find"); return "/fake/chrome"; } });
   assert.deepEqual([bad.r.ok, bad.r.codes, bad.r.reasons, bad.r.stage, bad.calls, calls], [false, ["R12"], [G.reason("R12n", { message: RR.ROOT_REFUSAL })], "setup", { render: 0, probe: 0 }, []]);
   assert.equal(fs.existsSync(path.join(bad.work, "build")), false, "nothing written");
   const root = { root: true, uid: 1234, gid: 5678, setpriv: "/x/setpriv" };
+  const plain = await rg({});
   for (const [name, over, ok] of [
     ["clean", {}, true],
     ["render fails", { runRender: async () => ({ status: 1, secs: 1, log: "boom", timedOut: false }) }, false],
     ["render times out", { runRender: async () => ({ status: -1, secs: 99, log: "killed after 99 s (render timeout)", timedOut: true }) }, false],
     ["probe refuses", { probeNetwork: () => ({ ok: false, lines: [], refusal: "x" }) }, false],
+    ["render throws", { runRender: async () => { throw new Error("boom"); } }, null],
   ]) {
     let home = null, got = null, user = null;
-    const x = await rg({ chromeUser: () => root, chromeHome: (u) => { home = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-chrome-")); assert.equal(u, root); return home; },
-      chromeShim: (d, exe, o) => { got = o.home; return "/fake/shim"; }, probeNetwork: (o) => { user = o.user; return { ok: true, lines: [] }; }, ...over });
+    const order = [];
+    const deps = { chromeUser: () => root, chromeHome: (u) => { assert.equal(u, root); home = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-chrome-")) + "/home"; fs.mkdirSync(home); return home; },
+      releaseChromeHome: (h, u) => { order.push("release"); assert.equal(u, root); return RR.releaseChromeHome(h, u, { spawn: () => { order.push("kill"); return { status: 0 }; } }); },
+      chromeShim: (d, exe, o) => { got = o; return "/fake/shim"; }, probeNetwork: (o) => { user = o.user; return { ok: true, lines: [] }; }, ...over };
+    let x;
+    try { x = await rg(deps); } catch (e) { x = { r: { ok: null, reasons: [e.message] }, work: "" }; }
     assert.equal(x.r.ok, ok, `${name}: ${x.r.reasons}`);
-    assert.equal(got, home, `${name}: the shim gets the home`);
-    assert.ok(!home.startsWith(x.work), `${name}: the home is not under the project/build dir`);
-    assert.equal(fs.existsSync(home), false, `${name}: the home is removed`);
+    assert.deepEqual([got.home, got.setpriv], [home, "/x/setpriv"], `${name}: the shim gets the home and the absolute setpriv`);
+    assert.ok(!x.work || !home.startsWith(x.work), `${name}: the home is not under the project/build dir`);
+    assert.deepEqual(order, ["release", "kill"], `${name}: the uid's processes are killed once`);
+    assert.equal(fs.existsSync(path.dirname(home)), false, `${name}: then the home is removed`);
     if (!over.probeNetwork) assert.equal(user.uid, 1234, "the probe is told who Chrome runs as");
+    if (name === "clean") assert.notEqual(path.basename(x.r.file), path.basename(plain.r.file), "a root render is cached under another key than a plain one");
   }
   const thrown = await rg({ chromeHome: () => { throw new Error("running as root: /x is not searchable by other users"); } });
   assert.deepEqual([thrown.r.reasons, thrown.calls.probe], [[G.reason("R12n", { message: "running as root: /x is not searchable by other users" })], 0]);
