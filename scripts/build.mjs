@@ -2890,7 +2890,10 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
     const popS = cap.popSafe ? r3(1 + Math.min(0.08, 0.12 / Math.max(1, caseOf(w.word.trim()).length * 0.72))) : 1.08;
     if (cap.pop !== false) tl.push(`ft("#cg${gi}w${wi}", { scale: 1 }, { scale: ${popS}, duration: 0.08, yoyo: true, repeat: 1, ease: "power1.out" }, ${r3(w.start)});`);
     // reveal: word -> each word appears when it's spoken; the box is already sized for the whole phrase
-    if (cap.style === "clipping" && wi === 0) tl.push(`ft("#cg${gi}", { scale: 0.9 }, { scale: 1, duration: 0.12, ease: "back.out(2.5)" }, ${r3(s)});`);  // R1b port (Broadsheet)
+    // R1b port (Broadsheet): the pop-in scales the INNER box (#cgNin), never #cgN itself. #cgN is centred by
+    // translateX(-50%); a tween on it makes GSAP turn that -50% into px with a guess that depends on whether the
+    // caption webfont had loaded when it first read the group, so the box landed up to ~50 px right of centre
+    if (cap.style === "clipping" && wi === 0) tl.push(`ft("#cg${gi}in", { scale: 0.9 }, { scale: 1, duration: 0.12, ease: "back.out(2.5)" }, ${r3(s)});`);
     // the emphasis word (lux) lands at full strength in one frame: a fading hero word reads as a ghost
     if (cap.reveal === "word" && wi > 0) tl.push(`ft("#cg${gi}w${wi}", { autoAlpha: 0 }, { autoAlpha: 1, duration: ${cap.style === "lux" && wi === emphI ? 0.01 : (cap.revealDur ?? 0.05)} }, ${r3(Math.max(s, w.start - 0.02))});`);
     if (cap.highlight) tl.push(`tl.set("#cg${gi}w${wi}", { color: "${cap.highlight}" }, ${r3(w.start)}); tl.set("#cg${gi}w${wi}", { color: "#fff" }, ${r3(Math.min(w.end + 0.02, e - 0.01))});`);
@@ -2908,7 +2911,14 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   const shadowed = pl.mode === "lower-face" && noBox;
   const orphanAt = cap.style === "noir" ? noirOrphanBreak(g, capSize) : -1;   // index of the word that opens the last line, or -1
   const tilt = cap.tilt ? `;rotate:${gi % 2 ? -cap.tilt : cap.tilt * 0.7}deg` : "";  // R1b port (Broadsheet clippings)
-  return `<div id="cg${gi}" class="cap-group clip${backed ? " cap-backed" : shadowed ? " cap-shadow" : ""}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w${wi === emphI ? " emph" : ""}">${esc(caseOf(w.word))}</span>`).map((sp, wi) => wi === 0 ? sp : (wi === orphanAt ? "<br>" : "<wbr>") + sp).join("")}</div>`;
+  const look = backed ? " cap-backed" : shadowed ? " cap-shadow" : "";
+  const body = g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w${wi === emphI ? " emph" : ""}">${esc(caseOf(w.word))}</span>`).map((sp, wi) => wi === 0 ? sp : (wi === orphanAt ? "<br>" : "<wbr>") + sp).join("");
+  // clipping (Broadsheet): two boxes. The outer #cgN places, centres (translateX(-50%)) and tilts, all static CSS that
+  // nothing animates; the inner #cgNin carries the box and the pop-in tween. (The tilt stays on the outer: CSS
+  // composes rotate with the -50% translate, which lifts/lowers the box by half its width x sin(tilt), up to ~6 px;
+  // moving the tilt inside would drop that and move every box vertically.)
+  const clipping = cap.style === "clipping";
+  return `<div id="cg${gi}" class="cap-group clip${clipping ? "" : look}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${clipping ? `<div id="cg${gi}in" class="cap-in${look}">${body}</div>` : body}</div>`;
 }).join("\n      ");
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
@@ -2975,7 +2985,10 @@ const capCss = cap.style === "type"
   : cap.style === "condensed"
   ? `.cap-group { font-family: ${cap.font ?? "Oswald"}, "Noto Sans Arabic", sans-serif; font-size: ${CAP_SIZES.condensed}px; font-weight: 700; line-height: .95; letter-spacing: 1px; color: ${cap.color ?? "#fff"}; max-width: 920px; text-align: center; text-shadow: 0 6px 22px rgba(0,0,0,.6), 0 2px 4px rgba(0,0,0,.7); }`
   : cap.style === "clipping"
-  ? `.cap-group { font-family: Gloock, "Noto Sans Arabic", Georgia, serif; font-size: ${cap.size ?? 58}px; line-height: 1.08; letter-spacing: -0.01em; color: #fbf8f1; background: #141210; padding: 6px 20px 12px; max-width: 900px; text-align: center; box-shadow: 0 10px 22px rgba(0,0,0,.35); }
+  // the box is on the inner .cap-in; its -20px side margins cancel its 20px padding, so the outer group's width and
+  // max-width (and so where lines wrap and where the box is centred) are what they were when the box was the group
+  ? `.cap-group { font-family: Gloock, "Noto Sans Arabic", Georgia, serif; font-size: ${cap.size ?? 58}px; line-height: 1.08; letter-spacing: -0.01em; color: #fbf8f1; max-width: 900px; text-align: center; }
+  .cap-in { margin: 0 -20px; background: #141210; padding: 6px 20px 12px; box-shadow: 0 10px 22px rgba(0,0,0,.35); }
   .cap-group .w { margin: 0 0.12em; }`
   : cap.style === "sessions"
   // R1b port: restyled to match editorial-collage's locked look (shares this style key with alif.json,
