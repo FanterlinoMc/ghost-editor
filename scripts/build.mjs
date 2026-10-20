@@ -26,6 +26,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard, isLightColor, fitWipe } from "./lib/motion.mjs";
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
+import { clippingExtent } from "./lib/caption-metrics.mjs";
 import { wordOwners } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
 import { compileMotion, resolveColor } from "./lib/motion-graphics.mjs";
@@ -2909,7 +2910,17 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   // noir / lux sit at a fixed height in the lower letterbox bar (cap.fixedY is in 9:16 pixels, scaled to other formats);
   // the block is still logged so caption_layout.json / qa.py see it
   const fy = fixedYOf(cap.style, s, e);
-  const pl = fy != null ? { y: Math.round(fy * H / 1920), mode: cap.style, scale: 1 } : placer.place(s, e, capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
+  // clipping (Broadsheet, mac-45): reserve the band the tilted box is DRAWN in, from the font's advances and the CSS
+  // below (lib/caption-metrics.mjs), not size x 1.3: the box's 18 px of vertical padding and the tilt (up to
+  // (width + 40) x sin(tilt) more on one side) put a one-line block ~81-95 px tall against 75 reserved. The placer
+  // places that band; the group's CSS top is the band's top plus how far the box reaches above it.
+  const tiltDeg = cap.tilt ? (gi % 2 ? -cap.tilt : cap.tilt * 0.7) : 0;
+  const clipExt = cap.style === "clipping" && fy == null
+    ? (sc = 1) => clippingExtent(g.map((w) => caseOf(w.word)), { size: cap.size ?? 58, maxWidth: W - 2 * placer.sidePad, deg: tiltDeg, scale: sc }) : null;
+  const pl = fy != null ? { y: Math.round(fy * H / 1920), mode: cap.style, scale: 1 } : placer.place(s, e, clipExt ? Math.ceil(clipExt().up) + Math.ceil(clipExt().down) : capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
+  // whole px, rounded outward: the band is ceil(up) + ceil(down) and the top sits ceil(up) into it, so the drawn box
+  // [top - up, top + down] never leaves [pl.y, pl.y + band] (the placer itself rounds y to whole px)
+  const cssTop = clipExt ? pl.y + Math.ceil(clipExt(pl.scale && pl.scale < 1 ? pl.scale : 1).up) : pl.y;
   if (fy != null) placer.log.push({ t0: +s.toFixed(2), t1: +e.toFixed(2), y: pl.y, h: Math.round(capSize * 1.3), mode: cap.style, scale: 1, face: null });
   // captions.backing false (opt-in): no grey box over the lower face, a heavy text shadow instead
   // captions.backingUntil: <edit s> (opt-in): only blocks starting before it get the box; later ones the shadow
@@ -2917,7 +2928,7 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   const backed = pl.mode === "lower-face" && !noBox && !["pill", "box", "sessions"].includes(cap.style);
   const shadowed = pl.mode === "lower-face" && noBox;
   const orphanAt = cap.style === "noir" ? noirOrphanBreak(g, capSize) : -1;   // index of the word that opens the last line, or -1
-  const tilt = cap.tilt ? `;rotate:${gi % 2 ? -cap.tilt : cap.tilt * 0.7}deg` : "";  // R1b port (Broadsheet clippings)
+  const tilt = cap.tilt ? `;rotate:${tiltDeg}deg` : "";  // R1b port (Broadsheet clippings)
   const look = backed ? " cap-backed" : shadowed ? " cap-shadow" : "";
   const body = g.map((w, wi) => `<span id="cg${gi}w${wi}" class="w${wi === emphI ? " emph" : ""}">${esc(caseOf(w.word))}</span>`).map((sp, wi) => wi === 0 ? sp : (wi === orphanAt ? "<br>" : "<wbr>") + sp).join("");
   // clipping (Broadsheet): two boxes. The outer #cgN places, centres (translateX(-50%)) and tilts, all static CSS that
@@ -2925,8 +2936,8 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   // composes rotate with the -50% translate, which lifts/lowers the box by half its width x sin(tilt), up to ~6 px;
   // moving the tilt inside would drop that and move every box vertically.)
   const clipping = cap.style === "clipping";
-  GEO_CAPS.push({ id: `cg${gi}`, t0: r3(s), t1: r3(r3(s) + r3(Math.max(0.1, e - s))), y: pl.y, h: capSize * (fy == null && ["pill", "box"].includes(cap.style) ? 1.6 : 1.3), mode: pl.mode, scale: pl.scale ?? 1, cx: W / 2, text: g.map((w) => caseOf(w.word)).join(" ") });
-  return `<div id="cg${gi}" class="cap-group clip${clipping ? "" : look}" style="top:${pl.y}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${clipping ? `<div id="cg${gi}in" class="cap-in${look}">${body}</div>` : body}</div>`;
+  GEO_CAPS.push({ id: `cg${gi}`, t0: r3(s), t1: r3(r3(s) + r3(Math.max(0.1, e - s))), y: pl.y, h: clipExt ? Math.ceil(clipExt().up) + Math.ceil(clipExt().down) : capSize * (fy == null && ["pill", "box"].includes(cap.style) ? 1.6 : 1.3), mode: pl.mode, scale: pl.scale ?? 1, cx: W / 2, text: g.map((w) => caseOf(w.word)).join(" ") });
+  return `<div id="cg${gi}" class="cap-group clip${clipping ? "" : look}" style="top:${cssTop}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${clipping ? `<div id="cg${gi}in" class="cap-in${look}">${body}</div>` : body}</div>`;
 }).join("\n      ");
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));
