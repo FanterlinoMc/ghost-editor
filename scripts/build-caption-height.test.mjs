@@ -20,6 +20,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { silentLibrary } from "./lib/silent-library.mjs";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
+import { findChrome as findPinnedChrome } from "./lib/graphic-render.mjs";
 import { clippingExtent, drawnExtent, wordPieces, EMOJI_EM } from "./lib/caption-metrics.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -108,7 +109,9 @@ test("build: B1's close-up - every clipping block's reserved band ends inside th
 const skipOrFail = (t, why) => { if (process.env.CI === "1" || process.env.REQUIRE_CHROME === "1") throw new Error(`real Chrome required (CI / REQUIRE_CHROME): ${why}`); return t.skip(why); };
 test("real Chrome: every drawn caption box lies inside its reserved band, above the bottom UI band", { timeout: 120000 }, async (t) => {
   let puppeteer, chrome;
-  try { puppeteer = findPuppeteer(); chrome = findChrome(); } catch (e) { return skipOrFail(t, e.message); }
+  // Chrome: CHROME, else the pinned shell the graphic renderer uses (GRAPHIC_CHROME_PATH, HYPERFRAMES_BROWSER_PATH, the
+  // pinned build in the caches - the Linux server sets GRAPHIC_CHROME_PATH), else any cached headless shell
+  try { puppeteer = findPuppeteer(); chrome = (process.env.CHROME && fs.existsSync(process.env.CHROME) && process.env.CHROME) || findPinnedChrome() || findChrome(); } catch (e) { return skipOrFail(t, e.message); }
   const { dir, html, layout } = reel();
   const TYPES = { ".html": "text/html", ".woff2": "font/woff2", ".mp4": "video/mp4", ".js": "text/javascript" };
   const server = http.createServer((req, res) => {

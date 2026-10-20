@@ -5,9 +5,9 @@
 //   PUPPETEER_CORE_DIR  a node_modules/puppeteer-core directory (override); else the npx caches (~/.npm/_npx, the
 //                       npm_config_cache one, Windows' LOCALAPPDATA one), ~/node_modules, and last the puppeteer-core
 //                       the PINNED renderer itself loads (graphic-render.mjs resolveHyperframes: npx -p hyperframes@pin)
-//   CHROME              a chrome / chrome-headless-shell executable; else GRAPHIC_CHROME_PATH (the pinned shell the
-//                       graphic renderer uses, e.g. on the Linux server), HYPERFRAMES_BROWSER_PATH,
-//                       PRODUCER_HEADLESS_SHELL_PATH, then the hyperframes / puppeteer caches
+//   CHROME              a chrome / chrome-headless-shell executable; else the hyperframes / puppeteer caches. (The
+//                       graphic renderer's pinned shell is graphic-render.mjs findChrome's alone: normal reels never
+//                       read its variable; a test that wants it asks graphic-render.mjs directly.)
 
 import fs from "node:fs";
 import os from "node:os";
@@ -38,9 +38,8 @@ export function findPuppeteer() {
 
 export function findChrome() {
   if (process.env.CHROME && fs.existsSync(process.env.CHROME)) return process.env.CHROME;
-  for (const k of ["GRAPHIC_CHROME_PATH", "HYPERFRAMES_BROWSER_PATH", "PRODUCER_HEADLESS_SHELL_PATH"]) if (process.env[k] && fs.existsSync(process.env[k])) return process.env[k];
   const exe = process.platform === "win32" ? "chrome-headless-shell.exe" : "chrome-headless-shell";
   const roots = [path.join(os.homedir(), ".cache", "hyperframes", "chrome", "chrome-headless-shell"), path.join(os.homedir(), ".cache", "puppeteer", "chrome-headless-shell")];
   for (const r of roots) for (const v of kids(r).sort().reverse()) for (const s of [v, ...kids(v)]) { const p = path.join(s, exe); if (fs.existsSync(p)) return p; }
-  throw new Error("no chrome-headless-shell in ~/.cache/hyperframes or ~/.cache/puppeteer: set CHROME or GRAPHIC_CHROME_PATH");
+  throw new Error("no chrome-headless-shell in ~/.cache/hyperframes or ~/.cache/puppeteer: set CHROME");
 }
