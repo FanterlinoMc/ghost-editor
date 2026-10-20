@@ -140,7 +140,9 @@ export const CLIPPING = { files: ["gloock-latin.woff2", "gloock-latin-ext.woff2"
 export function clippingExtent(words, { size, maxWidth, deg = 0, scale = 1 }) {
   const m = CLIPPING;
   const lines = wrapLines(words, size, maxWidth, m);
-  const w = Math.min(maxWidth, Math.max(...lines));
+  // the group is width: max-content clamped by max-width, so a block that wraps is max-width wide (Chrome: 820 px on a
+  // 2- and a 3-line block whose longest line is ~640), not its longest line: the tilt term uses that width
+  const w = lines.length > 1 ? maxWidth : Math.min(maxWidth, lines[0]);
   const h = lines.length * size * m.lineHeight + m.padTop + m.padBottom;
   const { up, down } = drawnExtent({ w, h, deg, scale, padX: m.padX });
   return { up, down, h: up + down, lines: lines.length, w };

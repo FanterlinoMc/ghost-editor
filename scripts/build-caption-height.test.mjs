@@ -150,5 +150,26 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
       assert.ok(e.h >= drawn.h - 0.05, `${words.join(" ").slice(0, 30)}: modelled ${e.h} (${e.lines} line(s)), drawn ${drawn.h}`);
       assert.ok(e.w >= drawn.w - 0.05 || e.lines > 1, `${words.join(" ").slice(0, 30)}: modelled width ${e.w}, drawn ${drawn.w}`);
     }
+    // wrapped blocks at both tilt signs (a wrapped group is max-width wide, so its tilt reaches further than its longest
+    // line): placed the way build.mjs places one - band at Y, the group's top ceil(up) into it - the drawn box stays in
+    // [Y, Y + ceil(up) + ceil(down)]
+    const Y = 300, maxWidth = 1080 - 2 * 130;
+    const cases = [["photographers", "recommended", "illustrations"], ["extraordinary", "photographers", "recommended", "illustrations", "everywhere"], ["to", "be", Array(22).fill("😂").join("")]];
+    for (const words of cases) for (const deg of [-1.6, 1.6 * 0.7]) {
+      const e = clippingExtent(words, { size: 58, maxWidth, deg });
+      const top = Y + Math.ceil(e.up), end = Y + Math.ceil(e.up) + Math.ceil(e.down);
+      const d = await page.evaluate((ws, top, deg) => {
+        const g = document.createElement("div"); g.className = "cap-group"; g.style.cssText = `top:${top}px;rotate:${deg}deg`;
+        const inn = document.createElement("div"); inn.className = "cap-in"; g.appendChild(inn);
+        inn.innerHTML = ws.map((w) => `<span class="w">${w}</span>`).join("<wbr>");
+        document.getElementById("cg0").parentElement.appendChild(g);
+        const r = inn.getBoundingClientRect(), lines = Math.round((g.offsetHeight - 18) / (58 * 1.08)), w = g.offsetWidth; g.remove();
+        return { y0: r.top, y1: r.bottom, lines, w };
+      }, words, top, deg);
+      const tag = `${words.join(" ").slice(0, 24)} @ ${deg}deg (${d.lines} line(s) drawn, ${e.lines} modelled, group ${d.w} px)`;
+      if (d.lines > 1) assert.equal(d.w, maxWidth, `${tag}: a wrapped group is max-width wide`);
+      assert.ok(d.y1 <= end + 0.05, `${tag}: drawn to ${d.y1}, band ends ${end}`);
+      assert.ok(d.y0 >= Y - 0.05, `${tag}: drawn from ${d.y0}, band starts ${Y}`);
+    }
   } finally { await browser.close(); server.close(); }
 });
