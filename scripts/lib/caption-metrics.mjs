@@ -94,25 +94,43 @@ export function textWidth(text, size, { files, fallbackEm = 0.6, letterSpacing =
   return em * size;
 }
 
-// Greedy line breaking at the break opportunities the markup and UAX #14 allow: between word spans (<wbr>, no space
-// characters) and on either side of an emoji inside a word (emoji are line-break class ID: Chrome wraps a long emoji
-// run mid-span). Each word is `wordPad` em wider for its side margins (half each side); -> line widths in px. Mirrors
-// CSS for a width: max-content box clamped by max-width: a line breaks before a piece that would push it past
-// maxWidth; a single over-long piece stays.
+// One emoji as Chrome shapes it: a ZWJ sequence (👨‍👩‍👧), a flag (two regional indicators), a skin-tone or VS16 variant -
+// one unit, never broken inside. Its width is still the sum of its code points' (an over-estimate, the safe side).
+const EMOJI_UNIT = /(\p{Regional_Indicator}{1,2}|\p{Extended_Pictographic}[️⃣\p{Emoji_Modifier}]*(?:‍\p{Extended_Pictographic}[️⃣\p{Emoji_Modifier}]*)*|\p{Emoji_Modifier})/u;
+// a word's unbreakable pieces: the text between emoji, and each emoji unit
+export const wordPieces = (w) => w.split(EMOJI_UNIT).filter(Boolean);
+
+// Line breaking -> line widths in px, for a width: max-content box clamped by max-width. Break opportunities: between
+// word spans (<wbr>, no space characters) and around an emoji inside a word (line-break class ID). Each word is
+// `wordPad` em wider for its side margins (half each side); a single over-long piece stays on its own line.
+// The count is an UPPER bound over how Chromes break a word that holds an emoji run (mac-45 CP5: Windows Chrome put
+// "to be 😂 x 22" on 4 lines where greedy packing gives 3), so two policies run and the one with more lines wins:
+//   packed: greedy over every piece (the run starts on the line before it, as macOS Chrome does)
+//   whole:  a word that does not fit the rest of the line starts a new one; if it is wider than a line it is then
+//           split greedily at its own pieces (the run moves down first, then wraps, as Windows Chrome did)
+// A word without emoji is one piece, so both policies agree on every plain-text caption.
 export function wrapLines(words, size, maxWidth, opts) {
-  const pad = (opts.wordPad ?? 0) * size / 2, pieces = [];
-  for (const w of words) {
-    const parts = w.split(/(\p{Extended_Pictographic}️?)/u).filter(Boolean);
-    if (!parts.length) { pieces.push(2 * pad); continue; }
-    parts.forEach((t, i) => pieces.push(textWidth(t, size, opts) + (i === 0 ? pad : 0) + (i === parts.length - 1 ? pad : 0)));
-  }
-  const lines = [];
-  let cur = 0;
-  for (const pw of pieces) {
-    if (cur > 0 && cur + pw > maxWidth) { lines.push(cur); cur = pw; } else cur += pw;
-  }
-  if (cur > 0 || !lines.length) lines.push(cur);
-  return lines;
+  const pad = (opts.wordPad ?? 0) * size / 2;
+  const ws = words.map((w) => {
+    const parts = wordPieces(w);
+    if (!parts.length) return [2 * pad];
+    return parts.map((t, i) => textWidth(t, size, opts) + (i === 0 ? pad : 0) + (i === parts.length - 1 ? pad : 0));
+  });
+  const run = (whole) => {
+    const lines = [];
+    let cur = 0;
+    const put = (pw) => { if (cur > 0 && cur + pw > maxWidth) { lines.push(cur); cur = pw; } else cur += pw; };
+    for (const ps of ws) {
+      const ww = ps.reduce((x, y) => x + y, 0);
+      if (!whole || ps.length === 1 || cur + ww <= maxWidth) { ps.forEach(put); continue; }
+      if (cur > 0) { lines.push(cur); cur = 0; }
+      ps.forEach(put);
+    }
+    if (cur > 0 || !lines.length) lines.push(cur);
+    return lines;
+  };
+  const packed = run(false), whole = run(true);
+  return whole.length > packed.length ? whole : packed;
 }
 
 // How far a box drawn by an element of `w` x `h` (outer group, origin at its centre unless `scale` < 1, which sets

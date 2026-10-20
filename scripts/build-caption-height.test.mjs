@@ -20,7 +20,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { silentLibrary } from "./lib/silent-library.mjs";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
-import { clippingExtent, drawnExtent, EMOJI_EM } from "./lib/caption-metrics.mjs";
+import { clippingExtent, drawnExtent, wordPieces, EMOJI_EM } from "./lib/caption-metrics.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.join(HERE, "build.mjs");
@@ -46,6 +46,20 @@ test("model: the band reserved for a B1 cg7-shaped block covers the box Chrome d
   assert.ok(Math.abs(t.down - (40 + 40 * Math.cos(2 * Math.PI / 180) + 320 * Math.sin(2 * Math.PI / 180))) < 1e-9, JSON.stringify(t));
   // a group too wide for the line wraps: two lines of Gloock
   assert.equal(clippingExtent(["photographers", "recommended", "illustrations"], { size: 58, maxWidth: 820 }).lines, 2);
+});
+
+test("model: the line count is an upper bound over how Chromes wrap an emoji run (Windows drew 4 lines where packing gave 3)", () => {
+  // Windows Chrome (Segoe UI Emoji): "to be" + 22 emoji in one word drew 4 lines - the run moved to its own line, then
+  // wrapped. The model takes the larger of greedy packing and that policy; at 1.5 em a line holds 9 emoji: 1 + 9/9/4.
+  const run = "😂".repeat(22);
+  assert.equal(clippingExtent(["to", "be", run], { size: 58, maxWidth: 820 }).lines, 4);
+  // the run alone wraps the same under both policies: ceil(22 x 87 px / 820) = 3
+  assert.equal(clippingExtent([run], { size: 58, maxWidth: 820 }).lines, 3);
+  // plain text: one piece per word, both policies agree (B1 shapes stay 1 line, a long group 2)
+  assert.equal(clippingExtent(["cats", "run", "fast"], { size: 58, maxWidth: 820 }).lines, 1);
+  // an emoji is one unbreakable unit: ZWJ sequences, flags, skin tones, VS16
+  assert.deepEqual(wordPieces("a👨‍👩‍👧b🇺🇸👍🏽❤️x"), ["a", "👨‍👩‍👧", "b", "🇺🇸", "👍🏽", "❤️", "x"]);
+  assert.deepEqual(wordPieces("lol"), ["lol"]);
 });
 
 function build() {
@@ -90,9 +104,11 @@ test("build: B1's close-up - every clipping block's reserved band ends inside th
   assert.ok(cg7.h >= 91, `cg7 reserves ${cg7.h} px (drawn 91.05)`);
 });
 
+// CI=1 or REQUIRE_CHROME=1: no Chrome / puppeteer-core / GSAP is a FAILURE, not a skip (a skipped test still exits 0)
+const skipOrFail = (t, why) => { if (process.env.CI === "1" || process.env.REQUIRE_CHROME === "1") throw new Error(`real Chrome required (CI / REQUIRE_CHROME): ${why}`); return t.skip(why); };
 test("real Chrome: every drawn caption box lies inside its reserved band, above the bottom UI band", { timeout: 120000 }, async (t) => {
   let puppeteer, chrome;
-  try { puppeteer = findPuppeteer(); chrome = findChrome(); } catch (e) { return t.skip(e.message); }
+  try { puppeteer = findPuppeteer(); chrome = findChrome(); } catch (e) { return skipOrFail(t, e.message); }
   const { dir, html, layout } = reel();
   const TYPES = { ".html": "text/html", ".woff2": "font/woff2", ".mp4": "video/mp4", ".js": "text/javascript" };
   const server = http.createServer((req, res) => {
@@ -108,7 +124,7 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
     await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: "load", timeout: 60000 });
     try { await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 }); }
-    catch { return t.skip("GSAP did not load (offline?)"); }
+    catch { return skipOrFail(t, "GSAP did not load (offline?)"); }
     const got = await page.evaluate(async (n) => {
       await document.fonts.load('58px "Gloock"', "cats run fast"); await document.fonts.ready;
       const tl = window.__timelines.main; tl.pause();
