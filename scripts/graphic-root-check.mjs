@@ -31,7 +31,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { chromeUser, chromeShim, chromeHome, releaseChromeHome, holdHostLock, hostLockPath, uidProcesses, NO_LOCK_DIR, LINGERING, findChrome, isChrome, ROOT_REFUSAL } from "./lib/graphic-render.mjs";
+import { chromeUser, chromeShim, chromeHome, releaseChromeHome, holdHostLock, hostLockPath, uidProcesses, NO_LOCK_DIR, LINGERING, findChrome, ROOT_REFUSAL } from "./lib/graphic-render.mjs";
 import { holdRenderLock } from "./lib/graphic-lock.mjs";
 
 holdRenderLock();
@@ -57,7 +57,14 @@ const proc = (pid, f) => { try { return fs.readFileSync(`/proc/${pid}/${f}`, "ut
 const field = (status, k) => ((new RegExp(`^${k}:\\s*(.*)$`, "m").exec(status || "") || [])[1] || "").trim();
 const environ = (pid) => (proc(pid, "environ") || "").split("\0").filter(Boolean);
 const ppid = (pid) => { const s = proc(pid, "stat"); return s ? Number(s.slice(s.lastIndexOf(")") + 2).split(" ")[1]) : null; };
-const exe = (pid) => { try { return path.basename(fs.readlinkSync(`/proc/${pid}/exe`)); } catch { return null; } };
+// /proc/<pid>/exe, environ and cwd of a process of ANOTHER uid that is non-dumpable (every process after setuid is)
+// need CAP_SYS_PTRACE, which a container's root usually lacks: unreadable (EACCES), not a sign of anything. status,
+// stat and cmdline stay world-readable. So a Chrome is recognised by argv[0] (cmdline), else by comm (stat, 15 chars).
+const argv0 = (pid) => ((proc(pid, "cmdline") || "").split("\0")[0] || null);
+const comm = (pid) => { const s = proc(pid, "stat"); return s ? s.slice(s.indexOf("(") + 1, s.lastIndexOf(")")) : null; };
+let CHROME_BASE = null; // set once findChrome ran
+const isPinnedChrome = (pid) => { const a = argv0(pid); return a ? path.basename(a) === CHROME_BASE : comm(pid) === (CHROME_BASE || "").slice(0, 15); };
+const readable = (pid, f) => { try { fs.readFileSync(`/proc/${pid}/${f}`); return true; } catch { return false; } };
 const pids = () => fs.readdirSync("/proc").filter((d) => /^\d+$/.test(d)).map(Number);
 const descendants = (root) => { const out = []; for (const p of pids()) { for (let q = p, n = 0; q > 1 && n < 64; q = ppid(q), n++) if (q === root) { if (p !== root) out.push(p); break; } } return out; };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -85,6 +92,7 @@ const setupOk = await step("setup (chrome, host lock, home, shim)", async () => 
   work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-root-check-"));
   chrome = findChrome();
   if (!chrome) throw new Error("no chrome-headless-shell (set GRAPHIC_CHROME_PATH)");
+  CHROME_BASE = path.basename(chrome);
   if (!lockFile) throw new Error(NO_LOCK_DIR);
   console.log(`info host lock: ${lockFile}`);
   lock = await holdHostLock(lockFile); // as renderGraphic: the uid's host lock around the whole home lifecycle
@@ -101,7 +109,7 @@ let err = "";
 cp.stderr.on("data", (d) => (err += d));
 cp.stdio[3].on("error", () => {}); cp.stdio[4].on("data", () => {}); cp.stdio[4].on("error", () => {});
 let pid = null;
-for (let i = 0; i < 100 && !pid; i++) { await wait(100); const m = (fs.existsSync(mark) ? fs.readFileSync(mark, "utf8") : "").trim(); if (m && exe(Number(m)) === path.basename(chrome)) pid = Number(m); }
+for (let i = 0; i < 100 && !pid; i++) { await wait(100); const m = (fs.existsSync(mark) ? fs.readFileSync(mark, "utf8") : "").trim(); if (m && isPinnedChrome(Number(m))) pid = Number(m); }
 if (check(pid === cp.pid, `Chrome started through the shim, marked PID ${pid} = the spawned PID ${cp.pid} (exec chain)${pid ? "" : ": " + err.trim().slice(-300)}`)) {
   await wait(1500); // let it start its children
   const st = proc(pid, "status");
@@ -111,23 +119,43 @@ if (check(pid === cp.pid, `Chrome started through the shim, marked PID ${pid} = 
   for (const c of ["CapInh", "CapPrm", "CapEff", "CapAmb"]) check(/^0+$/.test(field(st, c)), `${c}: ${field(st, c)}`);
   console.log(`info CapBnd: ${field(st, "CapBnd")} (the bounding set is not cleared; with uid != 0, no_new_privs and no file caps it grants nothing)`);
   check(field(st, "NoNewPrivs") === "1", `NoNewPrivs: ${field(st, "NoNewPrivs")}`);
-  const env = environ(pid);
-  check(env.map((e) => e.split("=")[0]).sort().join(",") === ALLOWED.join(","), `environ keys: ${env.map((e) => e.split("=")[0]).sort().join(",")}`);
-  check(!env.some((e) => e.includes(CANARY)), "environ: no canary");
+  // environ / cwd: read directly when root may (CAP_SYS_PTRACE), else proven below through the same shim
   let cwd = null; try { cwd = fs.readlinkSync(`/proc/${pid}/cwd`); } catch {}
-  check(cwd === fs.realpathSync(home), `cwd: ${cwd}`);
+  if (readable(pid, "environ")) {
+    const env = environ(pid);
+    check(env.map((e) => e.split("=")[0]).sort().join(",") === ALLOWED.join(","), `environ keys: ${env.map((e) => e.split("=")[0]).sort().join(",")}`);
+    check(!env.some((e) => e.includes(CANARY)), "environ: no canary");
+    check(cwd === fs.realpathSync(home), `cwd: ${cwd}`);
+  } else console.log(`info /proc/${pid}/environ, cwd, exe: unreadable to this root (no CAP_SYS_PTRACE; the dropped Chrome is non-dumpable), proven through the same shim below`);
   const argv = (proc(pid, "cmdline") || "").split("\0").filter(Boolean);
   const udd = argv.filter((a) => a.startsWith("--user-data-dir="));
   check(udd.length === 2 && udd[1] === `--user-data-dir=${home}/profile-${pid}`, `the last --user-data-dir is ours: ${udd.join(" ")}`);
   check(fs.existsSync(path.join(home, `profile-${pid}`)) && fs.readdirSync(profile).length === 0, "Chrome uses the LAST --user-data-dir (ours is populated, puppeteer-style root 0700 one is empty)");
-  check(!argv.some((a) => a.includes(work)) && !environ(pid).some((e) => e.includes(work)) && !String(cwd).startsWith(work), "no argv, env or cwd inside the root-only dir that holds the shim");
+  check(!argv.some((a) => a.includes(work)) && !environ(pid).some((e) => e.includes(work)) && !String(cwd).startsWith(work), "no argv (env, cwd where readable) inside the root-only dir that holds the shim");
   const kids = descendants(pid);
   const bad = kids.filter((k) => !new RegExp(`^${user.uid}\\s`).test(field(proc(k, "status"), "Uid")));
   check(kids.length > 0 && bad.length === 0, `${kids.length} child process(es), all uid ${user.uid}${bad.length ? `; NOT: ${bad.join(",")}` : ""}`);
 }
 try { cp.stdio[3].write(JSON.stringify({ id: 1, method: "Browser.close" }) + "\0"); } catch {}
 await new Promise((r) => { const t = setTimeout(r, 5000); cp.on("exit", () => { clearTimeout(t); r(); }); });
-if (pid && isChrome(pid)) { try { process.kill(pid, "SIGKILL"); } catch {} }
+if (pid && isPinnedChrome(pid) && field(proc(pid, "status"), "Uid").startsWith(String(user.uid))) { try { process.kill(pid, "SIGKILL"); } catch {} }
+});
+// what the shim execs, seen from inside: a stand-in "Chrome" through the SAME shim prints its ids, cwd and environment
+// (independent of /proc access)
+await step("ids, cwd and environment of what the shim execs", async () => {
+  const sdir = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-root-check-standin-"));
+  fs.chmodSync(sdir, 0o755);
+  const standin = path.join(sdir, "standin.sh");
+  fs.writeFileSync(standin, '#!/bin/sh\necho "UID=$(id -u) GID=$(id -g) GROUPS=$(id -G)"\necho "CWD=$(pwd -P)"\n/usr/bin/env | sed "s/^/ENV /"\n', { mode: 0o755 });
+  try {
+    const sshim = chromeShim(path.join(work, "standin"), standin, { home, setpriv: user.setpriv });
+    const r = spawnSync(sshim, [], { encoding: "utf8", env: process.env, timeout: 30000 });
+    const o = String(r.stdout);
+    const keys = o.split("\n").filter((l) => l.startsWith("ENV ")).map((l) => l.slice(4).split("=")[0]).sort();
+    check(o.includes(`UID=${user.uid} GID=${user.gid} GROUPS=${user.gid}\n`), `ids: ${(/UID=.*/.exec(o) || [r.stderr.trim().slice(-200)])[0]}`);
+    check(o.includes(`CWD=${fs.realpathSync(home)}\n`), `cwd: ${(/CWD=.*/.exec(o) || ["?"])[0]}`);
+    check(keys.join(",") === ALLOWED.join(",") && !o.includes(CANARY), `environment keys: ${keys.join(",")}; canary: ${o.includes(CANARY)}`);
+  } finally { fs.rmSync(sdir, { recursive: true, force: true }); }
 });
 await step("root-only file through the same drop", async () => {
   const secret = path.join(os.tmpdir(), `graphic-root-only-${process.pid}`), open = path.join(os.tmpdir(), `graphic-world-readable-${process.pid}`);
@@ -177,13 +205,21 @@ await step("a real render (waits for the host lock, then sampled)", async () => 
   await wait(5000);
   check(!done && /waiting for the host lock/.test(out) && !/render 1\/2/.test(out) && uidProcs().length === 0, `a concurrent render waits for the host lock ${lockFile} (no Chrome of the uid, no render started while it is held)`);
   lock.release();
+  // every 50 ms for the whole render: each descendant whose argv[0] is the pinned shell, its Uid line read at once
+  let samples = 0;
   while (!done) {
-    for (const p of descendants(det.pid)) if (!seen.has(p) && exe(p) === path.basename(chrome)) seen.set(p, { uid: field(proc(p, "status"), "Uid").split(/\s+/)[0], canary: environ(p).some((e) => e.includes(CANARY)), project: (proc(p, "cmdline") || "").includes("graphic-determinism-") });
-    await wait(100);
+    samples++;
+    for (const p of descendants(det.pid)) {
+      if (seen.has(p) || !isPinnedChrome(p)) continue;
+      const uids = field(proc(p, "status"), "Uid").split(/\s+/);
+      if (!uids[0]) continue; // gone between the two reads
+      seen.set(p, { uid: uids[0], all: uids.every((u) => u === uids[0]), canary: readable(p, "environ") && environ(p).some((e) => e.includes(CANARY)), project: (proc(p, "cmdline") || "").includes("graphic-determinism-") });
+    }
+    await wait(50);
   }
   const all = [...seen.values()];
   check(/GRAPHIC DETERMINISM: PASS/.test(out), `graphic-determinism ${path.basename(fixture)}: ${(/GRAPHIC DETERMINISM: \w+/.exec(out) || ["no verdict"])[0]}${/PASS/.test(out) ? "" : "\n" + out.trim().slice(-800)}`);
-  check(all.length > 0 && all.every((x) => x.uid === String(user.uid) && !x.canary && !x.project), `${all.length} Chrome process(es) seen during the render, uids {${[...new Set(all.map((x) => x.uid))].join(",")}}, canary in environ: ${all.filter((x) => x.canary).length}, argv naming the (root-only 0700) build dir: ${all.filter((x) => x.project).length}`);
+  check(all.length > 0 && all.every((x) => x.uid === String(user.uid) && x.all && !x.canary && !x.project), `${all.length} Chrome process(es) seen during the render (${samples} samples, 50 ms), real uids {${[...new Set(all.map((x) => x.uid))].join(",")}}${all.every((x) => x.all) ? "" : " (a Uid line with mixed ids!)"}, canary in a readable environ: ${all.filter((x) => x.canary).length}, argv naming the (root-only 0700) build dir: ${all.filter((x) => x.project).length}`);
   check(homes() === homesBefore, "the render's Chrome home under os.tmpdir() was removed");
   check(uidProcs().length === 0, `no process of uid ${user.uid} left after the render: ${uidProcs().join(",") || "none"}`);
 });
