@@ -653,7 +653,7 @@ export async function renderGraphic(opts, deps = {}) {
     log(msg); console.error(msg);
     if (res && res.ok && !res.cached && res.file) fs.rmSync(res.file, { force: true }); // this call's file: not kept
     if (thrown) throw thrown;
-    return { ok: false, reasons: [reason("R12n", { message: rel.error })], codes: ["R12"], stage: "release", ...(res && res.key ? { key: res.key, L: res.L } : {}), file: null };
+    return { ok: false, reasons: [reason("R12c", { message: rel.error })], codes: ["R12"], stage: "release", ...(res && res.key ? { key: res.key, L: res.L } : {}), file: null };
   }
   if (thrown) throw thrown;
   return res;
