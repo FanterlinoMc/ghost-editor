@@ -26,8 +26,10 @@
 //      must never run at the same time with the same uid: the engine runs a build's graphics one at a time (the
 //      awaited pre-pass in build.mjs), but nothing in the engine serialises two BUILDS on one host. Concurrent builds
 //      need a distinct uid each; renderGraphic itself holds a per-uid HOST LOCK (hostLockPath:
-//      /run/graphic-chrome-<uid>.lock, else in os.tmpdir()) from before the home exists until after its release, so
-//      a second render with the same uid waits. It is a DIFFERENT file from the CLIs' render lock (--lock /
+//      graphic-chrome-<uid>.lock in /run, else /var/lock, else root's home: root-only dirs, never the shared temp dir)
+//      from before the home exists until after its release, so a second render with the same uid waits; under it,
+//      before the home, any process of the uid left by an earlier render (its Node SIGKILLed) is killed, and a
+//      survivor refuses the render (sweepUid). It is a DIFFERENT file from the CLIs' render lock (--lock /
 //      GRAPHIC_RENDER_LOCK, /tmp/phantasic-render.lock on the Mac), so a caller holding the render lock never
 //      deadlocks with it (and the host lock is never taken around a child that takes it again). graphic-lock.mjs now
 //      says so when a --lock is already held (a CLI under `lockf` by hand AND with --lock on the same file waits for
@@ -317,32 +319,57 @@ const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),
 // only then is the home's root-owned parent removed. The kill not running (no setpriv, exec failure, exit other than
 // 0 / 1; 1 = nothing left to signal, the scan decides) or a survivor: the home is KEPT and ok is false.
 // Not root: the home (if any) is removed. -> { ok, kill: argv | null, left: [pid], error? } (spawn, scan injectable)
-export function releaseChromeHome(home, user, { spawn: run = spawnSync, scan = uidProcesses, killer = uidKiller() } = {}) {
-  if (!home) return { ok: true, kill: null, left: [] };
-  let kill = null, left = [];
+// Kill every process of the uid AS the uid, then rescan (up to 2 s): -> { ok, kill, found, left, errors[] }.
+// found = the uid's live processes before the kill. Used before a root render (sweepUid) and at its end (release).
+export function killUid(user, { spawn: run = spawnSync, scan = uidProcesses, killer = uidKiller() } = {}) {
+  let kill = null;
   const errors = [];
-  if (user && user.root) {
-    if (!user.setpriv) errors.push("no setpriv to kill the uid's processes");
-    else {
-      kill = [user.setpriv, `--reuid=${user.uid}`, `--regid=${user.gid}`, "--clear-groups", "--inh-caps=-all", "--no-new-privs", "--", ...killer];
-      const r = run(kill[0], kill.slice(1), { cwd: "/", env: { PATH: "/usr/bin:/bin" }, stdio: "ignore", timeout: 30000, killSignal: "SIGKILL" });
-      if (r.error || r.status === null || (r.status !== 0 && r.status !== 1)) errors.push(`the kill (${kill.join(" ")}) failed: ${r.error ? r.error.message : r.status === null ? `signal ${r.signal}` : `exit ${r.status}`}`);
-    }
-    left = scan(user.uid);
-    for (let i = 0; i < 20 && left.length; i++) { sleepSync(100); left = scan(user.uid); }
-    if (left.length) errors.push(`${left.length} process(es) of uid ${user.uid} still alive (${left.slice(0, 10).join(",")})`);
+  const found = scan(user.uid);
+  if (!user.setpriv) errors.push("no setpriv to kill the uid's processes");
+  else {
+    kill = [user.setpriv, `--reuid=${user.uid}`, `--regid=${user.gid}`, "--clear-groups", "--inh-caps=-all", "--no-new-privs", "--", ...killer];
+    const r = run(kill[0], kill.slice(1), { cwd: "/", env: { PATH: "/usr/bin:/bin" }, stdio: "ignore", timeout: 30000, killSignal: "SIGKILL" });
+    if (r.error || r.status === null || (r.status !== 0 && r.status !== 1)) errors.push(`the kill (${kill.join(" ")}) failed: ${r.error ? r.error.message : r.status === null ? `signal ${r.signal}` : `exit ${r.status}`}`);
   }
+  let left = scan(user.uid);
+  for (let i = 0; i < 20 && left.length; i++) { sleepSync(100); left = scan(user.uid); }
+  if (left.length) errors.push(`${left.length} process(es) of uid ${user.uid} still alive (${left.slice(0, 10).join(",")})`);
+  return { ok: errors.length === 0, kill, found, left, errors };
+}
+export const LINGERING = "processes of GRAPHIC_CHROME_UID are still running from an earlier render";
+// Before a root render, under the host lock and BEFORE the home: an earlier render whose Node was SIGKILLed freed the
+// lock but may have left Chromes of the uid running. They are killed; any survivor (or a kill that cannot run)
+// refuses the render. -> { ok, found, error? }
+export function sweepUid(user, opts = {}) {
+  const k = killUid(user, opts);
+  return k.ok ? { ok: true, found: k.found } : { ok: false, found: k.found, error: `${LINGERING} (${k.errors.join("; ")})` };
+}
+export function releaseChromeHome(home, user, opts = {}) {
+  if (!home) return { ok: true, kill: null, left: [] };
+  let kill = null, left = [], errors = [];
+  if (user && user.root) ({ kill, left, errors } = killUid(user, opts));
   if (errors.length) return { ok: false, kill, left, error: `running as root: ${errors.join("; ")}; the graphic Chrome's home is KEPT at ${home}` };
   const parent = path.dirname(home);
   if (path.basename(home) === "home" && /^graphic-chrome-/.test(path.basename(parent))) fs.rmSync(parent, { recursive: true, force: true });
   return { ok: true, kill, left };
 }
-// The per-uid host lock of root renders: /run/graphic-chrome-<uid>.lock when /run is writable, else in os.tmpdir().
-export function hostLockPath(uid, { run = "/run", tmp = os.tmpdir() } = {}) {
-  let dir = tmp;
-  try { fs.accessSync(run, fs.constants.W_OK); if (fs.statSync(run).isDirectory()) dir = run; } catch {}
-  return path.join(dir, `graphic-chrome-${uid}.lock`);
+// The per-uid host lock of root renders, in a ROOT-ONLY directory (never the shared temp dir, where any user could
+// squat the name): the first of /run, /var/lock, and root's own home (only when this process is root) that is a
+// directory (symlinks followed: /var/lock -> /run/lock 1777 is rejected), owned by `owner` (root), not group- or
+// world-writable, and writable by us. None: null (the render is refused).
+export function hostLockPath(uid, { dirs = ["/run", "/var/lock", ...(process.getuid?.() === 0 ? [os.homedir()] : [])], owner = 0 } = {}) {
+  for (const d of dirs) {
+    try {
+      const st = fs.statSync(d);
+      if (!st.isDirectory() || st.uid !== owner || (st.mode & 0o022)) continue;
+      fs.accessSync(d, fs.constants.W_OK);
+      return path.join(d, `graphic-chrome-${uid}.lock`);
+    } catch {}
+  }
+  return null;
 }
+export const NO_LOCK_DIR = "running as root: no root-only directory for the host lock (/run, /var/lock or root's home: owned by root, not group/world-writable)";
+export const hostLock = (user) => { const f = hostLockPath(user.uid); if (!f) return Promise.reject(new Error(NO_LOCK_DIR)); return holdHostLock(f); };
 // Holds an exclusive lock on `file` until release(): a child `flock <file>` (Linux) or `lockf -k <file>` (macOS) runs
 // `sh -c 'echo L; exec cat'`; its stdin is our pipe, so the lock goes when we release, exit or crash (the pipe closes).
 // The file is opened first with O_NOFOLLOW (a symlink planted there refuses) and must be a regular file owned by us,
@@ -524,7 +551,7 @@ export function runRender({ dir, out, mode, fps, workers, launcher, shim, logFil
 //         probeNetwork, runRender, frameMd5, maxAlpha, chromeUser, chromeHome, releaseChromeHome }
 // -> Promise<{ ok, reasons[], codes[], file?, cached?, key, L, renders: [{secs, status}], probe }>
 export async function renderGraphic(opts, deps = {}) {
-  const D = { chromeUser, chromeHome, releaseChromeHome, hostLock: (u) => holdHostLock(hostLockPath(u.uid)), findChrome, chromeShim, chromeVersion, ffmpegVersion, probeNetwork, runRender, frameMd5, maxAlpha, ...deps };
+  const D = { chromeUser, chromeHome, releaseChromeHome, hostLock, sweepUid, findChrome, chromeShim, chromeVersion, ffmpegVersion, probeNetwork, runRender, frameMd5, maxAlpha, ...deps };
   const { html: htmlPath = "assets/graphics/graphic.html", projectDir = null, mode = "overlay", W = 1080, H = 1920, fps = 30, inS = 0, after = "hold", frames, log = () => {} } = opts;
   let html = opts.content ?? null;
   if (html == null && projectDir) { const abs = path.join(projectDir, htmlPath); if (fs.existsSync(abs)) html = fs.readFileSync(abs); }
@@ -553,6 +580,10 @@ export async function renderGraphic(opts, deps = {}) {
     if (user.root) {
       log(`running as root: Chrome as ${user.uid}:${user.gid}; waiting for the host lock of uid ${user.uid} ...`);
       try { lock = await D.hostLock(user); } catch (e) { return { ok: false, reasons: [reason("R12n", { message: e.message })], codes: ["R12"], stage: "setup" }; }
+      // a render whose Node died mid-way freed the lock, but its Chromes (the uid's) may still run: kill them first
+      const sw = D.sweepUid(user);
+      if (sw.found.length) log(`killed ${sw.found.length} lingering process(es) of uid ${user.uid} before the render`);
+      if (!sw.ok) return { ok: false, reasons: [reason("R12n", { message: sw.error })], codes: ["R12"], stage: "setup" };
     }
     // root: the dropped Chrome's home is a fresh dir under os.tmpdir(), never in the project (the uid may not enter it)
     let shim;

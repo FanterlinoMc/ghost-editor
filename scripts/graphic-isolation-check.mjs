@@ -16,7 +16,7 @@ import dgram from "node:dgram";
 import path from "node:path";
 import { wrapperHtml, graphicFrames } from "./lib/graphic.mjs";
 import { holdRenderLock } from "./lib/graphic-lock.mjs";
-import { runRender, chromeShim, chromeUser, chromeHome, releaseChromeHome, holdHostLock, hostLockPath, findChrome, probeNetwork, sandboxLauncher, scanLog, PROBE_URLS } from "./lib/graphic-render.mjs";
+import { runRender, chromeShim, chromeUser, chromeHome, releaseChromeHome, hostLock, sweepUid, findChrome, probeNetwork, sandboxLauncher, scanLog, PROBE_URLS } from "./lib/graphic-render.mjs";
 
 holdRenderLock(); // --lock <path> / GRAPHIC_RENDER_LOCK: re-run under lockf / flock (the shared Mac)
 const args = process.argv.slice(2);
@@ -102,7 +102,11 @@ let lock = null;
 const dropHome = () => { const r = releaseChromeHome(home, user); if (lock) lock.release(); if (!r.ok) console.log(`GRAPHIC RENDER UNSAFE: ${r.error}`); return r.ok; };
 try {
   chrome = findChrome();
-  if (user.root) lock = await holdHostLock(hostLockPath(user.uid)); // the uid's host lock, as renderGraphic
+  if (user.root) { // the uid's host lock and the sweep of an earlier render's leftovers, as renderGraphic
+    lock = await hostLock(user);
+    const sw = sweepUid(user);
+    if (!sw.ok) throw new Error(sw.error);
+  }
   home = chromeHome(user); // root: the dropped Chrome's home, under os.tmpdir(); null otherwise
   shim = chromeShim(path.join(work, "shim"), chrome, { home, setpriv: user.setpriv || null });
   bareShim = chromeShim(path.join(work, "bare"), chrome, { lock: false, home, setpriv: user.setpriv || null });

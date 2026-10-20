@@ -19,6 +19,7 @@
 //      same drop without the lock flags).
 //      Also: a setsid + double-forked process of the uid survives a kill that does nothing or cannot start, and that
 //      is DETECTED (home kept); the real release kills it and removes the home. Phase 2 holds the uid's host lock.
+//   3c. a uid process left running before a render is killed by that render's sweep (or the render is refused).
 //   3b. while this check holds the uid's host lock, graphic-determinism waits (no render, no Chrome of the uid).
 // CapAmb must be 0; CapBnd is reported (not cleared: harmless for a non-root uid with no_new_privs).
 // Every step is wrapped: a throw (e.g. the temp home cannot be made) is a FAIL line, never a crash.
@@ -30,7 +31,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { chromeUser, chromeShim, chromeHome, releaseChromeHome, holdHostLock, hostLockPath, uidProcesses, findChrome, isChrome, ROOT_REFUSAL } from "./lib/graphic-render.mjs";
+import { chromeUser, chromeShim, chromeHome, releaseChromeHome, holdHostLock, hostLockPath, uidProcesses, NO_LOCK_DIR, LINGERING, findChrome, isChrome, ROOT_REFUSAL } from "./lib/graphic-render.mjs";
 import { holdRenderLock } from "./lib/graphic-lock.mjs";
 
 holdRenderLock();
@@ -84,6 +85,8 @@ const setupOk = await step("setup (chrome, host lock, home, shim)", async () => 
   work = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-root-check-"));
   chrome = findChrome();
   if (!chrome) throw new Error("no chrome-headless-shell (set GRAPHIC_CHROME_PATH)");
+  if (!lockFile) throw new Error(NO_LOCK_DIR);
+  console.log(`info host lock: ${lockFile}`);
   lock = await holdHostLock(lockFile); // as renderGraphic: the uid's host lock around the whole home lifecycle
   home = chromeHome(user);
   shim = chromeShim(path.join(work, "shim"), chrome, { home, setpriv: user.setpriv });
@@ -183,6 +186,20 @@ await step("a real render (waits for the host lock, then sampled)", async () => 
   check(all.length > 0 && all.every((x) => x.uid === String(user.uid) && !x.canary && !x.project), `${all.length} Chrome process(es) seen during the render, uids {${[...new Set(all.map((x) => x.uid))].join(",")}}, canary in environ: ${all.filter((x) => x.canary).length}, argv naming the (root-only 0700) build dir: ${all.filter((x) => x.project).length}`);
   check(homes() === homesBefore, "the render's Chrome home under os.tmpdir() was removed");
   check(uidProcs().length === 0, `no process of uid ${user.uid} left after the render: ${uidProcs().join(",") || "none"}`);
+});
+
+// 3c. a process of the uid left running (as by a render whose Node was SIGKILLed): the next render kills it first,
+// or refuses
+await step("a lingering uid process before a render", async () => {
+  const esc = spawn(user.setpriv, [`--reuid=${user.uid}`, `--regid=${user.gid}`, "--clear-groups", "--", "/bin/sh", "-c", "setsid sh -c 'sleep 300 & exit 0' & exit 0"], { cwd: "/", stdio: "ignore" });
+  await new Promise((r) => esc.on("exit", r));
+  await wait(500);
+  const lingering = uidProcs();
+  const r = spawnSync(process.execPath, [path.join(ROOT, "scripts", "graphic-determinism.mjs"), fixture], { encoding: "utf8", env: process.env, timeout: 600000 });
+  const out = String(r.stdout + r.stderr);
+  const killed = /killed \d+ lingering process\(es\) of uid/.test(out) && /GRAPHIC DETERMINISM: PASS/.test(out);
+  const refused = out.includes(LINGERING);
+  check(lingering.length > 0 && (killed || refused) && lingering.every((p) => !uidProcs().includes(p) || refused), `${lingering.length} lingering uid process(es): ${killed ? "killed before the render, which PASSED" : refused ? "the render was REFUSED" : "neither killed nor refused:\n" + out.trim().slice(-600)}`);
 });
 
 // 4. the isolation check (routes + R12 through the same shim)

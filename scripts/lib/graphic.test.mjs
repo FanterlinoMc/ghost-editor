@@ -575,7 +575,7 @@ test("releaseChromeHome: kills every process of the uid (as the uid) BEFORE remo
   const scans = [];
   const r = RR.releaseChromeHome(h, user, { killer: ["/bin/kill", "-9", "-1"], scan: (u) => { scans.push(u); return []; }, spawn: (cmd, argv, o) => { seen.push({ argv: [cmd, ...argv], homeThere: fs.existsSync(h), env: o.env, cwd: o.cwd }); return { status: 0 }; } });
   assert.deepEqual(seen.map((x) => x.argv), [["/x/setpriv", "--reuid=1234", "--regid=5678", "--clear-groups", "--inh-caps=-all", "--no-new-privs", "--", "/bin/kill", "-9", "-1"]]);
-  assert.deepEqual([r.ok, scans], [true, [1234]], "then the uid's live processes are scanned");
+  assert.deepEqual([r.ok, scans], [true, [1234, 1234]], "the uid's live processes are scanned before and after the kill");
   assert.deepEqual([seen[0].homeThere, seen[0].env, seen[0].cwd, r.kill[0]], [true, { PATH: "/usr/bin:/bin" }, "/", "/x/setpriv"], "the kill runs first, with no inherited env, from /");
   assert.equal(fs.existsSync(path.dirname(h)), false, "then the home's parent is gone");
   // not root: no kill; a path that is not <graphic-chrome-*>/home is never removed
@@ -659,8 +659,16 @@ test("holdHostLock: exclusive, released on release() and when the holder crashes
   fs.symlinkSync(path.join(dir, "target"), link);
   await assert.rejects(RR.holdHostLock(link).then((l) => l.release()), /cannot use the host lock .*link\.lock/); // (released if it ever resolves: no hang)
   assert.equal(fs.existsSync(path.join(dir, "target")), false, "nothing created through the link");
-  assert.equal(RR.hostLockPath(1234, { run: path.join(dir, "no-run"), tmp: "/t" }), "/t/graphic-chrome-1234.lock");
-  assert.equal(RR.hostLockPath(1234, { run: dir, tmp: "/t" }), path.join(dir, "graphic-chrome-1234.lock"));
+  // hostLockPath: the first root-only dir (here "root" = us): owned, not group/world-writable; never a temp-dir fallback
+  const me = process.getuid();
+  const [open, grp, good, good2] = ["open", "grp", "good", "good2"].map((n) => { const d = path.join(dir, n); fs.mkdirSync(d); return d; });
+  fs.chmodSync(open, 0o1777); fs.chmodSync(grp, 0o775); fs.chmodSync(good, 0o755); fs.chmodSync(good2, 0o700);
+  const vlink = path.join(dir, "lock-link"); fs.symlinkSync(open, vlink); // like /var/lock -> /run/lock (1777)
+  assert.equal(RR.hostLockPath(1234, { dirs: [path.join(dir, "missing"), open, grp, vlink, good, good2], owner: me }), path.join(good, "graphic-chrome-1234.lock"));
+  assert.equal(RR.hostLockPath(1234, { dirs: [good2], owner: me }), path.join(good2, "graphic-chrome-1234.lock"));
+  assert.equal(RR.hostLockPath(1234, { dirs: [good], owner: me + 1 }), null, "not owned by root: no");
+  assert.equal(RR.hostLockPath(1234, { dirs: [open, grp, vlink], owner: me }), null, "nothing root-only: null (refused), no temp-dir fallback");
+  if (RR.hostLockPath(4242) === null) await assert.rejects(RR.hostLock({ uid: 4242 }).then((l) => l.release()), { message: RR.NO_LOCK_DIR }, "no root-only dir here: refused with the reason");
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
@@ -683,6 +691,7 @@ test("renderGraphic as root: refused before anything when the drop is not set up
     const order = [];
     const deps = { chromeUser: () => root, chromeHome: (u) => { order.push("home"); assert.equal(u, root); home = tmpd(path.join(os.tmpdir(), "graphic-chrome-")) + "/home"; fs.mkdirSync(home); return home; },
       hostLock: async (u) => { assert.equal(u, root); const l = await RR.holdHostLock(lockFile); order.push("lock"); return { release: () => { order.push("unlock"); l.release(); } }; },
+      sweepUid: (u) => { order.push("sweep"); assert.equal(u, root); return { ok: true, found: [] }; },
       releaseChromeHome: (h, u) => { order.push("release"); assert.equal(u, root); return RR.releaseChromeHome(h, u, { scan: () => [], spawn: () => { order.push("kill"); return { status: 0 }; } }); },
       chromeShim: (d, exe, o) => { got = o; return "/fake/shim"; }, probeNetwork: (o) => { user = o.user; return { ok: true, lines: [] }; }, ...over };
     let x;
@@ -690,7 +699,7 @@ test("renderGraphic as root: refused before anything when the drop is not set up
     assert.equal(x.r.ok, ok, `${name}: ${x.r.reasons}`);
     assert.deepEqual([got.home, got.setpriv], [home, "/x/setpriv"], `${name}: the shim gets the home and the absolute setpriv`);
     assert.ok(!x.work || !home.startsWith(x.work), `${name}: the home is not under the project/build dir`);
-    assert.deepEqual(order, ["lock", "home", "release", "kill", "unlock"], `${name}: lock, home, kill the uid's processes once, unlock`);
+    assert.deepEqual(order, ["lock", "sweep", "home", "release", "kill", "unlock"], `${name}: lock, sweep leftovers, home, kill the uid's processes, unlock`);
     assert.equal(fs.existsSync(path.dirname(home)), false, `${name}: then the home is removed`);
     if (!over.probeNetwork) assert.equal(user.uid, 1234, "the probe is told who Chrome runs as");
     if (name === "clean") assert.notEqual(path.basename(x.r.file), path.basename(plain.r.file), "a root render is cached under another key than a plain one");
@@ -702,7 +711,7 @@ test("renderGraphic as root: refused before anything when the drop is not set up
     let x;
     try {
       x = await rg({ chromeUser: () => root, chromeHome: () => { home = tmpd(path.join(os.tmpdir(), "graphic-chrome-")) + "/home"; fs.mkdirSync(home); return home; },
-        hostLock: async () => ({ release: () => { unlocked = true; } }),
+        hostLock: async () => ({ release: () => { unlocked = true; } }), sweepUid: () => ({ ok: true, found: [] }),
         releaseChromeHome: (h, u) => RR.releaseChromeHome(h, u, { scan: () => [999], spawn: () => ({ status: 0 }) }) });
     } finally { console.error = err; }
     assert.equal(x.r.ok, false);
@@ -715,13 +724,29 @@ test("renderGraphic as root: refused before anything when the drop is not set up
     assert.match(said.join("\n"), /^GRAPHIC RENDER UNSAFE: running as root: 1 process/);
     fs.rmSync(path.dirname(home), { recursive: true });
   }
+  // leftovers of an earlier render (its Node SIGKILLed): killed first (logged); a survivor refuses, before any home
+  {
+    const lines = [];
+    let unlocked = false;
+    const swept = await rg({ chromeUser: () => root, hostLock: async () => ({ release: () => {} }), sweepUid: (u) => RR.sweepUid(u, { scan: (() => { let n = 0; return () => (n++ ? [] : [31, 32]); })(), spawn: () => ({ status: 0 }) }),
+      chromeHome: () => null, releaseChromeHome: () => ({ ok: true }) }, { log: (l) => lines.push(l) });
+    assert.equal(swept.r.ok, true, swept.r.reasons.join());
+    assert.ok(lines.includes("killed 2 lingering process(es) of uid 1234 before the render"), lines.join("|"));
+    const stuck = await rg({ chromeUser: () => root, hostLock: async () => ({ release: () => { unlocked = true; } }),
+      sweepUid: (u) => RR.sweepUid(u, { scan: () => [77], spawn: () => ({ status: 0 }) }), chromeHome: () => assert.fail("no home while the uid has leftovers") });
+    assert.deepEqual([stuck.r.ok, stuck.r.stage, stuck.calls.probe, unlocked], [false, "setup", 0, true]);
+    assert.equal(stuck.r.reasons[0], G.reason("R12n", { message: `${RR.LINGERING} (1 process(es) of uid 1234 still alive (77))` }));
+    const nokill = RR.sweepUid({ ...root, setpriv: "/x/setpriv" }, { scan: () => [], spawn: () => ({ status: 127 }) });
+    assert.deepEqual([nokill.ok, nokill.error.startsWith(RR.LINGERING)], [false, true], "a sweep whose kill cannot run refuses too");
+    assert.deepEqual(RR.sweepUid(root, { scan: () => [], spawn: () => ({ status: 1 }) }), { ok: true, found: [] }, "nothing there: fine");
+  }
   // a lock that cannot be had: a setup refusal, no home
   const nolock = await rg({ chromeUser: () => root, hostLock: async () => { throw new Error("running as root: host lock /x: not free after 1800 s (another graphic render with this uid?)"); }, chromeHome: () => assert.fail("no home without the lock") });
   assert.deepEqual([nolock.r.stage, nolock.r.reasons, nolock.calls.probe], ["setup", [G.reason("R12n", { message: "running as root: host lock /x: not free after 1800 s (another graphic render with this uid?)" })], 0]);
   // two concurrent root renders with the same uid (the real lock, flock / lockf): serialised, home to release
   {
     const spans = [];
-    const one = (tag) => rg({ chromeUser: () => root, hostLock: () => RR.holdHostLock(lockFile),
+    const one = (tag) => rg({ chromeUser: () => root, hostLock: () => RR.holdHostLock(lockFile), sweepUid: () => ({ ok: true, found: [] }),
       chromeHome: () => { spans.push(`${tag}+`); const h = tmpd(path.join(os.tmpdir(), "graphic-chrome-")) + "/home"; fs.mkdirSync(h); return h; },
       releaseChromeHome: (h, u) => { spans.push(`${tag}-`); return RR.releaseChromeHome(h, u, { scan: () => [], spawn: () => ({ status: 0 }) }); },
       runRender: async ({ out, markFile }) => { await new Promise((r) => setTimeout(r, 150)); fs.writeFileSync(out, "video"); fs.writeFileSync(markFile, "4242\n"); return { status: 0, secs: 1, log: "[BrowserManager] Browser launched (HeadlessChrome/152.0.7977.30, screenshot)\n" }; } });
@@ -984,6 +1009,8 @@ test("CLI render lock: a lock already held is reported (an outer lockf + --lock 
   assert.equal(L.busyHint(p), null, "free: no hint");
   const held = await RR.holdHostLock(p); // stands in for an outer `lockf -k <p>`
   try { assert.match(L.busyHint(p) || "", /is held by another process: waiting\. If this command was itself started under lockf \/ flock on .*render\.lock, it waits for itself forever/); } finally { held.release(); }
-  assert.notEqual(path.basename(RR.hostLockPath(0)), "phantasic-render.lock");
-  assert.match(path.basename(RR.hostLockPath(1234)), /^graphic-chrome-1234\.lock$/, "the engine's host lock never names the CLIs' render lock");
+  const own = { dirs: [dir], owner: process.getuid() };
+  fs.chmodSync(dir, 0o755);
+  assert.match(path.basename(RR.hostLockPath(1234, own)), /^graphic-chrome-1234\.lock$/, "the engine's host lock never names the CLIs' render lock");
+  assert.notEqual(RR.hostLockPath(0, own), p);
 });
