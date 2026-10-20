@@ -54,11 +54,12 @@ process.env.GRAPHIC_ROOT_CHECK_SECRET = CANARY;
 const ALLOWED = ["HOME", "LANG", "PATH", "TMPDIR"];
 
 const proc = (pid, f) => { try { return fs.readFileSync(`/proc/${pid}/${f}`, "utf8"); } catch { return null; } };
-const field = (status, k) => ((new RegExp(`^${k}:\\s*(.*)$`, "m").exec(status || "") || [])[1] || "").trim();
+// one line only: `[ \t]*`, never `\s*` (an EMPTY "Groups:" line would otherwise take the next line's text)
+const field = (status, k) => ((new RegExp(`^${k}:[ \\t]*([^\\n]*)$`, "m").exec(status || "") || [])[1] || "").trim();
 const environ = (pid) => (proc(pid, "environ") || "").split("\0").filter(Boolean);
 const ppid = (pid) => { const s = proc(pid, "stat"); return s ? Number(s.slice(s.lastIndexOf(")") + 2).split(" ")[1]) : null; };
-// /proc/<pid>/exe, environ and cwd of a process of ANOTHER uid that is non-dumpable (every process after setuid is)
-// need CAP_SYS_PTRACE, which a container's root usually lacks: unreadable (EACCES), not a sign of anything. status,
+// /proc/<pid>/exe, environ and cwd of a process of ANOTHER uid need CAP_SYS_PTRACE (ptrace access), which a
+// container's root usually lacks: unreadable (EACCES), not a sign of anything. status,
 // stat and cmdline stay world-readable. So a Chrome is recognised by argv[0] (cmdline), else by comm (stat, 15 chars).
 const argv0 = (pid) => ((proc(pid, "cmdline") || "").split("\0")[0] || null);
 const comm = (pid) => { const s = proc(pid, "stat"); return s ? s.slice(s.indexOf("(") + 1, s.lastIndexOf(")")) : null; };
@@ -115,7 +116,7 @@ if (check(pid === cp.pid, `Chrome started through the shim, marked PID ${pid} = 
   const st = proc(pid, "status");
   check(field(st, "Uid") === Array(4).fill(user.uid).join("\t"), `Uid: ${field(st, "Uid")}`);
   check(field(st, "Gid") === Array(4).fill(user.gid).join("\t"), `Gid: ${field(st, "Gid")}`);
-  check(field(st, "Groups") === "", `Groups: '${field(st, "Groups")}'`);
+  check(field(st, "Groups") === "", `Groups: '${field(st, "Groups")}' (empty = no supplementary groups)`);
   for (const c of ["CapInh", "CapPrm", "CapEff", "CapAmb"]) check(/^0+$/.test(field(st, c)), `${c}: ${field(st, c)}`);
   console.log(`info CapBnd: ${field(st, "CapBnd")} (the bounding set is not cleared; with uid != 0, no_new_privs and no file caps it grants nothing)`);
   check(field(st, "NoNewPrivs") === "1", `NoNewPrivs: ${field(st, "NoNewPrivs")}`);
@@ -126,7 +127,7 @@ if (check(pid === cp.pid, `Chrome started through the shim, marked PID ${pid} = 
     check(env.map((e) => e.split("=")[0]).sort().join(",") === ALLOWED.join(","), `environ keys: ${env.map((e) => e.split("=")[0]).sort().join(",")}`);
     check(!env.some((e) => e.includes(CANARY)), "environ: no canary");
     check(cwd === fs.realpathSync(home), `cwd: ${cwd}`);
-  } else console.log(`info /proc/${pid}/environ, cwd, exe: unreadable to this root (no CAP_SYS_PTRACE; the dropped Chrome is non-dumpable), proven through the same shim below`);
+  } else console.log(`info /proc/${pid}/environ, cwd, exe: unreadable to this root (no CAP_SYS_PTRACE for a process of another uid), proven through the same shim below`);
   const argv = (proc(pid, "cmdline") || "").split("\0").filter(Boolean);
   const udd = argv.filter((a) => a.startsWith("--user-data-dir="));
   check(udd.length === 2 && udd[1] === `--user-data-dir=${home}/profile-${pid}`, `the last --user-data-dir is ours: ${udd.join(" ")}`);
@@ -140,13 +141,14 @@ try { cp.stdio[3].write(JSON.stringify({ id: 1, method: "Browser.close" }) + "\0
 await new Promise((r) => { const t = setTimeout(r, 5000); cp.on("exit", () => { clearTimeout(t); r(); }); });
 if (pid && isPinnedChrome(pid) && field(proc(pid, "status"), "Uid").startsWith(String(user.uid))) { try { process.kill(pid, "SIGKILL"); } catch {} }
 });
-// what the shim execs, seen from inside: a stand-in "Chrome" through the SAME shim prints its ids, cwd and environment
-// (independent of /proc access)
+// what the shim execs, seen from inside: a stand-in "Chrome" through the SAME shim prints its ids, cwd and the
+// environment it was EXEC'D WITH: /proc/$$/environ, opened by the shell itself (its own, always readable) before
+// anything runs, so nothing sh adds (PWD, SHLVL) is in it (independent of root's /proc access)
 await step("ids, cwd and environment of what the shim execs", async () => {
   const sdir = fs.mkdtempSync(path.join(os.tmpdir(), "graphic-root-check-standin-"));
   fs.chmodSync(sdir, 0o755);
   const standin = path.join(sdir, "standin.sh");
-  fs.writeFileSync(standin, '#!/bin/sh\necho "UID=$(id -u) GID=$(id -g) GROUPS=$(id -G)"\necho "CWD=$(pwd -P)"\n/usr/bin/env | sed "s/^/ENV /"\n', { mode: 0o755 });
+  fs.writeFileSync(standin, '#!/bin/sh\nexec 3< /proc/$$/environ\necho "UID=$(id -u) GID=$(id -g) GROUPS=$(id -G)"\necho "CWD=$(pwd -P)"\ntr "\\000" "\\n" <&3 | sed "s/^/ENV /"\n', { mode: 0o755 });
   try {
     const sshim = chromeShim(path.join(work, "standin"), standin, { home, setpriv: user.setpriv });
     const r = spawnSync(sshim, [], { encoding: "utf8", env: process.env, timeout: 30000 });
