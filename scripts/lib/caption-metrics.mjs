@@ -130,6 +130,7 @@ export const wordPieces = (w) => {
 // The pieces (wordPieces) are only ever split where Chrome may break or finer, which keeps it an upper bound; glued
 // punctuation just trims choices Chrome never has. A word without emoji is one piece: no choice, plain greedy, so
 // every plain-text caption counts exactly as before.
+export const EXACT_PIECES = 64;
 export function wrapLines(words, size, maxWidth, opts) {
   const pad = (opts.wordPad ?? 0) * size / 2;
   const ws = words.map((w) => {
@@ -137,6 +138,14 @@ export function wrapLines(words, size, maxWidth, opts) {
     if (!parts.length) return [2 * pad];
     return parts.map((t, i) => textWidth(t, size, opts) + (i === 0 ? pad : 0) + (i === parts.length - 1 ? pad : 0));
   });
+  // the exact search is O(pieces^3); above EXACT_PIECES in one word, a bound that holds for ANY chunking instead: every
+  // break happens because the line plus the next chunk overflowed, so two consecutive lines always hold more than
+  // maxWidth together; k lines then hold more than floor(k / 2) x maxWidth, so k <= 2 x ceil(total / maxWidth) - 1
+  const total0 = ws.flat().reduce((x, y) => x + y, 0);
+  if (ws.some((ps) => ps.length > (opts.exactPieces ?? EXACT_PIECES))) {
+    const k = Math.max(1, 2 * Math.ceil(total0 / maxWidth) - 1);
+    return k === 1 ? [total0] : Array(k).fill(maxWidth);
+  }
   const flat = [], wordEnd = [];
   ws.forEach((ps) => { const e = flat.length + ps.length; ps.forEach((x) => { flat.push(x); wordEnd.push(e); }); });
   const total = flat.reduce((x, y) => x + y, 0), n = flat.length;
@@ -182,8 +191,8 @@ export function drawnExtent({ w, h, deg = 0, scale = 1, padX = 0 }) {
 // margin 0 0.12em; inner .cap-in padding 6px 20px 12px, margin 0 -20px; tilt as `rotate` on the outer group).
 // -> { up, down, h: up + down, lines, w }: the band [top - up, top + down] the drawn box covers.
 export const CLIPPING = { files: ["gloock-latin.woff2", "gloock-latin-ext.woff2"], fallbackEm: 0.6, letterSpacing: -0.01, wordPad: 0.24, lineHeight: 1.08, padTop: 6, padBottom: 12, padX: 20 };
-export function clippingExtent(words, { size, maxWidth, deg = 0, scale = 1, emojiEm }) {
-  const m = emojiEm ? { ...CLIPPING, emojiEm } : CLIPPING;
+export function clippingExtent(words, { size, maxWidth, deg = 0, scale = 1, emojiEm, exactPieces }) {
+  const m = emojiEm || exactPieces != null ? { ...CLIPPING, emojiEm: emojiEm ?? EMOJI_EM, exactPieces } : CLIPPING;
   const lines = wrapLines(words, size, maxWidth, m);
   // the group is width: max-content clamped by max-width, so a block that wraps is max-width wide (Chrome: 820 px on a
   // 2- and a 3-line block whose longest line is ~640), not its longest line: the tilt term uses that width

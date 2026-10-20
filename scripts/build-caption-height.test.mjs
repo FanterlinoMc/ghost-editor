@@ -68,6 +68,18 @@ test("model: the line count is an upper bound over how Chromes wrap an emoji run
   assert.deepEqual(wordPieces("lol"), ["lol"]);
 });
 
+test("model: a long emoji run uses the cheap bound - fast, and never below the exact search", () => {
+  const t0 = performance.now();
+  const huge = clippingExtent(["😂".repeat(3000)], { size: 58, maxWidth: 820 });
+  const ms = performance.now() - t0;
+  assert.ok(ms < 50, `3000 emoji modelled in ${ms.toFixed(1)} ms`);
+  assert.ok(huge.lines >= Math.ceil(3000 * 1.5 * 58 / 820), `${huge.lines} lines`);
+  for (const words of [["😂".repeat(64)], ["to", "be", "😂🔥(✨)".repeat(16)], ["no", "👍👨‍👩‍👧🇺🇸".repeat(21), "ok"]]) {
+    const exact = clippingExtent(words, { size: 58, maxWidth: 820 }).lines, cheap = clippingExtent(words, { size: 58, maxWidth: 820, exactPieces: 0 }).lines;
+    assert.ok(cheap >= exact, `${words.join(" ").slice(0, 20)}: cheap ${cheap} < exact ${exact}`);
+  }
+});
+
 function build() {
   const talk = path.join(root, "talk.mp4");
   execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", `testsrc2=size=108x192:rate=30:duration=${SEC}`, "-f", "lavfi", "-i", `sine=frequency=220:duration=${SEC}`,
