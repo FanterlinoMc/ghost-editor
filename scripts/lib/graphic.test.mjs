@@ -995,6 +995,16 @@ test("runRender: no inherited origins, the PID marker, a hung render is killed w
   assert.equal(sb.timedOut, true);
   assert.doesNotThrow(() => process.kill(chrome2, 0), "launcher set: marked PIDs skipped");
   process.kill(chrome2, "SIGKILL");
+  // root mode (chromeUid): a marked Chrome of another uid is left alone, one of the dropped uid is killed
+  const [mine, theirs] = [sleeper(), sleeper()];
+  fs.writeFileSync(markBin, `require("fs").writeFileSync(process.env.GRAPHIC_SHIM_MARK, "${mine}\\n${theirs}\\n"); setInterval(() => {}, 1000);`);
+  const info3 = (pid) => (pid === mine ? { exe: "chrome-headless-shell", pgid: 0, uid: 10101 } : pid === theirs ? { exe: "chrome-headless-shell", pgid: 0, uid: 0 } : null);
+  const ru = await RR.runRender({ dir, out: "--x", mode: "overlay", fps: 30, launcher: { argv: [] }, shim: null, markFile: path.join(dir, "m6"), bin: markBin, timeoutMs: 1500, kill: (p, sig) => process.kill(p, sig), info: info3, chromeUid: 10101 });
+  assert.deepEqual([ru.timedOut, ru.killed.slice(1)], [true, [String(mine)]], "only the dropped uid's Chrome");
+  await new Promise((ok) => setTimeout(ok, 300));
+  assert.throws(() => process.kill(mine, 0));
+  assert.doesNotThrow(() => process.kill(theirs, 0), "another uid's Chrome is alive");
+  process.kill(theirs, "SIGKILL");
 });
 
 test("rules.json is the source: parity with its cases.json, engine fonts = DESIGNER_FONTS", () => {
