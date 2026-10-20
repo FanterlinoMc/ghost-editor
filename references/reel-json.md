@@ -1079,7 +1079,7 @@ without running the file):
 - The engine writes `build/graphics/<name>-<key16>/index.html`: a CSP meta (v2: `default-src 'none'; script-src
   'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src
   'none'; form-action 'none'; base-uri 'none'; frame-src 'none'`), the font `@font-face` rules, the `rng`
-  definition, the graphic's `<head>` content, then `<div id="graphic-root" data-composition-id="graphic"
+  definition and `window.motion` (v3.4, "Motion helpers" below), the graphic's `<head>` content, then `<div id="graphic-root" data-composition-id="graphic"
   data-width="<w>" data-height="<h>" data-start="0" data-duration="<L / fps>" data-no-timeline>` holding the
   graphic's `<body>` content, then the bridge: `window.addEventListener("hf-seek", e => { k =
   Math.round(e.detail.time * fps); window.seek(map(k) / fps) })`, catching and reporting
@@ -1159,6 +1159,43 @@ without running the file):
      AND its port is one the preload recorded for this render's server (the log line
      `graphic-offline: render server localhost:<port>`). Any other CSP line, this text on another port, or a
      `127.0.0.1` origin, still refuses (R1). (This replaces v3.2.3's looser wording, which also named `127.0.0.1`.)
+
+### Motion helpers (v3.4)
+
+The wrapper defines `window.motion` before any graphic script (right after `window.rng`, in the same inline
+`<script>`; no network, about 6.5 KB). It is the engine's own code (`scripts/lib/motion-helpers.mjs`, MIT; no
+GSAP / Lottie), and it is **non-replaceable**: `window.motion` is a non-writable, non-configurable property, and
+`motion` and `motion.ease` are frozen (an assignment is ignored, or a TypeError in strict code). The Math natives
+it uses are captured before the graphic runs.
+
+**Guarantee: every helper is a pure function of its arguments** (no state, no timers, no `Date`, no
+`Math.random`, no DOM), so calling it from `seek(t)` with values derived from `t` keeps the frame a function of
+`t` alone. Using it is optional: a graphic that never reads `window.motion` renders exactly as before.
+The writer / planner prompt may tell the model to use it (the PC mirrors this section).
+
+| Helper | Returns |
+|---|---|
+| `motion.ease.<name>(p)` | `linear`, `quadIn/Out/InOut`, `cubicIn/Out/InOut`, `expoIn/Out/InOut`, `backIn/Out/InOut`. `p` is clamped to `[0, 1]`; every ease maps 0 to 0 and 1 to 1; all but `back*` are non-decreasing (`back*` overshoots, about 10 %). |
+| `motion.tween(t, t0, t1, from, to, ease?)` | `from` before `t0`, `to` after `t1`, eased between (clamped). `from` / `to`: numbers, or arrays of numbers of the same length (a new array). `ease`: a function, an ease name (`"cubicOut"`), or absent (linear). `t1 <= t0`: a step at `t0`. An unknown name throws. |
+| `motion.keyframes(t, [[t, value, ease?], ...])` | piecewise tween, keyframes in increasing `t`; before the first, its value; after the last, its value. A keyframe's `ease` shapes the segment that **arrives** at it (linear if absent). Values: numbers or same-length arrays. |
+| `motion.stagger(i, each, t, delay = 0)` | item `i`'s local time, `t - delay - i * each` (not clamped; feed it to `tween` / `spring`). |
+| `motion.spring(t, { stiffness = 100, damping = 10, mass = 1, from = 0, to = 1, velocity = 0 })` | a damped harmonic oscillator in closed form (under-, critically and over-damped); `from` at `t <= 0`, settles to `to`. `velocity` is the initial d(value)/dt per second. `stiffness > 0`, `mass > 0`, `damping >= 0`, else it throws. Critical damping = `2 * sqrt(stiffness * mass)` (20 for the defaults). |
+| `motion.countUp(t, t0, t1, from, to, { decimals = 0, prefix = "", suffix = "", separator = ",", point = ".", ease })` | the tweened value as a string: rounded with `toFixed(decimals)`, groups of three joined by `separator` (`""`: none), `point` before the decimals; locale-independent (never `toLocaleString`); a value that rounds to zero has no `-`. |
+| `motion.pathPoint(d, p)` | `{ x, y, angle }` at fraction `p` (clamped) of the path's length. `d`: `M L H V C Q Z`, absolute or relative (no `S T A`: it throws). Each curve is sampled at 64 fixed steps and length is measured on that polyline (deterministic); a move (`M`) adds no length. `angle`: degrees, `atan2` of the sampled chord (within about 3 degrees of the true tangent on a curve). |
+
+```js
+var m = window.motion;
+window.seek = function (t) {
+  card.style.opacity = m.tween(t, 0, 0.8, 0, 1, m.ease.expoOut);
+  big.textContent = m.countUp(t, 0.4, 2.4, 0, 1284500, { prefix: "$", ease: "cubicOut" });   // "$1,284,500"
+  for (var i = 0; i < dots.length; i++)
+    dots[i].style.top = 400 + m.spring(m.stagger(i, 0.12, t, 0.6), { stiffness: 180, damping: 12, from: 120, to: 0 }) + "px";
+  bar.style.transform = "scaleX(" + m.keyframes(t, [[1, 0], [2, 0.6, "backOut"], [3.6, 1, "quadInOut"]]) + ")";
+  var pt = m.pathPoint("M150 700 C330 420 560 900 760 560", m.tween(t, 1.2, 3.6, 0, 1, "cubicInOut"));
+};
+```
+
+Example fixture: `scripts/fixtures/graphics/motion-helpers.html` (passes `graphic-determinism.mjs`).
 
 ### Authoring for determinism (v3.2.3; the writer prompt carries this list verbatim)
 
@@ -1318,7 +1355,7 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
 ASCII: `html` and media paths are `[a-z0-9-]` by G1/G15). Every number is an integer.
 
 ```jsonc
-{ "v": 4,                                  // bumped when the wrapper / bridge / CSP / lock changes (3: PM2's pre-script and seek-order check; 4 (v3.3): the R14 glyph check in the pre-script)
+{ "v": 5,                                  // bumped when the wrapper / bridge / CSP / lock changes (3: PM2's pre-script and seek-order check; 4 (v3.3): the R14 glyph check in the pre-script; 5 (v3.4): window.motion in the wrapper)
   "html": "<sha256 hex of the HTML file bytes>",
   "media": [["assets/graphics/media/a.jpg", "<sha256 hex>"]],    // sorted by path; [] when none
   "fonts": ["Inter"],                      // the bundled families inlined, sorted; [] when none

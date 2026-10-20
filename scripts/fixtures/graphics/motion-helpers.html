@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Motion helpers: window.motion</title>
+<style>
+  #mh { position: relative; width: 1080px; height: 1080px; overflow: hidden; font-family: Inter, sans-serif; }
+  #mh .card { position: absolute; left: 90px; top: 150px; width: 900px; height: 780px; border-radius: 36px; background: #111216; }
+  #mh .big { position: absolute; left: 146px; top: 200px; font-size: 104px; font-weight: 700; color: #f4f3ef; letter-spacing: -0.045em; font-variant-numeric: tabular-nums; }
+  #mh .dot { position: absolute; width: 56px; height: 56px; border-radius: 50%; background: #ff6b4a; }
+  #mh .bar { position: absolute; left: 150px; top: 860px; width: 780px; height: 16px; border-radius: 8px; background: #7cf29c; transform-origin: 0 50%; }
+  #mh canvas { position: absolute; left: 0; top: 0; }
+</style>
+</head>
+<body>
+<div id="mh">
+  <div class="card" id="card"></div>
+  <canvas id="cv" width="1080" height="1080"></canvas>
+  <div class="big" id="big">$0</div>
+  <div class="dot" id="d0"></div><div class="dot" id="d1"></div><div class="dot" id="d2"></div><div class="dot" id="d3"></div><div class="dot" id="d4"></div>
+  <div class="bar" id="bar"></div>
+</div>
+<script>
+  window.duration = 4;
+  window.size = { w: 1080, h: 1080 };
+  /* window.motion is the engine's (non-writable): this assignment is ignored, and seek below still uses the real one */
+  try { window.motion = null; } catch (e) {}
+  var m = window.motion, E = m.ease;
+  var PATH = "M150 700 C330 420 560 900 760 560 Q860 400 930 520";
+  var g = document.getElementById("cv").getContext("2d");
+  function $(id) { return document.getElementById(id); }
+  window.seek = function (t) {
+    var c = m.tween(t, 0, 0.8, 0, 1, E.expoOut);
+    $("card").style.opacity = c;
+    $("card").style.transform = c === 1 ? "none" : "translateY(" + Math.round(60 * (1 - c)) + "px)";
+    $("big").textContent = m.countUp(t, 0.4, 2.4, 0, 1284500, { prefix: "$", ease: "cubicOut" });
+    for (var i = 0; i < 5; i++) {
+      var lt = m.stagger(i, 0.12, t, 0.6);
+      var y = m.spring(lt, { stiffness: 180, damping: 12, from: 120, to: 0 });
+      var o = m.tween(lt, 0, 0.3, 0, 1);
+      $("d" + i).style.left = (150 + i * 90) + "px";
+      $("d" + i).style.top = Math.round(400 + y) + "px";
+      $("d" + i).style.opacity = o;
+    }
+    var w = m.keyframes(t, [[1, 0], [2, 0.6, "backOut"], [3, 0.6], [3.6, 1, "quadInOut"]]);
+    $("bar").style.transform = "scaleX(" + w + ")";
+    g.clearRect(0, 0, 1080, 1080);
+    var p = m.tween(t, 1.2, 3.6, 0, 1, "cubicInOut");
+    g.lineWidth = 4; g.strokeStyle = "rgba(244, 243, 239, 0.18)";
+    g.stroke(new Path2D(PATH));
+    var pt = m.pathPoint(PATH, p);
+    g.save(); g.translate(pt.x, pt.y); g.rotate(pt.angle * Math.PI / 180);
+    g.fillStyle = "#f2c14e"; g.beginPath(); g.moveTo(26, 0); g.lineTo(-18, 16); g.lineTo(-18, -16); g.closePath(); g.fill();
+    g.restore();
+  };
+  window.seek(0);
+</script>
+</body>
+</html>

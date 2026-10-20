@@ -11,8 +11,9 @@ import { fileURLToPath } from "node:url";
 import { scopes, g36 } from "../graphic-rules/rules.mjs";
 import { familyCoverage, declaredCoverage, mergeRanges } from "./font-coverage.mjs";
 
+import { MOTION_SNIPPET } from "./motion-helpers.mjs";
 export const RENDERER = "hyperframes@0.8.81";
-export const KEY_VERSION = 4; // bumped when the wrapper / bridge / CSP / lock changes (it is in the cache key; 4: the R14 glyph check)
+export const KEY_VERSION = 5; // bumped when the wrapper / bridge / CSP / lock changes (it is in the cache key; 4: the R14 glyph check; 5: window.motion)
 export const QUALITY = "looks";
 export const LIMITS = {
   htmlBytes: 2097152, mediaBytes: 4194304, mediaFiles: 8, fileBytes: 52428800,
@@ -587,6 +588,7 @@ html, body { margin: 0; padding: 0; width: ${w}px; height: ${h}px; overflow: hid
 <script>
 ${preScript({ fps, L, inF, D, after, glyphs: glyphCoverage(text, fontDir, meta.fonts) })}
 ${RNG_SNIPPET}
+${MOTION_SNIPPET}
 </script>
 ${headOf(src)}
 </head>
