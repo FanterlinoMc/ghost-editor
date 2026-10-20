@@ -315,20 +315,33 @@ export const FONT_NAMES = { "instrument-serif": "Instrument Serif", "caveat-brus
 export const RANGES = {
   latin: "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
   cyrillic: "U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116",
+  arabic: "U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4, U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24, U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47, U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59, U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A, U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89, U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1",
   "latin-ext": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF",
 };
 // every bundled face: { family, file, range (its unicode-range), italic }, in file order
 export function engineFaces(fontDir = FONT_DIR) {
-  return fs.readdirSync(fontDir).filter((f) => /-(latin-ext|latin|cyrillic)(-italic)?\.woff2$/.test(f)).sort().map((f) => {
-    const m = /^(.*)-(latin-ext|latin|cyrillic)(-italic)?\.woff2$/.exec(f);
+  return fs.readdirSync(fontDir).filter((f) => /-(latin-ext|latin|cyrillic|arabic)(-italic)?\.woff2$/.test(f)).sort().map((f) => {
+    const m = /^(.*)-(latin-ext|latin|cyrillic|arabic)(-italic)?\.woff2$/.exec(f);
     return { family: FONT_NAMES[m[1]] || m[1].split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" "), file: path.join(fontDir, f), range: RANGES[m[2]], italic: !!m[3] };
   });
 }
+// Arabic (v3.3): the bundled Noto Sans Arabic face (OFL, templates/fonts/LICENSE-NotoSansArabic.txt), whenever the
+// graphic uses an engine family: as "Noto Sans Arabic" and under the name of every engine family the graphic uses, so
+// Arabic in `font-family: Inter, ...` text is drawn from the vendored font, never a system one. Its unicode-range keeps
+// it unloaded until an Arabic character is drawn, and it is declared FIRST: where its range overlaps a later face's
+// (U+200C-200E, U+2010-2011) the later face is tried first (CSS Fonts: the last rule defined is checked first).
+export const ARABIC_FAMILY = "Noto Sans Arabic";
+export const arabicAliases = (families) => (families.length ? [ARABIC_FAMILY, ...[...families].sort()] : []);
 export function fontFaceCss(families, fontDir = FONT_DIR) {
   const want = new Set(families);
   const out = [];
-  for (const { family: fam, file, range, italic } of engineFaces(fontDir)) {
-    if (!want.has(fam)) continue;
+  const faces = engineFaces(fontDir);
+  for (const { family: fam, file, range } of faces.filter((f) => f.family === ARABIC_FAMILY)) {
+    const b64 = fs.readFileSync(file).toString("base64");
+    for (const alias of arabicAliases(families)) out.push(`@font-face { font-family: "${alias}"; src: url(data:font/woff2;base64,${b64}) format("woff2"); font-weight: 100 900; unicode-range: ${range}; }`);
+  }
+  for (const { family: fam, file, range, italic } of faces) {
+    if (!want.has(fam) || fam === ARABIC_FAMILY) continue;
     const b64 = fs.readFileSync(file).toString("base64");
     out.push(`@font-face { font-family: "${fam}"; src: url(data:font/woff2;base64,${b64}) format("woff2"); font-weight: 100 900;${italic ? " font-style: italic;" : ""} unicode-range: ${range}; }`);
   }
@@ -347,8 +360,16 @@ export function engineRepertoire(fontDir = FONT_DIR) {
   }
   return repCache.get(fontDir);
 }
-export function glyphCoverage(text, fontDir = FONT_DIR) {
-  return { rep: engineRepertoire(fontDir), fams: Object.fromEntries(declaredCoverage(scopes(text).STYLE)) };
+export function arabicCoverage(fontDir = FONT_DIR) {
+  return familyCoverage(engineFaces(fontDir).filter((f) => f.family === ARABIC_FAMILY)).get(ARABIC_FAMILY) || [];
+}
+// families: the engine families the wrapper inlines (meta.fonts); each of them, and "Noto Sans Arabic", also covers
+// the Arabic face's code points (fontFaceCss's aliases)
+export function glyphCoverage(text, fontDir = FONT_DIR, families = []) {
+  const fams = declaredCoverage(scopes(text).STYLE);
+  const ar = arabicCoverage(fontDir);
+  for (const f of arabicAliases(families)) { const k = f.toLowerCase(); fams.set(k, mergeRanges([...(fams.get(k) || []), ...ar])); }
+  return { rep: engineRepertoire(fontDir), fams: Object.fromEntries(fams) };
 }
 // the engine's seeded random, defined before the graphic's scripts (spec: the same mulberry32 the templates carry)
 export const RNG_SNIPPET = `window.rng = function (seed) {
@@ -400,6 +421,11 @@ export function preScript({ fps, L, inF, D, after, glyphs = null }) {
   var getCS = window.getComputedStyle, cssVal = proto("CSSStyleDeclaration") && CSSStyleDeclaration.prototype.getPropertyValue;
   var parentGet = proto("Node") && getter(Node, "parentElement"), dataGet = proto("CharacterData") && getter(CharacterData, "data");
   var tagGet = proto("Element") && getter(Element, "tagName"), visible = proto("Element") && Element.prototype.checkVisibility, elQsa = proto("Element") && Element.prototype.querySelectorAll;
+  // off-viewport text (its box wholly outside the root's) is not drawn: skipped. Overflow clipping by an inner box is not.
+  var mkRange = proto("Document") && Document.prototype.createRange, selContents = proto("Range") && Range.prototype.selectNodeContents;
+  var rangeRect = proto("Range") && Range.prototype.getBoundingClientRect, elRect = proto("Element") && Element.prototype.getBoundingClientRect;
+  var boxOn = !!(mkRange && selContents && rangeRect && elRect);
+  function outside(r, v) { return (r.width === 0 && r.height === 0) || r.right <= v.left || r.bottom <= v.top || r.left >= v.right || r.top >= v.bottom; }
   var domOn = !!(GL && mkWalker && nextNode && getCS && cssVal && parentGet && dataGet && tagGet && elQsa), VIS = { visibilityProperty: true, opacityProperty: true };
   function inR(r, c) { var lo = 0, hi = (r.length >> 1) - 1, m; while (lo <= hi) { m = (lo + hi) >> 1; if (c < r[2 * m]) hi = m - 1; else if (c > r[2 * m + 1]) lo = m + 1; else return true; } return false; }
   // exempt: C0/C1 controls and spaces, soft hyphen, Ogham space, Mongolian vowel separator, U+2000-200F spaces and
@@ -433,8 +459,11 @@ export function preScript({ fps, L, inF, D, after, glyphs = null }) {
       i += w;
     }
   }
-  // a canvas context's font ("bold 48px Inter, sans-serif", as Chrome serialises it) -> its family list
-  function canvasStack(font) { var i = sIndex.call(font, "px "); return i < 0 ? font : sTrim.call(sSlice.call(font, i + 3)); }
+  // a canvas context's font (CSS font shorthand as Chrome serialises it: "italic 700 48px/1.2 \"My 12px Font\", serif")
+  // -> its family list: everything after the FIRST size token that comes before any quote (style / variant / weight /
+  // stretch keywords never hold a quote or a length, a quoted family may hold both)
+  var rxExec = RegExp.prototype.exec, SIZE = /^[^"']*?(?:^|\\s)[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:e[+-]?\\d+)?(?:px|pt|pc|in|cm|mm|q|em|rem|ex|ch|lh|vw|vh|vmin|vmax|%)(?:\\s*\\/\\s*[^\\s"']+)?\\s+/i;
+  function canvasStack(font) { var m = rxExec.call(SIZE, font); return m ? sTrim.call(sSlice.call(font, m[0].length)) : font; }
   function wrapText(P) {
     var fontGet = P && getter({ prototype: P }, "font"), names = ["fillText", "strokeText"], q;
     if (!fontGet) return;
@@ -450,8 +479,9 @@ export function preScript({ fps, L, inF, D, after, glyphs = null }) {
     return out;
   }
   function scanDom() {
-    var root = getById.call(document, "graphic-root"), wk, node, el, tg, els, i, j, st, ct, PS = ["::before", "::after"];
+    var root = getById.call(document, "graphic-root"), wk, node, el, tg, els, i, j, st, ct, PS = ["::before", "::after"], vp = null, rg = null;
     if (!root) return;
+    if (boxOn) { vp = elRect.call(root); rg = mkRange.call(document); }
     wk = mkWalker.call(document, root, 4);
     while (!said && (node = nextNode.call(wk))) {
       el = parentGet.call(node);
@@ -459,12 +489,13 @@ export function preScript({ fps, L, inF, D, after, glyphs = null }) {
       tg = sUpper.call(tagGet.call(el));
       if (tg === "SCRIPT" || tg === "STYLE" || tg === "TITLE") continue;
       if (visible && !visible.call(el, VIS)) continue;
+      if (rg) { selContents.call(rg, node); if (outside(rangeRect.call(rg), vp)) continue; }
       checkText(dataGet.call(node), cssVal.call(getCS.call(window, el), "font-family"));
     }
     els = elQsa.call(root, "*");
     for (i = 0; i < els.length && !said; i++) for (j = 0; j < 2; j++) {
       st = getCS.call(window, els[i], PS[j]); ct = cssVal.call(st, "content");
-      if (!ct || sIndex.call(ct, '"') < 0 || (visible && !visible.call(els[i], VIS))) continue;
+      if (!ct || sIndex.call(ct, '"') < 0 || (visible && !visible.call(els[i], VIS)) || (vp && outside(elRect.call(els[i]), vp))) continue;
       checkText(cssStrings(ct), cssVal.call(st, "font-family"));
     }
   }
@@ -554,7 +585,7 @@ html, body { margin: 0; padding: 0; width: ${w}px; height: ${h}px; overflow: hid
 #graphic-root { position: relative; width: ${w}px; height: ${h}px; overflow: hidden; background: ${bg}; }
 </style>
 <script>
-${preScript({ fps, L, inF, D, after, glyphs: glyphCoverage(text, fontDir) })}
+${preScript({ fps, L, inF, D, after, glyphs: glyphCoverage(text, fontDir, meta.fonts) })}
 ${RNG_SNIPPET}
 </script>
 ${headOf(src)}
