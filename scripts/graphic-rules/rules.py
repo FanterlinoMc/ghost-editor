@@ -55,6 +55,18 @@ def g18(S):
                 return "G18:" + json.dumps(f)
     return None
 
+def g36(whole):
+    # the first code point inside one of rules.json's glyphs.G36 ranges, as "U+<hex>"; numeric character references
+    # count as their character (see rules.mjs)
+    def ncr(m):
+        c = int(m.group(1), 16) if m.group(1) is not None else int(m.group(2))
+        return chr(c) if c <= 0x10FFFF and not 0xD800 <= c <= 0xDFFF else m.group(0)
+    for ch in re.sub(J["glyphs"]["ncr"], ncr, whole, flags=re.ASCII):
+        c = ord(ch)
+        if any(a <= c <= b for a, b in J["glyphs"]["G36"]):
+            return "%04X" % c
+    return None
+
 def first_fail(html, W=1080, H=1920):
     S, M = scopes(html), J["meta"]
     s = S["SCRIPT"]
@@ -77,7 +89,8 @@ def first_fail(html, W=1080, H=1920):
     checks = [lambda: regex_hit(5, 14), lambda: g18(S), lambda: regex_hit(19, 20),
               lambda: None if rx(M["G21"]).search(s) else "G21", g22, g23, lambda: regex_hit(25, 25),
               lambda: "G26" if rx(M["G26"]).search(s) else None, lambda: regex_hit(27, 34),
-              lambda: ("G35:" + json.dumps(S["insideTag"])) if S["insideTag"] else None]
+              lambda: ("G35:" + json.dumps(S["insideTag"])) if S["insideTag"] else None,
+              lambda: ("G36:U+" + g36(S["WHOLE"])) if g36(S["WHOLE"]) else None]
     for c in checks:
         r = c()
         if r: return r

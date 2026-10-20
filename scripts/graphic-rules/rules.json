@@ -316,5 +316,31 @@
       "^.*?(?:^|\\s)\\S*?(?:px|pt|em|rem|%|vh|vw|vmin|vmax|ch|ex)(?:\\s*/\\s*\\S+)?\\s+(.+)$",
       "is"
     ]
+  },
+  "glyphs": {
+    "_": "G36 (v3.3): code points no engine font has a glyph for (emoji and pictographs; checked against the fonts' cmaps by font-coverage.test.mjs). Inclusive [first, last] pairs, decimal. Checked in WHOLE, one code point at a time; the first one found is <match>, written U+<hex>. Numeric character references (ncr: &#<decimal>; / &#x<hex>;, the ';' optional, flags '') are decoded first.",
+    "ncr": "&#(?:[xX]([0-9a-fA-F]{1,6})|([0-9]{1,7}));?",
+    "G36": [
+      [
+        8960,
+        9215
+      ],
+      [
+        9632,
+        10175
+      ],
+      [
+        11008,
+        11263
+      ],
+      [
+        65039,
+        65039
+      ],
+      [
+        126976,
+        129791
+      ]
+    ]
   }
 }

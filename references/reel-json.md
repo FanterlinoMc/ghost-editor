@@ -1244,9 +1244,9 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
   Nothing is written before the pre-pass ends, so the page is the same bytes for the same reel and cached files. A reel
   with no graphic never reaches the pre-pass. The build does not take the Mac render lock itself: run a build that
   may render graphics under `lockf -k /tmp/phantasic-render.lock`, like any render.
-- **Order of checks (layer).** The existing `id`, kind and timing dies, then G1..G35 (the file), P1, the `dur` die,
+- **Order of checks (layer).** The existing `id`, kind and timing dies, then G1..G36 (the file), P1, the `dur` die,
   P2 (on `dur` as asked, before clamping to the reel), clamping, `after: "cut"` (GW2), the box die, P3, the
-  `enter` / `exit` / `fit` dies. Beat: G1..G35, P1, P2 (on `to - at` in source seconds), the time mapping (a
+  `enter` / `exit` / `fit` dies. Beat: G1..G36, P1, P2 (on `to - at` in source seconds), the time mapping (a
   failure drops the beat: `graphic <id or at>: <html>: <the E() message>, dropped`), P3, then `box must be { x, y, w,
   h } numbers with w, h > 0, got <json>` and `fit must be one of cover|contain, got <json>` (the layer texts, as a
   dropped beat). A render refusal: the first R text, as a layer die / dropped beat.
@@ -1263,9 +1263,9 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
 - **edit_truth.json.** Layer: `layerTruth` + `mode`, and `hideCaptions: true` when resolved true. Beat: as every
   beat, except `to` is the resolved end (the default window, or shortened by `cut`). sections.json: a graphic layer's
   file and key are in its layer object; a graphic beat's key is added to its section's payload (`graphics`).
-- **Check order, as one list (v3.2.5).** Layer: (1) the existing `id`, `kind` and timing dies; (2) G1..G35; (3) P1;
+- **Check order, as one list (v3.2.5).** Layer: (1) the existing `id`, `kind` and timing dies; (2) G1..G36; (3) P1;
   (4) the `dur` die; (5) P2 on `dur` as written, BEFORE clamping to the reel; (6) clamping (existing warnings);
-  (7) `after: "cut"` (GW2); (8) the `box` die; (9) P3; (10) the `enter` / `exit` / `fit` dies. Beat: (1) G1..G35;
+  (7) `after: "cut"` (GW2); (8) the `box` die; (9) P3; (10) the `enter` / `exit` / `fit` dies. Beat: (1) G1..G36;
   (2) P1; (3) P2 on the window in SOURCE seconds (`to - at` when both are seconds of the same recording, or the
   default window below); (4) the time mapping (`E()`); (5) P2 on the OUTPUT window `E(to) - E(at)` when the source
   window could not be read (`to: "end"`, `"hold:..."`, `at` and `to` in different recordings); P2 again on the output
@@ -1292,6 +1292,9 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
   **GW9** `graphic <id or at>: <html>: box covers the speaker's face for <p>% of its window, dropped` (`<p>` a
   whole percent). A user layer (`"by": "user"`) gets the same text without `, dropped`, as a warning. Inserts are
   exempt (full frame by design).
+- **v3.3 (`mac/graphic-glyphs`).** G36 (an emoji or pictograph written in the file, static, rules.json
+  `glyphs.G36`, JS/Python parity) and R14 (glyph coverage at render, "Glyph coverage" below); the bridge changed,
+  so the cache key's `v` is 4: every graphic cached under `v: 3` renders again once.
 - **v3.2.6.** The R6 row and the cache key's `"v": 3` line are PM2's wording (`mac/graphic-render` @ b6eca41),
   copied verbatim: the seek-order check's own R6 text (`R6o` in PM2's code) is `frame <k> (t=<t>s) depends on the
   seeks before it (not deterministic)`, `<k>` the graphic's own frame; the two-render texts are unchanged.
@@ -1315,7 +1318,7 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
 ASCII: `html` and media paths are `[a-z0-9-]` by G1/G15). Every number is an integer.
 
 ```jsonc
-{ "v": 3,                                  // bumped when the wrapper / bridge / CSP / lock changes (3: PM2's pre-script and seek-order check)
+{ "v": 4,                                  // bumped when the wrapper / bridge / CSP / lock changes (3: PM2's pre-script and seek-order check; 4 (v3.3): the R14 glyph check in the pre-script)
   "html": "<sha256 hex of the HTML file bytes>",
   "media": [["assets/graphics/media/a.jpg", "<sha256 hex>"]],    // sorted by path; [] when none
   "fonts": ["Inter"],                      // the bundled families inlined, sorted; [] when none
@@ -1378,7 +1381,7 @@ PM5 harness).
 - layer (`die()`): `layer <layer id>: graphic <html>: <reason>`
 - beat (warning, the beat is dropped): `graphic <beat id or at>: <html>: <reason>, dropped`
 
-**Order.** The checks run in the order of the table below (G1, G2, ... G35, then P1 to P3); the FIRST failing
+**Order.** The checks run in the order of the table below (G1, G2, ... G36, then P1 to P3); the FIRST failing
 check is the one reported (P1 to P3 too: one placement problem, the first, v3.2.2), and for a regex its LEFTMOST match in the first scope listed that matches is the
 `<match>`. One problem per graphic.
 
@@ -1497,6 +1500,7 @@ markup); CSS never contains a backslash (G31: write the character itself, e.g.
 | G33 | listing G33 (v3.2, two lines) | `graphic file <html> uses a script URL (<match>)` |
 | G34 | listing G34 (v3.2) | `graphic file <html> has <match> (no math, noscript, xmp, noembed, noframes, plaintext, textarea or template elements, and no <script> or <style> inside <svg>)` |
 | G35 | the tokenizer check above (v3.2) | `graphic file <html> starts a <match> inside another tag (a < inside an attribute value)` |
+| G36 | (v3.3) a code point of `WHOLE` (one code point at a time, after the newline / unicode-space normalisation) inside rules.json `glyphs.G36`: U+2300-23FF, U+25A0-27BF, U+2B00-2BFF, U+FE0F, U+1F000-1FAFF (emoji and pictographs; no engine font has a glyph in them, measured from the fonts' cmaps by `font-coverage.test.mjs`); numeric character references (rules.json `glyphs.ncr`: `&#<decimal>;` / `&#x<hex>;`, the `;` optional) are first decoded to the character they name when it is a scalar value (named references such as `&check;` are not); the first one found is `<hex>` (upper case, at least 4 digits) and `<char>`. Parity form: `G36:U+<hex>`. Text built by script is caught at render by R14 | `graphic file <html> has the character U+<hex> '<char>' (an emoji or symbol: no engine font has a glyph for it, it renders as a box)` |
 
 **Why v3.2 bans rather than tokenizes.** A spec-exact HTML tokenizer (script-data escape states, foreign
 content, comment edge cases like `<!-->` and `--!>`) would have to be written twice, in node and in Python, and
@@ -1570,7 +1574,33 @@ render wrapper reads the whole log of both renders; any of these deletes the out
 | R10 | `hyperframes render` exits non-zero, or writes no file | `hyperframes render failed (exit <code>): <last log line>` |
 | R11 (v2) | a log line containing `GRAPHIC-REFUSED: navigated` (v3.2.2: the bridge's Navigation API `navigate` trap, which also cancels the navigation) | `graphic navigated away from its page: render refused` |
 | R12 (v2) | the network probe (above, v3.2.2: Chrome over its debugging pipe on `about:blank`, plus the Node half) loaded `http://1.1.1.1/` or `http://169.254.169.254/`; or (v3.2.4) the second-`localhost` listener saw a connection (`<url>` = its URL); or the probe could not run (only a `TypeError` counts as blocked: a timeout or other error, no shim, e.g. Windows; Chrome did not start; the Chrome or ffmpeg version could not be read); or (root, stage `release`) after the render a process of GRAPHIC_CHROME_UID survived the kill, or the kill could not run (the Chrome home is kept, no file is cached) | `network lock is not in place (<url> was reachable from the render browser): graphic renders refused` / `network lock probe could not run: <message>` / `graphic Chrome could not be cleaned up safely: <message>` |
+| R14 (v3.3) | the bridge's glyph check (see "Glyph coverage" below): a drawn character no font in its stack has a glyph for: `GRAPHIC-REFUSED: glyph {"cp":"<hex>","font":"<font>","text":"<text>"}`. `<font>` = the element's computed `font-family` (DOM, `::before` / `::after`) or the canvas context's family list (`ctx.font` after its size); `<snippet>` = up to 30 UTF-16 units each side of the character, cut with `…` (never through a surrogate pair), whitespace runs collapsed to one space, trimmed | `character U+<hex> '<char>' in "<snippet>" isn't in <font> (no glyph; renders as a box)` |
 | R13 (v2) | the render log's `Browser launched (HeadlessChrome/<v>, ...` differs from the key's `chrome`; (v3.2.4) or that line is missing (`<v>` = `(no 'Browser launched' line)`), or the shim marker file is empty (`<v>` = `<v> (not launched through the shim)`) | `the render used Chrome <v>, the cache key says <k>: nothing cached` |
+
+**Glyph coverage (R14, v3.3).** A character that no available font has a glyph for falls through to the system's
+fallback font; on the Linux render container that has no emoji font, so it renders as a box ("tofu"), while a Mac
+draws it in Apple Color Emoji (the staging bug: a Charts DM counter whose message bubbles ended in an emoji). G36
+catches emoji written in the file; R14 catches what the page actually draws, including text built by script.
+- *Coverage* (`scripts/lib/font-coverage.mjs`, no dependency): the cmap (Unicode subtables, formats 0, 4, 6, 12, 13;
+  glyph 0 is no glyph) of each bundled `templates/fonts/*.woff2` face (WOFF2: brotli, `node:zlib`), clipped to the
+  face's `unicode-range` exactly as the wrapper's `@font-face` writes it. The **repertoire** = the union over every
+  engine family (rules.json `fonts.engine`): measured, Basic Latin, Latin-1, Latin Extended, Cyrillic, the common
+  punctuation (`– — ‘ ’ “ ” • … ‹ ›`), `€`, `™`, `↑ ↓`, `−`, and no emoji, arrows other than those two, check marks,
+  stars or geometric shapes. A graphic's own `data:` `@font-face` (WOFF2, WOFF or TTF/OTF) adds its cmap (clipped by
+  its `unicode-range`) for its family; one that cannot be read covers nothing.
+- *Rule*: a drawn character is fine if it is exempt (U+0000-0020, U+007F-00A0, U+00AD, U+1680, U+180E,
+  U+2000-200F, U+2028-202F, U+205F-206F, U+3000, U+FEFF, the variation selectors U+FE00-FE0F and U+E0100-E01EF), or
+  in the repertoire (an engine font, or the system fallback a generic family reaches, trusted only that far), or in
+  the cmap of a declared `data:` family named in its stack. Anything else refuses the render (R14, the first one).
+- *What is checked*: canvas `fillText` / `strokeText` (2d and OffscreenCanvas contexts), wrapped non-writable by the
+  pre-script before any graphic script, every call from load on except those made during the seek-order check;
+  after each `hf-seek`'s `seek(t)`, every text node under `#graphic-root` (not in `script` / `style` / `title`) whose
+  parent passes `checkVisibility({ visibilityProperty: true, opacityProperty: true })`, and every element's
+  `::before` / `::after` `content` strings. A (font-family, text) pair is checked once per page. Form-control values,
+  SVG `<image>` text and text inside images are not checked.
+- *Cost* (measured on the Mac mini, 2026-10-19, `graphic-determinism.mjs`, both renders of 10 fixtures + 10 PM4
+  samples against the base commit): 379.3 s vs 377.9 s, +0.4 % (within run-to-run noise); the coverage is computed
+  once per process (~11 ms). The page's own clock is virtualised by HyperFrames, so the check cannot be timed inside it.
 
 **Warnings (never fatal; layer and beat alike, prefixed `layer <id>:` / `graphic <id>:`).** The e79b4d3 texts,
 confirmed; GW7's `<platform name>` and GW8 are v3.1.
