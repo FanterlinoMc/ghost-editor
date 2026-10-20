@@ -4,7 +4,7 @@
 // Why (mac-45): the placer used to reserve `size x 1.3` for every caption block. Broadsheet's "clipping" block is a
 // box (padding 6px top + 12px bottom) around Gloock at line-height 1.08, tilted by `rotate` on an outer group that is
 // also translateX(-50%)'d: drawn, a one-line block is 80.64 px of box plus up to (width + 20) x sin(tilt) more below
-// its top, ~91 px for "that use this" against the 75 px reserved, so a lower-face block ran 15 px into the platform's
+// its top, ~91 px for B1's cg7 (a 3-word line) against the 75 px reserved, so a lower-face block ran 15 px into the platform's
 // bottom UI band (pixel check PX11 on a real close-up reel). Measured in Chrome, the model below matches to < 1 px.
 import fs from "node:fs";
 import path from "node:path";
@@ -55,14 +55,18 @@ function face(file) {
 }
 
 const cache = new Map();
+// an emoji no caption face covers falls back to the colour emoji font, drawn ~1.2 em wide (Chrome, Apple Color Emoji:
+// "😂😂😂 lol 🔥🔥" at 58 px). 1.25 em keeps the model at or over it; other uncovered text keeps `fallbackEm` (0.6 em
+// measured on the safe side for Arabic, which falls back to Noto Sans Arabic)
+const PICTO = /\p{Extended_Pictographic}/u, EMOJI_EM = 1.25;
 // a family's faces in @font-face order (latin, then latin-ext: the unicode-ranges do not overlap); the em advance of a
-// code point no face covers (the browser falls back to Noto Sans Arabic / Georgia) is `fallbackEm`
+// code point no face covers (the browser falls back to Noto Sans Arabic / Georgia) is `fallbackEm`, an emoji's EMOJI_EM
 function family(files, fallbackEm) {
   const k = files.join("|");
   if (!cache.has(k)) {
     const faces = files.map(face), memo = new Map();
     cache.set(k, (cp) => {
-      if (!memo.has(cp)) { let a = null; for (const f of faces) { a = f(cp); if (a != null) break; } memo.set(cp, a ?? fallbackEm); }
+      if (!memo.has(cp)) { let a = null; for (const f of faces) { a = f(cp); if (a != null) break; } memo.set(cp, a ?? (PICTO.test(String.fromCodePoint(cp)) ? EMOJI_EM : fallbackEm)); }
       return memo.get(cp);
     });
   }
@@ -80,15 +84,22 @@ export function textWidth(text, size, { files, fallbackEm = 0.6, letterSpacing =
   return em * size;
 }
 
-// Greedy line breaking at the word boundaries the markup allows (<wbr> between word spans: no space characters),
-// each word `wordPad` em wider for its side margins; -> line widths in px. Mirrors CSS for a width: max-content box
-// clamped by max-width: a line breaks before a word that would push it past maxWidth; a single over-long word stays.
+// Greedy line breaking at the break opportunities the markup and UAX #14 allow: between word spans (<wbr>, no space
+// characters) and on either side of an emoji inside a word (emoji are line-break class ID: Chrome wraps a long emoji
+// run mid-span). Each word is `wordPad` em wider for its side margins (half each side); -> line widths in px. Mirrors
+// CSS for a width: max-content box clamped by max-width: a line breaks before a piece that would push it past
+// maxWidth; a single over-long piece stays.
 export function wrapLines(words, size, maxWidth, opts) {
+  const pad = (opts.wordPad ?? 0) * size / 2, pieces = [];
+  for (const w of words) {
+    const parts = w.split(/(\p{Extended_Pictographic}️?)/u).filter(Boolean);
+    if (!parts.length) { pieces.push(2 * pad); continue; }
+    parts.forEach((t, i) => pieces.push(textWidth(t, size, opts) + (i === 0 ? pad : 0) + (i === parts.length - 1 ? pad : 0)));
+  }
   const lines = [];
   let cur = 0;
-  for (const w of words) {
-    const ww = textWidth(w, size, opts) + (opts.wordPad ?? 0) * size;
-    if (cur > 0 && cur + ww > maxWidth) { lines.push(cur); cur = ww; } else cur += ww;
+  for (const pw of pieces) {
+    if (cur > 0 && cur + pw > maxWidth) { lines.push(cur); cur = pw; } else cur += pw;
   }
   if (cur > 0 || !lines.length) lines.push(cur);
   return lines;

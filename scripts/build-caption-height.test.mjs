@@ -3,11 +3,12 @@
 // mac-45: the caption placer reserved `size x 1.3` for every block (75 px for Broadsheet's 58 px "clipping" caption).
 // The clipping box is drawn taller: Gloock at line-height 1.08 plus 6 + 12 px of box padding (80.64 px), and the
 // group's tilt (`rotate` on top of translateX(-50%), about the group's centre) lowers or lifts the box by up to
-// (width + 40) x sin(tilt). On a real close-up reel (m41c B1) the lower-face block cg7 "that use this" (tilt -1.6deg)
+// (width + 40) x sin(tilt). On a real close-up reel (m41c B1) a 3-word lower-face block cg7 (4 + 3 + 4 letters, tilt -1.6deg)
 // was drawn 90 px tall at top 1425 and ended at 1515.5, 15 px into Instagram's bottom UI band (safe bottom 1500);
 // pixel check PX11 found it. The placer's hysteresis then also held a taller block at a shorter one's y.
-//   - model: the reserved band for cg7's text, size and tilt covers what Chrome drew (constants measured once, below)
-//   - build: the same close-up, cg7's text at the same index: every block's band ends inside the safe area
+//   - model: the reserved band for a cg7-shaped block (stand-in text of the same letters per word and drawn width, 335 px),
+//     size and tilt covers what Chrome drew (constants measured once, below); an emoji run is modelled at or over too
+//   - build: the same close-up, that block at the same index: every block's band ends inside the safe area
 //   - real Chrome: every drawn box lies inside the band the placer reserved for it, and above the bottom UI band
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -27,11 +28,13 @@ const SEC = 9;
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "caption-height-"));
 process.on("exit", () => fs.rmSync(root, { recursive: true, force: true }));
 
-// m41c B1's cg7, measured in Chrome 1 (getBoundingClientRect of #cg7in, Gloock loaded, 1080x1920 at DPR 1, the B1
+// m41c B1's cg7, measured in Chrome (getBoundingClientRect of #cg7in, Gloock loaded, 1080x1920 at DPR 1, the B1
 // index.html built at 50228c6): top 1425 -> box 1424.46 .. 1515.51, so 0.54 px above the group's top and 90.51 below.
-const CG7 = { words: ["that", "use", "this"], size: 58, deg: -1.6, maxWidth: 1080 - 2 * 130, up: 0.54, down: 90.51 };
+// The stand-in "cats run fast" (same 4/3/4 letters) lays out at the same 335 px group width and measured the same
+// 0.54 / 90.51 in this test's reel at 78c1a4b.
+const CG7 = { words: ["cats", "run", "fast"], size: 58, deg: -1.6, maxWidth: 1080 - 2 * 130, up: 0.54, down: 90.51 };
 
-test("model: the band reserved for B1's cg7 covers the box Chrome drew (and the old 1.3 x size did not)", () => {
+test("model: the band reserved for a B1 cg7-shaped block covers the box Chrome drew (and the old 1.3 x size did not)", () => {
   const e = clippingExtent(CG7.words, CG7);
   assert.equal(e.lines, 1);
   assert.ok(e.down >= CG7.down && e.down - CG7.down < 1, `down: model ${e.down} vs drawn ${CG7.down}`);
@@ -42,15 +45,15 @@ test("model: the band reserved for B1's cg7 covers the box Chrome drew (and the 
   const t = drawnExtent({ w: 300, h: 80, deg: -2, padX: 20 });
   assert.ok(Math.abs(t.down - (40 + 40 * Math.cos(2 * Math.PI / 180) + 320 * Math.sin(2 * Math.PI / 180))) < 1e-9, JSON.stringify(t));
   // a group too wide for the line wraps: two lines of Gloock
-  assert.equal(clippingExtent(["pediatricians", "recommended", "vaccinations"], { size: 58, maxWidth: 820 }).lines, 2);
+  assert.equal(clippingExtent(["photographers", "recommended", "illustrations"], { size: 58, maxWidth: 820 }).lines, 2);
 });
 
 function build() {
   const talk = path.join(root, "talk.mp4");
   execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", `testsrc2=size=108x192:rate=30:duration=${SEC}`, "-f", "lavfi", "-i", `sine=frequency=220:duration=${SEC}`,
     "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", "30", "-c:a", "aac", "-ac", "2", "-shortest", talk], { stdio: "pipe" });
-  // 8 groups of 3; group 7 (odd: tilted -1.6deg, the side that drops) is cg7's text. Closer, wider groups around it.
-  const text = "today your child is due for four shots and i say it this way because some studies have shown that pediatricians that use this".split(" ");
+  // 8 groups of 3; group 7 (odd: tilted -1.6deg, the side that drops) is the cg7 stand-in. Neutral text, B1's word shapes.
+  const text = "today your garden is due for four plants and i say it this way because some builders have shown that photographers cats run fast".split(" ");
   const words = { segments: [{ start: 0, end: SEC, words: text.map((w, i) => ({ word: w, start: +(0.2 + i * 0.33).toFixed(2), end: +(0.45 + i * 0.33).toFixed(2) })) }] };
   // a close-up the whole time (B1's face: above the frame to below the safe bottom): every block goes lower-face
   const face = { fps: 5, w: 1080, h: 1920, samples: Array.from({ length: 6 }, (_, i) => [i * 2, -200, 1520, 120, 960, 540, 1040]) };
@@ -75,7 +78,7 @@ test("build: B1's close-up - every clipping block's reserved band ends inside th
   const gs = tops(html);
   assert.equal(gs.length, layout.blocks.length);
   assert.ok(gs.length >= 8, `groups: ${gs.length}`);
-  assert.match(html, /id="cg7w0" class="w">that<\/span><wbr><span id="cg7w1" class="w">use<\/span><wbr><span id="cg7w2" class="w">this</, "cg7 is B1's cg7 text");
+  assert.match(html, /id="cg7w0" class="w">cats<\/span><wbr><span id="cg7w1" class="w">run<\/span><wbr><span id="cg7w2" class="w">fast</, "cg7 is the stand-in");
   assert.equal(gs[7].deg, -1.6);
   for (const g of gs) {
     const b = layout.blocks[g.i];
@@ -107,7 +110,7 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
     try { await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 }); }
     catch { return t.skip("GSAP did not load (offline?)"); }
     const got = await page.evaluate(async (n) => {
-      await document.fonts.load('58px "Gloock"', "that use this"); await document.fonts.ready;
+      await document.fonts.load('58px "Gloock"', "cats run fast"); await document.fonts.ready;
       const tl = window.__timelines.main; tl.pause();
       return Array.from({ length: n }, (_, i) => {
         const g = document.getElementById(`cg${i}`);
@@ -123,5 +126,20 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
       assert.ok(g.y0 >= b.y - 0.05 && g.y1 <= b.y + b.h + 0.05, `cg${g.i}: drawn ${g.y0}..${g.y1}, reserved ${b.y}..${b.y + b.h}`);
     }
     assert.ok(got[7].y1 - got[7].y0 > 90, `cg7 is drawn ${got[7].y1 - got[7].y0} px tall`);
+    // emoji fall back to the colour emoji font (~1.2 em each): an untilted clipping block of them, laid out by the page's
+    // own CSS, is modelled at or over its drawn height (and line count)
+    for (const words of [["😂😂😂", "lol", "🔥🔥"], [Array(22).fill("😂").join("")], Array(22).fill("🔥")]) {
+      const drawn = await page.evaluate((ws) => {
+        const g = document.createElement("div"); g.className = "cap-group"; g.style.top = "100px";
+        const inn = document.createElement("div"); inn.className = "cap-in"; g.appendChild(inn);
+        inn.innerHTML = ws.map((w) => `<span class="w">${w}</span>`).join("<wbr>");
+        document.getElementById("cg0").parentElement.appendChild(g);
+        const h = inn.getBoundingClientRect().height, w = g.getBoundingClientRect().width; g.remove();
+        return { h, w };
+      }, words);
+      const e = clippingExtent(words, { size: 58, maxWidth: 820 });
+      assert.ok(e.h >= drawn.h - 0.05, `${words.join(" ").slice(0, 30)}: modelled ${e.h} (${e.lines} line(s)), drawn ${drawn.h}`);
+      assert.ok(e.w >= drawn.w - 0.05 || e.lines > 1, `${words.join(" ").slice(0, 30)}: modelled width ${e.w}, drawn ${drawn.w}`);
+    }
   } finally { await browser.close(); server.close(); }
 });
