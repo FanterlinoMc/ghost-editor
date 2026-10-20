@@ -284,7 +284,8 @@ def main():
         cv2.imwrite(b(os.path.join("pixel_probe_caps", name)), cv2.cvtColor(im, cv2.COLOR_RGBA2BGRA))
         templates[c["id"]] = {"frame": n, "file": f"pixel_probe_caps/{name}", "clip": clip}
     probe = {"v": 1, "chrome": "fixture", "geometry_sha256": hashlib.sha256(gbytes).hexdigest(), "html_sha256": None, "frames": plan["frames"],
-             "refused": [], "samples": samples, "templates": templates}
+             "refused": [], "samples": samples}
+    open(b(os.path.join("pixel_probe_caps", "index.json")), "w").write(pixel_check.canon(templates))
     open(b("pixel_probe.json"), "w").write(pixel_check.canon(probe))
     json.dump(dets, open(b("test_detections.json"), "w"))
     write_graphics(s, d)

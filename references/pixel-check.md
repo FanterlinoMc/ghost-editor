@@ -37,10 +37,12 @@ one audio decode. It never decodes every frame at full resolution. If a reel goe
 grid step (0.5 s to 1.0 s), never the event samples.
 
 **(built) Measured** on the Mac mini (M4, 10 CPUs), process wall time including Python start, against the hyperframes
-`rendered in` time of the same reel: 17.9 s broadsheet reels with 2 overlay graphics, 1.18-1.21 s against 15.5-16.0 s
-renders (7.3-7.8 %); the 13.1 s reel with 2 full-frame inserts, 1.50 s against a 15.7 s render (9.6 %). The probe,
-the graphic files, the grey pass and the audio run in parallel; YuNet runs on 4 threads beside the full-resolution
-decode (one detector per thread, `cv2.setNumThreads(1)`, so results do not depend on scheduling).
+`rendered in` time of the same reel (15.5-16.0 s for these 13-18 s reels). CP2 (before the caption images): 1.18-1.50 s,
+7.3-9.6 %. CP4 (with them, 2026-10-20): 1.54-1.56 s = 9.5-9.6 % with the box at load ~5 from other sessions, 1.6-2.1 s
+= 10.5-13.6 % at load 5-7. **Over budget under load**: the knob is the grid step (0.5 -> 1.0 s), not applied yet. The
+probe's layout samples (~0.45 s), the graphic files, the grey pass and the audio run in parallel; the decode starts when
+the probe's samples are written while the probe draws the caption images (PX9) over 4 tabs; YuNet runs on 4 threads
+beside the decode (one detector per thread, `cv2.setNumThreads(1)`).
 
 **Usage.**
 
@@ -466,16 +468,18 @@ the skipped windows, the hidden-caption reasons, joins / holds / outro, whole-fr
 map. `byte-identity.mjs` hashes `build/geometry.json` for the run-to-run check but does not compare it with the
 golden file (recorded before it existed); every file the golden lists must still match.
 
-Real reels (2026-10-20, all built with this branch, renders as they were):
-- broadsheet base render (mac-42 `r1base-1`): `fail`, PX9 on the 8 blocks measured +22 to +38 px (cg0 578, cg5 572,
-  cg7 569, cg9 573, ...), the same blocks `meas.py` finds. The fixed render `r1br-1`: no PX9. `r1f9-1` (f9e87f7) did
-  not race on this render (`meas.py` agrees: 537-542 px): no PX9.
-- savoy overlays (m41b A, an older render): `fail`, the same 8 race blocks; PX1 / PX11 / PX12 clean (PX12 measured).
-- close-up inserts (m41c B1, older render): `fail`, PX9 cg8 +51 px (`meas.py` 590.5), PX11 cg7 (the lower-face block
-  is drawn 90 px tall at y 1425, the placer reserved 75: 15 px into the bottom band). Re-rendered with this branch:
-  PX9 gone, PX11 cg7 still there (a placer height estimate, not a render race). Insert fade-from-black exempt.
+Real reels (2026-10-20, built with this branch at the release head a1cd731 incl. mac-45, GSAP fetched by the probe;
+renders as they were unless said):
+- broadsheet base render (mac-42 `r1base-1`): `fail`, PX9 on the same 8 blocks `meas.py` finds (+21 to +39 px, within
+  1-7 px of it). The fixed render `r1br-1`: no PX9. `r1f9-1` (f9e87f7) did not race on that render (`meas.py`: 537-542
+  px): no PX9.
+- savoy overlays (m41b A, an older render): `fail`, the same 8 race blocks; PX1 / PX11 / PX12 clean.
+- close-up inserts (m41c B1): the older render failed PX9 cg8 +51 px (`meas.py` 590.5) and PX11 cg7 (the lower-face
+  clipping box drawn 90 px tall against 75 reserved: 15 px into the bottom band; mac-45 fixed exactly that). Rendered
+  again at a1cd731: `warn` only (PX7), PX9 / PX11 clean; insert fade-from-black exempt. Same report hash twice.
 - the m41 face-overlap reel (proj-g, `out.mp4`): PX1 pass. Its boxes end at y 620 and the face (grown box) starts at
   y ~640 in this render; a frame at t = 10 s shows the card above the head. It is not the overlapping version.
+- CP4's pearl reels (a5-cp4 px6, px15): no PX9 (were -62, -48, -10 px); px14: PX14 only; px5: 1.29:1.
 
 ## 8. Open questions (PC / owner)
 

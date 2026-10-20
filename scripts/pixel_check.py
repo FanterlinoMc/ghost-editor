@@ -515,16 +515,33 @@ class Check:
                 res[name] = e
             self.t(name, (time.time() - t) * 1000)
 
-        first = []   # the measuring pass needs these two; the grey pass and the audio run on beside it
+        # the measuring pass needs the probe's samples (phase 1) and the graphic files; the grey pass, the audio and
+        # the probe's caption images (phase 2) run on beside it
+        self.phase1, self.phase1_ok, self.templates_problem = threading.Event(), False, None
+        probe_th = None
         if self.a.probe == "auto":
-            first.append(threading.Thread(target=timed, args=("probe", self.run_probe)))
-        first.append(threading.Thread(target=timed, args=("graphics", self.load_graphics)))
+            t_probe = time.time()
+
+            def probe_job():
+                try:
+                    res["probe"] = self.run_probe()
+                except Exception as e:
+                    res["probe"] = e
+                self.t("probe", (time.time() - t_probe) * 1000)
+            probe_th = threading.Thread(target=probe_job)
+        else:
+            self.phase1.set()
+        first = [threading.Thread(target=timed, args=("graphics", self.load_graphics))]
         later = [threading.Thread(target=timed, args=("grey_pass", lambda: grey_pass(self.a.render, fps))),
                  threading.Thread(target=timed, args=("audio", lambda: decode_audio(self.a.render)))]
-        for th in first + later:
+        for th in ([probe_th] if probe_th else []) + first + later:
             th.start()
+        self.phase1.wait()
+        self.t("probe_samples", (time.time() - T0) * 1000)
         for th in first:
             th.join()
+        if probe_th and not self.phase1_ok:
+            probe_th.join()
         self.no_probe = None
         if isinstance(res.get("probe"), ProbeUnavailable):
             # the page could not be laid out: the rules that need its layout are skipped, the pixel-only rules run
@@ -532,13 +549,13 @@ class Check:
             self.probe = {"samples": {}}
             self.json_sha["pixel_probe.json"] = None
         elif isinstance(res.get("probe"), Exception):
-            for th in later:
+            for th in later + ([probe_th] if probe_th else []):
                 th.join()
             return self.finish_px0([f"PX0 pixel_probe.mjs failed: {str(res['probe']).splitlines()[0][:200]}"], T0)
         else:
             msgs = self.probe_check()
             if msgs:
-                for th in later:
+                for th in later + ([probe_th] if probe_th else []):
                     th.join()
                 return self.finish_px0(msgs, T0)
             self.versions["chrome"] = self.probe.get("chrome")
@@ -563,33 +580,51 @@ class Check:
             self.dets[f] = fu.result()
         pool.shutdown()
         self.t("faces_wait", (time.time() - t2) * 1000)
-        for th in later:
+        for th in later + ([probe_th] if probe_th else []):
             th.join()
         t = time.time()
+        self.px9_match()
         self.evaluate(res)
         self.t("rules", (time.time() - t) * 1000 + tm["measure"] * 1000)
         return self.finish(T0)
 
     def run_probe(self):
-        fd, fpath = tempfile.mkstemp(suffix=".json")
+        """runs pixel_probe.mjs; sets self.phase1 when pixel_probe.json is written (its PIXEL_PROBE_SAMPLES line), so the
+        decode starts while the probe still draws the PX9 caption images; returns when the probe has exited"""
         tm = {}
         for cid, fs_ in self.plan["caps"].items():
             tm.setdefault(str(fs_[1]), []).append(cid)   # PX9: each block's middle sample
+        fd, fpath = tempfile.mkstemp(suffix=".json")
         with os.fdopen(fd, "w") as f:
             json.dump({"frames": self.plan["frames"], "templates": tm}, f)
         try:
-            r = subprocess.run(["node", os.path.join(HERE, "pixel_probe.mjs"), self.proj, "--frames", fpath], capture_output=True, text=True)
-            if r.returncode:
-                lines = [ln.strip() for ln in (r.stderr + "\n" + r.stdout).splitlines() if ln.strip()]
+            p = subprocess.Popen(["node", os.path.join(HERE, "pixel_probe.mjs"), self.proj, "--frames", fpath], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            err = []
+            th = threading.Thread(target=lambda: err.append(p.stderr.read()), daemon=True)
+            th.start()
+            out = []
+            for line in p.stdout:
+                out.append(line)
+                if line.startswith("PIXEL_PROBE_SAMPLES "):
+                    self.phase1_ok = True
+                    self.phase1.set()
+            code = p.wait()
+            th.join()
+            if code:
+                lines = [ln.strip() for ln in ("".join(err) + "\n" + "".join(out)).splitlines() if ln.strip()]
                 # the probe's own message (its last "pixel_probe: ..." line), else a thrown "Error: ..." line, never a stack frame
                 why = next((ln[len("pixel_probe: "):] for ln in reversed(lines) if ln.startswith("pixel_probe: ")), None) \
-                    or next((ln for ln in lines if re.match(r"^\w*Error\b", ln)), None) or (lines[-1] if lines else f"exit {r.returncode}, no output")
+                    or next((ln for ln in lines if re.match(r"^\w*Error\b", ln)), None) or (lines[-1] if lines else f"exit {code}, no output")
                 why = why[:300]
-                if r.returncode == 4:
+                if self.phase1_ok:
+                    self.templates_problem = f"the probe failed after its samples: {why}"
+                    return
+                if code == 4:
                     raise ProbeUnavailable(why)
                 raise RuntimeError(why)
         finally:
             os.unlink(fpath)
+            self.phase1.set()
 
     def prepare(self):
         g = self.geo
@@ -729,7 +764,7 @@ class Check:
                 self.m["px11c"].setdefault(cid, {})[f] = (int(zpx), zn)
                 if k == 1:
                     self.m["px6"][cid] = (f, min(w["fs"] for w in vis_words))
-                    self.m["px9"][cid] = (f, self.centre(img, gr, cid))
+                    self.m["px9"][cid] = (f, self.px9_band(img, gr))
 
         # ---- captions inside a hidden window ----
         for wi in self.hidden_samples.get(f, []):
@@ -859,35 +894,45 @@ class Check:
         li, lb = float(np.median(rel_lum(crop[ink]))), float(np.median(rel_lum(bg)))
         return r2((max(li, lb) + 0.05) / (min(li, lb) + 0.05))
 
-    def centre(self, img, gr, cid):
-        """PX9: where the caption is drawn. The probe's image of the block alone (box, text, shadow, as Chrome draws it)
-        is matched against the render in a band +-64 px around the probe's place (a race moves the drawn block, not the
-        layout); light footage beside it (a pearl necklace) is not the caption and does not move the match.
-        -> the drawn centre x, or None (no template, or no confident match: 'not checked')"""
-        import cv2
-        t = (self.probe.get("templates") or {}).get(cid)
-        if not t:
-            return None
-        tp = os.path.join(self.build, t["file"])
-        im = cv2.imread(tp, cv2.IMREAD_UNCHANGED)
-        if im is None or im.ndim != 3 or im.shape[2] != 4:
-            return None
-        x, y, w, h = t["clip"]
-        G, V = 64, 8
+    G9, V9 = 64, 8   # PX9 search: +-64 px across (a race moves the drawn block that far), +-8 px down
+
+    def px9_band(self, img, gr):
+        """the render around the probe's block, kept for PX9 (the caption image arrives after the decode)"""
         W, H = self.geo["W"], self.geo["H"]
-        bx0, by0, bx1, by1 = max(0, x - G), max(0, y - V), min(W, x + w + G), min(H, y + h + V)
-        band = cv2.cvtColor(np.ascontiguousarray(img[by0:by1, bx0:bx1]), cv2.COLOR_RGB2GRAY).astype(np.float32)
-        tg = cv2.cvtColor(im[..., :3], cv2.COLOR_BGR2GRAY).astype(np.float32)
-        mask = (im[..., 3] >= 128).astype(np.float32)
-        if band.shape[0] < tg.shape[0] or band.shape[1] < tg.shape[1] or mask.sum() < 50:
-            return None
-        res = cv2.matchTemplate(band, tg, cv2.TM_CCOEFF_NORMED, mask=mask)
-        res = np.nan_to_num(res, nan=-1.0, posinf=-1.0, neginf=-1.0)
-        _, best, _, loc = cv2.minMaxLoc(res)
-        if best < 0.5:
-            return None
-        dx = bx0 + loc[0] - x
-        return gr["rect"][0] + gr["rect"][2] / 2 + dx
+        r = gr["rect"]
+        x, y = max(0, int(math.floor(r[0] - 16))), max(0, int(math.floor(r[1] - 16)))   # = the probe's clip
+        bx0, by0 = max(0, x - self.G9), max(0, y - self.V9)
+        bx1, by1 = min(W, int(math.ceil(r[0] + r[2] + 16)) + self.G9), min(H, int(math.ceil(r[1] + r[3] + 16)) + self.V9)
+        return {"band": np.ascontiguousarray(img[by0:by1, bx0:bx1]).copy(), "x0": bx0, "y0": by0, "rect": gr["rect"]}
+
+    def px9_match(self):
+        """PX9: the probe's image of each block alone (box, text, shadow, as Chrome draws it) matched against the
+        render band (masked normalised cross-correlation on grey): light footage beside the block (a pearl necklace)
+        is not the caption and does not move the match. -> self.m["px9"][cid] = (frame, drawn centre x | None)"""
+        import cv2
+        idx = os.path.join(self.build, "pixel_probe_caps", "index.json")
+        try:
+            tmpl = json.load(open(idx))
+        except (OSError, ValueError):
+            tmpl = {}
+            self.templates_problem = self.templates_problem or "no caption images from the probe (pixel_probe_caps/index.json)"
+        for cid, (f, b) in list(self.m["px9"].items()):
+            x = None
+            t = tmpl.get(cid)
+            if b is not None and t:
+                im = cv2.imread(os.path.join(self.build, t["file"]), cv2.IMREAD_UNCHANGED)
+                if im is not None and im.ndim == 3 and im.shape[2] == 4:
+                    cx, cy = t["clip"][0], t["clip"][1]
+                    band = cv2.cvtColor(b["band"], cv2.COLOR_RGB2GRAY).astype(np.float32)
+                    tg = cv2.cvtColor(im[..., :3], cv2.COLOR_BGR2GRAY).astype(np.float32)
+                    mask = (im[..., 3] >= 128).astype(np.float32)
+                    if band.shape[0] >= tg.shape[0] and band.shape[1] >= tg.shape[1] and mask.sum() >= 50:
+                        res = np.nan_to_num(cv2.matchTemplate(band, tg, cv2.TM_CCOEFF_NORMED, mask=mask), nan=-1.0, posinf=-1.0, neginf=-1.0)
+                        _, best, _, loc = cv2.minMaxLoc(res)
+                        if best >= 0.5:
+                            dx = b["x0"] + loc[0] - cx
+                            x = b["rect"][0] + b["rect"][2] / 2 + dx
+            self.m["px9"][cid] = (f, x)
 
     def wants_face(self, f):
         return not self.cover.get(f) and self.face_at(f) is not None and (self.test_dets is not None or self.det_path is not None)
@@ -1113,6 +1158,8 @@ class Check:
         # PX9 off-centre (middle sample)
         p9 = R["PX9"]
         if p9.status != "skipped":
+            if self.templates_problem:
+                p9.notes.append(self.templates_problem)
             for cid, (f, x) in sorted(self.m["px9"].items()):
                 if x is None:
                     p9.notes.append(f"caption {cid}: no confident match of the probe's image of the block (not checked)")

@@ -246,11 +246,17 @@ async function main() {
     }
     return out;
   }, frames, geo.fps, geo.W, geo.H, geo.graphics.map((g) => ({ id: g.id, selector: g.selector })));
-    // PX9 templates: each requested caption group alone (everything else hidden, transparent background), as Chrome
-    // draws it at that frame: box, text and shadow. PNGs beside the JSON; the JSON lists the files, not their bytes
-    // (a screenshot can differ by an anti-aliasing level run to run; the checker's result is the integer shift).
     const tdir = path.join(path.dirname(out), "pixel_probe_caps");
     fs.rmSync(tdir, { recursive: true, force: true });
+    const doc = { v: 1, chrome, geometry_sha256: sha(geoBytes), html_sha256: sha(Buffer.from(htmlText)), frames, refused: [...refused].sort(), samples: result };
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, canon(doc));
+    // phase 1 done: the checker starts its decode on this line while the PX9 templates are drawn
+    console.log(`PIXEL_PROBE_SAMPLES ${out}`);
+    // PX9 templates: each requested caption group alone (everything else hidden, transparent background), as Chrome
+    // draws it at that frame: box, text and shadow. PNGs in build/pixel_probe_caps/ with an index.json; not part of
+    // pixel_probe.json (a screenshot can differ by an anti-aliasing level run to run; the checker's result is the
+    // integer shift).
     const tmpl = {};
     const want = Object.entries(templates).flatMap(([n, ids]) => ids.map((id) => [+n, id])).sort((p, q) => p[0] - q[0] || (p[1] < q[1] ? -1 : 1));
     if (want.length) {
@@ -285,10 +291,8 @@ async function main() {
         }
       }));
     }
-    const doc = { v: 1, chrome, geometry_sha256: sha(geoBytes), html_sha256: sha(Buffer.from(htmlText)), frames, refused: [...refused].sort(), samples: result, templates: tmpl };
-    fs.mkdirSync(path.dirname(out), { recursive: true });
-    fs.writeFileSync(out, canon(doc));
-    console.log(`pixel_probe: ${frames.length} frames in ${Date.now() - t0} ms -> ${out}`);
+    if (want.length) fs.writeFileSync(path.join(tdir, "index.json"), canon(tmpl));
+    console.log(`pixel_probe: ${frames.length} frames + ${Object.keys(tmpl).length} caption images in ${Date.now() - t0} ms -> ${out}`);
   } finally {
     if (browser) await browser.close().catch(() => {});
     if (server) server.close();
