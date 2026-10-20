@@ -88,7 +88,9 @@ only). As root (the server): the graphic render's uid drop from `lib/graphic-ren
 / GID via setpriv, the per-uid host lock, the lingering-process sweep, a fresh uid-owned home, its network-lock flags,
 every process of the uid killed afterwards), and first the R12 network probe through that shim (`probeNetwork`, as
 before every graphic render): the dropped Chrome and Node must fail to reach the probe URLs before the probe opens a
-user's page. Chrome never runs as root. The main reel renderer itself runs Chrome as
+user's page. Chrome never runs as root. As root with `GRAPHIC_SANDBOX` set the probe refuses (renderGraphic runs Node
+and Chrome inside that launcher; puppeteer cannot start Chrome inside it, so R12 would prove a launch the probe does
+not use). Chrome gets `cleanEnv()` plus the probe's own `GRAPHIC_RENDER_ORIGINS`. The main reel renderer itself runs Chrome as
 root with `--no-sandbox` on Linux; the probe is stricter because it opens a user's page outside a render. The root path
 is written to the graphic render's tested functions but has not run on the Linux server yet.
 

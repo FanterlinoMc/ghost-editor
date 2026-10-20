@@ -38,7 +38,7 @@ import { fileURLToPath } from "node:url";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
 import { RUNTIME_LIBS } from "./lib/runtime-libs.mjs";
 import { cacheDir, cacheRead, cacheWrite } from "./lib/probe-cache.mjs";
-import { chromeUser, chromeHome, chromeShim, releaseChromeHome, hostLock, sweepUid, probeNetwork, sandboxLauncher } from "./lib/graphic-render.mjs";
+import { chromeUser, chromeHome, chromeShim, releaseChromeHome, hostLock, sweepUid, probeNetwork, sandboxLauncher, cleanEnv } from "./lib/graphic-render.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -121,6 +121,11 @@ async function main() {
   try {
     let exe = findChrome(), args = ["--force-device-scale-factor=1", "--hide-scrollbars", "--mute-audio"];
     if (user.root) {   // never Chrome as root: the graphic render's drop, with its lock, sweep, home and network flags
+      // renderGraphic runs Node AND Chrome inside GRAPHIC_SANDBOX; puppeteer cannot start Chrome inside that launcher,
+      // so the R12 check below would prove a launch the probe does not use: refuse instead
+      const launcher = sandboxLauncher(process.env);
+      if (launcher.error) stop(2, launcher.error);
+      if (launcher.argv.length) stop(2, `running as root with ${launcher.label}: the probe cannot start Chrome inside that launcher (renderGraphic runs the whole render in it); unset GRAPHIC_SANDBOX for the pixel probe, the uid drop and the network lock still apply`);
       lock = await hostLock(user);
       const sw = sweepUid(user); if (!sw.ok) stop(2, sw.error);
       home = chromeHome(user);
@@ -128,14 +133,14 @@ async function main() {
       exe = chromeShim(path.join(scratch, "chrome"), exe, { home, setpriv: user.setpriv });
       // R12, as before every graphic render: the dropped Chrome (and Node) must FAIL to reach the probe URLs before the
       // probe opens a user's page through the same shim
-      const net = probeNetwork({ launcher: sandboxLauncher(process.env), shim: exe, user });
+      const net = probeNetwork({ launcher: { argv: [], label: "no extra launcher" }, shim: exe, user });
       if (!net.ok) stop(2, `network lock not proven: ${net.refusal}`);
     } else if (process.platform === "linux") args.unshift("--no-sandbox");   // as hyperframes launches it on Linux
     server = await serve(fs.realpathSync(proj));
     const origin = `127.0.0.1:${server.address().port}`;
     const puppeteer = findPuppeteer();
     browser = await puppeteer.launch({ executablePath: exe, headless: "shell", args, defaultViewport: { width: geo.W, height: geo.H, deviceScaleFactor: 1 },
-      env: { ...process.env, GRAPHIC_RENDER_ORIGINS: origin } });
+      env: { ...cleanEnv(), GRAPHIC_RENDER_ORIGINS: origin } });   // cleanEnv drops the graphic render's own vars; the shim's bypass gets ours
     const refused = new Set();
     // one page = the composition loaded, paused, footage paused, window.__pxSeek(t) seeking the way the renderer does
     const openPage = async () => {
