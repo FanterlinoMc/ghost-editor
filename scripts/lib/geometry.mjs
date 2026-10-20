@@ -62,7 +62,9 @@ export function buildGeometry(ctx) {
   const geoGraphics = graphics.map((g) => {
     const f0 = frameAtOrAfter(g.t0, fps), f1 = frameAtOrAfter(g.t1, fps);
     const srcFrames = [];
-    for (let n = f0; n < f1; n++) srcFrames.push(Math.min(g.L - 1, Math.max(0, Math.round((n / fps - g.t0) * fps))));
+    // the <video> starts at t0 (data-media-start 0): output frame n shows the file frame whose time is at or before
+    // n / fps - t0 (floor; measured on an insert that fades up from black at a t0 between two frames)
+    for (let n = f0; n < f1; n++) srcFrames.push(Math.min(g.L - 1, Math.max(0, Math.floor((n / fps - g.t0) * fps + 1e-6))));
     return {
       id: g.id, kind: g.kind, mode: g.mode, by: g.by, file: g.file, fit: g.fit, opacity: g.opacity,
       box: { x: r3(g.box.x), y: r3(g.box.y), w: r3(g.box.w), h: r3(g.box.h) },

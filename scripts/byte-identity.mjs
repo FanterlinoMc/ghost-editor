@@ -84,7 +84,7 @@ function buildOnce(name, reel, tag) {
 }
 
 const got = {};
-let bad = 0, tolerated = 0;
+let bad = 0, tolerated = 0, additive = 0;
 for (const [name, reel] of Object.entries(REELS)) {
   const a = buildOnce(name, reel, "a"), b = buildOnce(name, reel, "b");
   if (JSON.stringify(a) !== JSON.stringify(b)) { console.error(`NOT REPRODUCIBLE: ${name} builds differently run to run`); bad++; }
@@ -99,12 +99,16 @@ if (RECORD) {
   for (const name of Object.keys(REELS)) {
     for (const k of new Set([...Object.keys(want[name] || {}), ...Object.keys(got[name])])) {
       if ((want[name] || {})[k] === got[name][k]) continue;
+      // build/geometry.json (the pixel check's input, references/pixel-check.md 2.2) is ADDITIVE: written after every
+      // other output, from values they already hold, so it is not in the golden recorded before it existed. It is still
+      // hashed above, so the run-to-run check covers it; every file the golden lists must match as before.
+      if (k === "build/geometry.json" && !((want[name] || {})[k])) { additive++; continue; }
       const near = k === "build/sfx_events.json" && want[name]?.[k] ? measuredMatch(fs.readFileSync(path.join(root, `${name}-a`, k), "utf8"), want[name][k]) : null;
       if (near) { console.log(`within tolerance: ${name} ${k} (${near})`); tolerated++; continue; }
       console.error(`DIFFERS: ${name} ${k}`); bad++;
     }
   }
-  console.log(bad ? `byte-identity: ${bad} problem(s)` : `byte-identity: ${Object.keys(REELS).length} reels, every output identical to the golden hashes${tolerated ? ` (${tolerated} measured voiceP95 within ${VOICE_TOL_DB} dB)` : ""}`);
+  console.log(bad ? `byte-identity: ${bad} problem(s)` : `byte-identity: ${Object.keys(REELS).length} reels, every output identical to the golden hashes${tolerated ? ` (${tolerated} measured voiceP95 within ${VOICE_TOL_DB} dB)` : ""}${additive ? ` (+ build/geometry.json, additive, reproducible run to run, in ${additive} reels)` : ""}`);
 }
 if (!KEEP) fs.rmSync(root, { recursive: true, force: true }); else console.log("kept " + root);
 process.exit(bad ? 1 : 0);

@@ -217,11 +217,11 @@ def select_script(frames):
     return "+".join(f"eq(n,{f})" for f in frames) or "0"
 
 
-def decode_frames(path, frames, W, H, pix="rgb24", codec=None):
-    """yields (frame, ndarray HxWxC) for the listed frame indices, in order, full resolution"""
-    C = 4 if pix == "rgba" else 3
+def decode_frames(path, frames, W, H, pix="rgb24", codec=None, vf=None):
+    """yields (frame, ndarray HxWxC) for the listed frame indices, in order (full resolution unless vf scales to W x H)"""
+    C = 4 if pix == "rgba" else 1 if pix == "gray" else 3
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as fs:
-        fs.write(f"[0:v]select='{select_script(frames)}'[o]")
+        fs.write(f"[0:v]select='{select_script(frames)}'{',' + vf if vf else ''}[o]")
         script = fs.name
     cmd = ["ffmpeg", "-v", "error", "-nostdin", *(["-c:v", codec] if codec else []), "-i", path, "-filter_threads", "1",
            "-filter_complex_script", script, "-map", "[o]", "-fps_mode", "passthrough", "-f", "rawvideo", "-pix_fmt", pix, "pipe:1"]
@@ -235,7 +235,7 @@ def decode_frames(path, frames, W, H, pix="rgb24", codec=None):
             buf = p.stdout.read(size)
             if len(buf) < size:
                 break
-            yield f, np.frombuffer(buf, np.uint8).reshape(H, W, C)
+            yield f, np.frombuffer(buf, np.uint8).reshape(H, W, C) if C > 1 else np.frombuffer(buf, np.uint8).reshape(H, W)
     finally:
         p.stdout.close()
         p.wait()
@@ -347,6 +347,7 @@ class Check:
         self.build = os.path.join(self.proj, "build")
         self.rules = {rid: Rule(rid, name) for rid, name in RULES}
         self.timing = {}
+        self.unreadable = []
         self.versions = {"checker": CHECKER_VERSION}
 
     def t(self, stage, ms):
@@ -357,7 +358,11 @@ class Check:
         if not os.path.exists(p):
             return None, None
         b = open(p, "rb").read()
-        return json.loads(b), sha256_bytes(b)
+        try:
+            return json.loads(b), sha256_bytes(b)
+        except ValueError:
+            self.unreadable.append(name)
+            return None, sha256_bytes(b)
 
     # ---------------- PX0 ----------------
     def px0(self):
@@ -369,8 +374,10 @@ class Check:
         self.layout, lsha = self.load("caption_layout.json")
         self.sections, _ = self.load("sections.json")
         self.json_sha = {"geometry.json": gsha, "edit_truth.json": esha, "caption_layout.json": lsha}
+        for name in self.unreadable:
+            msgs.append(f"PX0 build/{name} is not readable JSON")
         for name, v in (("geometry.json", self.geo), ("edit_truth.json", self.edit), ("caption_layout.json", self.layout)):
-            if v is None:
+            if v is None and name not in self.unreadable:
                 msgs.append(f"PX0 missing build/{name}")
         if not os.path.exists(self.a.render):
             msgs.append(f"PX0 missing {os.path.basename(self.a.render)}")
@@ -404,7 +411,7 @@ class Check:
         self.probe, psha = self.load("pixel_probe.json")
         self.json_sha["pixel_probe.json"] = psha
         if self.probe is None:
-            return ["PX0 missing build/pixel_probe.json"]
+            return ["PX0 build/pixel_probe.json is not readable JSON" if psha else "PX0 missing build/pixel_probe.json"]
         if self.probe.get("geometry_sha256") != self.json_sha["geometry.json"] or self.probe.get("frames") != self.plan["frames"]:
             msgs.append("PX0 pixel_probe.json was made for another geometry.json or sample list (stale): run pixel_probe.mjs again")
         return msgs
@@ -426,7 +433,8 @@ class Check:
         st = next(s for s in ffprobe(path) if s.get("codec_type") == "video")
         gw, gh = st["width"], st["height"]
         need = set()
-        for f in self.plan["gfx"].get(g["id"], []):
+        # an overlay is measured at every graphic sample (PX1, PX11); an insert only at its window's edges (PX12)
+        for f in (self.plan["gfx"].get(g["id"], []) if g["mode"] == "overlay" else (g["f0"] - 1, g["f0"], g["f1"] - 1, g["f1"])):
             need.add(self.gframe_for(g, f))
         for wf in self.plan["hidden"]:
             for f in wf:
@@ -583,6 +591,7 @@ class Check:
         self.m = {k: {} for k in ("px1", "px2", "px3", "px4", "px5", "px6", "px8a", "px8b", "px9", "px10", "px11c", "px11t", "px11g", "px12")}
         self.cover = {}
         self.det_path = None
+        self.dark_cache = {}
         self.tls = threading.local()
         self.dets = {}
         import cv2
@@ -1139,14 +1148,14 @@ class Check:
         else:
             black, freeze, open_freeze = gp
             p13.checked = p14.checked = g["frames"]
-            for a, b in black:
-                if any(a >= x - EPS and b <= y + EPS for x, y, *_ in g.get("darkOk", [])):
-                    continue
-                k = max(1, rnd((b - a) * fps))
-                sev = "error" if k >= 3 else "warn"
-                f = rnd(a * fps)
-                p13.add(sev, "picture", a, f, k, 3 if sev == "error" else 1, "frames", f"PX13 {k} black frame(s) at t={a:.3f}s-{b:.3f}s",
-                        t_from=a, t_to=b, samples=k)
+            for a0, b0 in black:
+                for a, b in self.subtract((a0, b0), [(x, y) for x, y, *_ in g.get("darkOk", [])] + self.insert_darks(a0, b0)):
+                    k = rnd((b - a) * fps)
+                    if k < 1:
+                        continue
+                    sev = "error" if k >= 3 else "warn"
+                    p13.add(sev, "picture", a, rnd(a * fps), k, 3 if sev == "error" else 1, "frames", f"PX13 {k} black frame(s) at t={a:.3f}s-{b:.3f}s",
+                            t_from=a, t_to=b, samples=k)
             if open_freeze is not None:
                 freeze.append((open_freeze, g["total"]))
             for a, b in freeze:
@@ -1198,6 +1207,30 @@ class Check:
             fr = dict(decode_frames(os.path.join(self.proj, gg["file"]), sorted({j0, j1}), self.gfiles[gg["id"]]["w"], self.gfiles[gg["id"]]["h"]))
             if j0 in fr and j1 in fr and float(np.abs(fr[j0].astype(np.int16) - fr[j1]).mean()) < 1.0:
                 out.append((lo, hi))
+        return out
+
+    def insert_darks(self, a, b):
+        """black inside an insert whose own file is black at those frames (a fade up from black) is the graphic's design"""
+        out, fps = [], self.geo["fps"]
+        for gg in self.geo["graphics"]:
+            if gg["mode"] != "insert" or self.gfiles.get(gg["id"]) is None:
+                continue
+            f0, f1 = max(gg["f0"], rnd(a * fps)), min(gg["f1"], rnd(b * fps))   # blackdetect reports frame times
+            if f1 <= f0:
+                continue
+            # the same blackdetect as the grey pass, on the insert's own file (cached per insert)
+            if gg["id"] not in self.dark_cache:
+                fb, _, _ = grey_pass(os.path.join(self.proj, gg["file"]), fps)
+                self.dark_cache[gg["id"]] = {j for x, y in fb for j in range(rnd(x * fps), rnd(y * fps))}
+            dark = self.dark_cache[gg["id"]]
+            run = None
+            for f in range(f0, f1):
+                if self.gframe_for(gg, f) in dark:
+                    run = [f, f + 1] if run is None else [run[0], f + 1]
+                elif run:
+                    out.append((run[0] / fps, run[1] / fps)); run = None
+            if run:
+                out.append((run[0] / fps, run[1] / fps))
         return out
 
     @staticmethod
