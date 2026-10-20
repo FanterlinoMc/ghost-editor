@@ -39,6 +39,7 @@ import { HZ_CSS, hzBeat } from "./lib/hormozi.mjs";
 import { createHash } from "node:crypto";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
 import { buildGeometry } from "./lib/geometry.mjs";
+import { GSAP_URL } from "./lib/runtime-libs.mjs";
 import { matteThreads, cutMatteThreaded, writeAtomically } from "./lib/matte.mjs";
 import * as RL from "./lib/relight.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
@@ -168,7 +169,7 @@ function writeBlankPage() {
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=${W}, height=${H}" />
 <title>${String(spec.title || "reel").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</title>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script src="${GSAP_URL}"></script>
 <style>
   body { margin: 0; background: #000; }
   #root { position: relative; width: ${W}px; height: ${H}px; overflow: hidden; background: #000; }
@@ -3755,7 +3756,7 @@ const html = `<!doctype html>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=${W}, height=${H}" />
 <title>${esc(spec.title || "reel")}</title>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script src="${GSAP_URL}"></script>
 <style>
   @font-face { font-family: Geist; src: url(assets/fonts/geist-latin.woff2) format("woff2"); font-weight: 100 900; }
   @font-face { font-family: Geist; src: url(assets/fonts/geist-latin-ext.woff2) format("woff2"); font-weight: 100 900; unicode-range: ${RANGES["latin-ext"]}; }
@@ -3922,30 +3923,6 @@ fs.writeFileSync(path.join(proj, "build", "words.edit.json"), JSON.stringify(wor
 if (OUTRO > 0 && !outroCovered && !spec.outroFade) fs.writeFileSync(path.join(proj, "build", "tail.json"), JSON.stringify({ speech: r3(SPEECH), total: TOTAL, fps: FPS, hold: true }));
 else fs.rmSync(path.join(proj, "build", "tail.json"), { force: true });
 fs.writeFileSync(path.join(proj, "build", "caption_layout.json"), JSON.stringify({ platform: placer.platform, safeTop: placer.safeTop, safeBottom: placer.safeBottom, blocks: placer.log }, null, 1));
-// build/geometry.json (references/pixel-check.md 2.2): the camera, caption and graphic truth the pixel check reads. Additive:
-// written last from values already resolved above; nothing else reads it.
-{
-  const genericCaps = !["type", "podcast", "cluster", "duo", "glow", "none"].includes(cap.style) && !edit;
-  const graphics = [
-    ...GEO_SPANS.filter((x) => x.type === "graphic" && x.b._graphic?.file).map((x) => {
-      const g = x.b._graphic;
-      return { id: String(x.b.id ?? x.elId), kind: "beat", mode: g.mode, by: x.b.by ?? "planner", file: g.file, fit: g.fit, opacity: g.opacity, box: g.box,
-        t0: g.t0, t1: g.t1, L: g.L, inF: g.inF, D: g.D, after: g.after, hideCaptions: g.hideCaptions, selector: `#${x.elId}-in`, hard: true };
-    }),
-    ...LAYERS.filter((l) => l.kind === "graphic" && l.graphic?.file).map((l) => ({ id: String(l.id), kind: "layer", mode: l.graphic.mode, by: l.by ?? "user", file: l.graphic.file,
-      fit: l.fit, opacity: l.opacity, box: l.box, t0: l.t0, t1: l.t1, L: l.graphic.L, inF: l.graphic.inF, D: l.graphic.D, after: l.graphic.after,
-      hideCaptions: l.hideCaptions === true, selector: `#ly-${l.id}_box`, hard: (l.enter ?? "none") === "none" && (l.exit ?? "none") === "none" })),
-  ];
-  const spans = [...GEO_SPANS.map((x) => ({ t0: x.t0, t1: x.t1, label: x.label })), ...LAYERS.map((l) => ({ t0: l.t0, t1: l.t1, label: `layer:${l.id}` })), ...rampsAt.map((r) => ({ t0: r.t0, t1: r.end, label: "ramp" }))];
-  const full = (b) => b && b.w * b.h >= 0.9 * W * H;
-  const stills = [...GEO_SPANS.filter((x) => ["endcard", "cover"].includes(x.type)).map((x) => [x.t0, x.t1, x.label]),
-    ...LAYERS.filter((l) => (l.kind === "image" || l.kind === "logo") && full(l.box)).map((l) => [l.t0, l.t1, `layer:${l.id}`])];
-  fs.writeFileSync(path.join(proj, "build", "geometry.json"), JSON.stringify(buildGeometry({
-    W, H, fps: FPS, total: TOTAL, speech: SPEECH, format: FORMAT, platform, zones: PLATFORMS[platform] || PLATFORMS.instagram,
-    screenFaceAt: placer.screenFaceAt, primarySrc: PRIMARY_SRC, takes, roomWins, captions: genericCaps ? GEO_CAPS : null, captionStyle: cap.style,
-    capsHidden: CAPS_HIDDEN, spans, graphics, stills,
-  })));
-}
 // Resolved edit-time motion events, for the style-study accuracy harness (A1). Beat times in
 // reel.json are SOURCE seconds; these are what the render actually contains, after E() maps them
 // through the takes. Ground truth must come from here, never from the input spec.
@@ -4023,6 +4000,35 @@ fs.writeFileSync(path.join(proj, "build", "edit_truth.json"), JSON.stringify({
     sections: manifest,
   }, null, 2));
   console.log(`sections: ${sections.length} (${sections.map((s) => `${s.start}-${s.end}`).join(", ")})`);
+}
+// build/geometry.json (references/pixel-check.md 2.2): the camera, caption and graphic truth the pixel check reads. Additive:
+// written LAST, after every other output, from values already resolved above; nothing else reads it. A failure here never
+// fails the build: geometry.json then holds { v, error } (the pixel check reports it as PX0) and the build warns.
+try {
+  const genericCaps = !["type", "podcast", "cluster", "duo", "glow", "none"].includes(cap.style) && !edit;
+  const graphics = [
+    ...GEO_SPANS.filter((x) => x.type === "graphic" && x.b._graphic?.file).map((x) => {
+      const g = x.b._graphic;
+      return { id: String(x.b.id ?? x.elId), kind: "beat", mode: g.mode, by: x.b.by ?? "planner", file: g.file, fit: g.fit, opacity: g.opacity, box: g.box,
+        t0: g.t0, t1: g.t1, L: g.L, inF: g.inF, D: g.D, after: g.after, hideCaptions: g.hideCaptions, selector: `#${x.elId}-in`, hard: true };
+    }),
+    ...LAYERS.filter((l) => l.kind === "graphic" && l.graphic?.file).map((l) => ({ id: String(l.id), kind: "layer", mode: l.graphic.mode, by: l.by ?? "user", file: l.graphic.file,
+      fit: l.fit, opacity: l.opacity, box: l.box, t0: l.t0, t1: l.t1, L: l.graphic.L, inF: l.graphic.inF, D: l.graphic.D, after: l.graphic.after,
+      hideCaptions: l.hideCaptions === true, selector: `#ly-${l.id}_box`, hard: (l.enter ?? "none") === "none" && (l.exit ?? "none") === "none" })),
+  ];
+  const spans = [...GEO_SPANS.map((x) => ({ t0: x.t0, t1: x.t1, label: x.label })), ...LAYERS.map((l) => ({ t0: l.t0, t1: l.t1, label: `layer:${l.id}` })), ...rampsAt.map((r) => ({ t0: r.t0, t1: r.end, label: "ramp" }))];
+  const full = (b) => b && b.w * b.h >= 0.9 * W * H;
+  const stills = [...GEO_SPANS.filter((x) => ["endcard", "cover"].includes(x.type)).map((x) => [x.t0, x.t1, x.label]),
+    ...LAYERS.filter((l) => (l.kind === "image" || l.kind === "logo") && full(l.box)).map((l) => [l.t0, l.t1, `layer:${l.id}`])];
+  fs.writeFileSync(path.join(proj, "build", "geometry.json"), JSON.stringify(buildGeometry({
+    W, H, fps: FPS, total: TOTAL, speech: SPEECH, format: FORMAT, platform, zones: PLATFORMS[platform] || PLATFORMS.instagram,
+    screenFaceAt: placer.screenFaceAt, primarySrc: PRIMARY_SRC, takes, roomWins, captions: genericCaps ? GEO_CAPS : null, captionStyle: cap.style,
+    capsHidden: CAPS_HIDDEN, spans, graphics, stills,
+  })));
+} catch (e) {
+  const msg = String(e && e.message || e).split("\n")[0];
+  fs.writeFileSync(path.join(proj, "build", "geometry.json"), JSON.stringify({ v: 1, error: msg }));
+  warn.push(`build/geometry.json not written (${msg}): the pixel check will report PX0`);
 }
 {
   const modes = {};

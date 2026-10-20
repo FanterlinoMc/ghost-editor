@@ -340,6 +340,10 @@ def zone_name_at(rect_xyxy, zones):
 
 
 # ---------------------------------------------------------------- the check ----------------------------------------
+class ProbeUnavailable(Exception):
+    """the probe could not lay the page out (exit 4: a runtime library not reachable): pixel-only rules still run"""
+
+
 class Check:
     def __init__(self, a):
         self.a = a
@@ -383,6 +387,8 @@ class Check:
             msgs.append(f"PX0 missing {os.path.basename(self.a.render)}")
         if msgs:
             return msgs
+        if self.geo.get("error"):
+            return [f"PX0 build/geometry.json: the build could not write it ({self.geo['error']})"]
         g = self.geo
         st = ffprobe(self.a.render)
         v = next((s for s in st if s.get("codec_type") == "video"), None)
@@ -523,16 +529,23 @@ class Check:
             th.start()
         for th in first:
             th.join()
-        if isinstance(res.get("probe"), Exception):
+        self.no_probe = None
+        if isinstance(res.get("probe"), ProbeUnavailable):
+            # the page could not be laid out: the rules that need its layout are skipped, the pixel-only rules run
+            self.no_probe = str(res["probe"])
+            self.probe = {"samples": {}}
+            self.json_sha["pixel_probe.json"] = None
+        elif isinstance(res.get("probe"), Exception):
             for th in later:
                 th.join()
             return self.finish_px0([f"PX0 pixel_probe.mjs failed: {str(res['probe']).splitlines()[0][:200]}"], T0)
-        msgs = self.probe_check()
-        if msgs:
-            for th in later:
-                th.join()
-            return self.finish_px0(msgs, T0)
-        self.versions["chrome"] = self.probe.get("chrome")
+        else:
+            msgs = self.probe_check()
+            if msgs:
+                for th in later:
+                    th.join()
+                return self.finish_px0(msgs, T0)
+            self.versions["chrome"] = self.probe.get("chrome")
         if isinstance(res.get("graphics"), Exception):
             raise res["graphics"]
         # ---- full-resolution decode of the samples, measured frame by frame ----
@@ -568,7 +581,10 @@ class Check:
         try:
             r = subprocess.run(["node", os.path.join(HERE, "pixel_probe.mjs"), self.proj, "--frames", fpath], capture_output=True, text=True)
             if r.returncode:
-                raise RuntimeError((r.stderr or r.stdout).strip()[-300:])
+                why = ((r.stderr or r.stdout).strip().splitlines() or ["(no output)"])[-1].replace("pixel_probe: ", "")[:300]
+                if r.returncode == 4:
+                    raise ProbeUnavailable(why)
+                raise RuntimeError(why)
         finally:
             os.unlink(fpath)
 
@@ -890,6 +906,13 @@ class Check:
         if not g.get("captionsDescribed", True):
             for rid in CAPTION_RULES:
                 R[rid].skip(f"caption style {g.get('captionStyle')} is not described in geometry.json")
+        if self.no_probe:
+            for rid in ("PX4", "PX5", "PX6", "PX8", "PX9", "PX10"):
+                if R[rid].status != "skipped":
+                    R[rid].skip(self.no_probe)
+            R["PX11"].notes.append(f"captions and text not checked ({self.no_probe}); graphics from geometry boxes")
+            for rid in ("PX1", "PX12"):
+                R[rid].notes.append(f"graphic rects and opacity from geometry.json ({self.no_probe})")
 
         # PX2 first: it sets the face rules' confidence
         p2 = R["PX2"]
@@ -1329,6 +1352,8 @@ class Check:
         errs = sum(1 for r in rules for f in r["findings"] if f["severity"] == "error")
         wrns = sum(1 for r in rules for f in r["findings"] if f["severity"] == "warn")
         rep["verdict"] = "fail" if errs else "warn" if wrns else "pass"
+        if not px0:
+            rep["probe"] = {"status": "unavailable", "reason": self.no_probe} if getattr(self, "no_probe", None) else {"status": "ok"}
         rep["summary"] = {"errors": errs, "warnings": wrns, "rules": {r["id"]: r["status"] for r in rules}}
         rep["rules"] = rules
         rep["report_sha256"] = sha256_bytes(canon(rep).encode())

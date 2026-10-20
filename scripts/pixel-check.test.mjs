@@ -17,6 +17,10 @@ const deps = spawnSync(PY, ["-c", "import numpy, cv2"], { encoding: "utf8" }).st
   && /libvpx-vp9/.test(spawnSync("ffmpeg", ["-hide_banner", "-encoders"], { encoding: "utf8" }).stdout || "");
 const skip = deps ? false : "needs python3 with numpy + opencv and ffmpeg with libvpx-vp9";
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "pixel-check-"));
+// the network test's reachability check runs before any test is registered (a test's spawnSync blocks the event loop)
+const { GSAP_URL, GSAP_SHA256 } = await import("./lib/runtime-libs.mjs");
+let online = false;
+try { online = (await fetch(GSAP_URL, { method: "HEAD", signal: AbortSignal.timeout(4000) })).ok; } catch {}
 process.on("exit", () => fs.rmSync(ROOT, { recursive: true, force: true }));
 
 function check(variant, { dir = path.join(ROOT, variant), make = true } = {}) {
@@ -113,6 +117,15 @@ test("PX0: unreadable build JSON is a PX0 error, not a crash", { skip }, () => {
   assert.match(rule("PX0").findings[0].message, /^PX0 build\/edit_truth.json is not readable JSON/);
 });
 
+test("PX0: a geometry.json the build could not write (its error field) is reported", { skip }, () => {
+  const dir = path.join(ROOT, "geoerr");
+  check("clean", { dir });
+  fs.writeFileSync(path.join(dir, "build", "geometry.json"), JSON.stringify({ v: 1, error: "g.L is undefined" }));
+  const { code, rule } = check("clean", { dir, make: false });
+  assert.equal(code, 3);
+  assert.equal(rule("PX0").findings[0].message, "PX0 build/geometry.json: the build could not write it (g.L is undefined)");
+});
+
 test("PX0: a probe made for another geometry.json is stale", { skip }, () => {
   const dir = path.join(ROOT, "stale");
   check("clean", { dir });
@@ -138,7 +151,7 @@ test("pixel_probe.mjs: caption, word, graphic and text rects as Chrome lays them
     #card{position:absolute;inset:0;background:#000;visibility:hidden}
   </style></head><body><div id="root">
     <div id="b0" class="layer"><div id="b0-in" class="graphic"></div></div><div id="card"></div>
-    <div id="off">OFF THE EDGE</div>
+    <div id="off">OFF THE EDGE</div><img src="https://example.invalid/tracker.png" style="width:1px;height:1px">
     <div id="caps"><div id="cg0" class="cap-group clip" style="top:270px" data-start="0.5" data-duration="1"><span id="cg0w0" class="w">HI</span> <span id="cg0w1" class="w">YOU</span></div></div>
   </div><script>
     window.gsap = {};
@@ -160,4 +173,69 @@ test("pixel_probe.mjs: caption, word, graphic and text rects as Chrome lays them
   assert.ok(off && off.lines[0][0] === -50 && !off.cap, JSON.stringify(off));
   assert.ok(s[30].text.some((t) => t.cap && t.text === "HI"));
   assert.deepEqual(s[45].covers, []); assert.deepEqual(s[60].covers, ["#card"]);
+  assert.deepEqual(p.refused, ["https://example.invalid/tracker.png"], "an unknown URL is aborted (and recorded)");
+});
+
+// ---- GSAP: the URL build.mjs writes, fetched by Node, sha-checked, served to Chrome; nothing else ----
+const probeDir = (name, body, geo = { W: 270, H: 480, fps: 30, graphics: [] }) => {
+  const dir = path.join(ROOT, name);
+  fs.mkdirSync(path.join(dir, "build"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "index.html"), `<!doctype html><html><head><style>body{margin:0}#root{position:relative;width:270px;height:480px;overflow:hidden}</style></head><body><div id="root">${body}</div></body></html>`);
+  fs.writeFileSync(path.join(dir, "build", "geometry.json"), JSON.stringify(geo));
+  fs.writeFileSync(path.join(dir, "frames.json"), JSON.stringify({ frames: [0, 30] }));
+  return dir;
+};
+const gsapPage = `<div id="b0-in" style="position:absolute;left:20px;top:300px;width:80px;height:60px;background:#08c;visibility:hidden"></div>
+  <script src="${GSAP_URL}"></script>
+  <script>const tl = gsap.timeline({ paused: true }); tl.fromTo("#b0-in", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.001 }, 0.999); window.__timelines.main = tl;</script>`;
+const probe = (dir, env = {}) => {
+  const t = Date.now();
+  const r = spawnSync(process.execPath, [path.join(HERE, "pixel_probe.mjs"), dir, "--frames", path.join(dir, "frames.json")], { encoding: "utf8",
+    env: { ...process.env, PIXEL_PROBE_VENDOR: "", PIXEL_PROBE_CACHE: fs.mkdtempSync(path.join(ROOT, "cache-")), ...env } });
+  return { ...r, ms: Date.now() - t, last: (r.stderr.trim().split("\n").pop() || "") };
+};
+test("probe: real GSAP through the fetch path (network)", { skip: !chrome ? "no cached Chrome" : !online ? `offline: ${GSAP_URL} not reachable` : false }, () => {
+  const dir = probeDir("gsap-real", gsapPage, { W: 270, H: 480, fps: 30, graphics: [{ id: "card", selector: "#b0-in" }] });
+  const r = probe(dir);
+  assert.equal(r.status, 0, r.stderr);
+  const p = JSON.parse(fs.readFileSync(path.join(dir, "build", "pixel_probe.json"), "utf8"));
+  assert.equal(p.samples[0].graphics.card.op, 0); assert.equal(p.samples[30].graphics.card.op, 1, "real GSAP ran the timeline");
+  assert.deepEqual(p.refused, []);
+});
+test("probe: GSAP bytes that are not the pinned sha256 fail fast (exit 3), never served", { skip: chrome ? false : "no cached Chrome" }, () => {
+  const dir = probeDir("gsap-bad", gsapPage);
+  const bad = path.join(dir, "evil.js"); fs.writeFileSync(bad, "window.gsap = {}; /* not gsap */");
+  const r = probe(dir, { PIXEL_PROBE_TEST_FETCH: bad });
+  assert.equal(r.status, 3, r.stderr);
+  assert.match(r.last, new RegExp(`fetched bytes have sha256 [0-9a-f]{64}, pinned ${GSAP_SHA256}`));
+  assert.ok(r.ms < 3000, `${r.ms} ms`);
+  assert.ok(!fs.existsSync(path.join(dir, "build", "pixel_probe.json")));
+});
+test("probe: GSAP not reachable -> 'probe unavailable' (exit 4) in about a second", { skip: chrome ? false : "no cached Chrome" }, () => {
+  const r = probe(probeDir("gsap-down", gsapPage), { PIXEL_PROBE_TEST_FETCH: "fail" });
+  assert.equal(r.status, 4, r.stderr);
+  assert.match(r.last, /^pixel_probe: probe unavailable: https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@3\.14\.2\/dist\/gsap\.min\.js not reachable/);
+  assert.ok(r.ms < 3000, `${r.ms} ms`);
+});
+test("probe: a remote script the probe may not fetch -> exit 4 at once; a local copy must match the sha too", { skip: chrome ? false : "no cached Chrome" }, () => {
+  const r = probe(probeDir("other-cdn", `<script src="https://cdn.example.invalid/lib.js"></script>`));
+  assert.equal(r.status, 4, r.stderr); assert.match(r.last, /may not fetch/); assert.ok(r.ms < 3000, `${r.ms} ms`);
+  const dir = probeDir("vendor-bad", gsapPage), v = path.join(dir, "vendor");
+  fs.mkdirSync(v); fs.writeFileSync(path.join(v, "g.js"), "x");
+  fs.writeFileSync(path.join(v, "manifest.json"), JSON.stringify({ libraries: [{ url: GSAP_URL, file: "g.js", sha256: GSAP_SHA256 }] }));
+  const r2 = probe(dir, { PIXEL_PROBE_VENDOR: v });
+  assert.equal(r2.status, 3, r2.stderr); assert.match(r2.last, /PIXEL_PROBE_VENDOR has sha256/);
+});
+test("checker: probe unavailable -> the pixel-only rules still run, layout rules skipped with the reason", { skip: skip || (chrome ? false : "no cached Chrome") }, () => {
+  const dir = path.join(ROOT, "noprobe");
+  check("clean", { dir });
+  fs.writeFileSync(path.join(dir, "index.html"), `<!doctype html><html><body><div id="root"></div><script src="${GSAP_URL}"></script></body></html>`);
+  const r = spawnSync(PY, [CHECK, dir, path.join(dir, "render.mov")], { encoding: "utf8", env: { ...process.env, PIXEL_PROBE_TEST_FETCH: "fail", PIXEL_PROBE_VENDOR: "",
+    PIXEL_PROBE_CACHE: fs.mkdtempSync(path.join(ROOT, "cache-")), PIXEL_CHECK_TEST_DETECTIONS: path.join(dir, "build", "test_detections.json") } });
+  const rep = JSON.parse(fs.readFileSync(path.join(dir, "build", "pixel_check.json"), "utf8"));
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(rep.probe.status, "unavailable"); assert.match(rep.probe.reason, /not reachable/);
+  const st = Object.fromEntries(rep.rules.map((x) => [x.id, x.status]));
+  for (const id of ["PX4", "PX5", "PX6", "PX8", "PX9", "PX10"]) assert.equal(st[id], "skipped", id);
+  for (const id of ["PX0", "PX1", "PX2", "PX3", "PX7", "PX11", "PX12", "PX13", "PX14", "PX15", "PX16"]) assert.equal(st[id], "pass", id);
 });
