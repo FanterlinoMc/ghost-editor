@@ -113,25 +113,26 @@ const near = (a, b, e = 0.01) => assert.ok(Math.abs(a - b) <= e, `${a} vs ${b}`)
   assert.throws(() => design({ density: "loud" }, {}), /density must be low, med or high/);
   check("premium.mjs sfxDesign: riser > hit > tail on a cut, density, whip swish, missing sounds skipped, ducking, bad density");
 
-  // ---------- premium-iman (Empire): stage + type captions + drop + alignDrop ----------
-  const IMAN = { style: "premium-iman", takes: [{ a: 0, b: 8, hold: 7 }], captions: { reds: ["idea", "huge"] }, drop: { hold: 0, shots: [{ self: 2 }, { self: 4 }, { self: 6 }] } };
+  // ---------- premium-iman (Empire): real room + type captions behind the head + drop + alignDrop ----------
+  // (relight is off here: this reel's cut-out is a text stub; the relight + occluder path is scripts/build-iman-real-room.test.mjs)
+  const IMAN = { style: "premium-iman", relight: false, takes: [{ a: 0, b: 8, hold: 7 }], captions: { reds: ["idea", "huge"] }, drop: { hold: 0, shots: [{ self: 2 }, { self: 4 }, { self: 6 }] } };
   let dir = project(IMAN, { spans: [[0.3, 7.8]], matte: true });
   let log = build(dir);
   let h = html(dir);
-  assert.match(h, /#pip > #caps \{ z-index: 1; \} #pip > #base \{ z-index: 2; \}/, "captions.behind: the type sits between the set and the speaker");
+  assert.match(h, /<div id="capsb"><div id="tc0" class="tc clip/, "captions.behind (no stage): the type sits between the footage and the cut-out occluder");
+  assert.ok(!/id="stage-bg"/.test(h) && !/^stage: /m.test(log), "no neon set");
   assert.ok(count(h, /class="tc clip/g) >= 5, "one type card per phrase");
   assert.ok(count(h, /tl\.set\("#tc\d+-cur\d", \{ opacity: 0 \}, 0\)/g) >= 5, "cursor:false hides every cursor from frame 0");
   assert.ok(!/#tc0-cur0", \{ opacity: 1 \}/.test(h), "no blinking cursor");
   const chars0 = count(h, /id="tc0c\d+" class="tc-ch/g);
   assert.equal(count(h, /tl\.set\("#tc0c\d+", \{ display: "inline" \}/g), chars0, "wordReveal: every char of card 0 is revealed by a word-time set");
-  check("premium-iman: z-order css, cursor off, whole-word reveal");
-  assert.match(log, /stage: subject head top 300px -> subject scale 0\.87/, "stage.room 300 comes from the style");
+  check("premium-iman: cards behind the head over the real footage, cursor off, whole-word reveal");
   assert.match(log, /drop at 8\.1s: 13 cuts in 6\.17 s/);
   assert.equal(count(h, /id="dropflash-\d+"/g), 4, "a white flash on every third of the 12 later cuts");
   assert.match(log, /music: track 42\.65s lands on the drop at 8\.1s \(start 34\.55\), lift 13 dB/);
   assert.match(log, /music: 'head-bang' not on disk, skipped \(music\.optional\)/);
   assert.match(log, /sfx design \(med\)/);
-  check("premium-iman: stage room 300, drop ladder + flashes, alignDrop, unshipped bed skipped, sfxDesign pass runs");
+  check("premium-iman: drop ladder + flashes, alignDrop, unshipped bed skipped, sfxDesign pass runs");
   let truth = jsonOf(dir, "edit_truth.json");
   assert.equal(truth.beats.filter((b) => b.type === "scene" && b.kind === "image").length, 13, "the ladder scenes are beats");
   assert.ok(truth.takes.every((t) => t.ramp === undefined) && truth.txTransitions === undefined, "no ramp / txTransitions keys when unset");
@@ -140,7 +141,17 @@ const near = (a, b, e = 0.01) => assert.ok(Math.abs(a - b) <= e, `${a} vs ${b}`)
   assert.match(log, /sound\(s\) skipped, \d+ id\(s\) unavailable: .*cinematic-deep-boom/, "the drop boom is a missing-library warning, not a die");
   check("premium-iman: edit_truth lists the ladder scenes and no premium keys; missing sfx only warns");
 
-  // the same stage on Podcast Glow keeps its engine default (room 150): the iman headroom is a style value
+  // the style's relight with no depth model and no depth video (an empty PHANTASIC_MODELS): the reel still builds, unrelit, with a warning
+  const { relight: _r, ...IMAN_RL } = IMAN;
+  const noModels = path.join(root, "no-models"); fs.mkdirSync(noModels, { recursive: true });
+  dir = project(IMAN_RL, { spans: [[0.3, 7.8]], matte: true });
+  log = build(dir, { PHANTASIC_MODELS: noModels });
+  assert.match(log, /relight \(from the style\) skipped, the reel is built unrelit: no depth map at .*no depth model at .*no-models/);
+  h = html(dir);
+  assert.match(h, /<video id="take-0" src="assets\/talk\.mp4"/); assert.match(h, /<div id="capsb"><div id="tc0" class="tc clip/);
+  check("premium-iman with the style's relight and no depth model: unrelit build + warning, type still behind the head");
+
+  // a stage on Podcast Glow keeps its engine default (room 150)
   dir = project({ style: "podcast-glow", stage: {} }, { matte: true });
   assert.match(build(dir), /stage: subject head top 300px -> subject scale 0\.96/);
   check("stage.room stays 150 for every other style (podcast-glow subject scale 0.96)");
@@ -398,6 +409,17 @@ if (!python) {
   r = py("empire_finish.py", [P, path.join(S3, "src.mp4"), path.join(S3, "depth.mp4"), path.join(S3, "none.json"), path.join(S3, "o.mp4")]);
   assert.notEqual(r.status, 0); assert.match(r.stderr, /takes\.json not found/);
   check("empire_finish.py checks its inputs before it touches anything (it is not run end to end here: it renders and needs a depth map)");
+  // a real-room Empire project (no stage): refused before anything is written, the cut-out is left as it was
+  const RR = path.join(root, "realroom"); fs.mkdirSync(path.join(RR, "assets"), { recursive: true });
+  fs.writeFileSync(path.join(RR, "reel.json"), JSON.stringify({ style: "premium-iman", source: "assets/talk.mp4" }));
+  fs.writeFileSync(path.join(RR, "assets", "talk-matte.webm"), "the first-build cut-out");
+  fs.writeFileSync(path.join(S3, "takes.json"), JSON.stringify({ handle: 0.1, takes: [[0, 1]] }));
+  r = py("empire_finish.py", [RR, path.join(S3, "src.mp4"), path.join(S3, "depth.mp4"), path.join(S3, "takes.json"), path.join(S3, "o.mp4")]);
+  assert.equal(r.status, 3, r.stderr); assert.match(r.stderr, /sets no `stage`.*Nothing was changed/s);
+  assert.equal(fs.readFileSync(path.join(RR, "assets", "talk-matte.webm"), "utf8"), "the first-build cut-out", "the cut-out is untouched");
+  assert.deepEqual(fs.readdirSync(RR).sort(), ["assets", "reel.json"], "no build/relight folder, no talk-matte.orig.webm");
+  assert.deepEqual(fs.readdirSync(path.join(RR, "assets")), ["talk-matte.webm"]);
+  check("empire_finish.py on a real-room project (no stage): exit 3, nothing written");
 }
 console.log("\nbuild-ahmed-premium.test.mjs passed");
 fs.rmSync(root, { recursive: true, force: true });

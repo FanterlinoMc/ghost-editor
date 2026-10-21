@@ -965,14 +965,24 @@ if (spec.sourceGrade) {
 // copy (assets/<recording>-relit-<hash>.mp4, from the sourceGrade'd file when that is set) replaces the media like sourceGrade
 // does; takes, words, faces and edit_truth keep the recording's own name. Only recordings with a person in them are relit
 // (the primary, and any with a face track - the same rule as stage). With matte / stage the cut-out is relit too (below).
-const RELIGHT = spec.relight == null || spec.relight === false ? null : (() => { try { return RL.normalizeRelight(spec.relight); } catch (e) { die(e.message); } })();
+let RELIGHT = spec.relight == null || spec.relight === false ? null : (() => { try { return RL.normalizeRelight(spec.relight); } catch (e) { die(e.message); } })();
 const relitMatteOf = new Map();
 const relightable = (s) => s === SRC || fs.existsSync(path.join(proj, facePathFor(s)));
 if (RELIGHT) {
+  // relight that comes from the STYLE (premium-iman), not from the reel's own reel.json, degrades: with no depth model (and no
+  // depth video) or no python with the modules it needs, the reel builds unrelit with a warning. A reel that sets relight dies.
+  const fromStyle = rawSpec.relight === undefined, before = new Map(mediaOf);
+  const missingTool = /^relight: (no depth map at |PHANTASIC_PYTHON=.* cannot import |no python with )/;
   for (const s of SOURCES.filter(relightable)) {
-    try { mediaOf.set(s, RL.ensureRelit(proj, s, mediaOf.get(s), RELIGHT)); } catch (e) { die(e.message); }
+    try { mediaOf.set(s, RL.ensureRelit(proj, s, mediaOf.get(s), RELIGHT)); } catch (e) {
+      if (!(fromStyle && missingTool.test(e.message))) die(e.message);
+      for (const [k, v] of before) mediaOf.set(k, v);
+      warn.push(`relight (from the style) skipped, the reel is built unrelit: ${e.message.replace(/^relight: /, "")} (set "relight": false in reel.json to silence this)`);
+      RELIGHT = null;
+      break;
+    }
   }
-  console.log(`relight: ${SOURCES.filter(relightable).map((s) => `${s} -> ${mediaOf.get(s)}`).join(", ")}`);
+  if (RELIGHT) console.log(`relight: ${SOURCES.filter(relightable).map((s) => `${s} -> ${mediaOf.get(s)}`).join(", ")}`);
 }
 // Every take must fit inside its OWN recording. With one source this is the check that already
 // existed implicitly via srcDur; with several it is the only thing standing between a typo in
@@ -1128,29 +1138,32 @@ if (spec.matte) {
 // stage.windows [{at, to, set?}]: the set only on those moments; stage.sets {key: {...}}: a set per window.
 let stageBgHtml = "", stageCss = "", stageFgHtml = "", SUBJ = 1, headTopAt = null;   // headTopAt(src, a, b): the highest head top in a recording's cut-out (stage only)
 const stageWins = [];
+// the head-top track of a recording's cut-out (stage, and type captions behind the head without a stage): the first
+// row from the top with an opaque centre pixel, at 5 fps, cached as build/headtop[-<name>].json
+const trackOf = new Map();
+const headTrack = (src) => {
+  if (trackOf.has(src)) return trackOf.get(src);
+  const cache = path.join(proj, "build", src === SRC ? "headtop.json" : `headtop-${path.basename(src).replace(/\.[^.]+$/, "")}.json`);
+  let track = fs.existsSync(cache) ? JSON.parse(fs.readFileSync(cache, "utf8")) : null;
+  if (!track) {
+    const raw = execFileSync("ffmpeg", ["-v", "error", "-c:v", "libvpx-vp9", "-i", path.resolve(proj, matteRelOf(src)), "-vf", "fps=5,alphaextract,scale=108:192", "-f", "rawvideo", "-pix_fmt", "gray", "-"], { maxBuffer: 1 << 28 });
+    const N = 108 * 192; track = [];
+    for (let f = 0; f * N < raw.length; f++) {
+      let top = null;
+      for (let y = 0; y < 192 && top === null; y++) for (let x = 22; x < 86; x++) if (raw[f * N + y * 108 + x] > 128) { top = y * (H / 192); break; }
+      track.push([r3(f / 5), top]);
+    }
+    fs.mkdirSync(path.dirname(cache), { recursive: true });
+    fs.writeFileSync(cache, JSON.stringify(track));
+  }
+  trackOf.set(src, track);
+  return track;
+};
+const headTopOf = (src, o0, o1) => { const v = headTrack(src).filter(([t, y]) => y !== null && t >= o0 - 0.2 && t <= o1 + 0.2).map(([, y]) => y); return v.length ? Math.min(...v) : null; };
 if (spec.stage) {
   if (FORMAT !== "9:16") warn.push(`stage is tuned for 9:16 (head-top track, subject scale and set sizes); ${FORMAT} may look off`);
   const st = { bg: "neon", scale: 1, rim: true, safeTop: 210, room: 150, ...spec.stage };
-  const trackOf = new Map();
-  const headTrack = (src) => {
-    if (trackOf.has(src)) return trackOf.get(src);
-    const cache = path.join(proj, "build", src === SRC ? "headtop.json" : `headtop-${path.basename(src).replace(/\.[^.]+$/, "")}.json`);
-    let track = fs.existsSync(cache) ? JSON.parse(fs.readFileSync(cache, "utf8")) : null;
-    if (!track) {
-      const raw = execFileSync("ffmpeg", ["-v", "error", "-c:v", "libvpx-vp9", "-i", path.resolve(proj, matteRelOf(src)), "-vf", "fps=5,alphaextract,scale=108:192", "-f", "rawvideo", "-pix_fmt", "gray", "-"], { maxBuffer: 1 << 28 });
-      const N = 108 * 192; track = [];
-      for (let f = 0; f * N < raw.length; f++) {
-        let top = null;
-        for (let y = 0; y < 192 && top === null; y++) for (let x = 22; x < 86; x++) if (raw[f * N + y * 108 + x] > 128) { top = y * (H / 192); break; }
-        track.push([r3(f / 5), top]);
-      }
-      fs.mkdirSync(path.dirname(cache), { recursive: true });
-      fs.writeFileSync(cache, JSON.stringify(track));
-    }
-    trackOf.set(src, track);
-    return track;
-  };
-  headTopAt = (src, o0, o1) => { const v = headTrack(src).filter(([t, y]) => y !== null && t >= o0 - 0.2 && t <= o1 + 0.2).map(([, y]) => y); return v.length ? Math.min(...v) : null; };
+  headTopAt = headTopOf;
   const mattedTakes = takes.map((k) => stageMatted(k.src));
   if (!mattedTakes.some(Boolean)) warn.push("stage: no recording has a face track, so nothing is cut out (every take plays as the plain plate)");
   // auto subject scale (anchored at the bottom): the highest head top in the used (matted) takes sits >= safeTop + room
@@ -2796,6 +2809,16 @@ const clusterHtml = cap.style !== "cluster" ? "" : (() => {
 // letter by letter behind a blinking cursor bar, replaced (never stacked) by the next phrase. cap.reds (spoken words)
 // turn their phrase into a verdict card: those words go red with a red glow at redScale x size, the card slams in with
 // a 3-frame shake and a low hit; calm cards get an alternating pop. Placed by the face-aware placer (captions.prefer).
+// captions.behind with matte and NO stage (opt-in; Empire since 19 Oct 2026, references/reel-json.md "Type captions behind the head
+// without a stage"): the plate is the speaker's real footage and the cut-out is only an occluder. A card that fits above the crown of
+// its take goes into #capsb, inside the camera wrappers between the takes and the cut-out, so the head covers part of it; a card that
+// does not fit (a tight close-up) is placed in front by the placer as before.
+const OCCLUDE = !!(cap.style === "type" && cap.behind && spec.matte && !spec.stage);
+if (OCCLUDE && FORMAT !== "9:16") warn.push(`captions.behind is tuned for 9:16 (the head-top track and the type sizes); ${FORMAT} may look off`);
+if (OCCLUDE && spec.matteWindows) warn.push("captions.behind: matteWindows shows the cut-out only during behind / ground beats, so type cards behind the head are not covered outside them");
+const occMatted = (src) => perSrcMatte ? stageMatted(src) : src === SRC;
+if (OCCLUDE && cap.maxHidden !== undefined && !(typeof cap.maxHidden === "number" && cap.maxHidden >= 0 && cap.maxHidden <= 1)) die(`captions.maxHidden must be a number 0..1 (got ${JSON.stringify(cap.maxHidden)})`);
+let typeBehindHtml = "";
 const typeHtml = cap.style !== "type" ? "" : (() => {
   const bareOf = (w) => w.toLowerCase().replace(/[^a-z0-9']/g, "");
   const reds = new Set((cap.reds || []).map(bareOf));
@@ -2823,7 +2846,7 @@ const typeHtml = cap.style !== "type" ? "" : (() => {
   groupsT.forEach((g, gi) => {
     const s = Math.max(0, g[0].start - 0.05);
     const nextS = gi + 1 < groupsT.length ? groupsT[gi + 1][0].start - 0.05 : SPEECH;
-    const e = Math.min(g.at(-1).end + (cap.tail ?? 0.3), nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99), takeEndAt(takes, FPS, g.at(-1).start, SPEECH));
+    let e = Math.min(g.at(-1).end + (cap.tail ?? 0.3), nextS, SPEECH, g.at(-1).end + (cap.maxHold ?? 99), takeEndAt(takes, FPS, g.at(-1).start, SPEECH));
     // transcript quote marks ("What is...") are speech punctuation, not caption text
     const ws = g.map((w) => ({ text: caseOf(w.word.trim().replace(/["\u201C\u201D]/g, "")), red: isRedWord(w.word), w }));
     const isRed = ws.some((x) => x.red);
@@ -2840,7 +2863,32 @@ const typeHtml = cap.style !== "type" ? "" : (() => {
     // red verdicts are wide caps with a glow: size them on a wider letter estimate so they never touch the frame edge
     let size = Math.max(cap.minSize ?? 54, Math.min(S0, Math.floor((isRed ? (cap.redMaxWidth ?? MAXW) : MAXW) / (widest * (isRed ? CHW * (cap.redCharW ?? 1.14) : CHW)))));
     let lineH = size * 1.06 * (isRed ? RS : 1);
-    let pl;
+    let pl, behindCard = false;
+    const occTake = OCCLUDE ? locateTake(takes, s, FPS) : null;
+    // a take's hold is a still with no cut-out over it: a behind card ends where a hold starts; one that starts in a hold goes in front
+    const occHold = occTake ? takes.find((k) => k.holdFrames && s < k.holdStart + k.holdFrames / FPS && e > k.holdStart) : null;
+    const eB = occHold ? occHold.holdStart : e;
+    if (occTake && occMatted(occTake.src) && eB - s >= 1 / FPS) {
+      // behind the head over the real footage: shrink to the room above the crown (down to minSize); hang the block there only if it fits
+      const q0 = occTake.a + (s - occTake.start), q1 = occTake.a + (Math.min(eB, occTake.start + occTake.dur) - occTake.start);
+      const crown = headTopOf(occTake.src, q0, q1), ov0 = cap.overlap ?? 0.3;
+      const room = crown === null ? 0 : crown - (cap.safeTop ?? 200), MIN = cap.minSize ?? 54;
+      // one line first when the whole phrase fits the width at >= minSize (a single line needs the least room), then the card's own lines
+      const one = lines.length > 1 ? Math.min(S0, Math.floor((isRed ? (cap.redMaxWidth ?? MAXW) : MAXW) / (width1 * (isRed ? CHW * (cap.redCharW ?? 1.14) : CHW)))) : 0;
+      for (const [ls, sz0] of [...(one >= MIN ? [[[ws], one]] : []), [lines, size]]) {
+        if (room <= 0) break;
+        // captions.maxHidden: at most this fraction of the card's height may sit under the crown (the tuck shrinks for that card)
+        const ov = cap.maxHidden === undefined ? ov0 : Math.min(ov0, cap.maxHidden * ls.length);
+        const needOf = (lh) => ls.length * lh - lh * ov;
+        let sz = sz0, lh = sz * 1.06 * (isRed ? RS : 1);
+        if (needOf(lh) > room) { sz = Math.max(MIN, Math.floor(sz * room / needOf(lh))); lh = sz * 1.06 * (isRed ? RS : 1); }
+        if (needOf(lh) > room) continue;
+        lines = ls; size = sz; lineH = lh; e = eB;
+        pl = { y: Math.round(crown + lineH * ov - lines.length * lineH), mode: "behind" }; behindCard = true;
+        placer.log.push({ t0: r3(s), t1: r3(e), y: pl.y, h: Math.round(lines.length * lineH), mode: "behind", scale: 1, face: null });
+        break;
+      }
+    }
     // the take that owns this card, for the head-top track of ITS recording (a recording with no cut-out falls back to the placer)
     const ownTake = spec.stage && cap.behind && headTopAt ? locateTake(takes, s, FPS) : null;
     if (ownTake && stageMatted(ownTake.src)) {
@@ -2858,7 +2906,7 @@ const typeHtml = cap.style !== "type" ? "" : (() => {
       const htS = 1920 - SUBJ * (1920 - ht), blockH = lines.length * lineH;
       pl = { y: Math.round(Math.max(cap.safeTop ?? 200, htS + lineH * (cap.overlap ?? 0.3) - blockH)), mode: "behind" };
       placer.log.push({ t0: r3(s), t1: r3(e), y: pl.y, h: Math.round(blockH), mode: "behind", scale: 1, face: null });
-    } else pl = placer.place(s, e, lines.length * lineH + 20);
+    } else if (!pl) pl = placer.place(s, e, lines.length * lineH + 20);
     const id = `tc${gi}`;
     let k = 0;
     const lineStart = [];
@@ -2867,7 +2915,8 @@ const typeHtml = cap.style !== "type" ? "" : (() => {
       return `<span class="tc-w${x.red ? " tc-red" : ""}">${chars}</span>${xi < l.length - 1 ? `<span id="${id}c${k++}" class="tc-ch tc-sp"> </span>` : ""}`;
     }).join("")}<span id="${id}-cur${li}" class="tc-cur"${li ? ' style="opacity:0"' : ""}></span></div>`; }).join("");
     const nCh = k;
-    html += `<div id="${id}" class="tc clip${isRed ? " tc-hot" : ""}" style="top:${pl.y}px;font-size:${size}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5"><div id="${id}-in" class="tc-in">${body}</div></div>`;
+    const card = `<div id="${id}" class="tc clip${isRed ? " tc-hot" : ""}" style="top:${pl.y}px;font-size:${size}px${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5"><div id="${id}-in" class="tc-in">${body}</div></div>`;
+    if (behindCard) typeBehindHtml += card; else html += card;
     // typewriter: 1 letter per frame (30 cps), faster when the phrase would take longer than typeMax to type
     // cap.redInstant: a verdict card lands whole (it slams, it isn't typed); cap.blurIn: every card arrives out of a
     // short motion blur (the ref's ghosted swap), 4 frames
@@ -2901,6 +2950,15 @@ const typeHtml = cap.style !== "type" ? "" : (() => {
   });
   return html;
 })();
+// a take join with a blur / whip transition: the behind cards blur / fade (and whip) with the takes and the cut-out around them
+if (OCCLUDE && takeJoins.length) {
+  tl.push(`tl.set("#capsb", { autoAlpha: 1, filter: "blur(0px)", xPercent: 0 }, 0);`);
+  for (const { kind, T, outDur, inDur } of takeJoins) {
+    const b = kind === "whip" ? 40 : 28, x = kind === "whip" ? 8 : 0, ein = kind === "whip" ? "power1" : "power2";
+    tl.push(`tl.fromTo("#capsb", { autoAlpha: 1, filter: "blur(0px)", xPercent: 0 }, { autoAlpha: 0, filter: "blur(${b}px)", xPercent: ${-x}, duration: ${outDur}, ease: "${ein}.in", immediateRender: false }, ${r3(T - outDur)});`);
+    tl.push(`tl.fromTo("#capsb", { autoAlpha: 0, filter: "blur(${b}px)", xPercent: ${x} }, { autoAlpha: 1, filter: "blur(0px)", xPercent: 0, duration: ${inDur}, ease: "${ein}.out", immediateRender: false }, ${T});`);
+  }
+}
 const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podcastHtml : cap.style === "cluster" ? clusterHtml : cap.style === "duo" ? duoHtml : cap.style === "glow" ? glowHtml : cap.style === "none" || edit ? "" : groups.map((g, gi) => {
   const s = Math.max(0, g[0].start - 0.05);
   const nextS = gi + 1 < groups.length ? groups[gi + 1][0].start - 0.05 : SPEECH;
@@ -3813,7 +3871,9 @@ ${FX_ON ? `  #fx { position: absolute; inset: 0; transform-origin: 540px ${faceY
   .layer { z-index: 3; }
   #caps, #ecaps { z-index: 8; }${spec.stage && cap.behind ? `
   /* captions.behind: the type sits BETWEEN the set and the cut-out speaker, so the head really covers it (premium-iman 642e90e) */
-  #pip > #caps { z-index: 1; } #pip > #base { z-index: 2; }` : ""}
+  #pip > #caps { z-index: 1; } #pip > #base { z-index: 2; }` : ""}${OCCLUDE ? `
+  /* captions.behind without a stage: the type cards that fit above the crown sit inside the camera wrappers, under the cut-out occluder */
+  #capsb { position: absolute; left: 0; right: 0; top: 0; height: 0; }` : ""}
   #push video, .fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .layer { position: absolute; inset: 0; pointer-events: none; }
   .ov { position: absolute; box-sizing: border-box; }
@@ -3883,7 +3943,7 @@ ${FX_ON ? `  #fx { position: absolute; inset: 0; transform-origin: 540px ${faceY
 </head>
 <body>
 <div id="root" class="${spec.layout?.compact ? "compact" : ""}" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${SECTION_MODE ? SECTION_TOTAL : TOTAL}" data-fps="${FPS}">
-  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip">${stageBgHtml}${spec.stage && cap.behind ? `<div id="caps">${capHtml}</div>` : ""}<div id="base"><div id="snap"><div id="push">${FX_ON ? '<div id="fx">' : ""}${TX ? `<div id="tx" style="position:absolute;inset:0;transform-origin:50% 45%">` : ""}${takeHtml}${outroHtml}${behindHtml.join("")}${matteHtml}${TX ? "</div>" : ""}${frontHtml.join("")}${FX_ON ? "</div>" : ""}
+  ${roomWins.length ? `<div id="roomfill"></div><div id="room"><div id="roomin">` : ""}<div id="pip">${stageBgHtml}${spec.stage && cap.behind ? `<div id="caps">${capHtml}</div>` : ""}<div id="base"><div id="snap"><div id="push">${FX_ON ? '<div id="fx">' : ""}${TX ? `<div id="tx" style="position:absolute;inset:0;transform-origin:50% 45%">` : ""}${takeHtml}${outroHtml}${behindHtml.join("")}${OCCLUDE ? `<div id="capsb">${typeBehindHtml}</div>` : ""}${matteHtml}${TX ? "</div>" : ""}${frontHtml.join("")}${FX_ON ? "</div>" : ""}
   </div></div></div>${stageFgHtml}</div>${roomWins.length ? `</div></div>` : ""}
   ${overlays.filter((o) => o.html).map((o) => o.html).join("\n  ")}
   ${layersUnderHtml}${grainHtml}${vignetteHtml}${letterboxHtml}
