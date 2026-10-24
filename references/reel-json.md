@@ -1440,7 +1440,10 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
   rendered. A layer that fails dies (`layer <id>: graphic <html>: <reason>`); a beat is dropped
   (`graphic <id or at>: <html>: <reason>, dropped`). The first failing rule is the one reported, in this order:
   - **P4, face.** An overlay whose box intersects the face box grown by **40 px** at **any sampled instant** of its
-    window is refused. Samples: every **0.1 s** of `[t0, t1]` (output seconds), both ends included. The face box at an
+    window is refused. Samples: `t0`, `t0 + 0.1`, `t0 + 0.2` ... while `t <= t1` (output seconds; the step accumulates
+    as `+(t + 0.1).toFixed(3)`), so `t1` itself is sampled only when it lies on that grid and up to the last 0.1 s
+    before it may not be (mac-58: the code, which the planner mirrors; the face track itself is 5 samples a second,
+    and a graphic is gone on `t1`'s own frame). The face box at an
     instant is the caption placer's (`placer.faceAt`, `scripts/lib/safezone.mjs`): the nearest face sample within
     1.5 s of the take's source time, mapped through the source's crop plan and **the camera scale in force at that
     instant** (`zoom.base` x snap x push, around `zoom.origin`; planned and cadence snaps both). No face track, or no
@@ -1457,6 +1460,13 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
     refused. Not counted: the whole-frame washes `behind`, `leak`, `mood`; the camera beats `zoom`, `punch`, `push`,
     `snap`; `motion` and `graphic` beats (the planner arbitrates those). A beat with no `to` lasts **2.5 s** (the
     planner's `DEFAULT_OVERLAY_S`). `<kind>` is `<type> beat` or `title banner`; `<s>..<e>` rounded to 0.1 s.
+  - **Section builds** (`GE_SECTION_START` / `GE_SECTION_END`, the I-25 prototype): every time the contract compares
+    counts from the section's start - the graphic windows, the director beats (through `E()`, already rebased), the
+    face and band (the placer's), and the title banner, whose `from` / `to` are reel seconds and are moved by
+    `-GE_SECTION_START` like a layer's window (mac-58; before, it was compared unmoved). A section build prints no
+    warnings and writes no `graphics-dropped.json`: a dropped beat is only absent from the section's page, and the
+    whole-reel build is the one that reports and records it. (The banner's own `<div>` in a section page is still
+    written at reel seconds, a known I-25 gap outside the contract.)
   - **Inserts** (`mode: "insert"`) are exempt from P4 and P5 **by construction**: full frame on purpose, with the
     captions hidden by default. P6 applies to them.
   - **The spans are unchanged, deliberately** (beat or layer 0.1-60 s, P2; a typed motion beat 0.6-8 s): different
