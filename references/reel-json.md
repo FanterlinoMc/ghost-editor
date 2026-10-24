@@ -1925,6 +1925,49 @@ differ between two online renders of the same page (render nondeterminism, not t
 Not covered here, because they are not part of a build or a render: `depth_map.py --fetch` (the Empire depth model,
 `library/models.json`), `engravings_fetch.py`, `stock_fetch.py` and `meme_add.py` (asset prep, run by hand).
 
+## Partial rendering (`scripts/render-partial.mjs`, mac-63, opt-in)
+
+`node scripts/render-partial.mjs <project> [-o build/reel.mp4] [--max 10] [--min 3] [--jobs 2] [--verify <full.mp4>]`,
+after `build.mjs`, in place of `scripts/render.mjs`. It re-renders only the part of the reel an edit changed. Nothing
+calls it by default, and `build.mjs`'s outputs are unchanged (byte-identity 4/4).
+
+- **Windows** are `build/sections.json`'s sections (each starts at a take cut that no beat, push or take-join
+  transition straddles), frame-aligned, with shorter than `--min` s merged into the one before and longer than `--max` s
+  split evenly.
+- **A window renders from the reel's own `index.html`, time-shifted.** It does not use a `GE_SECTION_*` section build,
+  which does not cover beats. The root's `data-duration` becomes the window length; every timed element moves by `-a`;
+  a clip starting before the window is trimmed, with `data-media-start` moved too; an element the window never shows is
+  untimed and hidden (a `<video>` becomes a src-less `<div>`: a src-less `<video>` makes HyperFrames 0.8.81 wait 45 s to
+  "decode" it, in calibration and in every capture worker). The page's timeline is replayed with
+  `main.tweenFromTo(a, b)`, so window time `t` is reel time `a + t`.
+- **Sound**: one render of the page with every `<video>` off at 1 fps, muxed onto the joined picture.
+- **Cache** (`build/render-cache/<key>.mp4`, `audio-<key>.m4a`): a window's key hashes the page head, the root, the
+  static body, the outerHTML and window-relative timing of the timed elements on screen in it, every script line that
+  names one of them or names no element, the bytes of the assets they load, and the render settings (HyperFrames pin,
+  fps, vendor preload and manifest). The sound's key hashes the `<audio>` elements and their assets. `sections.json`'s
+  own section hash is not used: it hashes a beat's `{type, kind, at, to, in, out}` only, so editing a graphic's text
+  would not move it.
+- **Join**: the windows are concatenated by stream copy (no re-encode), then the sound is muxed.
+- **Same output as a full render** (`scripts/render-partial.test.mjs`, in the gate): the captured frames are identical
+  (PNG sequences, md5 per frame), the frame count is the same, and the decoded sound is identical sample for sample.
+  The joined mp4 differs from a full render's mp4 only by encoding, because each window is its own x264 run.
+  Measured on a 60 s 1080x1920 reel with noisy 16 Mbit/s footage: PSNR min 43.3 dB, mean 47.8 dB, no pixel at 64 or
+  more. On a clean source: min 51.3 dB.
+- **Measured** (Mac mini M4, 2026-10-24; 60 s reel, 12 takes, 6 graphics, style `clean`, inside the render lock):
+
+  | | 60 s, camera-weight footage | 60 s, light footage |
+  |---|---|---|
+  | full render (`render.mjs`) | 87.6 s | 45.7 s |
+  | partial, empty cache (12 windows + sound, 2 at a time) | 82.7 s | n/a |
+  | one graphic's text edited: 1 of 12 windows + join, sound reused | **10.2 s** | n/a |
+  | nothing changed | 0.6 s | n/a |
+
+- **Limits**: a window is as small as the reel's cuts allow (sections never split a beat), so a reel of one long take
+  is one window per `--max` seconds. A change to the page head (style CSS, fonts) or to a line naming no element (the
+  timeline's helpers, its total) invalidates every window, which is correct. A beat whose sound changes re-renders the
+  sound (about 9 s here). Styles that render nondeterministically run to run (keynote*, closer*, broadsheet,
+  premium-*, podcast-glow-*: up to 15/255, measured in mac-60) do so in windows as well.
+
 ## What the build enforces (warnings, printed after the SFX table)
 
 - the same meme sound twice in one reel
