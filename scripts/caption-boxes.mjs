@@ -19,8 +19,10 @@
 // `x` (left edge, px, may be negative) and `width` (px), both whole pixels; the file gets
 // `measured: { by: "caption-boxes", chrome: <version>, platform: <os> }` (fonts can differ between hosts: Arial is the
 // host's). A layout block with no drawn element at its start gets `x: null, width: null`.
-// --check: exit 1 when any measured block reaches outside [0, W] (the canvas), printing one line per block.
-// stdout: one JSON line { blocks, measured, unmatched, outside: [{ i, t0, x, width }] }.
+// Each block also gets `drawnTop` / `drawnBottom` (px, whole): its drawn vertical extent, against the reserved `y` / `h`.
+// --check: exit 1 when a block reaches outside [0, W] or outside the safe area [safeTop, safeBottom], one line per block.
+// stdout: one JSON line { blocks, measured, unmatched, W, outside: [{ i, t0, x, width }], safeTop, safeBottom,
+//   unsafe: [{ i, t0, mode, drawnTop, drawnBottom, over }], chrome }.
 import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
@@ -38,9 +40,11 @@ const MATCH_S = 0.006;   // the log's t0 is the start rounded to 0.01 s; the pag
 export function joinBoxes(layoutBlocks, pageBlocks) {
   return layoutBlocks.map((b) => {
     const mine = pageBlocks.filter((p) => Math.abs(p.start - b.t0) <= MATCH_S && p.x1 > p.x0);
-    if (!mine.length) return { ...b, x: null, width: null };
+    if (!mine.length) return { ...b, x: null, width: null, drawnTop: null, drawnBottom: null };
     const x0 = Math.min(...mine.map((p) => p.x0)), x1 = Math.max(...mine.map((p) => p.x1));
-    return { ...b, x: Math.floor(x0), width: Math.ceil(x1) - Math.floor(x0) };
+    const ys = mine.filter((p) => Number.isFinite(p.y0) && Number.isFinite(p.y1));
+    const v = ys.length ? { drawnTop: Math.floor(Math.min(...ys.map((p) => p.y0))), drawnBottom: Math.ceil(Math.max(...ys.map((p) => p.y1))) } : {};
+    return { ...b, x: Math.floor(x0), width: Math.ceil(x1) - Math.floor(x0), ...v };
   });
 }
 
@@ -86,12 +90,12 @@ export async function measure(proj, { chrome, puppeteer, withGsap = false } = {}
       for (const el of els) {
         const start = +el.dataset.start, dur = +el.dataset.duration || 0;
         if (tl) { tl.seek(start + Math.min(0.3, dur / 2)); await new Promise((r) => requestAnimationFrame(() => r())); }
-        let x0 = Infinity, x1 = -Infinity;
+        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
         for (const n of [el, ...el.querySelectorAll("*")]) {
           const r = n.getBoundingClientRect();
-          if (r.width > 0 && r.height > 0) { x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); }
+          if (r.width > 0 && r.height > 0) { x0 = Math.min(x0, r.left); x1 = Math.max(x1, r.right); y0 = Math.min(y0, r.top); y1 = Math.max(y1, r.bottom); }
         }
-        if (x1 > x0) out.push({ start, x0, x1 });
+        if (x1 > x0) out.push({ start, x0, x1, y0, y1 });
       }
       return out;
     }, withGsap);
@@ -99,7 +103,11 @@ export async function measure(proj, { chrome, puppeteer, withGsap = false } = {}
     const next = { ...layout, measured: { by: "caption-boxes", chrome: version, platform: `${os.platform()}-${os.arch()}`, ...(withGsap ? { gsap: true } : {}) }, blocks };
     fs.writeFileSync(layoutFile, JSON.stringify(next, null, 1));
     const outside = blocks.map((b, i) => ({ i, t0: b.t0, x: b.x, width: b.width })).filter((b) => b.x !== null && (b.x < 0 || b.x + b.width > W));
-    return { blocks: blocks.length, measured: blocks.filter((b) => b.x !== null).length, unmatched: blocks.filter((b) => b.x === null).length, W, outside, chrome: version };
+    // vertical: the drawn box against the platform's safe area the placer used (caption_layout's safeTop / safeBottom)
+    const sT = layout.safeTop ?? 0, sB = layout.safeBottom ?? H;
+    const unsafe = blocks.map((b, i) => ({ i, t0: b.t0, mode: b.mode, drawnTop: b.drawnTop, drawnBottom: b.drawnBottom, over: Math.max(0, sT - b.drawnTop, b.drawnBottom - sB) }))
+      .filter((b) => b.drawnTop != null && b.over > 0);
+    return { blocks: blocks.length, measured: blocks.filter((b) => b.x !== null).length, unmatched: blocks.filter((b) => b.x === null).length, W, outside, safeTop: sT, safeBottom: sB, unsafe, chrome: version };
   } finally {
     await browser.close();
     server.close();
@@ -113,8 +121,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     const r = await measure(proj, { withGsap: args.includes("--with-gsap") });
     process.stdout.write(JSON.stringify(r) + "\n");
-    if (args.includes("--check") && r.outside.length) {
+    if (args.includes("--check") && (r.outside.length || r.unsafe.length)) {
       for (const b of r.outside) console.error(`caption block ${b.i} at ${b.t0}s is drawn at x ${b.x}..${b.x + b.width}px, outside the ${r.W}px canvas`);
+      for (const b of r.unsafe) console.error(`caption block ${b.i} at ${b.t0}s (${b.mode}) is drawn at y ${b.drawnTop}..${b.drawnBottom}px, outside the safe area ${r.safeTop}..${r.safeBottom}px`);
       process.exit(1);
     }
   } catch (e) { console.error(`ERROR: ${e.message}`); process.exit(1); }

@@ -14,11 +14,11 @@ const REQUIRED = process.env.CI === "1" || process.env.REQUIRE_CHROME === "1";
 
 test("joinBoxes: elements join a block by start (to 0.006 s), a cluster's several elements are one union, no element gives null", () => {
   const blocks = [{ t0: 0.12, y: 1200 }, { t0: 1.4, y: 1200 }, { t0: 3 }];
-  const page = [{ start: 0.12, x0: 230.4, x1: 849.6 }, { start: 1.403, x0: 100, x1: 300 }, { start: 1.404, x0: 500.2, x1: 700.9 }, { start: 2.9, x0: 1, x1: 2 }];
+  const page = [{ start: 0.12, x0: 230.4, x1: 849.6, y0: 1200.5, y1: 1283.2 }, { start: 1.403, x0: 100, x1: 300, y0: 1190, y1: 1250 }, { start: 1.404, x0: 500.2, x1: 700.9, y0: 1210, y1: 1290.1 }, { start: 2.9, x0: 1, x1: 2, y0: 1, y1: 2 }];
   assert.deepEqual(joinBoxes(blocks, page), [
-    { t0: 0.12, y: 1200, x: 230, width: 620 },
-    { t0: 1.4, y: 1200, x: 100, width: 601 },
-    { t0: 3, x: null, width: null },
+    { t0: 0.12, y: 1200, x: 230, width: 620, drawnTop: 1200, drawnBottom: 1284 },
+    { t0: 1.4, y: 1200, x: 100, width: 601, drawnTop: 1190, drawnBottom: 1291 },
+    { t0: 3, x: null, width: null, drawnTop: null, drawnBottom: null },
   ]);
 });
 
@@ -51,6 +51,7 @@ test("real Chrome: blocks get x and width, a centred block is centred, an overlo
     assert.match(r.stderr, /caption block \d+ at [\d.]+s is drawn at x -?\d+\.\.\d+px, outside the 1080px canvas/);
     for (const [i, b] of lay.blocks.entries()) {
       assert.ok(Number.isInteger(b.x) && Number.isInteger(b.width) && b.width > 0, JSON.stringify(b));
+      assert.ok(Number.isInteger(b.drawnTop) && b.drawnBottom > b.drawnTop, JSON.stringify(b));
       if (i !== long) assert.ok(Math.abs(b.x - (1080 - b.width) / 2) <= 2, `centred: ${JSON.stringify(b)}`);
     }
     assert.equal(build().status, 0);
