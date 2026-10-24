@@ -109,6 +109,14 @@ A reel can use a style that is not in `styles/`: set `"style": "user:<id>"`. `bu
 
 `build/caption_layout.json` records every block's zone. `qa.py` prints the counts and fails on anything outside the safe area.
 
+**The last-resort block grows upward (mac-47).** A block in that lowest position (`mode: "lower-face"`) is placed by its
+BOTTOM edge (`top` at the band's bottom plus CSS `translate: 0 -100%`), at the bottom of the band the placer reserved for it. A block that wraps to more lines
+than the band holds therefore grows up over the chest, never down into the platform's bottom UI. Before this, such a
+block was placed by its top and spilled down: measured up to 123 px into the bottom zone (closer), 75 px (headline-2
+and 3), 22 px (editorial, cinematic). Every other position is unchanged and still placed by its top; clipping
+(Broadsheet) keeps its measured band (mac-45). `node scripts/caption-boxes.mjs <project> --check` measures the drawn
+boxes (`drawnTop` / `drawnBottom`, after this anchoring) against the safe area.
+
 `premium-noir` (and `premium-noir-ice|jade|red|rose|silver`, which extend it and change only the gold word's colour) was
 hand-ported from Ahmed's Noir (phantasic `origin/template-hormozi`, `engine/core/styles/premium-noir.json`) with the
 engine features it needs - see "Premium kit: Noir" in `references/reel-json.md`. It differs from his JSON in one key:

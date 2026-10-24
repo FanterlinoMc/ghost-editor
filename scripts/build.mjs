@@ -2438,8 +2438,8 @@ const sfxTag = (e, i) => `<audio id="sfx-${i}" src="${e.src}" data-start="${e.t}
 const sfxAudio = sfxEvents.filter((e) => !e.id.startsWith("meme:")).map(sfxTag);
 const sfxAudioAll = () => sfxEvents.filter((e) => !e.id.startsWith("meme:")).sort((a, b) => a.t - b.t).map(sfxTag);
 
-// `bottom`: the band's bottom edge as a CSS bottom offset, for a block anchored by its bottom (mac-47, lower-face)
-motionCtx.placeCaption = (t0, t1, h) => { const p = placer.place(t0, t1, h); return { ...p, bottom: Math.round(H - (p.y + h)) }; };
+// `bandBottom`: the reserved band's bottom edge (canvas px), for a block anchored by its bottom (mac-47, lower-face)
+motionCtx.placeCaption = (t0, t1, h) => { const p = placer.place(t0, t1, h); return { ...p, bandBottom: Math.round(p.y + h) }; };
 motionCtx.sidePad = placer.sidePad;
 
 // ---------- captions ----------
@@ -2956,7 +2956,9 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   // edge at the bottom of the band the placer reserved, so a block that wraps to more lines than reserved grows UP over
   // the chest instead of down into the platform's bottom UI. Clipping keeps its measured band (mac-45); fixed-height
   // styles never take this path.
-  const vpos = pl.mode === "lower-face" && !clipExt && fy == null ? `bottom:${Math.round(H - (pl.y + reserveH))}px` : `top:${cssTop}px`;
+  // `translate` (the individual CSS property, not `transform`): GSAP never writes it, and the caption container is not
+  // canvas-sized, so a CSS `bottom` would be measured from the wrong edge (measured: blocks 700+ px off)
+  const vpos = pl.mode === "lower-face" && !clipExt && fy == null ? `top:${Math.round(pl.y + reserveH)}px;translate:0 -100%` : `top:${cssTop}px`;
   return `<div id="cg${gi}" class="cap-group clip${clipping ? "" : look}" style="${vpos}${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${clipping ? `<div id="cg${gi}in" class="cap-in${look}">${body}</div>` : body}</div>`;
 }).join("\n      ");
 
