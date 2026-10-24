@@ -17,7 +17,9 @@ export const HYPERFRAMES = "0.8.81";   // engine/tests/common.py HYPERFRAMES_VER
 // forward slashes: NODE_OPTIONS reads a backslash inside quotes as an escape (Windows takes either)
 export const PRELOAD = path.join(SKILL, "scripts", "vendor-offline.cjs").split(path.sep).join("/");
 export const MARK = "vendor: served";
-export const LIBRARIES = JSON.parse(fs.readFileSync(path.join(VENDOR, "manifest.json"), "utf8")).libraries;
+const MANIFEST = JSON.parse(fs.readFileSync(path.join(VENDOR, "manifest.json"), "utf8"));
+export const LIBRARIES = MANIFEST.libraries;
+export const ICON_SETS = MANIFEST.iconSets || [];
 const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
 
 // the vendored bytes of a manifest entry, sha256-checked; throws when missing or altered (never a silent CDN fallback)
@@ -68,4 +70,18 @@ export async function serveVendoredInPage(page) {
     if (body) req.respond({ status: 200, contentType: "application/javascript; charset=utf-8", body });
     else req.continue();
   });
+}
+
+// Build time: the SVG of one icon from a vendored set ("lucide-static", "simple-icons"), or null when the set has no
+// such icon. build.mjs used to curl these from jsdelivr @latest per beat; now nothing a build needs comes off the
+// network. The set's file is sha256-checked once per process; a missing or altered set throws (never a CDN fallback).
+const iconCache = new Map();
+export function vendoredIcon(set, name) {
+  if (!iconCache.has(set)) {
+    const e = ICON_SETS.find((x) => x.name === set);
+    if (!e) throw new Error(`no vendored icon set '${set}' in vendor/manifest.json`);
+    iconCache.set(set, JSON.parse(vendoredBytes(e).toString("utf8")));
+  }
+  const icons = iconCache.get(set);
+  return Object.prototype.hasOwnProperty.call(icons, name) ? icons[name] : null;
 }

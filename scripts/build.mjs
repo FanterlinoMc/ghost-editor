@@ -45,6 +45,7 @@ import * as RL from "./lib/relight.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 import { inspectPlaced, resolveGraphicBeat, prepareGraphics, testDeps, graphicBeatHtml, graphicBeatTweens, crossesUi, graphicLabel as _gl } from "./lib/graphic-place.mjs";
 import { layerProblem as graphicLayerProblem, beatProblem as graphicBeatProblem, reason as graphicReason } from "./lib/graphic.mjs";
+import { vendoredIcon } from "./lib/vendor.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = process.env.PHANTASIC_LIB ? path.resolve(process.env.PHANTASIC_LIB) : path.join(SKILL, "library");   // PHANTASIC_LIB: another library root (tests; a studio with its own sounds)
@@ -594,11 +595,13 @@ const artAsset = (key) => {
   return `assets/art/${key}.jpg`;
 };
 const icon = (slug) => {
-  // simple-icons (CC0), fetched at build time, never at render time
+  // simple-icons (CC0), from vendor/simple-icons (scripts/lib/vendor.mjs): never fetched, at build or render time
   const dst = path.join(A, "icons", `${slug}.svg`);
   if (!fs.existsSync(dst)) {
-    try { execFileSync("curl", ["-sfL", "-o", dst, `https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/${slug}.svg`]); }
-    catch { die(`no simple-icons slug '${slug}' (see https://simpleicons.org); pass "src" with your own image instead`); }
+    const svg = vendoredIcon("simple-icons", slug);
+    if (svg == null) die(`no simple-icons slug '${slug}' (see https://simpleicons.org); pass "src" with your own image instead`);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.writeFileSync(dst, svg);
   }
   return `assets/icons/${slug}.svg`;
 };
@@ -1775,9 +1778,11 @@ for (const b of beatsList) {
     case "icon": {
       // a gold glass tile with a line icon (Lucide, ISC licence) for a named concept: "working towards" -> signpost
       const svgPath = path.join(A, "icons", `lucide-${b.name}.svg`);
-      if (!fs.existsSync(svgPath)) {
-        try { execFileSync("curl", ["-sfL", "-o", svgPath, `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${b.name}.svg`]); }
-        catch { die(`no Lucide icon '${b.name}' (see https://lucide.dev/icons)`); }
+      if (!fs.existsSync(svgPath)) {   // from vendor/lucide-static, never fetched
+        const svg = vendoredIcon("lucide-static", b.name);
+        if (svg == null) die(`no Lucide icon '${b.name}' (see https://lucide.dev/icons)`);
+        fs.mkdirSync(path.dirname(svgPath), { recursive: true });
+        fs.writeFileSync(svgPath, svg);
       }
       const svg = fs.readFileSync(svgPath, "utf8").replace(/<!--[\s\S]*?-->/g, "").replace(/width="24"/, 'width="120"').replace(/height="24"/, 'height="120"')
         .replace(/stroke="currentColor"/, `stroke="${b.ink ?? "#fff8e6"}"`).replace(/stroke-width="2"/, 'stroke-width="1.6"');
@@ -3416,9 +3421,10 @@ if (spec.toolLogos) {
     const [, slug, color] = brand2, t = r3(Math.max(0, w.start - 0.05));
     if (shown.some((m) => m.slug === slug && t - m.t < 8)) return;       // named twice in a row: one tile
     const svg = path.join(A, "logos", `${slug}.svg`);
-    if (!fs.existsSync(svg)) {
-      try { execFileSync("curl", ["-sfL", "-o", svg, `https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/${slug}.svg`]); }
-      catch { warn.push(`no logo for ${slug}`); return; }
+    if (!fs.existsSync(svg)) {   // from vendor/simple-icons, never fetched
+      const body = vendoredIcon("simple-icons", slug);
+      if (body == null) { warn.push(`no logo for ${slug}`); return; }
+      fs.writeFileSync(svg, body);
     }
     const onPage = scenes.some(([a, b]) => t >= a - 0.1 && t <= b);
     // slots: on a page, bottom-right (clear of the text column); over footage, upper right (clear of the face)

@@ -1,5 +1,5 @@
 {
-  "_": "Runtime libraries the compositions load, served from this folder instead of a CDN. url: exactly what build.mjs writes into index.html. file: the copy here. sha256 of the file (identical to the CDN's bytes and the npm package's). A render resolves url -> local bytes through scripts/vendor-offline.cjs (run it with scripts/render.mjs or runRender() in scripts/lib/vendor.mjs).",
+  "_": "Runtime libraries the compositions load, served from this folder instead of a CDN. url: exactly what build.mjs writes into index.html. file: the copy here. sha256 of the file (identical to the CDN's bytes and the npm package's). A render resolves url -> local bytes through scripts/vendor-offline.cjs (run it with scripts/render.mjs or runRender() in scripts/lib/vendor.mjs). iconSets: the SVG icon sets build.mjs used to curl from jsdelivr at build time (icon, logo and auto-logo beats), one JSON {name: svg text} per set, every value the package's icons/<name>.svg byte for byte.",
   "libraries": [
     {
       "name": "gsap",
@@ -9,6 +9,30 @@
       "sha256": "c174bfce53a729418d57a8ad8625e7247c793a22fef8e2851e3cfa3de9cd8280",
       "license": "gsap/3.14.2/LICENSE.txt",
       "sources": "gsap/3.14.2/SOURCES.md"
+    }
+  ],
+  "iconSets": [
+    {
+      "name": "lucide-static",
+      "version": "1.61.0",
+      "cdn": "https://cdn.jsdelivr.net/npm/lucide-static@1.61.0/icons/<name>.svg",
+      "file": "lucide-static/1.61.0/icons.json",
+      "sha256": "3a6f2fef27d2b742c79044476f39d88cc1174112701cf9cff2c84f4158afead4",
+      "count": 2171,
+      "license": "lucide-static/1.61.0/LICENSE",
+      "spdx": "ISC",
+      "sources": "lucide-static/1.61.0/SOURCES.md"
+    },
+    {
+      "name": "simple-icons",
+      "version": "16.35.0",
+      "cdn": "https://cdn.jsdelivr.net/npm/simple-icons@16.35.0/icons/<name>.svg",
+      "file": "simple-icons/16.35.0/icons.json",
+      "sha256": "c0f548525a443561af329777e830cae58164956bec90f973e16020fcc99640bb",
+      "count": 3466,
+      "license": "simple-icons/16.35.0/LICENSE.md",
+      "spdx": "CC0-1.0",
+      "sources": "simple-icons/16.35.0/SOURCES.md"
     }
   ]
 }
