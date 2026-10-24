@@ -163,10 +163,10 @@ the build warns on a double booking).
 | `endcard` | `title`, `line`, `url` (usually `at: "outro+0"`) | whoosh | the close |
 | `endcard` + `variant: "caps"` | `title` (`\|` = line break), `accent`, `font` (`"serif"` = italic Instrument Serif that keeps its case, `"mono"`), `size`, `y`, `bg` (`"black"` default, `"none"` = a soft band over the picture, `"smoke"`), `arrow`, `fade`, `color`, `instant` | tick-1 (no arrow) / ding-1 | a chapter card ("I.  Home") or a letter-spaced caps call to action. Opt-in port of Ahmed's Empire / Noir card; hides the captions while it is up |
 | `nametag` | `name`, `title`, `subtitle`, `x`, `y`, `nameSize`, `titleSize`, `color`, `wipe`, `wipeDur` | whoosh (`sound.nametag: false` to silence) | a name + title card in the first few seconds (Alif). `spec.nametagStyle: "byline"` (Broadsheet) swaps it for a newspaper byline - "BY NAME" in spaced caps, an italic outlet/beat line, a brand-colour rule - same fields |
-| `icon` | `name` (a Lucide icon slug, lucide.dev, fetched at build time), `x`, `y`, `ink` | ding-1 | a named concept the speaker made concrete ("working towards" -> `signpost`) |
+| `icon` | `name` (a Lucide icon slug, lucide.dev, from `vendor/lucide-static/1.61.0`), `x`, `y`, `ink` | ding-1 | a named concept the speaker made concrete ("working towards" -> `signpost`) |
 | `slam` | `text`, `pre`, `post`, `size` (auto-fits the width) | burn-whoosh-fast | a type-only pattern break: the footage dims and blurs, one huge serif word (`text`) lands on the charged word as it is spoken, with an optional small line above (`pre`) or below (`post`). Captions hide during it. Once per video (Editorial Collage / R1b) |
 
-`icon` (the `logo` beat) slugs come from simpleicons.org (fetched at build time, CC0). The `icon` **beat type** above fetches from lucide-static instead.
+`icon` (the `logo` beat) slugs come from simpleicons.org (CC0), the `icon` **beat type** above from lucide-static (ISC). Both sets are vendored (`vendor/simple-icons/16.35.0`, `vendor/lucide-static/1.61.0`, one sha256-checked `icons.json` each): a build never fetches an icon. A slug the vendored version does not have is the same error as before (`logo`, `icon`) or the same `no logo for <slug>` warning (`toolLogos`). simple-icons 16.0.0 removed 44 brands, among them `openai` and `slack` (two of the `toolLogos` brands): the CDN's `@latest` still served them from 15.22.0, the vendored set does not have them, so a reel that names ChatGPT or Slack now warns `no logo for openai` / `slack`. Re-adding them is the owner's call (a logo its owner had removed); `src` with your own image works today.
 
 ## Style, platform, look (top level)
 
@@ -217,7 +217,7 @@ A reel that sets none of these builds exactly as before (`scripts/byte-identity.
 - `cadence.faceAnchor: {headroom}`: every punch-in scales around the speaker's face - x = the face centre, y = the top of the head minus `headroom` (default 24) - measured over that snap's hold, using the face track and crop plan of **the take's own source**. A source with no face track gets a plain punch around `zoom.origin`. `edit_truth.json` snaps gain `origin: [x, y]` **only for anchored snaps**. The caption placer (`safezone.mjs`) is not told about the origin and keeps modelling the face around `zoom.origin`; Noir's own captions are fixed-height so it only matters for cards and slots.
 - `music.optional: true` (fork-only): if the named `music.id` is in the manifest but its file is not on disk, the build warns and goes on without a bed. Without it a missing file is still a fatal error (A10). `premium-noir` sets it because `silent-descent` is not shipped.
 
-The rest of Ahmed's premium kit (speed ramps, `sfxDesign`, `drop`, `transitions`, the scorers, `PHANTASIC_PREVIEW_SCALE`) is under "Premium line" below. Not ported: the vendored GSAP (the page still loads GSAP from the CDN).
+The rest of Ahmed's premium kit (speed ramps, `sfxDesign`, `drop`, `transitions`, the scorers, `PHANTASIC_PREVIEW_SCALE`) is under "Premium line" below. GSAP is vendored (`vendor/gsap/3.14.2`, mac-10/mac-60): the page names the CDN URL and a render through `scripts/render.mjs` serves it from `vendor/`.
 
 ## Premium line (Empire, Signature, Prestige, Noir, kit demo; all opt-in, phase D; hand port of phantasic `engine/core` on origin/main + `template-premium-iman`)
 
@@ -280,6 +280,8 @@ Density rows: `low` = riser + hit on major cuts, no tail, soft whoosh on scene p
 | `ramp` | `burn-whoosh-tunnel` | whoosh | the speed peak of a ramp take |
 
 **How the fallback resolves.** The group fallback (`sfxDesign`) and the list fallback (`drop`) choose the id **before** `addSfx` runs, by checking the manifest entry and its file in `library/sfx`. So with a partial library they take precedence over `spec.sfxFallback` (which only sees the id already chosen) and never go through `pick()`'s family names (`pop`, `whoosh`, `impact`); a `"pack:<name>"` id inside a drop list is never "on disk" to this check, so a list made only of pack ids resolves to its first entry (which `addSfx` then plays from the pack, or reports skipped). With every id present or every id missing the result is the same as before.
+
+**When a sound plays nothing (mac-61).** A sound whose id has no measured entry or no file in `library/sfx` is skipped with one `WARNINGS` line, so a library with no audio builds silent reels without failing. Two loud checks exist for the places that ship reels: `node scripts/sfx_check.mjs [--pack <dir>]` exits 1 with one `SFX UNRESOLVED <id>: <why>` line per manifest id that plays no file (no pack category, not mapped, not measured, file absent, pack file absent), and `SFX_STRICT=1` makes `build.mjs` exit 1 (one `SFX_STRICT:` line per id, the page is still written) when the reel asks for such a sound. `library/sfx/pack-map.json` names, per id, the licensed pack file (`packFile`, a path inside the pack) it is processed from, the pack category proposed for it, and the pack's licence line; it holds names only, never audio.
 
 **The drop's sounds** (fields of `drop`, read only when the drop is placed: `hold`, `at` or `shots`). Each sound field is a **sound id, a non-empty list of ids (the first one on disk plays; none on disk = the first is reported as skipped), or `false` / `"none"` (no sound)**. Anything else: die `drop.<field> must be a sound id, a non-empty list of sound ids, false or "none" (got X)`. **Changed:** an empty string `""` used to mean no sound (silently); it now dies with this message. Use `false` or `"none"`.
 
@@ -379,7 +381,7 @@ The planner side: `signature_plan.py` is the only one that writes a reel; call i
 
 ### Not ported, and missing assets
 
-Not ported: vendored GSAP (the page still loads it from the CDN), `captions.chestFirst` / `captions.prefer`, the `sound.complete` key (see `completeMix`), Ahmed's per-version reels under `engine/docs/templates` (they are history, not code). Not shipped, so the matching features degrade with a warning: the sound packs the scorers name (`e-*`, `s-*`, `old-*` wavs), the music beds (`head-bang`, `silent-descent`, Ahmed's `empire-house-a/b.mp3`), the library sfx audio, and the depth model for Empire (`relight`; `depth_map.py --fetch` downloads it, see "Empire depth relight"). The Signature look also needs per-video art (Ahmed generated it with an image model and an image-to-video model; nothing here does).
+Not ported: `captions.chestFirst` / `captions.prefer`, the `sound.complete` key (see `completeMix`), Ahmed's per-version reels under `engine/docs/templates` (they are history, not code). Not shipped, so the matching features degrade with a warning: the sound packs the scorers name (`e-*`, `s-*`, `old-*` wavs), the music beds (`head-bang`, `silent-descent`, Ahmed's `empire-house-a/b.mp3`), the library sfx audio, and the depth model for Empire (`relight`; `depth_map.py --fetch` downloads it, see "Empire depth relight"). The Signature look also needs per-video art (Ahmed generated it with an image model and an image-to-video model; nothing here does).
 
 ## Empire depth relight (`relight`, opt-in; Depth Anything V2 Small, run locally)
 
@@ -689,7 +691,7 @@ No sound of its own (use `inSfx`).
 |---|---|---|---|
 | `at` | source seconds | **required** (`E(...) for cardpage item` fails the build without it) | when this picture swaps in (a small scale/rotate settle), `click-1` (-8 dB) on each swap |
 | `art` | string | | a `library/art/<key>.jpg` painting that fills the frame; a missing key dies (`art '<key>' not in library/art`) |
-| `logo` | string | | a simple-icons slug on a white tile, fetched at build time (wins over `art`); an unknown slug dies |
+| `logo` | string | | a simple-icons slug on a white tile, from `vendor/simple-icons` (wins over `art`); an unknown slug dies |
 
 The swap clicks are not silenced by the beat's `sfx`.
 
@@ -773,11 +775,16 @@ Helpers:
 - Scene times may sit up to 1.2 s inside a removed pause; they snap to the next kept moment.
 - Each whisper word belongs to the one take it overlaps most, so boundary words are never duplicated.
 
-## Lottie element (`shape: "lottie"` in a motion beat or motion layer): spec (CP1), compiler not built yet
+## Lottie element (`shape: "lottie"` in a motion beat or motion layer): spec, compiler on `mac/lottie`, not in this release
 
-Status: **spec (CP1), compiler not built yet.** Nothing below is read by `build.mjs` today; a reel that
-uses it gets the existing `unknown shape 'lottie', dropped` warning. Phase 2 (CP2) builds it exactly as
-written here. The PC builds the validator and the picker against this section at the same time.
+Status: **spec, as built on `mac/lottie` @ d8a474a (fork PR #9, not merged: on hold with GSAP, owner 19 Oct).**
+This release has no Lottie compiler: nothing below is read by `build.mjs` here, and a reel that uses it gets the
+existing `unknown shape 'lottie', dropped` warning. The text is the built section word for word so the planner's
+validator (`lottie_checks.py`) and `test_engine_contract.py` compare against it instead of skipping; the
+validator still refuses the shape until the pinned engine renders it (`LOTTIE_RENDERED`). When PR #9 merges,
+this paragraph becomes the built one and nothing else changes. Code on that branch: `scripts/lib/lottie.mjs`,
+`compileMotion` in `scripts/lib/motion-graphics.mjs`, `renderLayer` in `scripts/lib/layers.mjs`; test:
+`scripts/lottie.test.mjs`.
 
 **Where it lives, and why.** A Lottie is a seventh `shape` in the element list of the `motion` vocabulary
 (`docs/MOTION-GRAPHICS-SPEC.md` in phantasic; `compileMotion` in `scripts/lib/motion-graphics.mjs`), so
@@ -824,17 +831,34 @@ time. The A3 elements that follow (chart, icon, mockup, particles) take the same
 Tweens: a Lottie element takes the node keys an `image` takes, under the existing tween rules: `x y scale
 scaleX scaleY rotate opacity blur reveal` (`blur` under the existing two-element / half-canvas limits).
 `draw` and `count` are ignored with the existing warnings. Tweens move the box; the animation's own frames
-are driven only by `start`, `speed`, `loop` and `frames`. Limit: **3 Lottie elements per beat or layer**
-(they count toward the 12 elements); the rest are dropped with a warning.
+are driven only by `start`, `speed`, `loop` and `frames`. Limit: **3 valid Lottie elements per beat or layer**
+(they count toward the 12 elements). The cap counts only Lottie elements that passed every check below: an
+invalid one is dropped (beat) or dies (layer) and does not use up a place. Once 3 are kept, every later
+`shape: "lottie"` element in that beat or layer is dropped unchecked with W6 (in a layer too: it does not die).
 
 ### The file (checked by the build at compile time; the validator runs the same checks)
 
-- Size at most **2 097 152 bytes** (2 MiB): it is inlined into `index.html`.
-- Valid JSON whose top level has numbers `fr` (1..120), `ip`, `op` (`op > ip`, `op - ip <= 10000`),
-  `w`, `h` (1..8192) and an array `layers`.
+- Size at most **2 097 152 bytes** (2 MiB): it is inlined into `index.html`. The size is read from the file
+  system before the file is read.
+- For a project path, the file's **real path** (symlinks resolved) must lie inside the project's real `assets/`
+  folder: a symlinked file or folder that leads out of it is L1.
+- Valid JSON whose top level has numbers `fr` (1..120), `ip`, `op`, `w`, `h` (1..8192) and an array `layers`.
+- **`ip` and `op` are made whole when the file is read:** a value within 0.001 of a whole number is rounded
+  to it (Bodymovin writes `op` as `60.0000024`); otherwise `ip` is rounded up and `op` down, so every frame
+  the driver shows lies inside the file. After that `op > ip` and `op - ip <= 10000` must hold (else L9).
+  The whole values are what `frames` is checked against (W5), what the driver uses, and what the inlined
+  copy carries (its `ip`/`op` are rewritten), so the player's own first frame and frame count agree.
 - **Vector only.** Every layer, at the top level and inside every precomp in `assets[].layers`, has
   `ty` 0 (precomp), 1 (solid), 3 (null) or 4 (shape). No image (2), text (5), audio (6), camera (13) or
   other types: image and font loads are asynchronous and would race the first frame.
+- **Nothing to load** (L13). `lottie_light` loads every `assets[]` entry that has no `layers` array (an image,
+  or `t: 3` footage) whether a layer uses it or not, adds a `<link>`/`@font-face` for every `fonts.list`
+  entry, and `chars` are those fonts' glyphs. So: every `assets[]` entry must be a precomp (an object with a
+  `layers` array), `fonts.list` must be absent or empty, and `chars` must be absent or empty.
+- **At most 256 levels of nesting** (L14). A level is counted like this: the top-level object is level 1;
+  each object or array nested inside an object or array adds 1; plain values (numbers, strings, booleans,
+  null) do not count. A file whose deepest object or array is at a level over 256 gives L14. The player walks
+  shape groups and precomps recursively; real files stay well under 40.
 - **No expressions**: no property object carrying a string `x` (After Effects expression). The bundled
   player is `lottie_light`, which does not evaluate them, so the file would render differently from
   what was authored.
@@ -844,13 +868,35 @@ are driven only by `start`, `speed`, `loop` and `frames`. Limit: **3 Lottie elem
 ### How it renders (deterministic, no autoplay, no network)
 
 - **Player:** `lottie-web` pinned at **5.12.2**, file `build/player/lottie_light.min.js` (MIT, SVG renderer
-  only, no expression engine). Bundled with the engine like GSAP (task mac-10: same vendor folder and the
-  same copy-into-the-project step), never loaded from a CDN. The `<script>` and the data are written **only
-  when the reel compiles at least one Lottie element**, so every existing reel builds byte-identically.
+  only, no expression engine), vendored as `vendor/lottie-web/5.12.2/` (file, `LICENSE.md`, `SOURCES.md`) with an
+  entry in `vendor/manifest.json`, exactly like GSAP (mac-10): the page names the jsdelivr URL and a render through
+  `scripts/render.mjs` / `runRender()` (the `scripts/vendor-offline.cjs` preload) serves it from `vendor/`
+  (`vendor: served ...lottie_light.min.js`), failing the render if it did not, so nothing is fetched. The `<script>` and the data are
+  written **only when the reel compiles at least one Lottie element**, so every existing reel builds byte-identically.
+- **Off `window.lottie`.** Right after the player loads, the page moves it to `window.__geLottie` and deletes
+  `window.lottie` and `window.bodymovin` (the same player, set by the UMD tail). HyperFrames 0.8.81 has its own Lottie adapter: it finds `window.lottie.getRegisteredAnimations()`
+  and, on every frame it renders, seeks each animation to the composition time, after our timeline has run, ignoring
+  `start`, `speed` and `frames`. Left in place, a real render showed both fixture players on frame 59 at 4.1 s
+  (want 59 and 3). Each player is also kept in `window.__geLottieAnims[<beat>-<element id>]` (the determinism check
+  and the studio read `currentFrame` there).
+  **Risk:** a later HyperFrames that finds players another way (a DOM scan, a hook in `loadAnimation`) would put
+  the second clock back silently. What guards it, exactly:
+  - `node scripts/lottie-render-check.mjs` (**re-run it whenever the HyperFrames version or lottie-web changes**)
+    builds the fixture reel, renders it through `runRender()` (the vendor preload, as `scripts/render.mjs`) under
+    `lockf -k /tmp/phantasic-render.lock` (it takes the lock itself), reads the red square's left edge
+    (centre x = 50 + 5 * frame) in every frame where it is fully visible (play-once 2.9..7.8 s, loop 2.0..7.8 s;
+    frames with a caption over the square are skipped) and compares it with `lottieFrameAt(t)`. It exits 1 on any
+    mismatch or with fewer than 20 readable frames per player. Measured: PASS (147 and 43 frames); with
+    `window.lottie` left in place it FAILS (play-once shows 59 from 2.6 s).
+  - `motion-determinism.mjs --variant lottie` only checks that the page hides the globals HyperFrames 0.8.81
+    looks for: after the first seek `window.lottie` and `window.bodymovin` are undefined. It has no HyperFrames
+    runtime, so its `window.__hfLottie` check is always trivially empty and proves nothing about the adapter.
+  - Not a page-side `throw`: a throwing seek did not fail a HyperFrames render, it hung it (measured: 10 min,
+    render lock held, until killed).
 - **Data inlined**, not fetched: each distinct file is written once into the page as
-  `<script type="application/json" id="lottie-<sha8>">` (minified) and passed as `animationData`, so the
+  `<script type="application/json" id="lottie-<first 12 hex of the sha256 of the minified JSON>">` and passed as `animationData`, so the
   load is synchronous and there is no XHR or `file://` fetch.
-- `lottie.loadAnimation({ container: #<uid>-a, renderer: "svg", loop: false, autoplay: false,
+- `__geLottie.loadAnimation({ container: #<uid>-l (inside #<uid>-a), renderer: "svg", loop: false, autoplay: false,
   animationData, rendererSettings: { preserveAspectRatio, progressiveLoad: false, hideOnTransparent: true } })`,
   then `anim.setSubframe(false)`. `preserveAspectRatio` is `xMidYMid meet` (contain), `xMidYMid slice`
   (cover) or `none` (fill).
@@ -859,16 +905,19 @@ are driven only by `start`, `speed`, `loop` and `frames`. Limit: **3 Lottie elem
   renderer seeks with events suppressed, see the count-up comment in `motion-graphics.mjs`) that computes
   the frame from the elapsed time `e` (seconds since `start`, floored at 0) and calls
   `anim.goToAndStop(f - ip, true)`:
-  - `n = last - first`, `p = Math.floor(e * fr * speed + 1e-6)` (`fr` = the file's own frame rate)
+  - `n = last - first`, `p = Math.floor(e * fr * speed + 1e-3)` (`fr` = the file's own frame rate; the 1e-3 frame
+    margin covers GSAP's 1e-7 s rounding of timeline times, which put a real render one frame early on a boundary
+    with the CP1 value 1e-6)
   - `loop: false`: `f = first + Math.min(p, n - 1)`;  `loop: true`: `f = first + (p % n)`
   - plus a `tl.set` at time 0 that shows frame `first`.
 
   Whole frames only, the same frame for the same time from any seek order, in any worker; nothing reads
   the previous frame, so a loop cannot drift. A 24 fps file in a 30 fps reel repeats frames as authored.
-- **Determinism check (CP2):** `node scripts/motion-determinism.mjs --variant lottie` (a fixture beat with a
-  looping and a play-once Lottie, a `start` > 0, `speed` 1.5 and a scale/opacity tween on the box) must
-  pass the same reference / shuffled / reverse / cold / repeat comparison as `busy`, and the reel must build
-  the same bytes twice.
+- **Determinism check:** `node scripts/motion-determinism.mjs --variant lottie` (`LOTTIE_BEAT` in
+  `scripts/lib/motion-fixture.mjs`: a hand-written vector file, a play-once player at 1.5x from 0.5 s in with a
+  scale/opacity tween on its box, and a 1x loop) runs the reference / shuffled / reverse / repeat / cold comparison
+  and also checks each player's frame at every sample time against the formula above. It seeks the timeline
+  directly, so it does not see the HyperFrames adapter; `scripts/lottie-render-check.mjs` does (see "Off `window.lottie`").
 
 ### Library Lottie files
 
@@ -897,23 +946,32 @@ vanish silently). Same reason text in both:
 | L4 | `lottie library file <src>.json is missing (restore the library)` |
 | L5 | `lottie library file <src>.json does not match its manifest sha256` |
 | L6 | `lottie file <src> is <bytes> bytes (max 2097152)` |
-| L7 | `lottie file <src> is not valid JSON` |
+| L7 | `lottie file <src> is not valid JSON` (also any error while reading it back, as a safety net) |
 | L8 | `lottie file <src> is not a Lottie animation (needs numbers fr, ip, op, w, h and a layers array)` |
 | L9 | `lottie file <src> is out of range (fr 1..120, op > ip, op - ip <= 10000, w and h 1..8192)` |
 | L10 | `lottie file <src> has a layer of type <ty> (only 0 precomp, 1 solid, 3 null and 4 shape are supported)` |
 | L11 | `lottie file <src> uses expressions (not supported)` |
 | L12 | `lottie box shows less than 20% inside the <W>x<H> canvas` |
+| L13 | `lottie file <src> has <what>: only vector shapes are supported, nothing may be loaded`, `<what>` one of `an asset without layers (an image or footage)`, `fonts`, `glyphs (chars)` (checked in that order) |
+| L14 | `lottie file <src> is nested more than 256 levels deep` |
+
+Order of the checks (the first failing one is reported): a project path L1 (the text), L2, L1 (the real path),
+L6; a library id L3, L4, L6, L5; then for both L7, L8, L9, L10, L13, L14, L11; L12 (the box) after the file.
 
 **Warnings** (both places, never fatal; the element is kept with the value named):
 
 | # | text (exact) |
 |---|---|
 | W1 | `motion <id>: element <el id>: lottie fit '<v>' is not contain, cover or fill, using contain` |
-| W2 | `motion <id>: element <el id>: lottie start <v>s is outside 0..<max>s, clamped` |
+| W2 | `motion <id>: element <el id>: lottie start <v>s is outside 0..<max>s, clamped` (not a number: `... lottie start '<v>' is not a number, using 0`) |
 | W3 | `motion <id>: element <el id>: lottie speed <v> is outside 0.25..4, clamped` (not a number: `... lottie speed '<v>' is not a number, using 1`) |
+
+In the "not a number" variants of W2 and W3, `<v>` is JavaScript's `String(v)` cut to 40 characters. The
+validator only needs to match it for strings and booleans (`'soon'`, `'true'`); for objects, arrays and null the
+text differs between languages and only the fact of the warning has to match.
 | W4 | `motion <id>: element <el id>: lottie loop must be true or false, using false` |
 | W5 | `motion <id>: element <el id>: lottie frames must be [first, last] whole frames with <ip> <= first < last <= <op>, using [<ip>, <op>]` |
-| W6 | `motion <id>: only the first 3 lottie elements are used` |
+| W6 | `motion <id>: only the first 3 lottie elements are used` (printed once; counts valid elements, see the limit above) |
 | W7 | `motion <id>: element <el id>: lottie box crosses the <platform name> UI zone` (any part of the box above `top`, below `H - bottom` or right of `W - right` of `safezone.mjs` `PLATFORMS[platform]`; the face and caption checks stay the validator's, as for every element) |
 
 In a layer the `motion <id>` prefix is the layer's id, as for the existing motion-layer warnings.
@@ -1841,6 +1899,31 @@ requests and zero packets** (and the R12 probe passes first). One more fixture (
 Not in this version: sound inside a graphic, audio-reactive visualisers (Music graphics draw from seeded data),
 WebGL / three.js, GSAP or any library (owner's pause, licence question), variables passed in at render
 (`--variables`; a template's fields are filled into the HTML by the writer instead), dotLottie inside a graphic.
+
+## Offline: nothing a reel needs comes off the internet (mac-60)
+
+A build and a render make no network request. What used to be fetched, and where it comes from now:
+
+| What | When | Was | Now |
+|---|---|---|---|
+| GSAP 3.14.2 | render | `cdn.jsdelivr.net` (the page's `<script src>`) | `vendor/gsap/3.14.2`, served by the `scripts/vendor-offline.cjs` preload; render through `scripts/render.mjs` / `runRender()` |
+| Lucide icons (`icon` beat) | build | `curl` from jsdelivr `lucide-static@latest` | `vendor/lucide-static/1.61.0/icons.json` (ISC) |
+| simple-icons (`logo` beat, `chips` icons, `toolLogos`) | build | `curl` from jsdelivr `simple-icons@latest` | `vendor/simple-icons/16.35.0/icons.json` (CC0; `openai` and `slack` are not in 16.x, see `logo` above) |
+| Google Fonts: EB Garamond, Inter | render | HyperFrames 0.8.81's compiler fetched `fonts.googleapis.com/css2` + `fonts.gstatic.com` for the faces behind a system family the page names (`Georgia` -> EB Garamond, `Arial` / `Helvetica` -> Inter) that its own bundle lacks (italics, other weights, other scripts). Every shipped style asked. When Google did not answer, a `Georgia` italic script keyword rendered another face and its line moved | `vendor/google-fonts/<family>/<version>` (Google's CSS and woff2 bytes, OFL), answered by the same preload; a family that is not vendored gets Google's own 400 for an unknown family (the renderer keeps its bundle) and the log line `vendor: font '<family>' is not vendored` |
+
+Every vendored file is sha256-checked against `vendor/manifest.json` when it is used; a missing or altered one is refused,
+never replaced by the network. `scripts/offline.test.mjs` (in the gate) proves it: no engine source fetches a remote
+host; every shipped style builds with curl / wget shimmed to fail, Node `fetch()` refused and (macOS) the build inside
+`sandbox-exec` with outbound network denied, and its page names no remote host but the vendored GSAP URL; icon and
+logo SVGs are the vendored bytes; and an editorial reel with a script keyword renders inside the sandbox (or
+`unshare -rn` on Linux) with GSAP and both fonts served from `vendor/` and no blocked, refused or unvendored request.
+Measured on 2026-10-24 (HyperFrames 0.8.81, Chrome hardware mode, the Mac mini): the vendored fonts render the
+script-keyword reel frame-identical to a render that got Google's answer (90 of 90 frames); across 78 styles, 72 are
+bit-identical and 6 differ by at most 15 / 255 with no pixel at 16 or more, the same signature as 18 styles that
+differ between two online renders of the same page (render nondeterminism, not the network).
+
+Not covered here, because they are not part of a build or a render: `depth_map.py --fetch` (the Empire depth model,
+`library/models.json`), `engravings_fetch.py`, `stock_fetch.py` and `meme_add.py` (asset prep, run by hand).
 
 ## What the build enforces (warnings, printed after the SFX table)
 

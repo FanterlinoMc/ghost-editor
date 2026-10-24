@@ -30,6 +30,7 @@ import { clippingExtent } from "./lib/caption-metrics.mjs";
 import { wordOwners } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
 import { compileMotion, resolveColor, LIMITS as MOTION_LIMITS } from "./lib/motion-graphics.mjs";
+import { resolveEmojiEm } from "./lib/emoji-em.mjs";
 import { ROOM_SCALE, ROOM_EXIT_S, ROOM_FILL, normalizeRoom, ROOM_EASE_NAME, roomFrames, roomWindows, roomOrigin, roomCardCss } from "./lib/room.mjs";
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 import { loadStyleChain, checkBrandName } from "./lib/style-path.mjs";
@@ -44,6 +45,7 @@ import * as RL from "./lib/relight.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 import { inspectPlaced, resolveGraphicBeat, prepareGraphics, testDeps, graphicBeatHtml, graphicBeatTweens, crossesUi, graphicLabel as _gl } from "./lib/graphic-place.mjs";
 import { layerProblem as graphicLayerProblem, beatProblem as graphicBeatProblem, reason as graphicReason, checkContract, checkContractCoded, NOT_AN_OVERLAY as GRAPHIC_NOT_AN_OVERLAY, CAMERA_BEATS as GRAPHIC_CAMERA_BEATS, LIMITS as GRAPHIC_LIMITS } from "./lib/graphic.mjs";
+import { vendoredIcon } from "./lib/vendor.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = process.env.PHANTASIC_LIB ? path.resolve(process.env.PHANTASIC_LIB) : path.join(SKILL, "library");   // PHANTASIC_LIB: another library root (tests; a studio with its own sounds)
@@ -146,6 +148,9 @@ const rgbaOf = (hex, a) => { const h = String(hex).replace("#", ""); return /^[0
 // a stage / set glow of "accent" takes the template's accent colour
 const glowOf = (g) => (g === "accent" ? rgbaOf(brand.accent, 0.3) : g);
 const warn = [...styleWarnings];
+// mac-56: this host's emoji advance for the caption model (CAPTION_EMOJI_EM + its stamp; lib/emoji-em.mjs), else 1.5
+const HOST_EMOJI = resolveEmojiEm();
+if (HOST_EMOJI.warning) warn.push(HOST_EMOJI.warning);
 // mac-54: every graphic the build leaves out, as data: build/graphics-dropped.json (written only when something was
 // dropped, removed otherwise, so the file never outlives the build that wrote it). The warnings are unchanged; this is a
 // second, machine-readable copy for the planner and the review pass. Spec: references/reel-json.md "graphics-dropped.json".
@@ -590,11 +595,13 @@ const artAsset = (key) => {
   return `assets/art/${key}.jpg`;
 };
 const icon = (slug) => {
-  // simple-icons (CC0), fetched at build time, never at render time
+  // simple-icons (CC0), from vendor/simple-icons (scripts/lib/vendor.mjs): never fetched, at build or render time
   const dst = path.join(A, "icons", `${slug}.svg`);
   if (!fs.existsSync(dst)) {
-    try { execFileSync("curl", ["-sfL", "-o", dst, `https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/${slug}.svg`]); }
-    catch { die(`no simple-icons slug '${slug}' (see https://simpleicons.org); pass "src" with your own image instead`); }
+    const svg = vendoredIcon("simple-icons", slug);
+    if (svg == null) die(`no simple-icons slug '${slug}' (see https://simpleicons.org); pass "src" with your own image instead`);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.writeFileSync(dst, svg);
   }
   return `assets/icons/${slug}.svg`;
 };
@@ -1815,9 +1822,11 @@ for (const b of beatsList) {
     case "icon": {
       // a gold glass tile with a line icon (Lucide, ISC licence) for a named concept: "working towards" -> signpost
       const svgPath = path.join(A, "icons", `lucide-${b.name}.svg`);
-      if (!fs.existsSync(svgPath)) {
-        try { execFileSync("curl", ["-sfL", "-o", svgPath, `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${b.name}.svg`]); }
-        catch { die(`no Lucide icon '${b.name}' (see https://lucide.dev/icons)`); }
+      if (!fs.existsSync(svgPath)) {   // from vendor/lucide-static, never fetched
+        const svg = vendoredIcon("lucide-static", b.name);
+        if (svg == null) die(`no Lucide icon '${b.name}' (see https://lucide.dev/icons)`);
+        fs.mkdirSync(path.dirname(svgPath), { recursive: true });
+        fs.writeFileSync(svgPath, svg);
       }
       const svg = fs.readFileSync(svgPath, "utf8").replace(/<!--[\s\S]*?-->/g, "").replace(/width="24"/, 'width="120"').replace(/height="24"/, 'height="120"')
         .replace(/stroke="currentColor"/, `stroke="${b.ink ?? "#fff8e6"}"`).replace(/stroke-width="2"/, 'stroke-width="1.6"');
@@ -3028,7 +3037,7 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   // places that band; the group's CSS top is the band's top plus how far the box reaches above it.
   const tiltDeg = cap.tilt ? (gi % 2 ? -cap.tilt : cap.tilt * 0.7) : 0;
   const clipExt = cap.style === "clipping" && fy == null
-    ? (sc = 1) => clippingExtent(g.map((w) => caseOf(w.word)), { size: cap.size ?? 58, maxWidth: W - 2 * placer.sidePad, deg: tiltDeg, scale: sc }) : null;
+    ? (sc = 1) => clippingExtent(g.map((w) => caseOf(w.word)), { size: cap.size ?? 58, maxWidth: W - 2 * placer.sidePad, deg: tiltDeg, scale: sc, ...(HOST_EMOJI.source === "host" ? { emojiEm: HOST_EMOJI.em } : {}) }) : null;
   const reserveH = clipExt ? Math.ceil(clipExt().up) + Math.ceil(clipExt().down) : capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3);
   const pl = fy != null ? { y: Math.round(fy * H / 1920), mode: cap.style, scale: 1 } : placer.place(s, e, reserveH);
   // whole px, rounded outward: the band is ceil(up) + ceil(down) and the top sits ceil(up) into it, so the drawn box
@@ -3456,9 +3465,10 @@ if (spec.toolLogos) {
     const [, slug, color] = brand2, t = r3(Math.max(0, w.start - 0.05));
     if (shown.some((m) => m.slug === slug && t - m.t < 8)) return;       // named twice in a row: one tile
     const svg = path.join(A, "logos", `${slug}.svg`);
-    if (!fs.existsSync(svg)) {
-      try { execFileSync("curl", ["-sfL", "-o", svg, `https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/${slug}.svg`]); }
-      catch { warn.push(`no logo for ${slug}`); return; }
+    if (!fs.existsSync(svg)) {   // from vendor/simple-icons, never fetched
+      const body = vendoredIcon("simple-icons", slug);
+      if (body == null) { warn.push(`no logo for ${slug}`); return; }
+      fs.writeFileSync(svg, body);
     }
     const onPage = scenes.some(([a, b]) => t >= a - 0.1 && t <= b);
     // slots: on a page, bottom-right (clear of the text column); over footage, upper right (clear of the face)
@@ -4167,4 +4177,10 @@ if (missingSfx.size) {
 }
 for (const e of sfxEvents) console.log(`  ${e.t.toFixed(2).padStart(6)}s  ${e.id.padEnd(22)} ${e.role.padEnd(6)} vol ${e.vol}  (${e.why})`);
 if (warn.length) console.log("\nWARNINGS:\n  " + [...new Set(warn)].join("\n  "));
+// SFX_STRICT=1 (opt-in; set it where reels ship once the pack is restored): a sound the reel asks for that plays nothing
+// fails the build, one line per id, instead of the warning above. The page is still written; exit 1 says it is silent there.
+if (process.env.SFX_STRICT === "1" && missingSfx.size) {
+  for (const [k, n] of missingSfx) console.error(`SFX_STRICT: ${k} x${n} plays nothing (node scripts/sfx_check.mjs says why)`);
+  process.exit(1);
+}
 console.log(`\n-> ${path.join(proj, "index.html")}`);

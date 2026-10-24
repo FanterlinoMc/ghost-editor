@@ -87,7 +87,8 @@ function family(files, fallbackEm, emojiEm = EMOJI_EM) {
 // each one, the last included). Advances only: no kerning (GPOS), which Gloock applies as small negative pairs, so the
 // estimate runs at or over the drawn width (measured on a real reel's 12 blocks: +3..+23 px, 1-3%) - the safe side for
 // the tilt term, and a wrap only ever comes a little early, never late.
-// `emojiEm` overrides EMOJI_EM (tests only: modelling one platform's real emoji advance; builds never pass it).
+// `emojiEm` overrides EMOJI_EM: tests (one platform's real advance), and a build on a host with a measured, guarded
+// CAPTION_EMOJI_EM (lib/emoji-em.mjs, mac-56).
 export function textWidth(text, size, { files, fallbackEm = 0.6, letterSpacing = 0, emojiEm = EMOJI_EM }) {
   const adv = family(files, fallbackEm, emojiEm);
   let em = 0;
@@ -133,39 +134,55 @@ export const wordPieces = (w) => {
 export const EXACT_PIECES = 64;
 export function wrapLines(words, size, maxWidth, opts) {
   const pad = (opts.wordPad ?? 0) * size / 2;
+  // mac-48: every caption word is its own `display: inline-block` span (build.mjs `.w`). Chrome never breaks a word that
+  // fits on a line: it is atomic, and the line between words fills greedily. A word WIDER than a line wraps inside its
+  // own box, and that box is as wide as the line, so the word sits alone on its lines and the next word starts a new
+  // line. (The old model let the next word share the wrapped word's last line: 2 of 420 random groups drawn a line
+  // taller than modelled with Noto Color Emoji, the server's font; 1 of 420 with Segoe.)
   const ws = words.map((w) => {
     const parts = wordPieces(w);
     if (!parts.length) return [2 * pad];
     return parts.map((t, i) => textWidth(t, size, opts) + (i === 0 ? pad : 0) + (i === parts.length - 1 ? pad : 0));
   });
-  // the exact search is O(pieces^3); above EXACT_PIECES in one word, a bound that holds for ANY chunking instead: every
-  // break happens because the line plus the next chunk overflowed, so two consecutive lines always hold more than
-  // maxWidth together; k lines then hold more than floor(k / 2) x maxWidth, so k <= 2 x ceil(total / maxWidth) - 1
-  const total0 = ws.flat().reduce((x, y) => x + y, 0);
-  if (ws.some((ps) => ps.length > (opts.exactPieces ?? EXACT_PIECES))) {
-    const k = Math.max(1, 2 * Math.ceil(total0 / maxWidth) - 1);
-    return k === 1 ? [total0] : Array(k).fill(maxWidth);
-  }
-  const flat = [], wordEnd = [];
-  ws.forEach((ps) => { const e = flat.length + ps.length; ps.forEach((x) => { flat.push(x); wordEnd.push(e); }); });
-  const total = flat.reduce((x, y) => x + y, 0), n = flat.length;
-  const pre = [0]; flat.forEach((x) => pre.push(pre[pre.length - 1] + x));
-  // best(i, s): most line BREAKS still to come, with the next chunk starting at piece i and the current line holding
-  // pieces s..i-1 (s === i: an empty line). A chunk is i..j-1, j at most the end of i's word.
-  const memo = new Map();
-  const best = (i, s) => {
-    if (i >= n) return 0;
-    const k = i * (n + 1) + s;
-    if (memo.has(k)) return memo.get(k);
-    let r = 0;
-    for (let j = i + 1; j <= wordEnd[i]; j++) {
-      const c = pre[j] - pre[i], cur = pre[i] - pre[s];
-      r = Math.max(r, cur > 0 && cur + c > maxWidth ? 1 + best(j, i) : best(j, s));
-    }
-    memo.set(k, r);
-    return r;
+  // lines a too-wide word takes inside its box (content width maxWidth - 2 x pad, its margins outside): the WORST over
+  // every set of break opportunities inside it (where Chrome can break inside a word that holds emoji is ICU data, see
+  // above), each line filled greedily. Exact by dynamic programming over (piece, line start); above EXACT_PIECES pieces a
+  // bound that holds for ANY chunking: two consecutive lines always hold more than the width together, so
+  // k <= 2 x ceil(total / width) - 1.
+  const innerLines = (ps) => {
+    const inner = ps.map((x, i) => x - (i === 0 ? pad : 0) - (i === ps.length - 1 ? pad : 0)), wid = maxWidth - 2 * pad;
+    const n = inner.length, tot = inner.reduce((x, y) => x + y, 0);
+    if (n > (opts.exactPieces ?? EXACT_PIECES)) return Math.max(1, 2 * Math.ceil(tot / wid) - 1);
+    const pre = [0]; inner.forEach((x) => pre.push(pre[pre.length - 1] + x));
+    const memo = new Map();
+    const best = (i, s) => {   // most breaks still to come: next chunk starts at piece i, the line holds pieces s..i-1
+      if (i >= n) return 0;
+      const k = i * (n + 1) + s;
+      if (memo.has(k)) return memo.get(k);
+      let r = 0;
+      for (let j = i + 1; j <= n; j++) {
+        const c = pre[j] - pre[i], cur = pre[i] - pre[s];
+        r = Math.max(r, cur > 0 && cur + c > wid ? 1 + best(j, i) : best(j, s));
+      }
+      memo.set(k, r);
+      return r;
+    };
+    return 1 + best(0, 0);
   };
-  const lines = 1 + best(0, 0);
+  let lines = 0, cur = 0, total = 0;   // lines finished so far; the width used on the open line (0: none open)
+  for (const ps of ws) {
+    const w = ps.reduce((x, y) => x + y, 0);
+    total += w;
+    if (w <= maxWidth) {
+      if (cur > 0 && cur + w > maxWidth) { lines++; cur = 0; }
+      cur += w;
+      continue;
+    }
+    if (cur > 0) { lines++; cur = 0; }   // the line-wide box cannot share a line
+    lines += innerLines(ps);
+  }
+  if (cur > 0) lines++;
+  lines = Math.max(1, lines);
   return lines === 1 ? [total] : Array(lines).fill(maxWidth);
 }
 

@@ -71,4 +71,4 @@ Whisper for transcription, OpenCV for face tracking, [HyperFrames](https://www.n
 
 ---
 
-Built by [@kurbaitaev](https://x.com/kurbaitaev) on X. MIT licence.
+Built by [@kurbaitaev](https://x.com/kurbaitaev) on X. MIT licence, except `vendor/`: each vendored library carries its own licence there (GSAP: the GSAP Standard "No Charge" License; Lucide: ISC; simple-icons: CC0, the logos remain their owners' trademarks; EB Garamond and Inter: SIL OFL 1.1).

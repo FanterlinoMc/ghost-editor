@@ -26,6 +26,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { findPuppeteer, findChrome } from "./lib/browser.mjs";
+import { serveVendoredInPage } from "./lib/vendor.mjs";
 import { makeProject, BUSY_BEAT, BLUR_BEAT, ROOM_BEAT, ROOM_OVERLAP_BEATS, LAYERS_FIXTURE } from "./lib/motion-fixture.mjs";
 import { ROOM_SCALE, roomFrames, roomWindows, roomScaleAt, roomCardAt } from "./lib/room.mjs";
 
@@ -124,6 +125,7 @@ async function grab(page, reset = false, after = null) {
 }
 async function open() {
   const page = await browser.newPage();
+  await serveVendoredInPage(page);   // GSAP from vendor/, not jsdelivr
   await page.evaluateOnNewDocument(() => { window.__timelines = {}; });   // the hyperframes runtime creates this registry; the composition only fills it
   await page.goto(pathToFileURL(proj.html).href, { waitUntil: "load", timeout: 60000 });
   await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 });
@@ -269,6 +271,7 @@ if (isRoom) {
   if (nTween !== 2) roomFailures.push(`overlapping beats made ${nTween} #room tweens, want 2 (one shrink, one return)`);
   if (JSON.stringify(ovTruth.room) !== JSON.stringify([{ start: 2, end: 6.567, scale: ROOM_SCALE }])) roomFailures.push(`overlap edit_truth.room: ${JSON.stringify(ovTruth.room)}`);
   const pg2 = await browser.newPage();
+  await serveVendoredInPage(pg2);   // GSAP from vendor/, not jsdelivr
   await pg2.evaluateOnNewDocument(() => { window.__timelines = {}; });
   await pg2.goto(pathToFileURL(ov.html).href, { waitUntil: "load", timeout: 60000 });
   await pg2.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 });
