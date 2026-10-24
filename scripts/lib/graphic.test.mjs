@@ -1183,7 +1183,7 @@ test("REASONS are word for word the spec's tables (references/reel-json.md)", ()
   const sec = md.slice(md.indexOf("## Prompt Motion graphic"), md.indexOf("\n## ", md.indexOf("## Prompt Motion graphic") + 5));
   const PH = { html: "<html>", match: "<match>", bytes: "<bytes>", path: "<path>", n: "<n>", name: "<name>", value: "<value>", W: "<W>", H: "<H>", w: "<w>", h: "<h>",
     v: "<v>", s: "<s>", url: "<url>", message: "<message>", t: "<t>", a: "<a>", b: "<b>", i: "<i>", L: "<L>", code: "<code>", line: "<last log line>", k: "<k>",
-    duration: "<duration>", platform: "<platform name>", cp: "<hex>", ch: "<char>", snippet: "<snippet>", font: "<font>" };
+    duration: "<duration>", platform: "<platform name>", cp: "<hex>", ch: "<char>", snippet: "<snippet>", font: "<font>", top: "<top>", bottom: "<bottom>", kind: "<kind>", e: "<e>" };
   const MORE = { G16: ["G16o"], G17: ["G17n"], R4: ["R4p"], R6: ["R6n", "R6L", "R6o"], R12: ["R12n", "R12c"] };
   const seen = new Set(), diffs = [];
   for (const line of sec.split("\n")) {
@@ -1229,4 +1229,24 @@ test("CLI render lock: a lock already held is reported (an outer lockf + --lock 
   fs.chmodSync(dir, 0o755);
   assert.match(path.basename(RR.hostLockPath(1234, own)), /^graphic-chrome-1234\.lock$/, "the engine's host lock never names the CLIs' render lock");
   assert.notEqual(RR.hostLockPath(0, own), p);
+});
+
+test("checkContract: insert exempt from face and band, washes/camera/graphics never collide, a beat without `to` is 2.5 s, first failure wins", async () => {
+  const { checkContract, reason, NOT_AN_OVERLAY, CAMERA_BEATS } = await import("./graphic.mjs");
+  const face = () => ({ left: 300, top: 300, right: 700, bottom: 900 });
+  const band = () => ({ top: 1156, bottom: 1332 });
+  const geo = (others = []) => ({ faceAt: face, band, capH: 128, total: 10, others });
+  const onFace = { x: 400, y: 400, w: 100, h: 100 };
+  assert.deepEqual(checkContract({ mode: "insert", box: { x: 0, y: 0, w: 1080, h: 1920 }, t0: 1, t1: 2 }, geo()), [], "insert: no face, no band");
+  assert.deepEqual(checkContract({ mode: "overlay", box: onFace, t0: 1, t1: 2 }, geo()), [reason("P4", { t: 1 })]);
+  assert.deepEqual(checkContract({ mode: "overlay", box: { x: 0, y: 1200, w: 200, h: 100 }, t0: 1, t1: 2 }, geo()), [reason("P5", { top: 1156, bottom: 1332 })]);
+  assert.deepEqual(checkContract({ mode: "overlay", box: { x: 0, y: 1200, w: 200, h: 100 }, t0: 1, t1: 2, overCaptions: true }, geo()), []);
+  // face before band before collision: the first failing one
+  assert.deepEqual(checkContract({ mode: "overlay", box: { x: 400, y: 800, w: 100, h: 500 }, t0: 1, t1: 2 }, geo([{ kind: "slam beat", s: 0, e: 5 }])), [reason("P4", { t: 1 })]);
+  assert.deepEqual(checkContract({ mode: "insert", t0: 1, t1: 2 }, geo([{ kind: "slam beat", s: 1.9, e: 4 }])), [reason("P6", { kind: "slam beat", s: 1.9, e: 4 })]);
+  assert.deepEqual(checkContract({ mode: "insert", t0: 1, t1: 2 }, geo([{ kind: "slam beat", s: 2, e: 4 }])), [], "touching ends do not overlap");
+  for (const k of ["behind", "leak", "mood", "motion", "graphic"]) assert.ok(NOT_AN_OVERLAY.includes(k), k);
+  assert.deepEqual(CAMERA_BEATS, ["zoom", "punch", "push", "snap"]);
+  // no face at the instant (null) and no band (null): nothing to refuse
+  assert.deepEqual(checkContract({ mode: "overlay", box: onFace, t0: 1, t1: 2 }, { faceAt: () => null, band: null, others: [] }), []);
 });
