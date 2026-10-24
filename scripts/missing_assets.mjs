@@ -66,7 +66,9 @@ function objectPopNames() {
 // on a line that plays sound (an *Sfx( call, an sfx key, a sound map), minus the labels/names listed here.
 const guarded = new Map();   // sfx id -> code sites that check the manifest before using it
 const NOT_SOUNDS = new Set(["sfx-pack", "push-in", "gm-kinetic", "gm-flow", "gm-nodes"]);
-const SOUND_LINE = /Sfx\(|sfx|Sfx|riser:|boom:|tail:|PAPER_IN|penN|sfxManifest\[|: \["[a-z0-9-]+", (true|false)\]|^\s+(riser|hit|tail|soft|tick|swish|whip|ramp): \[/;
+// riser / boom / tail count only as whole keys (not inside "detail:", "thumbnail:", ...): a substring match turned a
+// record field named `detail` into a sound line, and its "no-room" rule into a dangling sfx id (mac-54)
+const SOUND_LINE = /Sfx\(|sfx|Sfx|(?<![A-Za-z0-9_$])(?:riser|boom|tail):|PAPER_IN|penN|sfxManifest\[|: \["[a-z0-9-]+", (true|false)\]|^\s+(riser|hit|tail|soft|tick|swish|whip|ramp): \[/;
 const codeFiles = ["scripts/build.mjs", ...fs.readdirSync(path.join(ROOT, "scripts", "lib")).filter((f) => f.endsWith(".mjs") && !/test|fixture/.test(f)).sort().map((f) => `scripts/lib/${f}`)];
 for (const f of codeFiles) fs.readFileSync(path.join(ROOT, f), "utf8").split("\n").forEach((line, i) => {
   if (/^\s*\/\//.test(line) || line.includes("const VARIANTS =")) return;   // the family table itself is not a use
