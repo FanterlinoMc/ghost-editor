@@ -48,6 +48,9 @@ import { layerProblem as graphicLayerProblem, beatProblem as graphicBeatProblem,
 import { vendoredIcon } from "./lib/vendor.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// mac-65: the page's tween runtime (scripts/lib/tween-runtime.js), inlined into every page: GSAP is gone (owner's
+// decision, 24 Oct 2026). Every seek is a pure function of time; references/reel-json.md "Tween runtime".
+const TWEEN_RUNTIME = fs.readFileSync(path.join(SKILL, "scripts", "lib", "tween-runtime.js"), "utf8").replace(/<\/script/gi, "<\\/script");
 const LIB = process.env.PHANTASIC_LIB ? path.resolve(process.env.PHANTASIC_LIB) : path.join(SKILL, "library");   // PHANTASIC_LIB: another library root (tests; a studio with its own sounds)
 const proj = path.resolve(process.argv[2] || ".");
 const rawSpec = JSON.parse(fs.readFileSync(path.join(proj, "reel.json"), "utf8"));
@@ -199,7 +202,7 @@ function writeBlankPage() {
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=${W}, height=${H}" />
 <title>${String(spec.title || "reel").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</title>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script>${TWEEN_RUNTIME}</script>
 <style>
   body { margin: 0; background: #000; }
   #root { position: relative; width: ${W}px; height: ${H}px; overflow: hidden; background: #000; }
@@ -208,7 +211,7 @@ function writeBlankPage() {
 <body>
 <div id="root" data-composition-id="main" data-start="0" data-width="${W}" data-height="${H}" data-duration="${BLANK_S}" data-fps="${FPS}"></div>
 <script>
-  const tl = gsap.timeline({ paused: true });
+  const tl = tween.timeline({ paused: true });
   // the timeline is as long as the reel, not as long as its last tween: a preview or player that reads
   // tl.duration() would otherwise stop at the last caption/graphic and freeze the footage after it
   tl.set({}, {}, ${BLANK_S});
@@ -792,7 +795,7 @@ const openPushHeldByMotion = (dur) => motionHold.some(([fa]) => fa <= Math.round
 
 // ---------- zoom ----------
 const zoom = spec.zoom || {};
-const tl = []; // GSAP lines
+const tl = []; // timeline lines (tween-runtime.js)
 const snaps = (zoom.snaps || []).map(([t, z]) => [E(t, "snap"), z]).sort((a, b) => a[0] - b[0]);
 // cadence: automatic punch-in rhythm (The Closer: the frame changes every 1-1.5 s).
 // Snaps land on a word start, at every jump cut between takes, and on emphasis words;
@@ -3906,7 +3909,7 @@ const html = `<!doctype html>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=${W}, height=${H}" />
 <title>${esc(spec.title || "reel")}</title>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script>${TWEEN_RUNTIME}</script>
 <style>
   @font-face { font-family: Geist; src: url(assets/fonts/geist-latin.woff2) format("woff2"); font-weight: 100 900; }
   @font-face { font-family: Geist; src: url(assets/fonts/geist-latin-ext.woff2) format("woff2"); font-weight: 100 900; unicode-range: ${RANGES["latin-ext"]}; }
@@ -4023,7 +4026,7 @@ ${FX_ON ? `  #fx { position: absolute; inset: 0; transform-origin: 540px ${faceY
   ${musicHtml}
 </div>
 <script>
-  const tl = gsap.timeline({ paused: true });
+  const tl = tween.timeline({ paused: true });
   // fromTo with a baseline at 0: seeks before a tween never inherit another tween's from-values
   // fromTo with a baseline at 0, set ONCE per element: a second baseline for an
   // element animated twice would be rendered after the first tween on a direct

@@ -34,12 +34,12 @@ export function vendoredBytes(e) {
 export const renderEnv = (env = process.env) => ({ ...env, NODE_OPTIONS: `${env.NODE_OPTIONS || ""} --require "${PRELOAD}"`.trim() });
 
 // the manifest URLs the page uses that the render's stderr does not show the preload serving (empty = all local)
-export const unservedUrls = (html, stderr) => LIBRARIES.filter((e) => html.includes(e.url) && !stderr.includes(`${MARK} ${e.url}`)).map((e) => e.url);
+export const unservedUrls = (html, stderr, libraries = LIBRARIES) => libraries.filter((e) => html.includes(e.url) && !stderr.includes(`${MARK} ${e.url}`)).map((e) => e.url);
 
 // Run `npx hyperframes@<pin> render <args>` in cwd with the preload. Returns { status, stdout, stderr, error };
 // status is 1 with `error` set when the page (cwd/index.html, or the -c composition) is missing (nothing is run), or
 // uses a vendored URL the preload did not serve; then the -o/--output file is deleted. spawn is injectable for tests.
-export function runRender(args, { cwd = process.cwd(), version = HYPERFRAMES, env = process.env, spawn = spawnSync } = {}) {
+export function runRender(args, { cwd = process.cwd(), version = HYPERFRAMES, env = process.env, spawn = spawnSync, libraries = LIBRARIES } = {}) {
   const ci = args.findIndex((a) => a === "-c" || a === "--composition");
   const page = path.resolve(cwd, ci >= 0 ? args[ci + 1] ?? "" : "index.html");
   if (!fs.existsSync(page) || !fs.statSync(page).isFile()) return { status: 1, stdout: "", stderr: "", error: `no page to render: ${page}` };
@@ -48,7 +48,7 @@ export function runRender(args, { cwd = process.cwd(), version = HYPERFRAMES, en
   const out = { status: r.status ?? 1, stdout: String(r.stdout || ""), stderr: String(r.stderr || ""), error: r.error ? String(r.error.message || r.error) : "" };
   if (out.status !== 0) return out;
   const html = fs.readFileSync(page, "utf8");
-  const missed = unservedUrls(html, out.stderr);
+  const missed = unservedUrls(html, out.stderr, libraries);
   if (missed.length) {
     // the reel may be complete (Chrome fetched the library from the CDN itself): never leave it where a caller looks
     const oi = args.findIndex((a) => a === "-o" || a === "--output");

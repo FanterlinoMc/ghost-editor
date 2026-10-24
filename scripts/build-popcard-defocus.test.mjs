@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// node scripts/build-popcard-defocus.test.mjs        (GSAP_JS=<path to gsap.min.js 3.14.2> to force the real-GSAP seek)
+// node scripts/build-popcard-defocus.test.mjs        (seeks the page's own tween runtime, scripts/lib/tween-runtime.js)
 // A popcard defocuses and dims the camera behind it by tweening #fx's filter (the layer that wraps every take's <video>, the
 // cut-out and the behind layers). In Pitch (look.refocus + captions.energyPunch) more tweens drive that same filter - the
 // refocus pull after a page, the energy punch, a leak's bloom - and each ended on "blur(0px) brightness(1)", so one landing
@@ -27,7 +27,7 @@ import { silentLibrary } from "./lib/silent-library.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BUILD = path.join(HERE, "build.mjs");
-const GSAP_JS = [process.env.GSAP_JS, path.join(HERE, "..", "vendor", "gsap", "3.14.2", "gsap.min.js")].find((p) => p && fs.existsSync(p));
+const GSAP_JS = path.join(HERE, "lib", "tween-runtime.js");   // mac-65: the runtime the page ships (GSAP is gone); the name is kept for the code below
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "build-popcard-defocus-"));
 const ff = (...a) => execFileSync("ffmpeg", ["-v", "error", "-y", ...a], { stdio: "pipe" });
 const SEC = 10, FPS = 30, JOIN = 4.9;
@@ -79,9 +79,9 @@ function filterAt(html, times) {
   const lines = fxLines(html);
   if (GSAP_JS) {
     const run = (forward) => {
-      const ctx = { console, setTimeout, clearTimeout, requestAnimationFrame: (f) => setTimeout(f, 16), cancelAnimationFrame: clearTimeout }; ctx.window = ctx; ctx.self = ctx; vm.createContext(ctx);
+      const ctx = { console, setTimeout, clearTimeout, requestAnimationFrame: (f) => setTimeout(f, 16), cancelAnimationFrame: clearTimeout, Element: class {}, SVGElement: class {}, SVGSVGElement: class {} }; ctx.window = ctx; ctx.self = ctx; vm.createContext(ctx);
       vm.runInContext(fs.readFileSync(GSAP_JS, "utf8"), ctx);
-      const mk = () => { const FX = { filter: "blur(0px) brightness(1)", scale: 1 }; const tl = ctx.gsap.timeline({ paused: true }); new Function("tl", "FX", lines.map((l) => l.replace('"#fx"', "FX")).join("\n"))(tl, FX); return [tl, FX]; };
+      const mk = () => { const FX = { filter: "blur(0px) brightness(1)", scale: 1 }; const tl = ctx.tween.timeline({ paused: true }); new Function("tl", "FX", lines.map((l) => l.replace('"#fx"', "FX")).join("\n"))(tl, FX); return [tl, FX]; };
       if (forward) { const [tl, FX] = mk(); const out = new Map(); for (let k = 0; k <= Math.ceil(SEC * FPS); k++) { tl.seek(k / FPS, false); out.set(k, FX.filter); } return times.map((t) => out.get(Math.round(t * FPS))); }
       return times.map((t) => { const [tl, FX] = mk(); tl.seek(t, false); return FX.filter; });
     };
@@ -114,7 +114,7 @@ function assertCards(html, label, { bloom = false } = {}) {
   }
   return hs;
 }
-const check = (label) => console.log(`ok    ${label}${GSAP_JS ? " [real GSAP]" : " [settled frames]"}`);
+const check = (label) => console.log(`ok    ${label}${GSAP_JS ? " [tween runtime]" : " [settled frames]"}`);
 
 // as in the Pitch acceptance reel: a highlight page ends just before the after-join card and an energy span opens inside it
 const PAGE = { type: "scene", kind: "highlight", at: 5.1, to: 5.3, lines: [{ text: "are more likely", at: 5.1 }] };

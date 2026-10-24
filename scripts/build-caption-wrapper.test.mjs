@@ -102,8 +102,8 @@ test("real Chrome: the caption font arrives AFTER the first seek, and every box 
     const page = await browser.newPage();
     await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: "domcontentloaded", timeout: 60000 });
-    try { await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 }); }
-    catch { return t.skip("GSAP did not load (offline?)"); }
+    try { await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.tween, { timeout: 30000 }); }
+    catch { return t.skip("the page timeline did not start"); }
     const starts = groupsOf(html).map((g) => +html.match(new RegExp(`id="cg${g.i}" [^>]*data-start="([\\d.]+)"`))[1]);
     // the first reads: seek into every pop-in while only the fallback font is available
     const early = await page.evaluate((ts) => {
@@ -120,12 +120,12 @@ test("real Chrome: the caption font arrives AFTER the first seek, and every box 
         tl.seek(s + 0.3);   // after the 0.12 s pop-in
         const out = document.getElementById(`cg${i}`), inn = document.getElementById(`cg${i}in`);
         const ro = out.getBoundingClientRect(), ri = inn.getBoundingClientRect();
-        return { i, parsedByGsap: !!out._gsap, inline: out.style.transform, outerX: (ro.left + ro.right) / 2, innerX: (ri.left + ri.right) / 2, innerW: ri.width, outerW: ro.width, font: document.fonts.check('58px "Gloock"') };
+        return { i, parsedByGsap: !!window.__timelines.main._trackOf.get(out), inline: out.style.transform, outerX: (ro.left + ro.right) / 2, innerX: (ri.left + ri.right) / 2, innerW: ri.width, outerW: ro.width, font: document.fonts.check('58px "Gloock"') };
       });
     }, starts);
     for (const g of got) {
       assert.equal(g.font, true);
-      assert.equal(g.parsedByGsap, false, `cg${g.i}: GSAP never read or wrote the outer group`);
+      assert.equal(g.parsedByGsap, false, `cg${g.i}: the tween runtime never read or wrote the outer group`);
       assert.equal(g.inline, "", `cg${g.i}: no inline transform on the outer group`);
       assert.ok(Math.abs(g.outerX - 540) <= 1, `cg${g.i}: outer centre ${g.outerX}`);
       assert.ok(Math.abs(g.innerX - 540) <= 1, `cg${g.i}: box centre ${g.innerX}`);
