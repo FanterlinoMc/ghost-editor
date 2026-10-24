@@ -2438,7 +2438,8 @@ const sfxTag = (e, i) => `<audio id="sfx-${i}" src="${e.src}" data-start="${e.t}
 const sfxAudio = sfxEvents.filter((e) => !e.id.startsWith("meme:")).map(sfxTag);
 const sfxAudioAll = () => sfxEvents.filter((e) => !e.id.startsWith("meme:")).sort((a, b) => a.t - b.t).map(sfxTag);
 
-motionCtx.placeCaption = (t0, t1, h) => placer.place(t0, t1, h);
+// `bottom`: the band's bottom edge as a CSS bottom offset, for a block anchored by its bottom (mac-47, lower-face)
+motionCtx.placeCaption = (t0, t1, h) => { const p = placer.place(t0, t1, h); return { ...p, bottom: Math.round(H - (p.y + h)) }; };
 motionCtx.sidePad = placer.sidePad;
 
 // ---------- captions ----------
@@ -2931,7 +2932,8 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   const tiltDeg = cap.tilt ? (gi % 2 ? -cap.tilt : cap.tilt * 0.7) : 0;
   const clipExt = cap.style === "clipping" && fy == null
     ? (sc = 1) => clippingExtent(g.map((w) => caseOf(w.word)), { size: cap.size ?? 58, maxWidth: W - 2 * placer.sidePad, deg: tiltDeg, scale: sc }) : null;
-  const pl = fy != null ? { y: Math.round(fy * H / 1920), mode: cap.style, scale: 1 } : placer.place(s, e, clipExt ? Math.ceil(clipExt().up) + Math.ceil(clipExt().down) : capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3));
+  const reserveH = clipExt ? Math.ceil(clipExt().up) + Math.ceil(clipExt().down) : capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3);
+  const pl = fy != null ? { y: Math.round(fy * H / 1920), mode: cap.style, scale: 1 } : placer.place(s, e, reserveH);
   // whole px, rounded outward: the band is ceil(up) + ceil(down) and the top sits ceil(up) into it, so the drawn box
   // [top - up, top + down] never leaves [pl.y, pl.y + band] (the placer itself rounds y to whole px)
   const cssTop = clipExt ? pl.y + Math.ceil(clipExt(pl.scale && pl.scale < 1 ? pl.scale : 1).up) : pl.y;
@@ -2950,7 +2952,12 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   // composes rotate with the -50% translate, which lifts/lowers the box by half its width x sin(tilt), up to ~6 px;
   // moving the tilt inside would drop that and move every box vertically.)
   const clipping = cap.style === "clipping";
-  return `<div id="cg${gi}" class="cap-group clip${clipping ? "" : look}" style="top:${cssTop}px${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${clipping ? `<div id="cg${gi}in" class="cap-in${look}">${body}</div>` : body}</div>`;
+  // mac-47: a lower-face block (the close-up fallback, already at the bottom of the safe area) is anchored by its BOTTOM
+  // edge at the bottom of the band the placer reserved, so a block that wraps to more lines than reserved grows UP over
+  // the chest instead of down into the platform's bottom UI. Clipping keeps its measured band (mac-45); fixed-height
+  // styles never take this path.
+  const vpos = pl.mode === "lower-face" && !clipExt && fy == null ? `bottom:${Math.round(H - (pl.y + reserveH))}px` : `top:${cssTop}px`;
+  return `<div id="cg${gi}" class="cap-group clip${clipping ? "" : look}" style="${vpos}${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${clipping ? `<div id="cg${gi}in" class="cap-in${look}">${body}</div>` : body}</div>`;
 }).join("\n      ");
 
 const cyr = /[\u0400-\u04FF]/.test(JSON.stringify(spec.beats || []) + words.map((w) => w.word).join(" "));

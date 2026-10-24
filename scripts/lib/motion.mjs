@@ -1245,7 +1245,7 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
     // captions.backingUntil: <edit s> (opt-in): the grey box only on close-up blocks that start before it; later ones get the
     // heavy text shadow (the approved Keynote sample drops the box after its opening lines)
     const noBox = cap.backing === false || (typeof cap.backingUntil === "number" && Math.max(0, s) >= cap.backingUntil);
-    return `<div id="eb${bi}" class="eblock clip${pl.mode === "lower-face" ? (noBox ? " eshadow" : " ebacked") : ""}" style="top:${y}px${pl.scale && pl.scale < 1 ? `;transform:scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(Math.max(0, s))}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${inner}</div>`;
+    return `<div id="eb${bi}" class="eblock clip${pl.mode === "lower-face" ? (noBox ? " eshadow" : " ebacked") : ""}" style="${pl.mode === "lower-face" && Number.isFinite(pl.bottom) ? `bottom:${pl.bottom}px` : `top:${y}px`}${pl.scale && pl.scale < 1 ? `;transform:scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(Math.max(0, s))}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${inner}</div>`;
   }).join("\n      ");
   // hide the captions under full-screen scenes that don't want them
   tl.push(`tl.set("#ecaps", { autoAlpha: 1 }, 0);`);
