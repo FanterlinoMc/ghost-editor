@@ -346,7 +346,7 @@ alone, like the other whole-reel files. Shape: `{ "dropped": [ { kind, id, type,
   room beside the face), `caption treatment` (a `captions.energy` / `serifSpans` / `stairs` span).
 - `at`, `to`: as written in reel.json. `t`: the start in output seconds when it could be resolved, else null.
 - `rule`: `designer-off`, `no-to`, `span`, `take`, `time`, `compile`, `element`, `tween`, `tween-key`, `tween-limit`, `no-room`, or a Prompt Motion code
-  (`G1`..`G36`, `P1`..`P3`, `R1`..`R14`, `box`, `fit`).
+  (`G1`..`G36`, `P1`..`P6`, `R1`..`R14`, `box`, `fit`).
 - `why`: one sentence a person can read, for example `The graphic "unsafe" at 0:04 was dropped because its HTML
   file failed a safety check.` `warning`: the build's own warning, word for word.
 - Graphic LAYERS are not in it: a layer that cannot be placed stops the build (`die()`), it is never dropped.
@@ -354,7 +354,7 @@ alone, like the other whole-reel files. Shape: `{ "dropped": [ { kind, id, type,
   ignores (`tween-key`), or a tween past the 30 a graphic may have (`tween-limit`). `id` is `<owner id>/tween <n>`. The
   element still shows; it just does not move as planned. Clamped durations and ease fallbacks still animate, so they
   are not recorded. A motion LAYER's left-out elements and tweens are recorded too (`type` `motion layer`).
-- The placement contract's P4-P6 drops join when fork PR #32 merges (it is rebased onto this record).
+- The placement contract's drops are in it with `rule` `P4`, `P5` or `P6`.
 - Test: `scripts/build-graphics-dropped.test.mjs`.
 
 ### What the build refuses (`die()`; planner validator checks)
@@ -926,7 +926,7 @@ reverse play, dotLottie (`.lottie`), image or text layers, expressions.
 
 ## Prompt Motion graphic (`kind: "graphic"` layer, `type: "graphic"` beat): spec (CP1), not built yet
 
-Status: **spec (CP1) v3.2.5 (v3.2.5 records PM3's placement as built, `mac/graphic-place` @ 5b3aa1d; v3.2.4 records PM2's security hardening, `mac/graphic-render` @ 4cbdc73; v3.2.3 adds what the PM5 fixtures measured: the streaming-encoder pin, the blob-worker R1 exclusion, authoring for determinism; v3.2.2 resolves the twelve points PM2 hit while building; CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found; v3.2.1 notes the G31 trade-off); PM3 (in the reel) built on `mac/graphic-place`, see "Placement as built (PM3)".**
+Status: **spec (CP1) v3.5 (v3.5 adds the placement contract P4-P6, enforced by the build, `mac/graphic-contract`; v3.2.5 records PM3's placement as built, `mac/graphic-place` @ 5b3aa1d; v3.2.4 records PM2's security hardening, `mac/graphic-render` @ 4cbdc73; v3.2.3 adds what the PM5 fixtures measured: the streaming-encoder pin, the blob-worker R1 exclusion, authoring for determinism; v3.2.2 resolves the twelve points PM2 hit while building; CP3 PASS at v3; v3.1 answered the PC's eight questions; v3.2 closes four crafted-file bypasses the PC found; v3.2.1 notes the G31 trade-off); PM3 (in the reel) built on `mac/graphic-place`, see "Placement as built (PM3)".**
 `build.mjs` and `layers.mjs` place a graphic layer (`kind: "graphic"`) and a `graphic` beat as written here, through PM2's
 `renderGraphic` (sandbox + render). The PC mirrors every **static** rule
 (G1 to G28) and every placement rule in the validator word for word, at the same time.
@@ -1374,12 +1374,38 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
 - **sections.json (v3.2.5).** The per-section `graphics` key list is hashed into the section's hash ONLY when the reel has graphic beats
   (and then only on the sections that hold one); a reel without them keeps the manifest's old shape. Graphic layers
   carry their file and key inside their layer object.
-- **Face (v3.2.5, proposed for the validator; the build does not check it).** A director- or planner-placed overlay
-  beat must keep off the speaker's face. The validator samples the face track at 10 fps over the beat's window;
-  if the overlay box intersects the face box in more than 50 % of the samples, the beat is dropped with
-  **GW9** `graphic <id or at>: <html>: box covers the speaker's face for <p>% of its window, dropped` (`<p>` a
-  whole percent). A user layer (`"by": "user"`) gets the same text without `, dropped`, as a warning. Inserts are
-  exempt (full frame by design).
+- **The placement contract (v3.5, P4-P6; phantasic `docs/GRAPHICS-ROUTES.md` D2). Built and enforced by the build:
+  refused, never warned.** It replaces the v3.2.5 face note (GW9, a validator-only warning at >50 % of the window;
+  the build never checked it). Where the typed route (`docs/MOTION-GRAPHICS-SPEC.md` "What the validator checks" 3, 4,
+  8) and Prompt Motion disagreed, the typed rule is the contract. Code: `checkContract` in `scripts/lib/graphic.mjs`,
+  called by `build.mjs` once the caption placer exists and BEFORE the render pre-pass, so a refused graphic is never
+  rendered. A layer that fails dies (`layer <id>: graphic <html>: <reason>`); a beat is dropped
+  (`graphic <id or at>: <html>: <reason>, dropped`). The first failing rule is the one reported, in this order:
+  - **P4, face.** An overlay whose box intersects the face box grown by **40 px** at **any sampled instant** of its
+    window is refused. Samples: every **0.1 s** of `[t0, t1]` (output seconds), both ends included. The face box at an
+    instant is the caption placer's (`placer.faceAt`, `scripts/lib/safezone.mjs`): the nearest face sample within
+    1.5 s of the take's source time, mapped through the source's crop plan and **the camera scale in force at that
+    instant** (`zoom.base` x snap x push, around `zoom.origin`; planned and cadence snaps both). No face track, or no
+    face at the instant: nothing to hit. `<t>` is the instant, rounded to 0.1 s.
+  - **P5, captions.** An overlay whose box crosses the caption band in y is refused, unless the entry sets
+    `hideCaptions: true` or `overCaptions: true` explicitly. The band is the placer's first-choice zone for a block of
+    the reel's caption height over `[t0, t1]` (`placer.band`: no zone lock, no card step-around, no hysteresis),
+    padded **24 px** on both sides; the height is `round((captions.size ?? brand.capSize) * 2.2)`, the planner's
+    `cap_h` before it reads `caption_layout.json`. A reel with `captions.style: "none"` has no band. `<top>..<bottom>`
+    are whole pixels. On a beat, `overCaptions: true` only lifts P5: a graphic beat still sits in the beats' band,
+    under the captions, which draw over it (a layer with `overCaptions` is drawn above them, as before).
+  - **P6, director collision.** A graphic of either mode whose window overlaps in time (strictly: touching ends do not
+    count) a director beat, or the title banner (`banner.from ?? 0` to `banner.to ?? end`, output seconds), is
+    refused. Not counted: the whole-frame washes `behind`, `leak`, `mood`; the camera beats `zoom`, `punch`, `push`,
+    `snap`; `motion` and `graphic` beats (the planner arbitrates those). A beat with no `to` lasts **2.5 s** (the
+    planner's `DEFAULT_OVERLAY_S`). `<kind>` is `<type> beat` or `title banner`; `<s>..<e>` rounded to 0.1 s.
+  - **Inserts** (`mode: "insert"`) are exempt from P4 and P5 **by construction**: full frame on purpose, with the
+    captions hidden by default. P6 applies to them.
+  - **The spans are unchanged, deliberately** (beat or layer 0.1-60 s, P2; a typed motion beat 0.6-8 s): different
+    containers, recorded as a decision, not drift.
+  - **Blast radius.** A reel with no graphic layer or beat never reaches this code (byte-identity unchanged). The
+    four shipped styles that set `designer: true` (`explainer-2`, `keynote-3`, `keynote-4`, `mono-2`) gate the typed
+    `motion` beat, not graphics; a graphic in a reel of theirs is checked like any other.
 - **v3.3 (`mac/graphic-glyphs`).** G36 (an emoji or pictograph written in the file, static, rules.json
   `glyphs.G36`, JS/Python parity) and R14 (glyph coverage at render, "Glyph coverage" below); the bridge changed,
   so the cache key's `v` is 4: every graphic cached under `v: 3` renders again once.
@@ -1692,6 +1718,9 @@ has the first `!important` (flag `i`) removed from the list, is trimmed, loses O
 | P1 | `graphic mode '<v>' is not overlay or insert` |
 | P2 | `graphic window <s>s is outside 0.1..60s` |
 | P3 | `graphic box shows less than 20% inside the <W>x<H> canvas` |
+| P4 | `graphic box covers the speaker's face at <t>s (40 px margin)` |
+| P5 | `graphic box crosses the caption band <top>..<bottom>px (set hideCaptions or overCaptions to allow it)` |
+| P6 | `graphic overlaps the director's <kind> at <s>..<e>s (one thing on screen at a time)` |
 
 (The layer's existing `id`, timing, `dur`, `box`, `fit`, `enter`, `exit` dies apply unchanged to a graphic layer.
 P3 REPLACES the generic layer rule "at least 20 % of the box inside the canvas" for a graphic layer: the

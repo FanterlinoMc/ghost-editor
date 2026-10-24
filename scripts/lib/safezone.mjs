@@ -166,6 +166,24 @@ export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = 
     }
     return r;
   };
+  // The caption band a block of height h gets over [t0, t1] (the placer's FIRST choice: no zone lock, no card
+  // step-around, no hysteresis), padded by `pad` on both sides. Stateless, so a caller can ask without moving
+  // `prev`. It is what the planner's designer_validate.Geometry.caption_band mirrors, and what the Prompt Motion
+  // contract (reel-json.md "Placement as built", P5) measures an overlay against. { top, bottom } in canvas px.
+  const band = (t0, t1, h, pad = 24) => {
+    const sp = span(t0, t1);
+    const maxY = safeBottom - h;
+    let y, hh = h;
+    if (!sp.seen) y = Math.min(ideal, maxY);
+    else {
+      const { top, bottom, mouth } = sp;
+      if (bottom + gap <= maxY) y = Math.max(bottom + gap, Math.min(ideal, maxY));
+      else if (top - gap - h >= safeTop) y = top - gap - h;
+      else if (top - gap - safeTop >= h * 0.7) { y = safeTop; hh = top - gap - safeTop; }
+      else y = Math.max(safeTop, Math.min(maxY, Math.max(mouth + 60, maxY)));
+    }
+    return { top: y - pad, bottom: y + hh + pad };
+  };
   // rectangles already on screen (cards), so captions can step around them
   const occupied = [];
   const clash = (t0, t1, y, h) => occupied.find((o) => t0 < o.t1 && t1 > o.t0 && y < o.y1 && y + h > o.y0);
@@ -238,5 +256,6 @@ export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = 
     if (sp.top - gap - h >= safeTop) return { x: Math.round(W / 2 - w / 2), y: Math.round(sp.top - gap - h) };
     return null;
   };
-  return { place, card, slot, span, log, platform: P, safeTop, safeBottom, sidePad: P.right };
+  // faceAt(t): the face box on the canvas at edit time t under the camera in force (null: no face); band(): above
+  return { place, card, slot, span, band, faceAt: screenFace, log, platform: P, safeTop, safeBottom, sidePad: P.right };
 }
