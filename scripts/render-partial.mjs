@@ -10,8 +10,9 @@
 //   - the root's data-duration becomes the window's length; every timed element (data-start) is moved by -a, a clip that
 //     starts before the window is trimmed (data-media-start moved with it), a clip wholly outside it is switched off
 //     (data-pr-off: display none, no src), so nothing it would never show is loaded;
-//   - the GSAP timeline the page registers as window.__timelines.main is replaced by a paused timeline that plays
-//     main.tweenFromTo(a, b): the renderer seeking window time t puts the page's own timeline at a + t, exactly the time a
+//   - the timeline the page registers as window.__timelines.main is replaced by a delegating one that plays
+//     the page's timeline from a to b: the renderer seeking window time t puts the page's own timeline at a + t (its
+//     totalTime, nothing runtime-specific: GSAP's or the engine's tween runtime alike), exactly the time a
 //     full render would seek for that frame. Every beat, caption and push renders as it does in a full render.
 //   - <audio> is left out; the sound is one separate render of the page with no <video> at 1 fps (the mix does not
 //     depend on the picture), cached the same way, and muxed onto the joined picture.
@@ -128,8 +129,16 @@ export function windowPage(html, a, b) {
   out = out.replace(/(<div id="root"[^>]*\sdata-duration=")[^"]*"/, `$1${r6(b - a)}"`);
   out = out.replace("</head>", "<style>[data-pr-off]{display:none !important}</style>\n</head>");
   // the page's own timeline, played from a to b: window time t = reel time a + t
-  const shim = `\n<script>(() => { const inner = window.__timelines.main; inner.pause();
-  const w = gsap.timeline({ paused: true }); w.add(inner.tweenFromTo(${a}, ${b}, { ease: "none", immediateRender: false }), 0);
+  // a delegating timeline, not a GSAP one: it works with whatever runtime the page carries (GSAP before mac-65, the
+  // engine's tween runtime after), because it only calls the inner timeline's totalTime / pause
+  const shim = `\n<script>(() => { const inner = window.__timelines.main, A = ${a}, D = ${r6(b - a)}; inner.pause();
+  let now = 0;
+  const w = { totalTime(t, s) { if (t === undefined) return now; now = t; inner.totalTime(A + t, s); return w; },
+    time(t, s) { return w.totalTime(t, s); }, seek(t, s) { return w.totalTime(t, s); },
+    progress(p, s) { return p === undefined ? (D ? now / D : 0) : w.totalTime(p * D, s); },
+    duration() { return D; }, totalDuration() { return D; }, timeScale(v) { return v === undefined ? 1 : w; },
+    pause() { return w; }, play() { return w; }, paused() { return true; }, isActive() { return false; },
+    getChildren() { return []; }, kill() { return w; }, eventCallback() { return w; } };
   window.__timelines.main = w; })();</script>\n`;
   const i = out.lastIndexOf("</body>");
   return out.slice(0, i) + shim + out.slice(i);

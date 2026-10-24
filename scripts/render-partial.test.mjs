@@ -65,7 +65,9 @@ test("windowPage: shifted, trimmed, the rest switched off, the page's timeline r
   assert.match(p, /<div data-pr-off id="take-0"><\/div>/);
   assert.match(p, /<div data-pr-off id="b2" class="clip"><div id="b2-in">Two<\/div><\/div>/);
   assert.doesNotMatch(p, /<audio/);
-  assert.match(p, /inner\.tweenFromTo\(6, 10/);
+  assert.match(p, /const inner = window\.__timelines\.main, A = 6, D = 4;/);
+  assert.match(p, /inner\.totalTime\(A \+ t, s\)/);
+  assert.doesNotMatch(p, /tweenFromTo/, "the window shim needs no GSAP API (mac-65)");
   assert.match(p, /\[data-pr-off\]\{display:none !important\}/);
   // the sound page keeps every <audio>, no video, 1 frame a second
   const a = audioPage(PAGE);
