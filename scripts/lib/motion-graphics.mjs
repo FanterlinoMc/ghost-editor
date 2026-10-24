@@ -176,7 +176,7 @@ export function compileMotion(b, ctx) {
     }
     els.set(el.id, el);
   }
-  if (!els.size) return { ok: false, reason: "no valid elements", warnings, dropped: droppedEls };
+  if (!els.size) return { ok: false, reason: "no valid elements", warnings, dropped: droppedEls, droppedTweens: [] };
 
   // ---------- tweens -> per-element plans ----------
   // plan: for each (selector, key) a list of segments {at, end, from, to}, used for the backfill at
@@ -188,20 +188,27 @@ export function compileMotion(b, ctx) {
   const used = new Map();               // `${eid}|${fam}` -> [[at,end]]
   const blurEls = new Set();
   const rawTw = Array.isArray(b.tweens) ? b.tweens.slice(0, LIMITS.tweens) : [];
-  if (Array.isArray(b.tweens) && b.tweens.length > LIMITS.tweens) warn(`only the first ${LIMITS.tweens} tweens are used`);
+  // mac-55: every tween (or tween key) left out, as data ({ tween, target, rule, why }), for build/graphics-dropped.json.
+  // Clamps and ease fallbacks still animate, so they are not here.
+  const droppedTw = [];
+  if (Array.isArray(b.tweens) && b.tweens.length > LIMITS.tweens) {
+    warn(`only the first ${LIMITS.tweens} tweens are used`);
+    b.tweens.slice(LIMITS.tweens).forEach((tw, k) => droppedTw.push({ tween: LIMITS.tweens + k, target: isObj(tw) && typeof tw.target === "string" ? tw.target : null, rule: "tween-limit", why: `only the first ${LIMITS.tweens} tweens are used` }));
+  }
   const drawVis = new Map(), needsDraw = new Set(), needsClip = new Map(), countFmt = new Map(), kept = [];
   const pad = (el) => (el.shape === "text" ? (el.shadow === "none" ? 8 : 28) : Math.ceil((el.sw ?? 0) / 2) + 4);
 
   rawTw.forEach((tw, ti) => {
     const w = (m) => warn(`tween ${ti}: ${m}`);
-    if (!isObj(tw) || !isObj(tw.from) || !isObj(tw.to)) return w("needs target, from and to objects, dropped");
+    const td = (m, rule) => { w(m); droppedTw.push({ tween: ti, target: isObj(tw) && typeof tw.target === "string" ? tw.target : null, rule, why: `tween ${ti}: ${m}` }); };
+    if (!isObj(tw) || !isObj(tw.from) || !isObj(tw.to)) return td("needs target, from and to objects, dropped", "tween");
     const el = els.get(tw.target);
-    if (!el) return w(`target '${tw.target}' is not an element of this beat, dropped`);
+    if (!el) return td(`target '${tw.target}' is not an element of this beat, dropped`, "tween");
     const at = num(tw.at, 0, 1e4, NaN);
-    if (Number.isNaN(at)) return w("at must be a number >= 0, dropped");
+    if (Number.isNaN(at)) return td("at must be a number >= 0, dropped", "tween");
     let dur = num(tw.dur, 0.05, 10, NaN);
-    if (Number.isNaN(dur)) return w("dur must be 0.05..10, dropped");
-    if (at >= len - 0.05) return w(`starts at ${at}s, at or past the end of the beat (${len}s), dropped`);
+    if (Number.isNaN(dur)) return td("dur must be 0.05..10, dropped", "tween");
+    if (at >= len - 0.05) return td(`starts at ${at}s, at or past the end of the beat (${len}s), dropped`, "tween");
     const ease = Object.hasOwn(EASES, tw.ease) ? EASES[tw.ease] : (tw.ease === undefined ? EASES["power2.out"] : (w(`ease '${tw.ease}' is not allowed, using power2.out`), EASES["power2.out"]));
     // stagger
     let stag = 0, units = null;
@@ -210,40 +217,40 @@ export function compileMotion(b, ctx) {
         stag = num(tw.stagger, 0, 5, 0);
         units = el.split === "words" ? el.text.split(" ") : [...el.text.replace(/ /g, "")];
         if (units.length > 1 && stag > 0) stag = Math.min(stag, Math.max(0, (len - at - dur) / (units.length - 1)));
-      } else w("stagger needs a text element with split set, ignored");
+      } else td("stagger needs a text element with split set, ignored", "tween-key");
     }
     const span = at + dur + (units && stag > 0 ? (units.length - 1) * stag : 0);
     if (span > len + 1e-6) {
       if (units && stag > 0) { /* stagger already shrunk; dur may still overrun */ }
       const room = len - at - (units && stag > 0 ? (units.length - 1) * stag : 0);
-      if (room < 0.05) return w("does not fit before the end of the beat, dropped");
+      if (room < 0.05) return td("does not fit before the end of the beat, dropped", "tween");
       dur = r3(Math.min(dur, room));
       w(`ends after the beat; dur clamped to ${dur}s`);
     }
     // keys
     const revFrom = ["left", "right", "top", "bottom"].includes(tw.revealFrom) ? tw.revealFrom : ["left", "right", "top", "bottom"].includes(tw.to.revealFrom) ? tw.to.revealFrom : ["left", "right", "top", "bottom"].includes(tw.from.revealFrom) ? tw.from.revealFrom : "left";
-    for (const k of Object.keys(tw.from)) if (k !== "revealFrom" && !KEYS.includes(k)) w(`key '${k}' is not animatable, ignored`);
-    const keys = KEYS.filter((k) => k in tw.from && k in tw.to).filter((k) => (fin(tw.from[k]) && fin(tw.to[k])) || (w(`key '${k}' needs numbers in from and to, ignored`), false));
-    for (const k of Object.keys(tw.from)) if (KEYS.includes(k) && !(k in tw.to)) w(`key '${k}' is in from but not in to, ignored`);
+    for (const k of Object.keys(tw.from)) if (k !== "revealFrom" && !KEYS.includes(k)) td(`key '${k}' is not animatable, ignored`, "tween-key");
+    const keys = KEYS.filter((k) => k in tw.from && k in tw.to).filter((k) => (fin(tw.from[k]) && fin(tw.to[k])) || (td(`key '${k}' needs numbers in from and to, ignored`, "tween-key"), false));
+    for (const k of Object.keys(tw.from)) if (KEYS.includes(k) && !(k in tw.to)) td(`key '${k}' is in from but not in to, ignored`, "tween-key");
     const lim = { x: [-4000, 4000], y: [-4000, 4000], scale: [0, 20], scaleX: [0, 20], scaleY: [0, 20], rotate: [-720, 720], opacity: [0, 1], blur: [0, 30], draw: [0, 1], reveal: [0, 1], count: [-1e12, 1e12] };
     const val = {};
     for (const k of keys) {
-      if (k === "draw" && (!DRAW_SHAPES.includes(el.shape) || el.sw <= 0 || el.stroke === "none")) { w(`draw needs a stroked line, path, rect or ellipse, ignored on '${el.id}'`); continue; }
-      if (k === "count" && !(el.shape === "text" && el.split === "none" && parseCount(el.text))) { w(`count needs an unsplit text element whose text is a number, ignored on '${el.id}'`); continue; }
-      if (k === "reveal" && el.shape === "line") { w("reveal on a line is not supported, ignored"); continue; }
+      if (k === "draw" && (!DRAW_SHAPES.includes(el.shape) || el.sw <= 0 || el.stroke === "none")) { td(`draw needs a stroked line, path, rect or ellipse, ignored on '${el.id}'`, "tween-key"); continue; }
+      if (k === "count" && !(el.shape === "text" && el.split === "none" && parseCount(el.text))) { td(`count needs an unsplit text element whose text is a number, ignored on '${el.id}'`, "tween-key"); continue; }
+      if (k === "reveal" && el.shape === "line") { td("reveal on a line is not supported, ignored", "tween-key"); continue; }
       if (k === "blur") {
-        if (el.w * el.h > 0.5 * W * H) { w(`blur on '${el.id}' (over half the canvas) ignored`); continue; }
-        if (!blurEls.has(el.id) && blurEls.size >= LIMITS.maxBlurEls) { w(`blur on a third element ('${el.id}') ignored (max ${LIMITS.maxBlurEls})`); continue; }
+        if (el.w * el.h > 0.5 * W * H) { td(`blur on '${el.id}' (over half the canvas) ignored`, "tween-key"); continue; }
+        if (!blurEls.has(el.id) && blurEls.size >= LIMITS.maxBlurEls) { td(`blur on a third element ('${el.id}') ignored (max ${LIMITS.maxBlurEls})`, "tween-key"); continue; }
       }
       val[k] = [clamp(tw.from[k], ...lim[k]), clamp(tw.to[k], ...lim[k])];
     }
     // overlap: same element + key family must not overlap in time
     for (const k of Object.keys(val)) {
       const fam = `${el.id}|${keyFam(k)}`, iv = [at, r3(span > len ? len : span)];
-      if ((used.get(fam) || []).some(([a, e2]) => iv[0] < e2 - 1e-6 && iv[1] > a + 1e-6)) { w(`'${k}' on '${el.id}' overlaps an earlier tween of the same key, that key ignored`); delete val[k]; continue; }
+      if ((used.get(fam) || []).some(([a, e2]) => iv[0] < e2 - 1e-6 && iv[1] > a + 1e-6)) { td(`'${k}' on '${el.id}' overlaps an earlier tween of the same key, that key ignored`, "tween-key"); delete val[k]; continue; }
       used.set(fam, [...(used.get(fam) || []), iv]);
     }
-    if (!Object.keys(val).length) return w("no usable keys left, dropped");
+    if (!Object.keys(val).length) return td("no usable keys left, dropped", "tween");
     if ("blur" in val) blurEls.add(el.id);
     kept.push({ el, at, dur, ease, units, stag });
 
@@ -408,5 +415,5 @@ export function compileMotion(b, ctx) {
   if (exitKind === "fade") lines.push(`ft("#${id}-in", { opacity: 1 }, { opacity: 0, duration: ${r3(fo)}, ease: "power1.in" }, ${r3(t1 - fo)});`);
 
   const sfx = b.sfx === undefined ? "whoosh" : b.sfx;
-  return { ok: true, dropped: droppedEls, html: dimHtml + `<div id="${id}-in" class="ov"${ctx.beatId != null ? ` data-beat-id="${escHtml(ctx.beatId)}"` : ""} style="left:0;top:0;width:${W}px;height:${H}px">${html.join("")}</div>`, lines, hideCaptions: b.hideCaptions === true || room === "below", room, sfx, dim, exit: exitKind, warnings };
+  return { ok: true, dropped: droppedEls, droppedTweens: droppedTw, html: dimHtml + `<div id="${id}-in" class="ov"${ctx.beatId != null ? ` data-beat-id="${escHtml(ctx.beatId)}"` : ""} style="left:0;top:0;width:${W}px;height:${H}px">${html.join("")}</div>`, lines, hideCaptions: b.hideCaptions === true || room === "below", room, sfx, dim, exit: exitKind, warnings };
 }

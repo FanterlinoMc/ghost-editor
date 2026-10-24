@@ -64,6 +64,33 @@ test("each kind of drop is recorded with its rule and a plain sentence; the warn
   assert.equal(d.length, 4, JSON.stringify(d.map((x) => x.kind + ":" + x.id)));
 });
 
+test("mac-55: tweens and tween keys a kept motion graphic leaves out are recorded, for beats and motion layers", () => {
+  const el = [{ id: "t", shape: "text", text: "Hi", x: 100, y: 300, w: 600, h: 120, size: 80 }];
+  const ok = { target: "t", at: 0, dur: 0.3, from: { opacity: 0 }, to: { opacity: 1 } };
+  const dir = project({
+    beats: [motion("anim", { by: "user", elements: el, tweens: [
+      ok,
+      { target: "ghost", at: 0, dur: 0.3, from: { opacity: 0 }, to: { opacity: 1 } },               // no such element: dropped
+      { target: "t", at: 0.5, dur: 0.3, from: { opacity: 0, color: 1 }, to: { opacity: 1, color: 2 } }, // 'color' is not animatable
+    ] }), motion("many", { by: "user", at: 4, to: 6, elements: el, tweens: Array.from({ length: 31 }, (_, k) => ({ ...ok, at: k * 0.05 })) })],
+    layers: [{ id: "lay", kind: "motion", pin: true, at: 6.5, dur: 1, elements: el, tweens: [{ target: "nope", at: 0, dur: 0.3, from: { x: 0 }, to: { x: 10 } }] }],
+  }, { fps: 5, w: 1080, h: 1920, samples: [[0, 300, 900, 340, 740, 480, 700], [8, 300, 900, 340, 740, 480, 700]] });
+  const r = build(dir);
+  assert.equal(r.status, 0, r.stderr);
+  const d = record(dir).filter((x) => x.kind === "motion tween");
+  const get = (id) => d.find((x) => x.id === id);
+  assert.equal(get("anim/tween 1").rule, "tween");
+  assert.equal(get("anim/tween 1").why, 'An animation (tween 1 on "ghost") of the motion graphic at 0:01 was left out, so that part does not move as planned.');
+  assert.ok(r.stdout.includes(get("anim/tween 1").warning), "warning is the build's own text");
+  assert.equal(get("anim/tween 2").rule, "tween-key");
+  assert.match(get("anim/tween 2").warning, /key 'color' is not animatable, ignored/);
+  assert.equal(get("many/tween 30").rule, "tween-limit");
+  assert.equal(get("many/tween 30").why, "An animation (tween 30 on \"t\") of the motion graphic at 0:04 was left out because a motion graphic may have at most 30 animations.");
+  assert.equal(get("lay/tween 0").type, "motion layer");
+  assert.equal(get("lay/tween 0").why, 'An animation (tween 0 on "nope") of the motion layer at 0:06 was left out, so that part does not move as planned.');
+  assert.ok(!d.some((x) => x.id === "anim/tween 0"), "a kept tween is not recorded");
+});
+
 test("a rebuild that drops nothing removes the file; a reel that never dropped anything never has one", () => {
   const dir = project({ beats: [motion("nodesign")] });
   assert.equal(build(dir).status, 0);

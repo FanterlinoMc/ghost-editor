@@ -29,7 +29,7 @@ import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { clippingExtent } from "./lib/caption-metrics.mjs";
 import { wordOwners } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
-import { compileMotion, resolveColor } from "./lib/motion-graphics.mjs";
+import { compileMotion, resolveColor, LIMITS as MOTION_LIMITS } from "./lib/motion-graphics.mjs";
 import { ROOM_SCALE, ROOM_EXIT_S, ROOM_FILL, normalizeRoom, ROOM_EASE_NAME, roomFrames, roomWindows, roomOrigin, roomCardCss } from "./lib/room.mjs";
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 import { loadStyleChain, checkBrandName } from "./lib/style-path.mjs";
@@ -159,6 +159,19 @@ const GRAPHIC_WHY = (code) => !code ? "it could not be placed"
        time: "its time is not inside the edit", box: "its box is not a valid rectangle", fit: "its fit is not cover or contain" })[code] ?? "it could not be placed";
 const recordDrop = ({ kind, id = null, type = null, at = null, to = null, t = null, rule, why, warning }) =>
   dropped.push({ kind, id: id ?? null, type, at: at ?? null, to: to ?? null, t: Number.isFinite(t) ? Math.round(t * 1000) / 1000 : null, rule, why, warning });
+// the parts a kept motion graphic (beat or layer) leaves out: elements (not drawn) and tweens or tween keys (drawn, but
+// not moving as planned). `owner`: { id, type, at, to } as written; `t`: its start in output seconds.
+const recordMotionParts = (owner, mg, t) => {
+  const what = owner.type === "motion layer" ? "motion layer" : "motion graphic";
+  for (const d of mg.dropped || []) recordDrop({ kind: "motion element", id: `${owner.id ?? "?"}/${d.element ?? "?"}`, type: owner.type, at: owner.at, to: owner.to, t, rule: "element", why: `One part${d.element ? ` ("${d.element}")` : ""} of the ${what} at ${clock(t)} was left out because it could not be drawn.`, warning: d.why });
+  for (const d of mg.droppedTweens || []) {
+    const on = d.target ? ` on "${d.target}"` : "";
+    const why = d.rule === "tween-limit" ? `An animation (tween ${d.tween}${on}) of the ${what} at ${clock(t)} was left out because a motion graphic may have at most ${MOTION_LIMITS.tweens} animations.`
+      : d.rule === "tween-key" ? `Part of an animation (tween ${d.tween}${on}) of the ${what} at ${clock(t)} was left out, so it does not move exactly as planned.`
+      : `An animation (tween ${d.tween}${on}) of the ${what} at ${clock(t)} was left out, so that part does not move as planned.`;
+    recordDrop({ kind: "motion tween", id: `${owner.id ?? "?"}/tween ${d.tween}`, type: owner.type, at: owner.at, to: owner.to, t, rule: d.rule, why, warning: `motion ${owner.id ?? "?"}: ${d.why}` });
+  }
+};
 const die = (m) => { console.error("ERROR: " + m); process.exit(1); };
 // premium kit (opt-in, lib/premium.mjs): SVG defs collected here are written inside #root next to the watermark.
 // look.preset names a grade in presets/grades.json (an SVG tone-curve filter on #base); unset = nothing changes.
@@ -2311,7 +2324,7 @@ for (const b of beatsList) {
         recordDrop({ kind: "motion beat", id: b.id, type: "motion", at: b.at, to: b.to, t: t0, rule: "compile", why: `The motion graphic${b.id ? ` "${b.id}"` : ""} at ${clock(t0)} was dropped because it could not be drawn (${mg.reason}).`, warning: `motion beat ${b.id ?? "?"} dropped: ${mg.reason}` });
         continue;
       }
-      for (const d of mg.dropped || []) recordDrop({ kind: "motion element", id: `${b.id ?? "?"}/${d.element ?? "?"}`, type: "motion", at: b.at, to: b.to, t: t0, rule: "element", why: `One part${d.element ? ` ("${d.element}")` : ""} of the motion graphic at ${clock(t0)} was left out because it could not be drawn.`, warning: d.why });
+      recordMotionParts({ id: b.id, type: "motion", at: b.at, to: b.to }, mg, t0);
       inner = mg.html;
       for (const l of mg.lines) tl.push(l);
       if (mg.hideCaptions) hiddenCaps.push([t0, t1]);
@@ -3141,7 +3154,9 @@ if (LAYERS.length) {
   const under = [], over = [];
   for (const l of [...LAYERS].sort((x, y) => x.z - y.z || x.index - y.index)) {
     if (SECTION_MODE && !(l.t0 >= SECTION_START - 1e-6 && l.t0 < SECTION_END - 1e-6)) continue;   // another section's layer
-    const r = renderLayer(l, { W, H, brand, uiFont: UI_FONT, esc, compileMotion, resolveColor, resolveImage: resolveLayerImage, off: SECTION_MODE ? SECTION_START : 0 }, l.index);
+    // mac-55: a motion layer's left-out elements and tweens are recorded like a beat's (the layer itself never drops: it dies)
+    const compileLayerMotion = (beat, c) => { const mg = compileMotion(beat, c); if (mg.ok) recordMotionParts({ id: l.id, type: "motion layer", at: l.at, to: l.to ?? null }, mg, l.t0); return mg; };
+    const r = renderLayer(l, { W, H, brand, uiFont: UI_FONT, esc, compileMotion: compileLayerMotion, resolveColor, resolveImage: resolveLayerImage, off: SECTION_MODE ? SECTION_START : 0 }, l.index);
     for (const m of r.warnings) warn.push(m);
     if (r.dropped) continue;
     if (l.kind === "graphic" && l.graphic.mode === "overlay" && crossesUi(l.box, PLATFORMS[platform], W, H)) warn.push(`layer ${l.id}: ${graphicReason("GW7", { platform: PLATFORMS[platform].name })}`);

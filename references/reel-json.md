@@ -341,17 +341,20 @@ The build keeps dropping what it cannot place, exactly as before, with the same 
 the file never outlives the build that wrote it. A missing file means nothing was dropped. Section builds leave it
 alone, like the other whole-reel files. Shape: `{ "dropped": [ { kind, id, type, at, to, t, rule, why, warning } ] }`.
 
-- `kind`: `motion beat` (a designer `motion` beat), `motion element` (one element of a kept motion beat; `id` is
-  `<beat id>/<element id>`), `graphic beat` (Prompt Motion), `sticker` (an `emoji`, `logo`, `meme` or `icon` with no
+- `kind`: `motion beat` (a designer `motion` beat), `motion element` (one element of a kept motion beat or layer; `id`
+  is `<owner id>/<element id>`), `motion tween` (below), `graphic beat` (Prompt Motion), `sticker` (an `emoji`, `logo`, `meme` or `icon` with no
   room beside the face), `caption treatment` (a `captions.energy` / `serifSpans` / `stairs` span).
 - `at`, `to`: as written in reel.json. `t`: the start in output seconds when it could be resolved, else null.
-- `rule`: `designer-off`, `no-to`, `span`, `take`, `time`, `compile`, `element`, `no-room`, or a Prompt Motion code
+- `rule`: `designer-off`, `no-to`, `span`, `take`, `time`, `compile`, `element`, `tween`, `tween-key`, `tween-limit`, `no-room`, or a Prompt Motion code
   (`G1`..`G36`, `P1`..`P3`, `R1`..`R14`, `box`, `fit`).
 - `why`: one sentence a person can read, for example `The graphic "unsafe" at 0:04 was dropped because its HTML
   file failed a safety check.` `warning`: the build's own warning, word for word.
 - Graphic LAYERS are not in it: a layer that cannot be placed stops the build (`die()`), it is never dropped.
-- Not yet in it: a tween dropped inside a kept motion beat (the element still shows), and the placement contract's
-  P4-P6 drops, which join when that work (fork PR #32) is rebased onto this.
+- `motion tween` (mac-55): a tween a kept motion beat or motion layer leaves out (`rule` `tween`), a key of a tween it
+  ignores (`tween-key`), or a tween past the 30 a graphic may have (`tween-limit`). `id` is `<owner id>/tween <n>`. The
+  element still shows; it just does not move as planned. Clamped durations and ease fallbacks still animate, so they
+  are not recorded. A motion LAYER's left-out elements and tweens are recorded too (`type` `motion layer`).
+- The placement contract's P4-P6 drops join when fork PR #32 merges (it is rebased onto this record).
 - Test: `scripts/build-graphics-dropped.test.mjs`.
 
 ### What the build refuses (`die()`; planner validator checks)
