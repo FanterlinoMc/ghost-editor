@@ -190,6 +190,13 @@ if (spec.look?.preset) {
 }
 // Blank project (origin "blank", no takes): a black W x H page, 1 s long, with the same root and
 // timeline contract as a real build, plus the build/*.json files other tools read - all empty.
+const TIMELINE_ONLY = process.argv.slice(3).includes("--timeline");
+function writeTimeline(t) {
+  fs.mkdirSync(path.join(proj, "build"), { recursive: true });
+  fs.writeFileSync(path.join(proj, "build", "timeline.json"), JSON.stringify(t, null, 2) + "\n");
+  console.log(JSON.stringify(t));
+  process.exit(0);
+}
 function writeBlankPage() {
   const BLANK_S = 1;
   const html = `<!doctype html>
@@ -272,6 +279,7 @@ if (!(spec.takes || []).length) {
   if (rawSpec.origin !== "blank") die(`reel.json has no takes (an empty reel is only valid with "origin": "blank")`);
   // layers are resolved against the take layout, and there is none: say so rather than drop them silently
   if (Array.isArray(rawSpec.layers) && rawSpec.layers.length) console.log(`WARNING: ${rawSpec.layers.length} layer(s) ignored - a reel with no takes builds the blank page only; add a clip first`);
+  if (TIMELINE_ONLY) writeTimeline({ speech: 0, outro: 0, total: 1, fps: FPS });   // writeBlankPage's 1 s page
   writeBlankPage();
 }
 const takes = spec.takes.map((t, i) => {
@@ -362,6 +370,12 @@ if (SECTION_MODE) {
 }
 const SECTION_TOTAL = SECTION_MODE ? +(SECTION_END - SECTION_START).toFixed(3) : null;
 const TOTAL = +(SPEECH + OUTRO).toFixed(3);
+// mac-59: `build.mjs <project> --timeline` measures the reel's length WITHOUT building it. The outro is the style's
+// (`outro` after the style is merged under reel.json, default 3), which a caller cannot know without resolving the style,
+// and TOTAL is what an open-ended `banner.to`, `"end"` and the faceAt clamp read. It stops here: nothing but
+// build/timeline.json is written, no media is made, and a full build never writes that file. Spec: references/reel-json.md
+// "build/timeline.json". (A BUILT reel already carries total / speech / fps in edit_truth.json.)
+if (TIMELINE_ONLY) writeTimeline({ speech: +SPEECH.toFixed(3), outro: OUTRO, total: TOTAL, fps: FPS });
 
 // takes in recording order, for the gap-snap below. Array order is PLAYBACK order and may differ.
 // I-16: partitioned PER SOURCE. A single global sort would interleave times from different
