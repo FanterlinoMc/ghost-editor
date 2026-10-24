@@ -11,6 +11,7 @@
 //   - music.optional: the bed named by the style is not shipped, so the reel builds without it (warning, no crash)
 //   - everything above is absent from a reel that does not use Noir (the byte-identity check proves the rest)
 // Sources are tiny lavfi files, like build-review-fixes.test.mjs.
+import { stripRuntime } from "./lib/page-norm.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -50,7 +51,7 @@ function project(reel, { second = false } = {}) {
 }
 const run = (dir, env = {}) => spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: { ...process.env, PHANTASIC_LIB: silentLibrary(), ...env } });   // no audio: see lib/silent-library.mjs
 const build = (dir, env) => { const r = run(dir, env); assert.equal(r.status, 0, r.stderr + r.stdout); return r.stdout + r.stderr; };
-const html = (dir) => fs.readFileSync(path.join(dir, "index.html"), "utf8");
+const html = (dir) => stripRuntime(fs.readFileSync(path.join(dir, "index.html"), "utf8"));   // the reel's markup, without the inlined tween runtime
 const truth = (dir) => JSON.parse(fs.readFileSync(path.join(dir, "build", "edit_truth.json"), "utf8"));
 const check = (label) => console.log(`ok    ${label}`);
 const count = (s, re) => (s.match(re) || []).length;

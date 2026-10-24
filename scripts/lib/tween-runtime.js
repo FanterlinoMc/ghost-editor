@@ -9,7 +9,8 @@
  * which times were sought before or in what order (the renderer seeks any frame, in several workers). So nothing is
  * captured lazily during playback, as GSAP does: for each (element, property) the tweens are kept in a track, sorted by
  * start (ties: the order they were added), and the value at t is a fold over the ones that have started:
- *   - the LAST started tween wins (GSAP's render order: a later child renders after an earlier one);
+ *   - the tween that renders LAST in forward playback wins: a running one over a finished one, then the later start
+ *     (GSAP's order: children render in start order every frame, a finished tween stops rendering);
  *   - a fromTo starts from its `from`; a to() starts from the track's own value AT ITS START (computed by the same fold,
  *     not read from the page);
  *   - before any tween of the track has started: the `from` of the earliest fromTo / set that renders immediately
@@ -187,7 +188,7 @@
       keys.forEach(function (k) {
         if (RESERVED[k]) return;
         var tv = k in toVars ? toVars[k] : fromVars[k], fv = fromVars && k in fromVars ? fromVars[k] : null;
-        if (!isEl) { if (typeof tv === "number") put(k, "num", fv, tv); else unsupported["object key " + k] = 1; return; }
+        if (!isEl) { if (typeof tv === "number" || typeof tv === "string") put(k, typeof tv === "number" ? "num" : "str", fv, tv); else unsupported["object key " + k] = 1; return; }
         if (k === "autoAlpha") { put("opacity", "num", fv, tv); put("visibility", "alpha", fv, tv); return; }
         if (k === "scale") { put("scaleX", "tf", fv, tv); put("scaleY", "tf", fv, tv); return; }
         if (TRANSFORM[k] !== undefined) { put(ALIAS[k] || k, "tf", fv, tv); return; }
@@ -313,9 +314,18 @@
     return out;
   }
   // the track's value at t: { v, seg, p } (seg null: no tween has started)
+  // the winner among the started tweens is the one that renders LAST in forward playback (GSAP's order, which the
+  // engine's tweens were written for): the latest min(t, end), i.e. any still-running tween over a finished one; among
+  // those, the later start (then the later added). Still a pure function of t.
+  var endOf = function (sp) { return sp.start + sp.dur * (sp.rep + 1); };
   function valueAt(tr, t) {
-    var win = null, wp = 0, wi = -1;
-    for (var i = 0; i < tr.segs.length; i++) { var p = progress(tr.segs[i].span, t); if (p !== null) { win = tr.segs[i]; wp = p; wi = i; } }
+    var win = null, wp = 0, wi = -1, wk = -Infinity;
+    for (var i = 0; i < tr.segs.length; i++) {
+      var p = progress(tr.segs[i].span, t);
+      if (p === null) continue;
+      var k = Math.min(t, endOf(tr.segs[i].span));
+      if (k > wk + 1e-9 || Math.abs(k - wk) <= 1e-9) { win = tr.segs[i]; wp = p; wi = i; wk = Math.max(k, wk); }
+    }
     if (!win) {
       for (var j = 0; j < tr.segs.length; j++) if (tr.segs[j].span.imm && tr.segs[j].from !== null) return { v: tr.segs[j].from, seg: tr.segs[j], p: 0, pre: true };
       return { v: tr.base, seg: null, p: 0 };
