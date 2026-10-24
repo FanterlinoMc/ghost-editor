@@ -107,6 +107,19 @@ A reel can use a style that is not in `styles/`: set `"style": "user:<id>"`. `bu
 - puts emoji/logo/meme on the side of the head with room, or skips them
 - steps captions around cards on screen at the same time
 
+**Emoji in Broadsheet captions: a per-host bound (mac-56).** The clipping caption model reserves 1.5 em per emoji, the
+bound over every platform measured (Apple 1.0, Noto 1.248, Segoe 1.373), because a browserless build cannot know the
+render host. A host may reserve its own, measured value instead, with two deploy settings written from one measurement:
+
+    node scripts/emoji-advance.mjs --write /etc/phantasic/emoji-stamp.json   # on the render host; --font <ttf> without fontconfig
+    CAPTION_EMOJI_EM=1.248  CAPTION_EMOJI_STAMP=/etc/phantasic/emoji-stamp.json
+
+The value is used only when it is at least the stamp's measured advance and the emoji font file the stamp names still
+has the stamped sha256. Otherwise the build reserves 1.5 and warns why; unset is 1.5 with no warning. **Re-measure after
+any base-image or font change**: a changed font is refused loudly, never used silently. Measured: Noto Color Emoji's
+widest of 1,205 emoji is 1.248 em; on 420 random emoji groups the model at 1.248 over-reserves 227 and under-counts
+0, against 272 at 1.5. Code: `scripts/lib/emoji-em.mjs`; test: `scripts/emoji-em.test.mjs`.
+
 `build/caption_layout.json` records every block's zone. `qa.py` prints the counts and fails on anything outside the safe area.
 
 **The last-resort block grows upward (mac-47).** A block in that lowest position (`mode: "lower-face"`) is placed by its
