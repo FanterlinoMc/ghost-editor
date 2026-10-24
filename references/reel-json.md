@@ -348,7 +348,7 @@ alone, like the other whole-reel files. Shape: `{ "dropped": [ { kind, id, type,
   room beside the face), `caption treatment` (a `captions.energy` / `serifSpans` / `stairs` span).
 - `at`, `to`: as written in reel.json. `t`: the start in output seconds when it could be resolved, else null.
 - `rule`: `designer-off`, `no-to`, `span`, `take`, `time`, `compile`, `element`, `tween`, `tween-key`, `tween-limit`, `no-room`, or a Prompt Motion code
-  (`G1`..`G36`, `P1`..`P3`, `R1`..`R14`, `box`, `fit`).
+  (`G1`..`G36`, `P1`..`P6`, `R1`..`R14`, `box`, `fit`).
 - `why`: one sentence a person can read, for example `The graphic "unsafe" at 0:04 was dropped because its HTML
   file failed a safety check.` `warning`: the build's own warning, word for word.
 - Graphic LAYERS are not in it: a layer that cannot be placed stops the build (`die()`), it is never dropped.
@@ -356,7 +356,7 @@ alone, like the other whole-reel files. Shape: `{ "dropped": [ { kind, id, type,
   ignores (`tween-key`), or a tween past the 30 a graphic may have (`tween-limit`). `id` is `<owner id>/tween <n>`. The
   element still shows; it just does not move as planned. Clamped durations and ease fallbacks still animate, so they
   are not recorded. A motion LAYER's left-out elements and tweens are recorded too (`type` `motion layer`).
-- The placement contract's P4-P6 drops join when fork PR #32 merges (it is rebased onto this record).
+- The placement contract's drops are in it with `rule` `P4`, `P5` or `P6`.
 - Test: `scripts/build-graphics-dropped.test.mjs`.
 
 ### What the build refuses (`die()`; planner validator checks)

@@ -328,6 +328,10 @@ test("P4 face: refused at the first sampled instant the box meets the face (movi
   assert.ok(r3.stdout.includes("graphic snap: assets/graphics/card.html: graphic box covers the speaker's face at 2s (40 px margin), dropped"), r3.stdout);
   assert.ok(!read(d3, "index.html").includes("data-graphic="), "the beat is not placed");
   assert.equal(r3.renders.length, 0);
+  // mac-54: the drop is recorded with its rule and a plain sentence
+  const rec = JSON.parse(read(d3, "build/graphics-dropped.json")).dropped;
+  assert.deepEqual(rec.map((x) => [x.kind, x.id, x.rule, x.t]), [["graphic beat", "snap", "P4", 1]]);
+  assert.equal(rec[0].why, 'The graphic "snap" at 0:01 was dropped because it covered the speaker\'s face.');
 });
 
 test("P5 captions: an overlay across the caption band is refused unless hideCaptions or overCaptions says so", () => {
