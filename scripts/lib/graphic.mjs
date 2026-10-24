@@ -63,6 +63,7 @@ export const REASONS = {
   G35: ({ html, match }) => `graphic file ${html} starts a ${match} inside another tag (a < inside an attribute value)`,
   G36: ({ html, cp, ch }) => `graphic file ${html} has the character U+${cp} '${ch}' (an emoji or symbol: no engine font has a glyph for it, it renders as a box)`,
   P1: ({ v }) => `graphic mode '${v}' is not overlay or insert`,
+  P1b: ({ v }) => `graphic mode '${v}' is not overlay, insert or behind`,   // v3.6: a beat's modes
   P2: ({ s }) => `graphic window ${s}s is outside 0.1..60s`,
   P3: ({ W, H }) => `graphic box shows less than 20% inside the ${W}x${H} canvas`,
   P4: ({ t }) => `graphic box covers the speaker's face at ${t}s (40 px margin)`,
@@ -262,9 +263,10 @@ export function inspectGraphic(content, opts = {}) {
 // ---------- placement problems (P1-P3, static on the reel.json entry; first failing one) ----------
 // { mode, window (seconds: dur, or to - at), box {x,y,w,h} } on a W x H canvas -> reasons[] (0 or 1)
 export function checkPlacement({ mode = "overlay", window: win, box } = {}, { W = 1080, H = 1920 } = {}) {
-  if (mode !== "overlay" && mode !== "insert") return [reason("P1", { v: mode })];
+  if (mode !== "overlay" && mode !== "insert" && mode !== "behind") return [reason("P1", { v: mode })];
   if (win !== undefined && !(Number.isFinite(win) && win >= LIMITS.minWindow && win <= LIMITS.maxWindow)) return [reason("P2", { s: win })];
-  if (mode === "overlay" && box && [box.x, box.y, box.w, box.h].every(Number.isFinite) && box.w > 0 && box.h > 0) {
+  // behind (v3.6, beats only): placed like an overlay box, P3 included; full-bleed (and larger) is allowed
+  if ((mode === "overlay" || mode === "behind") && box && [box.x, box.y, box.w, box.h].every(Number.isFinite) && box.w > 0 && box.h > 0) {
     const iw = Math.max(0, Math.min(box.x + box.w, W) - Math.max(box.x, 0));
     const ih = Math.max(0, Math.min(box.y + box.h, H) - Math.max(box.y, 0));
     if ((iw * ih) / (box.w * box.h) < LIMITS.boxInside) return [reason("P3", { W, H })];

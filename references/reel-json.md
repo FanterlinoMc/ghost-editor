@@ -1344,7 +1344,7 @@ frames, so a graphic:
 | `kind` / `type` | `"graphic"` | | literal |
 | `html` | string | | `assets/graphics/<name>.html`, `<name>` `[a-z0-9-]{1,48}`, lowercase `.html`, no `..`, no URL, no absolute path, the resolved file inside `<project>/assets/graphics/` (G1, G2) |
 | `src` (beat) | string | the primary recording | the recording the beat's `at`/`to` belong to, exactly as on every beat (multi-source reels). Not the graphic file: v3.1 renamed the graphic file field to `html` so a graphic beat can name its recording. A graphic layer has no `src` (output seconds); a `src` on it is ignored (GW8) |
-| `mode` | string | `"overlay"` | `overlay` (alpha WebM in `box`) or `insert` (opaque MP4 over the whole canvas). Else P1 |
+| `mode` | string | `"overlay"` | `overlay` (alpha WebM in `box`), `insert` (opaque MP4 over the whole canvas), or (v3.6, beats only) `behind` (alpha WebM drawn between the picture and the speaker's cut-out; "Behind the speaker" below). Else P1 (a layer) or P1b (a beat) |
 | timing (layer) | | | exactly the layer rules: `pin` + `at`, or `anchor {take, offset}`; clamped to the reel; under 0.1 s once clamped: dropped (existing warnings and dies) |
 | timing (beat) | `at`, `to` | `to` = `at` + the graphic's window | source seconds, the beat rules (`src` for multi-source); `to - at` 0.1..60 s (P2) |
 | `dur` (layer) | number s | `duration - in` | > 0 (existing die); the placement's length. 0.1..60 s (P2) |
@@ -1469,6 +1469,8 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
     written at reel seconds, a known I-25 gap outside the contract.)
   - **Inserts** (`mode: "insert"`) are exempt from P4 and P5 **by construction**: full frame on purpose, with the
     captions hidden by default. P6 applies to them.
+  - **Behind graphics** (`mode: "behind"`, v3.6) are exempt from P4 and P5 **by construction**: the speaker's
+    cut-out is drawn over the graphic, so it cannot cover the face, and the captions are drawn over both. P6 applies.
   - **The spans are unchanged, deliberately** (beat or layer 0.1-60 s, P2; a typed motion beat 0.6-8 s): different
     containers, recorded as a decision, not drift.
   - **Blast radius.** A reel with no graphic layer or beat never reaches this code (byte-identity unchanged). The
@@ -1492,6 +1494,38 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
   <...>/scripts/fixtures/ (got <value>)`). After its deps are spread, `chromeVersion` is forced to `0.0.0-stub`, so a
   test render is keyed under a Chrome that does not exist and a real Chrome launched under it is refused by R13:
   nothing is ever cached under a real key. `scripts/fixtures/graphic-stub-deps.mjs` writes a small ffmpeg clip.
+
+### Behind the speaker (`mode: "behind"`, v3.6, mac-62)
+
+The owner's reference look: a giant word, full-bleed, with the speaker's head and shoulders in front of it.
+A graphic **beat** with `mode: "behind"` is that shot. (A layer cannot be `behind`: P1, `graphic mode 'behind' is a
+beat mode only`.)
+
+- **Render.** Exactly an overlay's: the same file, checks (G1-G36), render, alpha WebM and cache key (keyed as
+  `overlay`, so an overlay and a behind placement of the same graphic share one file). Only where it is drawn differs.
+- **Compositing order**, bottom to top: the picture (takes), `ground` pages and `behind` words, **the behind
+  graphic**, the speaker cut-out (the matte), then everything as before (beats, captions, layers). It sits inside the
+  camera (`#push` / `#snap`), with the picture and the cut-out, so a punch-in moves all three together.
+- **Box.** Default: the whole canvas (`{x: 0, y: 0, w: W, h: H}`, **full-bleed**); `fit` default `contain`. A `box`
+  may be anything P3 accepts, including larger than the canvas. No free-box minimum, no face clearance (P4) and no
+  caption clearance (P5): the cut-out covers the face and the captions are on top. `hideCaptions` default `false`.
+- **The cut-out, per span, cached.** A reel with a behind graphic and no `"matte"` key gets the speaker cut out
+  **only around its behind spans**: `matte`, `matteWindows` and `matteClip` are switched on for it (as
+  `glow.hookGround` does), and the frames are cut into a frame-keyed cache, `assets/matte-cache/<srcKey>/`, one file per
+  run of frames (`f<first>-<last>.webm`, recording frame indices at the reel's fps; `<srcKey>` = sha256 of the
+  recording's size and its first and last MiB, so a replaced recording never reuses a stale cut-out). A span needs
+  the recording frames it shows **plus 2 frames each side**; any of them already in the cache are reused, and only the
+  missing runs are cut. A piece that spans several cached files is shown as consecutive `<video>`s, frame-exact.
+  The other behind / ground beats of such a reel use the same cache. A reel that sets `"matte": true` itself keeps
+  the existing cut-out exactly as before (whole recording, or `matteWindows` / `matteClip` windows).
+- **Budget.** The cut-out costs ~1.6 s a frame here; a reel matted end to end is never a default. The design budget
+  is about three behind moments of ~2 s a reel (~190 frames with the margins, ~5 min, once). The build prints the
+  frames it cut and the frames it reused.
+- **When it cannot.** The beat is dropped (warned, and recorded in `graphics-dropped.json`, rule `matte`), never
+  matted whole, when: the reel sets `"matte": false`; it has a `stage`; it has more than one recording; a take
+  transition (`blur`, `whip`) joins two takes; a take is ramped. Text: `graphic <id or at>: <html>: a behind graphic
+  needs the speaker cut out per span (<why>), dropped`.
+- **Blast radius.** Nothing changes for a reel without a behind graphic (byte-identity unchanged).
 
 ### Cache key
 
@@ -1783,7 +1817,7 @@ has the first `!important` (flag `i`) removed from the list, is trimmed, loses O
 
 | # | `<reason>` (exact) |
 |---|---|
-| P1 | `graphic mode '<v>' is not overlay or insert` |
+| P1 | `graphic mode '<v>' is not overlay or insert` (a layer); `graphic mode '<v>' is not overlay, insert or behind` (a beat, v3.6) |
 | P2 | `graphic window <s>s is outside 0.1..60s` |
 | P3 | `graphic box shows less than 20% inside the <W>x<H> canvas` |
 | P4 | `graphic box covers the speaker's face at <t>s (40 px margin)` |
