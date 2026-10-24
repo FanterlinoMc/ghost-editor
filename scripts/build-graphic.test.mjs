@@ -31,17 +31,22 @@ const GRAPHICS = {
 };
 
 let n = 0;
-function project(reel) {
+function project(reel, faceTrack = face) {
   const dir = path.join(root, `p${n++}`);
   fs.mkdirSync(path.join(dir, "assets", "graphics"), { recursive: true });
   fs.mkdirSync(path.join(dir, "build"), { recursive: true });
   fs.copyFileSync(path.join(root, "talk.mp4"), path.join(dir, "assets", "talk.mp4"));
   for (const [f, t] of Object.entries(GRAPHICS)) fs.writeFileSync(path.join(dir, "assets", "graphics", f), t);
   fs.writeFileSync(path.join(dir, "build", "words.whisper.json"), JSON.stringify(words));
-  fs.writeFileSync(path.join(dir, "build", "face.json"), JSON.stringify(face));
+  fs.writeFileSync(path.join(dir, "build", "face.json"), JSON.stringify(faceTrack));
   fs.writeFileSync(path.join(dir, "reel.json"), JSON.stringify({ title: "graphic test", source: "assets/talk.mp4", words: "build/words.whisper.json", face: "build/face.json", fps: 30, outro: 0, music: null, style: "clean", zoom: {}, beats: [], takes: [{ a: 0, b: 8 }], ...reel }, null, 2));
   return dir;
 }
+// The render-mechanics tests below are not about placement: they get a face in the top-right corner (clear of every box
+// they use, with the 40 px margin) and a reel that draws no captions, so the placement contract (P4-P6) has nothing to
+// refuse. The contract tests at the end use the real fixture face and captions.
+const FACE_CLEAR = { fps: 5, w: 1080, h: 1920, samples: Array.from({ length: 5 }, (_, i) => [i * 2, 0, 120, 700, 900, 40, 100]) };
+const mech = (reel) => project({ captions: { style: "none" }, ...reel }, FACE_CLEAR);
 function build(dir, env = {}) {
   const count = path.join(dir, "renders.txt");
   const r = spawnSync(process.execPath, [BUILD, "."], { cwd: dir, encoding: "utf8", env: { ...process.env, GRAPHIC_TEST_DEPS: STUB, GRAPHIC_STUB_COUNT: count, ...env } });
@@ -55,7 +60,7 @@ const frameCount = (file) => +execFileSync("ffprobe", ["-v", "error", "-count_fr
 const card = (extra = {}) => ({ id: "card", kind: "graphic", html: "assets/graphics/card.html", pin: true, at: 1, by: "user", ...extra });
 
 test("overlay layer: a timed <video> of the cached alpha WebM in its box, with z, opacity, fit; edit_truth kind graphic + mode", () => {
-  const dir = project({ layers: [card({ box: { x: 100, y: 300, w: 600, h: 600 }, z: 3, opacity: 0.8, fit: "cover" })] });
+  const dir = mech({ layers: [card({ box: { x: 100, y: 300, w: 600, h: 600 }, z: 3, opacity: 0.8, fit: "cover" })] });
   const r = build(dir);
   assert.equal(r.status, 0, r.stderr + r.stdout);
   const html = read(dir, "index.html");
@@ -72,7 +77,7 @@ test("overlay layer: a timed <video> of the cached alpha WebM in its box, with z
   assert.equal(r.renders.length, 1);
   // the default box: the design size (1080x1080) centred on the canvas, fit contain
   // (and a dur that is not whole frames is snapped: 2.01 s -> 60 frames, data-duration 2, edit_truth end 3)
-  const d2 = project({ layers: [card({ dur: 2.01 })] });
+  const d2 = mech({ layers: [card({ dur: 2.01 })] });
   const r2 = build(d2);
   assert.equal(r2.status, 0, r2.stderr);
   assert.match(read(d2, "index.html"), /style="visibility:hidden;left:0px;top:420px;width:1080px;height:1080px;"><video id="ly-card_v" src="[^"]+" data-start="1" data-duration="2"[^>]*object-fit:contain/);
@@ -113,7 +118,7 @@ test("insert: an opaque full-frame MP4 over the footage, captions hidden by defa
 
 test("in / after: hold, loop and cut map the frames (the wrapper's bridge), each its own cache key; cut shortens the placement (GW2)", () => {
   // card is 2 s = 60 frames. A 3 s placement from in 0.5 s: L 90, inF 15
-  const dir = project({ layers: [
+  const dir = mech({ layers: [
     card({ id: "h", dur: 3, in: 0.5, after: "hold", box: { x: 0, y: 0, w: 500, h: 500 } }),
     card({ id: "l", dur: 3, in: 0.5, after: "loop", box: { x: 0, y: 600, w: 500, h: 500 } }),
     card({ id: "c", at: 4, dur: 3, in: 0.5, after: "cut", box: { x: 0, y: 1200, w: 500, h: 500 } }),
@@ -141,7 +146,7 @@ test("in / after: hold, loop and cut map the frames (the wrapper's bridge), each
 });
 
 test("one render per cache key: the same graphic placed twice (a layer and a beat) renders once; a second build renders nothing", () => {
-  const dir = project({
+  const dir = mech({
     layers: [card({ box: { x: 0, y: 200, w: 540, h: 540 } })],
     beats: [{ type: "graphic", id: "again", html: "assets/graphics/card.html", at: 4, to: 6, box: { x: 540, y: 200, w: 540, h: 540 } }],
   });
@@ -202,11 +207,11 @@ test("a static refusal: the layer dies, the beat is dropped with a warning (exac
 test("a render refusal: the layer dies with the R text, the beat is dropped", () => {
   const refuse = FIX("graphic-refuse-deps.mjs");
   const R12 = reason("R12", { url: "http://1.1.1.1/" });
-  const d1 = project({ layers: [card()] });
+  const d1 = mech({ layers: [card()] });
   const r1 = build(d1, { GRAPHIC_TEST_DEPS: refuse });
   assert.equal(r1.status, 1);
   assert.equal(r1.stderr.trim(), `ERROR: ${layerProblem("card", "assets/graphics/card.html", R12)}`);
-  const d2 = project({ beats: [{ type: "graphic", id: "net", html: "assets/graphics/card.html", at: 2, to: 3 }] });
+  const d2 = mech({ beats: [{ type: "graphic", id: "net", html: "assets/graphics/card.html", at: 2, to: 3 }] });
   const r2 = build(d2, { GRAPHIC_TEST_DEPS: refuse });
   assert.equal(r2.status, 0, r2.stderr);
   assert.ok(r2.stdout.includes(beatProblem("net", "assets/graphics/card.html", R12)));
@@ -232,7 +237,7 @@ test("GRAPHIC_TEST_DEPS guards: ignored outside node --test, only scripts/fixtur
   //    runs, here pointed at a Chrome that does not exist, so it refuses before any render (R12 "could not run")
   const env = { ...process.env, GRAPHIC_TEST_DEPS: FIX("graphic-boom-deps.mjs"), HYPERFRAMES_BROWSER_PATH: path.join(root, "no-such-chrome") };
   delete env.NODE_TEST_CONTEXT;
-  const d1 = project({ layers: [card()] });
+  const d1 = mech({ layers: [card()] });
   const r1 = spawnSync(process.execPath, [BUILD, "."], { cwd: d1, encoding: "utf8", env });
   assert.equal(r1.status, 1);
   assert.ok(r1.stdout.includes("WARNING: GRAPHIC_TEST_DEPS is ignored outside node --test"), r1.stdout);
@@ -241,13 +246,13 @@ test("GRAPHIC_TEST_DEPS guards: ignored outside node --test, only scripts/fixtur
   // 2. a module outside scripts/fixtures/ (here a byte-identical copy of the stub) kills the build
   const copy = path.join(root, "graphic-stub-deps.mjs");
   fs.copyFileSync(STUB, copy);
-  const d2 = project({ layers: [card()] });
+  const d2 = mech({ layers: [card()] });
   const r2 = build(d2, { GRAPHIC_TEST_DEPS: copy });
   assert.equal(r2.status, 1);
   assert.match(r2.stderr, /^ERROR: GRAPHIC_TEST_DEPS must name a module inside \S+\/scripts\/fixtures\/ \(got /);
   assert.equal(r2.renders.length, 0);
   // 3. a module claiming the real Chrome is keyed under the stub Chrome anyway: the launch line no longer matches, R13
-  const d3 = project({ layers: [card()] });
+  const d3 = mech({ layers: [card()] });
   const r3 = build(d3, { GRAPHIC_TEST_DEPS: FIX("graphic-realver-deps.mjs") });
   assert.equal(r3.status, 1, r3.stdout);
   assert.equal(r3.stderr.trim(), `ERROR: ${layerProblem("card", "assets/graphics/card.html", reason("R13", { v: "152.0.7977.30", k: "0.0.0-stub" }))}`);
@@ -257,7 +262,7 @@ test("GRAPHIC_TEST_DEPS guards: ignored outside node --test, only scripts/fixtur
 test("across a take join: L = round((E(to) - E(at)) * fps); a default window ending in a removed gap drops the beat; P2 on the output window", () => {
   // takes 0-3 and 5-8 (a 2 s gap, too long to snap): source 2..6 is output 2..4
   const takes = [{ a: 0, b: 3 }, { a: 5, b: 8 }];
-  const dir = project({ takes, beats: [
+  const dir = mech({ takes, beats: [
     { type: "graphic", id: "across", html: "assets/graphics/card.html", at: 2, to: 6, after: "loop", box: { x: 0, y: 300, w: 500, h: 500 } },
     { type: "graphic", id: "gap", html: "assets/graphics/card.html", at: 2.5 },                    // default to 4.5: in the gap
     { type: "graphic", id: "tail", html: "assets/graphics/card.html", at: 7.95, to: "end" },        // 0.05 s of output
@@ -278,7 +283,7 @@ test("across a take join: L = round((E(to) - E(at)) * fps); a default window end
 test("sections.json: a graphic beat's cache key is in its section's hash", () => {
   const beat = (after) => ({ type: "graphic", id: "k", html: "assets/graphics/card.html", at: 1, to: 2, after });
   const hashes = ["hold", "loop", "hold"].map((after) => {
-    const d = project({ beats: [beat(after)] });
+    const d = mech({ beats: [beat(after)] });
     const r = build(d);
     assert.equal(r.status, 0, r.stderr);
     return JSON.parse(read(d, "build/sections.json")).sections.map((x) => x.hash).join();
@@ -289,7 +294,7 @@ test("sections.json: a graphic beat's cache key is in its section's hash", () =>
 });
 
 test("a graphic at 0 is visible on frame 0 by its own style (no show tween that cannot end before 0)", () => {
-  const dir = project({ layers: [card({ at: 0, opacity: 0.5, box: { x: 0, y: 300, w: 500, h: 500 } })], beats: [{ type: "graphic", id: "z", html: "assets/graphics/card.html", at: 0, to: 1, box: { x: 500, y: 300, w: 500, h: 500 } }] });
+  const dir = mech({ layers: [card({ at: 0, opacity: 0.5, box: { x: 0, y: 300, w: 500, h: 500 } })], beats: [{ type: "graphic", id: "z", html: "assets/graphics/card.html", at: 0, to: 1, box: { x: 500, y: 300, w: 500, h: 500 } }] });
   const r = build(dir);
   assert.equal(r.status, 0, r.stderr);
   const html = read(dir, "index.html");
@@ -299,6 +304,74 @@ test("a graphic at 0 is visible on frame 0 by its own style (no show tween that 
   const id = /<div id="(b\d+)-in" class="graphic"/.exec(html)[1];
   assert.ok(!html.includes(`ft("#${id}-in"`), "no show tween for the beat");
   assert.ok(html.includes(`tl.fromTo("#${id}-in", {"autoAlpha":1}, {"autoAlpha":0,"duration":0.001,"ease":"none","force3D":false,"immediateRender":false}, 0.999);`), "hidden at its end");
+});
+
+// ---------- the placement contract (P4-P6; references/reel-json.md "Placement as built", "The placement contract") ----------
+const CARD = "assets/graphics/card.html";
+test("P4 face: refused at the first sampled instant the box meets the face (moving face, camera snap); nothing rendered", () => {
+  // the face moves right at 4 s: a box clear of it at the start is hit from the first sample nearer the moved face (3.1 s)
+  const moving = { fps: 5, w: 1080, h: 1920, samples: Array.from({ length: 5 }, (_, i) => (i * 2 < 4 ? [i * 2, 300, 900, 340, 740, 480, 700] : [i * 2, 300, 900, 700, 1000, 480, 700])) };
+  const box = { x: 800, y: 300, w: 280, h: 500 };
+  const d1 = project({ layers: [card({ dur: 3, box })] }, moving);
+  const r1 = build(d1);
+  assert.equal(r1.status, 1);
+  assert.equal(r1.stderr.trim(), `ERROR: ${layerProblem("card", CARD, reason("P4", { t: 3.1 }))}`);
+  assert.equal(r1.stderr.trim(), "ERROR: layer card: graphic assets/graphics/card.html: graphic box covers the speaker's face at 3.1s (40 px margin)");
+  assert.equal(r1.renders.length, 0, "a refused graphic is never rendered");
+  // the same box on the still face: clear (40 px margin: the face's right edge 740 + 40 < 800)
+  const d2 = project({ layers: [card({ dur: 3, box })] });
+  assert.equal(build(d2).status, 0);
+  // a 1.5x camera snap at 2 s around zoom.origin grows the face into the box: refused at 2 s, as a dropped beat
+  const d3 = project({ zoom: { snaps: [[2, 1.5]] }, beats: [{ type: "graphic", id: "snap", html: CARD, at: 1, to: 3, box }] });
+  const r3 = build(d3);
+  assert.equal(r3.status, 0, r3.stderr);
+  assert.ok(r3.stdout.includes("graphic snap: assets/graphics/card.html: graphic box covers the speaker's face at 2s (40 px margin), dropped"), r3.stdout);
+  assert.ok(!read(d3, "index.html").includes("data-graphic="), "the beat is not placed");
+  assert.equal(r3.renders.length, 0);
+  // mac-54: the drop is recorded with its rule and a plain sentence
+  const rec = JSON.parse(read(d3, "build/graphics-dropped.json")).dropped;
+  assert.deepEqual(rec.map((x) => [x.kind, x.id, x.rule, x.t]), [["graphic beat", "snap", "P4", 1]]);
+  assert.equal(rec[0].why, 'The graphic "snap" at 0:01 was dropped because it covered the speaker\'s face.');
+});
+
+test("P5 captions: an overlay across the caption band is refused unless hideCaptions or overCaptions says so", () => {
+  const box = { x: 0, y: 1160, w: 280, h: 240 };   // clear of the face (x 300..780 with the margin), across the band
+  const r1 = build(project({ layers: [card({ box })] }));
+  assert.equal(r1.status, 1);
+  assert.equal(r1.stderr.trim(), "ERROR: layer card: graphic assets/graphics/card.html: graphic box crosses the caption band 1176..1365px (set hideCaptions or overCaptions to allow it)");
+  assert.equal(build(project({ layers: [card({ box, overCaptions: true })] })).status, 0, "overCaptions: drawn over the captions");
+  assert.equal(build(project({ layers: [card({ box, hideCaptions: true })] })).status, 0, "hideCaptions: the captions go");
+  const r4 = build(project({ beats: [{ type: "graphic", id: "low", html: CARD, at: 2, to: 3, box }] }));
+  assert.ok(r4.stdout.includes("graphic low: assets/graphics/card.html: graphic box crosses the caption band 1176..1365px (set hideCaptions or overCaptions to allow it), dropped"), r4.stdout);
+  assert.equal(build(project({ captions: { style: "none" }, layers: [card({ box })] })).status, 0, "a reel without captions has no band");
+});
+
+test("P6 collision: a graphic over the title banner is refused; an insert too (the face and band do not apply to it, this does)", () => {
+  const banner = { text: "Title", from: 0, to: 3 };
+  const box = { x: 0, y: 300, w: 280, h: 500 };
+  const r1 = build(project({ banner, layers: [card({ box })] }));
+  assert.equal(r1.status, 1);
+  assert.equal(r1.stderr.trim(), "ERROR: layer card: graphic assets/graphics/card.html: graphic overlaps the director's title banner at 0..3s (one thing on screen at a time)");
+  const r2 = build(project({ banner, beats: [{ type: "graphic", id: "fb", html: "assets/graphics/full.html", mode: "insert", at: 2, to: 3.5 }] }));
+  assert.ok(r2.stdout.includes("graphic fb: assets/graphics/full.html: graphic overlaps the director's title banner at 0..3s (one thing on screen at a time), dropped"), r2.stdout);
+  assert.equal(build(project({ banner: { ...banner, to: 0.9 }, layers: [card({ box })] })).status, 0, "no time overlap: kept");
+});
+
+test("section build: the contract compares in the section's own seconds, the banner included (mac-58)", () => {
+  // section [4, 8): a graphic beat at 5..6 s of the reel is 1..2 s of the section. The banner is written in reel seconds
+  // and is moved into the section's, like every other time the contract compares. A section build prints no warnings
+  // and writes no graphics-dropped.json (the whole-reel build does), so the verdict is read off the section's page.
+  const box = { x: 0, y: 300, w: 280, h: 500 };
+  const kept = (banner) => {
+    const dir = project({ banner, beats: [{ type: "graphic", id: "sec", html: CARD, at: 5, to: 6, box }] });
+    const out = path.join(dir, "section.html");
+    const r = build(dir, { GE_SECTION_START: "4", GE_SECTION_END: "8", GE_SECTION_OUT: out });
+    assert.equal(r.status, 0, r.stderr);
+    return /src="assets\/graphics\/card-[0-9a-f]{16}\.webm"/.test(fs.readFileSync(out, "utf8"));
+  };
+  assert.equal(kept({ text: "Title", from: 0, to: 3 }), true, "reel 0..3 = section -4..-1: the banner is gone before the graphic");
+  assert.equal(kept({ text: "Title", from: 5, to: 7 }), false, "reel 5..7 = section 1..3: on screen with it, refused");
+  assert.equal(kept({ text: "Title", from: 5.5 }), false, "open-ended from 5.5: section 1.5..4 (the reel's end), refused");
 });
 
 test.after(() => fs.rmSync(root, { recursive: true, force: true }));
