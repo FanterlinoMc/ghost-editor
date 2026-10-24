@@ -29,3 +29,5 @@ else than that or `"none (needs a licensed source)"`.
 
 `node scripts/sound_audit.mjs --coverage` lists which ids have a file on this machine;
 `--audit` lists ids the styles name that no manifest has.
+`node scripts/sfx_check.mjs` is the loud version: exit 1, one line per id that plays no file, with the reason;
+`library/sfx/pack-map.json` records which pack file each id comes from (names and the licence line only).

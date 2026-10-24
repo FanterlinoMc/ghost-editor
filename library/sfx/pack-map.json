@@ -1,0 +1,299 @@
+{
+  "_doc": "Which file of the licensed pack each library/sfx id comes from. Names and licence text only: no audio is ever in this repository (library/SOURCES.md). packFile is the pack-relative path of the raw wav the id is processed from; null = not mapped yet. category is the pack's sound category the id is proposed to come from (null = the pack has no such category: the sound is still needed). Checked by scripts/sfx_check.mjs.",
+  "pack": "editorsinventory",
+  "licence": "Editorsinventory Ultimate Drive, by its creator Adish: written permission received by message 2026-09-29, a perpetual, worldwide, royalty-free right for KARRAR ENTERPRISES LLC to use, modify and include it in Phantasic; no third-party files (phantasic engine/assets/LEDGER.md row 'Editorsinventory Ultimate Drive').",
+  "r2Prefix": "private/assets/editorsinventory",
+  "packCategories": [
+    "whooshes",
+    "risers",
+    "shutters",
+    "clicks",
+    "keyboards",
+    "slices",
+    "gears"
+  ],
+  "packSoundFiles": null,
+  "packSoundFilesWhy": "The pack's 12 wav file names are recorded nowhere yet: phantasic engine/assets/STUDY-editorsinventory.md lists the Sound Pack by category only ('12 wav, ~3 s: whooshes, risers, shutters, clicks, keyboards, slices, gears'). They come from the --make-manifest report (docs/ASSETS-UPLOAD.md section 3) once the pack is uploaded.",
+  "ids": {
+    "whoosh-1": {
+      "category": "whooshes",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "whoosh-2": {
+      "category": "whooshes",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "whoosh-3": {
+      "category": "whooshes",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "whoosh-cine": {
+      "category": "whooshes",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "pop-1": {
+      "category": "clicks",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "pop-3": {
+      "category": "clicks",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "click-1": {
+      "category": "clicks",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "tick-1": {
+      "category": "clicks",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "typing-1": {
+      "category": "keyboards",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "impact-1": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "impact-2": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "riser-1": {
+      "category": "risers",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "ding-1": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "buzzer-1": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "kaching-1": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "shutter-1": {
+      "category": "shutters",
+      "packFile": null,
+      "proposal": "mac-61, by the id name only (unheard)"
+    },
+    "pop-2": {
+      "category": "clicks",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "reaction-boing": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "reaction-rimshot": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "reaction-fail-trombone": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "reaction-drum-roll": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "reaction-crowd-laugh": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "reaction-crowd-boo": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "reaction-applause-short": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "reaction-tape-rewind": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "reaction-cartoon-pop": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "reaction-slide-whistle": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "reaction-gasp": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "reaction-ding-ding": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "cinematic-deep-boom": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "cinematic-rumble-riser": {
+      "category": "risers",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "cinematic-drone-swell": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "cinematic-heartbeat": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "cinematic-film-flash": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "tech-glitch-1": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "tech-glitch-2": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "tech-digital-whoosh": {
+      "category": "whooshes",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "tech-ui-confirm": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "tech-ui-error": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "tech-keyboard-burst": {
+      "category": "keyboards",
+      "packFile": null,
+      "proposal": "mac-61, by the id name only (unheard)"
+    },
+    "tech-notification-2": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "tech-camera-flash": {
+      "category": "shutters",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "cinematic-cine-hit": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "zoom-sweep-small": {
+      "category": "slices",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "zoom-sweep-short": {
+      "category": "slices",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "pop-whoosh-light": {
+      "category": "whooshes",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "burn-whoosh-fast": {
+      "category": "whooshes",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "burn-whoosh-tunnel": {
+      "category": "whooshes",
+      "packFile": null,
+      "proposal": "docs/ASSETS-UPLOAD.md section 4 (unheard)"
+    },
+    "paper-quick": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "paper-page-turn": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "paper-pages": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "paper-crinkle": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "pen-short": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "pen-letters": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "pen-scribble": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    },
+    "pen-scribble-2": {
+      "category": null,
+      "packFile": null,
+      "proposal": null
+    }
+  }
+}
