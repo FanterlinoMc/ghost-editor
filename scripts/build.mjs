@@ -146,6 +146,19 @@ const rgbaOf = (hex, a) => { const h = String(hex).replace("#", ""); return /^[0
 // a stage / set glow of "accent" takes the template's accent colour
 const glowOf = (g) => (g === "accent" ? rgbaOf(brand.accent, 0.3) : g);
 const warn = [...styleWarnings];
+// mac-54: every graphic the build leaves out, as data: build/graphics-dropped.json (written only when something was
+// dropped, removed otherwise, so the file never outlives the build that wrote it). The warnings are unchanged; this is a
+// second, machine-readable copy for the planner and the review pass. Spec: references/reel-json.md "graphics-dropped.json".
+const dropped = [];
+const clock = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+const GRAPHIC_WHY = (code) => !code ? "it could not be placed"
+  : /^G\d/.test(code) ? "its HTML file failed a safety check"
+  : /^R\d/.test(code) ? "it could not be rendered safely"
+  : ({ P1: "its mode is not overlay or insert", P2: "it is shorter or longer than a graphic window may be", P3: "most of its box is off the canvas",
+       P4: "it covered the speaker's face", P5: "it crossed the captions", P6: "it overlapped something the director placed at the same time",
+       time: "its time is not inside the edit", box: "its box is not a valid rectangle", fit: "its fit is not cover or contain" })[code] ?? "it could not be placed";
+const recordDrop = ({ kind, id = null, type = null, at = null, to = null, t = null, rule, why, warning }) =>
+  dropped.push({ kind, id: id ?? null, type, at: at ?? null, to: to ?? null, t: Number.isFinite(t) ? Math.round(t * 1000) / 1000 : null, rule, why, warning });
 const die = (m) => { console.error("ERROR: " + m); process.exit(1); };
 // premium kit (opt-in, lib/premium.mjs): SVG defs collected here are written inside #root next to the watermark.
 // look.preset names a grade in presets/grades.json (an SVG tone-curve filter on #base); unset = nothing changes.
@@ -194,6 +207,7 @@ function writeBlankPage() {
   j("words.edit.json", []);
   j("caption_layout.json", { platform: null, safeTop: 0, safeBottom: H, blocks: [] });
   j("sections.json", { total: BLANK_S, fps: FPS, globalHash: null, sections: [] });
+  fs.rmSync(path.join(proj, "build", "graphics-dropped.json"), { force: true });   // mac-54: a blank page drops nothing
   console.log(`blank project: no takes yet -> ${BLANK_S}s black ${W}x${H} page\n\n-> ${path.join(proj, "index.html")}`);
   process.exit(0);
 }
@@ -700,7 +714,14 @@ for (let i = motionBeats.length - 1; i >= 0; i--) {
       else if (ka !== kz || z > ka.start + ka.dur + 1e-6) why = "`at` and `to` are not in the same kept take";
     } catch (e) { why = String(e.message).split("\n")[0]; }
   }
-  if (why) { warn.push(`motion beat ${b.id ?? i} dropped: ${why}`); motionBeats.splice(i, 1); }
+  if (why) {
+    warn.push(`motion beat ${b.id ?? i} dropped: ${why}`);
+    const rule = why.startsWith("this style does not set designer") ? "designer-off" : why === "no `to`" ? "no-to" : why.startsWith("`to` is not after") ? "span" : why.includes("same kept take") ? "take" : "time";
+    let t = null; try { t = EB(b, "at", "motion at"); } catch { /* the time itself may be what failed */ }
+    const plain = { "designer-off": "the reel's style does not allow designer graphics", "no-to": "it has no end time", span: "it ends before it starts", take: "it runs across a cut", time: "its time is not inside the edit" }[rule];
+    recordDrop({ kind: "motion beat", id: b.id, type: "motion", at: b.at, to: b.to, t, rule, why: `The motion graphic${b.id ? ` "${b.id}"` : ""}${t != null ? ` at ${clock(t)}` : ""} was dropped because ${plain}.`, warning: `motion beat ${b.id ?? i} dropped: ${why}` });
+    motionBeats.splice(i, 1);
+  }
 }
 
 // ---------- Prompt Motion graphics (references/reel-json.md "Prompt Motion graphic"; lib/graphic-place.mjs) ----------
@@ -715,7 +736,12 @@ for (let i = motionBeats.length - 1; i >= 0; i--) {
   const b = motionBeats[i];
   if (!b || b.type !== "graphic") continue;
   const g = resolveGraphicBeat(b, inspectPlaced(b, { proj, W, H }), { out: (t) => E(t, "graphic", beatRec(b)), fps: FPS, W, H });
-  if (g.problem) { warn.push(g.problem); motionBeats.splice(i, 1); continue; }
+  if (g.problem) {
+    warn.push(g.problem);
+    let t = null; try { t = E(b.at, "graphic", beatRec(b)); } catch { /* unmappable: recorded without a time */ }
+    recordDrop({ kind: "graphic beat", id: b.id, type: "graphic", at: b.at, to: b.to, t, rule: g.code ?? null, why: `The graphic${b.id !== undefined ? ` "${b.id}"` : ""}${t != null ? ` at ${clock(t)}` : ""} was dropped because ${GRAPHIC_WHY(g.code)}.`, warning: g.problem });
+    motionBeats.splice(i, 1); continue;
+  }
   b._graphic = g;
   graphicBeats.unshift(b);
 }
@@ -734,6 +760,7 @@ if (graphicLayers.length || graphicBeats.length) {
     const r = res[i];
     if (r.ok) { Object.assign(b._graphic, { file: r.file, key: r.key }); for (const w of b._graphic.warnings) warn.push(w); return; }
     warn.push(graphicBeatProblem(_gl(b), b.html, r.reasons[0]));
+    recordDrop({ kind: "graphic beat", id: b.id, type: "graphic", at: b.at, to: b.to, t: b._graphic.t0, rule: (r.codes || [])[0] ?? null, why: `The graphic${b.id !== undefined ? ` "${b.id}"` : ""} at ${clock(b._graphic.t0)} was dropped because ${GRAPHIC_WHY((r.codes || [])[0])}.`, warning: graphicBeatProblem(_gl(b), b.html, r.reasons[0]) });
     motionBeats.splice(motionBeats.indexOf(b), 1);
   });
 }
@@ -1600,7 +1627,11 @@ for (const b of beatsList) {
   let slotPos = null;
   if (["emoji", "logo", "meme", "icon"].includes(b.type) && b.x === undefined && b.y === undefined && face) {
     slotPos = placer.slot(t0, t1, b.type === "emoji" ? 360 : b.type === "logo" || b.type === "icon" ? 280 : (b.w ?? 320), b.type === "emoji" ? 360 : 300);
-    if (!slotPos) { warn.push(`${b.type} at ${b.at}: the face fills the frame, no room beside it: skipped`); continue; }
+    if (!slotPos) {
+      warn.push(`${b.type} at ${b.at}: the face fills the frame, no room beside it: skipped`);
+      recordDrop({ kind: "sticker", id: b.id, type: b.type, at: b.at, to: b.to, t: t0, rule: "no-room", why: `The ${b.type} at ${clock(t0)} was left out because the speaker's face fills the frame and there is no room beside it.`, warning: `${b.type} at ${b.at}: the face fills the frame, no room beside it: skipped` });
+      continue;
+    }
   }
   const box = (html, x = CARD.x, y = cy, w = CARD.w) => `<div id="${id}-in" class="ov card" style="left:${x}px;top:${y}px;width:${w}px">${html}</div>`;
 
@@ -2275,7 +2306,12 @@ for (const b of beatsList) {
       };
       const mg = compileMotion(b, { id, t0, t1, W, H, brand, resolveImage, beatId: b.id });
       for (const m of mg.warnings || []) warn.push(m);
-      if (!mg.ok) { warn.push(`motion beat ${b.id ?? "?"} dropped: ${mg.reason}`); continue; }
+      if (!mg.ok) {
+        warn.push(`motion beat ${b.id ?? "?"} dropped: ${mg.reason}`);
+        recordDrop({ kind: "motion beat", id: b.id, type: "motion", at: b.at, to: b.to, t: t0, rule: "compile", why: `The motion graphic${b.id ? ` "${b.id}"` : ""} at ${clock(t0)} was dropped because it could not be drawn (${mg.reason}).`, warning: `motion beat ${b.id ?? "?"} dropped: ${mg.reason}` });
+        continue;
+      }
+      for (const d of mg.dropped || []) recordDrop({ kind: "motion element", id: `${b.id ?? "?"}/${d.element ?? "?"}`, type: "motion", at: b.at, to: b.to, t: t0, rule: "element", why: `One part${d.element ? ` ("${d.element}")` : ""} of the motion graphic at ${clock(t0)} was left out because it could not be drawn.`, warning: d.why });
       inner = mg.html;
       for (const l of mg.lines) tl.push(l);
       if (mg.hideCaptions) hiddenCaps.push([t0, t1]);
@@ -2587,7 +2623,11 @@ const tryE = (t) => { try { return E(t); } catch { return null; } };
 // take (outside every take, or ambiguous between recordings: write {src, t}) is dropped with a warning, never widened to the whole reel.
 const capSpans = (xs, what) => (xs || []).flatMap(([a, b]) => {
   const x = tryE(a), y = tryE(b);
-  if (x === null || y === null) { warn.push(`captions.${what} [${JSON.stringify(a)}, ${JSON.stringify(b)}] does not resolve to one kept take: dropped`); return []; }
+  if (x === null || y === null) {
+    warn.push(`captions.${what} [${JSON.stringify(a)}, ${JSON.stringify(b)}] does not resolve to one kept take: dropped`);
+    recordDrop({ kind: "caption treatment", id: `captions.${what}`, type: what, at: a, to: b, t: x, rule: "take", why: `A caption treatment (captions.${what}) was dropped because its time is not inside one kept take.`, warning: `captions.${what} [${JSON.stringify(a)}, ${JSON.stringify(b)}] does not resolve to one kept take: dropped` });
+    return [];
+  }
   return [[x, y]];
 });
 // podcast: 1-3 words in heavy caps at the lower third; cap.keys words in the key colour (yellow); a group that holds
@@ -3959,6 +3999,9 @@ fs.writeFileSync(path.join(proj, "build", "words.edit.json"), JSON.stringify(wor
 // from an earlier build must not freeze a reel that now ends on a page).
 if (OUTRO > 0 && !outroCovered && !spec.outroFade) fs.writeFileSync(path.join(proj, "build", "tail.json"), JSON.stringify({ speech: r3(SPEECH), total: TOTAL, fps: FPS, hold: true }));
 else fs.rmSync(path.join(proj, "build", "tail.json"), { force: true });
+// mac-54: what was left out, and why (only when something was; a build that drops nothing removes an older file)
+if (dropped.length) fs.writeFileSync(path.join(proj, "build", "graphics-dropped.json"), JSON.stringify({ dropped }, null, 2));
+else fs.rmSync(path.join(proj, "build", "graphics-dropped.json"), { force: true });
 fs.writeFileSync(path.join(proj, "build", "caption_layout.json"), JSON.stringify({ platform: placer.platform, safeTop: placer.safeTop, safeBottom: placer.safeBottom, blocks: placer.log }, null, 1));
 // Resolved edit-time motion events, for the style-study accuracy harness (A1). Beat times in
 // reel.json are SOURCE seconds; these are what the render actually contains, after E() maps them

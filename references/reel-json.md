@@ -334,6 +334,26 @@ and Geist, Inter, Montserrat and Oswald ship as variable fonts. So a separate st
 - Test: `scripts/caption-boxes.test.mjs` (the join always; real Chrome when present, required with `CI=1` /
   `REQUIRE_CHROME=1`).
 
+### `graphics-dropped.json`: what the build left out, and why (mac-54)
+
+The build keeps dropping what it cannot place, exactly as before, with the same warnings. It now also writes
+`build/graphics-dropped.json` when it dropped at least one graphic, and **removes the file when it dropped none**, so
+the file never outlives the build that wrote it. A missing file means nothing was dropped. Section builds leave it
+alone, like the other whole-reel files. Shape: `{ "dropped": [ { kind, id, type, at, to, t, rule, why, warning } ] }`.
+
+- `kind`: `motion beat` (a designer `motion` beat), `motion element` (one element of a kept motion beat; `id` is
+  `<beat id>/<element id>`), `graphic beat` (Prompt Motion), `sticker` (an `emoji`, `logo`, `meme` or `icon` with no
+  room beside the face), `caption treatment` (a `captions.energy` / `serifSpans` / `stairs` span).
+- `at`, `to`: as written in reel.json. `t`: the start in output seconds when it could be resolved, else null.
+- `rule`: `designer-off`, `no-to`, `span`, `take`, `time`, `compile`, `element`, `no-room`, or a Prompt Motion code
+  (`G1`..`G36`, `P1`..`P3`, `R1`..`R14`, `box`, `fit`).
+- `why`: one sentence a person can read, for example `The graphic "unsafe" at 0:04 was dropped because its HTML
+  file failed a safety check.` `warning`: the build's own warning, word for word.
+- Graphic LAYERS are not in it: a layer that cannot be placed stops the build (`die()`), it is never dropped.
+- Not yet in it: a tween dropped inside a kept motion beat (the element still shows), and the placement contract's
+  P4-P6 drops, which join when that work (fork PR #32) is rebased onto this.
+- Test: `scripts/build-graphics-dropped.test.mjs`.
+
 ### What the build refuses (`die()`; planner validator checks)
 
 take N has a ramp but contains speech; a ramped take can't be the last take or carry a hold; `take.ramp` with `spec.stage` / `spec.matte`; unknown ramp preset; `sfxDesign.density` not low / med / high; `transitions.kind` not whip / zoom / mix; `drop` without `shots`; `drop` without `hold` or `at`; `drop.riser` / `boom` / `tail` / `cutSfx` not an id, a non-empty list of ids, `false` or `"none"`; `drop.hold` naming a take that does not exist. (A ramp that would run past the end of its source is also checked, but a take's `b` is already checked against the file.)

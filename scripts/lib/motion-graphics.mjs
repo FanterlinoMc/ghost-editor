@@ -102,6 +102,9 @@ export function revealClip(r, from, w, h, pad) {
 export function compileMotion(b, ctx) {
   const warnings = [];
   const warn = (m) => warnings.push(`motion ${b?.id ?? "?"}: ${m}`);
+  // mac-54: every element left out, as data ({ element, why }), for build/graphics-dropped.json
+  const droppedEls = [];
+  const dropEl = (id, m) => { warn(m); droppedEls.push({ element: typeof id === "string" ? id : null, why: m }); };
   const { id, t0, t1, W, H, brand = {} } = ctx;
   const r3 = (x) => Math.round(x * 1000) / 1000;
   const len = r3(t1 - t0);
@@ -120,24 +123,24 @@ export function compileMotion(b, ctx) {
   const rawEls = b.elements.slice(0, LIMITS.elements);
   if (b.elements.length > LIMITS.elements) warn(`only the first ${LIMITS.elements} elements are used`);
   for (const e of rawEls) {
-    if (!isObj(e)) { warn("element is not an object, dropped"); continue; }
-    if (typeof e.id !== "string" || !ID_RE.test(e.id)) { warn(`element id '${e.id}' is not [a-z0-9-]{1,24}, dropped`); continue; }
-    if (els.has(e.id)) { warn(`duplicate element id '${e.id}', dropped`); continue; }
-    if (!SHAPES.includes(e.shape)) { warn(`element ${e.id}: unknown shape '${e.shape}', dropped`); continue; }
+    if (!isObj(e)) { dropEl(null, "element is not an object, dropped"); continue; }
+    if (typeof e.id !== "string" || !ID_RE.test(e.id)) { dropEl(e.id, `element id '${e.id}' is not [a-z0-9-]{1,24}, dropped`); continue; }
+    if (els.has(e.id)) { dropEl(e.id, `duplicate element id '${e.id}', dropped`); continue; }
+    if (!SHAPES.includes(e.shape)) { dropEl(e.id, `element ${e.id}: unknown shape '${e.shape}', dropped`); continue; }
     const el = { id: e.id, shape: e.shape, uid: `${id}-${e.id}`, z: Math.round(num(e.z, 0, 9, 0)), opacity: num(e.opacity, 0, 1, 1), rotate: num(e.rotate, -180, 180, 0) };
     if (e.shape === "line") {
       const p = ["x", "y", "x2", "y2"].map((k) => num(e[k], -4000, 6000, NaN));
-      if (p.some(Number.isNaN)) { warn(`element ${e.id}: line needs x, y, x2, y2, dropped`); continue; }
+      if (p.some(Number.isNaN)) { dropEl(e.id, `element ${e.id}: line needs x, y, x2, y2, dropped`); continue; }
       const [x, y, x2, y2] = p;
       Object.assign(el, { x: Math.min(x, x2), y: Math.min(y, y2), w: Math.max(1, Math.abs(x2 - x)), h: Math.max(1, Math.abs(y2 - y)), lx1: x - Math.min(x, x2), ly1: y - Math.min(y, y2), lx2: x2 - Math.min(x, x2), ly2: y2 - Math.min(y, y2) });
     } else {
       const g = ["x", "y", "w", "h"].map((k) => num(e[k], -4000, 6000, NaN));
-      if (g.some(Number.isNaN) || g[2] <= 0 || g[3] <= 0) { warn(`element ${e.id}: needs numeric x, y and w, h > 0, dropped`); continue; }
+      if (g.some(Number.isNaN) || g[2] <= 0 || g[3] <= 0) { dropEl(e.id, `element ${e.id}: needs numeric x, y and w, h > 0, dropped`); continue; }
       [el.x, el.y, el.w, el.h] = g;
     }
     if (e.shape === "text") {
       const text = cleanText(e.text ?? "");
-      if (!text) { warn(`element ${e.id}: empty text, dropped`); continue; }
+      if (!text) { dropEl(e.id, `element ${e.id}: empty text, dropped`); continue; }
       let font = e.font;
       if (!DESIGNER_FONTS.includes(font)) { if (font !== undefined) warn(`element ${e.id}: font '${font}' is not in DESIGNER_FONTS, using Inter`); font = "Inter"; }
       const color = e.color === undefined ? "#ffffff" : resolveColor(e.color, brand);
@@ -152,7 +155,7 @@ export function compileMotion(b, ctx) {
       });
     } else if (e.shape === "image") {
       const src = typeof e.src === "string" ? ctx.resolveImage?.(e.src) : null;
-      if (!src) { warn(`element ${e.id}: image src '${String(e.src).slice(0, 60)}' is not under assets/ or a library id, dropped`); continue; }
+      if (!src) { dropEl(e.id, `element ${e.id}: image src '${String(e.src).slice(0, 60)}' is not under assets/ or a library id, dropped`); continue; }
       Object.assign(el, { src, fit: e.fit === "contain" ? "contain" : "cover" });
     } else {
       const fill = e.fill === undefined || e.fill === "none" ? "none" : resolveColor(e.fill, brand);
@@ -160,20 +163,20 @@ export function compileMotion(b, ctx) {
       if (fill === null) warn(`element ${e.id}: bad fill '${e.fill}', using none`);
       if (stroke === null) warn(`element ${e.id}: bad stroke '${e.stroke}', using none`);
       Object.assign(el, { fill: fill ?? "none", stroke: stroke ?? "none", sw: num(e.strokeWidth, 0, 40, stroke && stroke !== "none" ? 4 : 0), cap: ["round", "square", "butt"].includes(e.cap) ? e.cap : "round" });
-      if (e.shape === "line" && el.stroke === "none") { warn(`element ${e.id}: a line with no stroke is invisible, dropped`); continue; }
+      if (e.shape === "line" && el.stroke === "none") { dropEl(e.id, `element ${e.id}: a line with no stroke is invisible, dropped`); continue; }
       if (e.shape === "rect" || e.shape === "ellipse") {
         const f2 = e.fill2 === undefined ? null : resolveColor(e.fill2, brand);
         if (f2 && el.fill !== "none") Object.assign(el, { fill2: f2, angle: num(e.gradientAngle, -360, 360, 180) });
         if (e.shape === "rect") el.radius = num(e.radius, 0, 960, 0);
       }
       if (e.shape === "path") {
-        if (typeof e.d !== "string" || !e.d.trim() || e.d.length > LIMITS.maxPath || !PATH_RE.test(e.d) || !/^\s*[Mm]/.test(e.d)) { warn(`element ${e.id}: path d is empty, too long, starts without M, or uses a command outside M L H V C S Q T A Z, dropped`); continue; }
+        if (typeof e.d !== "string" || !e.d.trim() || e.d.length > LIMITS.maxPath || !PATH_RE.test(e.d) || !/^\s*[Mm]/.test(e.d)) { dropEl(e.id, `element ${e.id}: path d is empty, too long, starts without M, or uses a command outside M L H V C S Q T A Z, dropped`); continue; }
         el.d = e.d.trim();
       }
     }
     els.set(el.id, el);
   }
-  if (!els.size) return { ok: false, reason: "no valid elements", warnings };
+  if (!els.size) return { ok: false, reason: "no valid elements", warnings, dropped: droppedEls };
 
   // ---------- tweens -> per-element plans ----------
   // plan: for each (selector, key) a list of segments {at, end, from, to}, used for the backfill at
@@ -405,5 +408,5 @@ export function compileMotion(b, ctx) {
   if (exitKind === "fade") lines.push(`ft("#${id}-in", { opacity: 1 }, { opacity: 0, duration: ${r3(fo)}, ease: "power1.in" }, ${r3(t1 - fo)});`);
 
   const sfx = b.sfx === undefined ? "whoosh" : b.sfx;
-  return { ok: true, html: dimHtml + `<div id="${id}-in" class="ov"${ctx.beatId != null ? ` data-beat-id="${escHtml(ctx.beatId)}"` : ""} style="left:0;top:0;width:${W}px;height:${H}px">${html.join("")}</div>`, lines, hideCaptions: b.hideCaptions === true || room === "below", room, sfx, dim, exit: exitKind, warnings };
+  return { ok: true, dropped: droppedEls, html: dimHtml + `<div id="${id}-in" class="ov"${ctx.beatId != null ? ` data-beat-id="${escHtml(ctx.beatId)}"` : ""} style="left:0;top:0;width:${W}px;height:${H}px">${html.join("")}</div>`, lines, hideCaptions: b.hideCaptions === true || room === "below", room, sfx, dim, exit: exitKind, warnings };
 }

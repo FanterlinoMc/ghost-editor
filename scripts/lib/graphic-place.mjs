@@ -60,10 +60,10 @@ export const crossesUi = (box, sz, W, H) => !!sz && (box.y < sz.top || box.y + b
  */
 export function resolveGraphicBeat(b, insp, { out, fps, W, H }) {
   const label = graphicLabel(b);
-  const drop = (r) => ({ problem: beatProblem(label, b.html, r) });
-  if (!insp.ok) return drop(insp.reasons[0]);
+  const drop = (r, code = null) => ({ problem: beatProblem(label, b.html, r), code });   // code: mac-54's record
+  if (!insp.ok) return drop(insp.reasons[0], (insp.codes || [])[0] ?? null);
   const meta = insp.meta, mode = b.mode ?? "overlay";
-  if (!MODES.includes(mode)) return drop(reason("P1", { v: mode }));
+  if (!MODES.includes(mode)) return drop(reason("P1", { v: mode }), "P1");
   const tm = graphicTiming(meta, b, fps);
   const warnings = [...tm.warnings];
   // the window, in source seconds: to - at when both are seconds of the same recording, or the graphic's own length
@@ -74,17 +74,17 @@ export function resolveGraphicBeat(b, insp, { out, fps, W, H }) {
   const A = srcOf(b.at), Z = b.to === undefined ? null : srcOf(b.to);
   const win = b.to === undefined ? (A ? tm.defaultWindow : undefined) : A && Z && A.src === Z.src ? Z.t - A.t : undefined;
   const p2 = (s) => checkPlacement({ mode, window: r3(s) }, { W, H });
-  if (win !== undefined && p2(win).length) return drop(p2(win)[0]);
+  if (win !== undefined && p2(win).length) return drop(p2(win)[0], "P2");
   let t0, t1;
   try {
     t0 = out(b.at);
     if (b.to !== undefined) t1 = out(b.to);
     else if (A) t1 = out(fin(b.at) ? r3(b.at + win) : { ...b.at, t: r3(b.at.t + win) });
     else t1 = r3(t0 + tm.defaultWindow);   // an `at` that is not a source second: the default window in output seconds
-  } catch (e) { return drop(String(e.message).split("\n")[0]); }
-  if (p2(t1 - t0).length) return drop(p2(t1 - t0)[0]);
+  } catch (e) { return drop(String(e.message).split("\n")[0], "time"); }
+  if (p2(t1 - t0).length) return drop(p2(t1 - t0)[0], "P2");
   const Lf = Math.round((t1 - t0) * fps);
-  if (Lf < 1) return drop(reason("P2", { s: r3(t1 - t0) }));
+  if (Lf < 1) return drop(reason("P2", { s: r3(t1 - t0) }), "P2");
   t1 = r3(t0 + Lf / fps);   // whole frames: the <video>'s data-duration is the rendered length L / fps
   const cut = cutFrames(meta, tm, fps, Lf);
   warnings.push(...cut.warnings);
@@ -94,12 +94,12 @@ export function resolveGraphicBeat(b, insp, { out, fps, W, H }) {
     if (b.box !== undefined) warnings.push(reason("GW4"));
     box = { x: 0, y: 0, w: W, h: H };
   } else {
-    if (b.box !== undefined && !goodBox(b.box)) return drop(`box must be { x, y, w, h } numbers with w, h > 0, got ${JSON.stringify(b.box)}`);
+    if (b.box !== undefined && !goodBox(b.box)) return drop(`box must be { x, y, w, h } numbers with w, h > 0, got ${JSON.stringify(b.box)}`, "box");
     box = b.box !== undefined ? { x: b.box.x, y: b.box.y, w: b.box.w, h: b.box.h } : centredBox(meta.size, W, H);
     const p = checkPlacement({ mode, box }, { W, H });
-    if (p.length) return drop(p[0]);
+    if (p.length) return drop(p[0], "P3");
   }
-  if (b.fit !== undefined && !GRAPHIC_FITS.includes(b.fit)) return drop(`fit must be one of ${GRAPHIC_FITS.join("|")}, got ${JSON.stringify(b.fit)}`);
+  if (b.fit !== undefined && !GRAPHIC_FITS.includes(b.fit)) return drop(`fit must be one of ${GRAPHIC_FITS.join("|")}, got ${JSON.stringify(b.fit)}`, "fit");
   warnings.push(...ignoredWarnings(b));
   return {
     html: b.html, t0, t1, L: cut.L, inF: tm.inF, D: tm.D, after: tm.after, mode, box, meta, warnings: warnings.map((w) => `graphic ${label}: ${w}`),
