@@ -357,4 +357,21 @@ test("P6 collision: a graphic over the title banner is refused; an insert too (t
   assert.equal(build(project({ banner: { ...banner, to: 0.9 }, layers: [card({ box })] })).status, 0, "no time overlap: kept");
 });
 
+test("section build: the contract compares in the section's own seconds, the banner included (mac-58)", () => {
+  // section [4, 8): a graphic beat at 5..6 s of the reel is 1..2 s of the section. The banner is written in reel seconds
+  // and is moved into the section's, like every other time the contract compares. A section build prints no warnings
+  // and writes no graphics-dropped.json (the whole-reel build does), so the verdict is read off the section's page.
+  const box = { x: 0, y: 300, w: 280, h: 500 };
+  const kept = (banner) => {
+    const dir = project({ banner, beats: [{ type: "graphic", id: "sec", html: CARD, at: 5, to: 6, box }] });
+    const out = path.join(dir, "section.html");
+    const r = build(dir, { GE_SECTION_START: "4", GE_SECTION_END: "8", GE_SECTION_OUT: out });
+    assert.equal(r.status, 0, r.stderr);
+    return /src="assets\/graphics\/card-[0-9a-f]{16}\.webm"/.test(fs.readFileSync(out, "utf8"));
+  };
+  assert.equal(kept({ text: "Title", from: 0, to: 3 }), true, "reel 0..3 = section -4..-1: the banner is gone before the graphic");
+  assert.equal(kept({ text: "Title", from: 5, to: 7 }), false, "reel 5..7 = section 1..3: on screen with it, refused");
+  assert.equal(kept({ text: "Title", from: 5.5 }), false, "open-ended from 5.5: section 1.5..4 (the reel's end), refused");
+});
+
 test.after(() => fs.rmSync(root, { recursive: true, force: true }));
