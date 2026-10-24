@@ -2998,7 +2998,11 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   // styles never take this path.
   // `translate` (the individual CSS property, not `transform`): GSAP never writes it, and the caption container is not
   // canvas-sized, so a CSS `bottom` would be measured from the wrong edge (measured: blocks 700+ px off)
-  const vpos = pl.mode === "lower-face" && !clipExt && fy == null ? `top:${Math.round(pl.y + reserveH)}px;translate:0 -100%` : `top:${cssTop}px`;
+  // mac-53: the same for a block BELOW the face (or with no face) whose band ends less than one more line above the safe
+  // bottom: a wrap there would also spill into the bottom UI (measured: clean on a close-up, 2 blocks, 48 px). A block
+  // with a line of room below it stays top-anchored, and blocks above the head are never moved.
+  const nearBottom = !["above", "above-compact"].includes(pl.mode) && pl.y + 2 * reserveH > placer.safeBottom;
+  const vpos = (pl.mode === "lower-face" || nearBottom) && !clipExt && fy == null ? `top:${Math.round(pl.y + reserveH)}px;translate:0 -100%` : `top:${cssTop}px`;
   return `<div id="cg${gi}" class="cap-group clip${clipping ? "" : look}" style="${vpos}${tilt}${pl.scale && pl.scale < 1 ? `;transform:translateX(-50%) scale(${pl.scale});transform-origin:50% 0` : ""}" data-start="${r3(s)}" data-duration="${r3(Math.max(0.1, e - s))}" data-track-index="5">${clipping ? `<div id="cg${gi}in" class="cap-in${look}">${body}</div>` : body}</div>`;
 }).join("\n      ");
 

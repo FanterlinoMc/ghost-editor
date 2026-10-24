@@ -113,7 +113,9 @@ A reel can use a style that is not in `styles/`: set `"style": "user:<id>"`. `bu
 BOTTOM edge (`top` at the band's bottom plus CSS `translate: 0 -100%`), at the bottom of the band the placer reserved for it. A block that wraps to more lines
 than the band holds therefore grows up over the chest, never down into the platform's bottom UI. Before this, such a
 block was placed by its top and spilled down: measured up to 123 px into the bottom zone (closer), 75 px (headline-2
-and 3), 22 px (editorial, cinematic). Every other position is unchanged and still placed by its top; clipping
+and 3), 22 px (editorial, cinematic). The same holds for a block below the face (or with no face seen) whose band ends less than one more line above
+the safe bottom (mac-53: clean on a close-up, 2 blocks drawn 48 px into the bottom zone, now 0). Every other position
+is unchanged and still placed by its top, and blocks above the head are never moved; clipping
 (Broadsheet) keeps its measured band (mac-45). `node scripts/caption-boxes.mjs <project> --check` measures the drawn
 boxes (`drawnTop` / `drawnBottom`, after this anchoring) against the safe area.
 
