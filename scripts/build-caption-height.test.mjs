@@ -52,9 +52,12 @@ test("model: the band reserved for a B1 cg7-shaped block covers the box Chrome d
 test("model: the line count is an upper bound over how Chromes wrap an emoji run (Windows drew 4 lines where packing gave 3)", () => {
   // Windows Chrome (Segoe UI Emoji): "to be" + 22 emoji in one word drew 4 lines; greedy packing at every emoji gave 3.
   // The model takes the worst over every set of break opportunities inside an emoji word: at 1.5 em that is 5 lines
-  // (chunks just over half a line, one per line), never fewer than any real Chrome
+  // (chunks just over half a line, one per line), never fewer than any real Chrome. mac-48: a word wider than a line is
+  // an inline-block as wide as the line, so it cannot share a line: "to be" takes line 1 and the run its own 5 (6)
   const run = "😂".repeat(22);
-  assert.equal(clippingExtent(["to", "be", run], { size: 58, maxWidth: 820 }).lines, 5);
+  assert.equal(clippingExtent(["to", "be", run], { size: 58, maxWidth: 820 }).lines, 6);
+  // ...and the word after a wrapped one starts a new line (the 2-of-420 Noto case: "photographers👍🏽🇺🇸💯🎉👍👍🏽” 👍")
+  assert.equal(clippingExtent([run, "ok"], { size: 58, maxWidth: 820 }).lines, 6);
   assert.ok(clippingExtent(["to", "be", run], { size: 58, maxWidth: 820, emojiEm: 1.373 }).lines >= 4, "Segoe's advance: at least Windows' 4");
   assert.equal(clippingExtent([run], { size: 58, maxWidth: 820 }).lines, 5);
   // plain text: one piece per word, no choice, plain greedy (B1 shapes stay 1 line, a long group 2)
@@ -135,7 +138,12 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
   try { puppeteer = findPuppeteer({ npxTimeout: REQUIRED ? 20000 : undefined }); } catch (e) { return skipOrFail(t, e.message); }
   const { dir, html, layout } = reel();
   const TYPES = { ".html": "text/html", ".woff2": "font/woff2", ".mp4": "video/mp4", ".js": "text/javascript" };
+  // EMOJI_FONT=<a .ttf> (mac-48): lay the captions out with THAT emoji font instead of this OS's, to reproduce another
+  // host on this one (the server's Noto Color Emoji on a Mac, say). Served at /__emoji-font and put after the caption
+  // font in the family list, so text keeps its face and only emoji fall through to it.
+  const EMOJI_FONT = process.env.EMOJI_FONT && fs.existsSync(process.env.EMOJI_FONT) ? process.env.EMOJI_FONT : null;
   const server = http.createServer((req, res) => {
+    if (EMOJI_FONT && new URL(req.url, "http://x").pathname === "/__emoji-font") { res.writeHead(200, { "content-type": "font/ttf" }); return fs.createReadStream(EMOJI_FONT).pipe(res); }
     const f = path.join(dir, decodeURIComponent(new URL(req.url, "http://x").pathname));
     if (!f.startsWith(dir) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { "content-type": TYPES[path.extname(f)] || "application/octet-stream" });
@@ -149,6 +157,13 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: "load", timeout: 60000 });
     try { await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 }); }
     catch { return skipOrFail(t, "GSAP did not load (offline?)"); }
+    if (EMOJI_FONT) {
+      await page.addStyleTag({ content: `@font-face { font-family: "EmojiFontTest"; src: url(/__emoji-font) format("truetype"); }
+        .cap-group, .cap-group * { font-family: Gloock, "EmojiFontTest", "Noto Sans Arabic", Georgia, serif !important; }` });
+      const ok = await page.evaluate(async () => (await document.fonts.load('58px "EmojiFontTest"', "\u{1F602}")).length > 0);
+      assert.ok(ok, `EMOJI_FONT ${EMOJI_FONT} did not load`);
+      console.log(`emoji font forced: ${path.basename(EMOJI_FONT)}`);
+    }
     const got = await page.evaluate(async (n) => {
       await document.fonts.load('58px "Gloock"', "cats run fast"); await document.fonts.ready;
       const tl = window.__timelines.main; tl.pause();
