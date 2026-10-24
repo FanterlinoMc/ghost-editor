@@ -31,3 +31,10 @@ test("no sfx id is dangling except the guarded ones", () => {
   assert.deepEqual(sfx.filter((d) => !/every code site checks the manifest first/.test(d.effect)).map((d) => d.id), []);
   assert.deepEqual(sfx.map((d) => d.id), ["vine-boom"]);
 });
+
+test("the sound-line pattern matches riser / boom / tail only as whole keys (a `detail:` field is not a sound line)", () => {
+  const src = fs.readFileSync(new URL("./missing_assets.mjs", import.meta.url), "utf8");
+  const SOUND_LINE = eval(/^const SOUND_LINE = (\/.*\/);$/m.exec(src)[1]);
+  for (const l of ['  detail: "no-room",', '{ thumbnail: "x" }', 'why: "a cocktail: x"']) assert.ok(!SOUND_LINE.test(l), l);
+  for (const l of ['{ tail: "boom-1" }', '  boom: ["impact-1"],', 'riser: "cinematic-rumble-riser"', 'addSfx("whoosh-1")']) assert.ok(SOUND_LINE.test(l), l);
+});
