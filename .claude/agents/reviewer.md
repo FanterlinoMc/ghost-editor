@@ -1,5 +1,6 @@
 ---
 name: reviewer
+model: opus
 description: Checker, either machine, read-only. Checkpoint CP3 - reviews one branch's diff for correctness, security, over-engineering, opt-in/byte-identity discipline and test coverage, and returns BLOCKER / SHOULD / NIT findings. Use after a builder finishes and before the verifier runs. Never reviews its own work.
 disallowedTools: Edit, Write, NotebookEdit
 skills:

@@ -62,6 +62,23 @@ In short: the Mac owns this repo's engine files; the PC owns the planner and the
 between the two is `references/reel-json.md`: for each new element the field list is agreed there
 first (a small PR), then both sides build in parallel.
 
+**Two rules the owner added on 24 Oct, both in TEAM.md — read §3, §4 and the model table in §1 before
+your first hand-off:**
+
+- **A hand-off is a pointer, not a report.** 30 lines at most. Test output means the single
+  `GATE:`/`CHECK:` line plus every failure in full — never the list of passing tests. No file
+  contents, no diffs, no listings: name the path and the sha. Cite a contract as `<file> §<section>`
+  instead of explaining it again. Subagents answer in 300 words or fewer.
+- **`STATE.md` in the phantasic repo is the status.** One row per branch. Edit your branch's row in
+  the same commit that changes it, and read it instead of asking the PC where things stand. Entries in
+  `MAC-FEEDBACK.md` and `MAC-TASKS.md` now go **newest first**, 20 lines each, so a reader can take
+  the top and stop — or read only what is new with
+  `git diff <sha>..origin/main -- MAC-FEEDBACK.md`.
+
+Each agent file here now names its own model (`engine` and `reviewer` on Opus, `ingest-formats` and
+`verifier` on Sonnet), so you do not pass one by hand. Use Haiku for lookups — finding a file, reading
+a log, updating a `STATE.md` row.
+
 ## Current work for the Mac
 
 See the vault note "Phantasic Next Stage — Two Machines (19 Oct)" (owner shares it). In short:

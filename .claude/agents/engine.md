@@ -1,5 +1,6 @@
 ---
 name: engine
+model: opus
 description: Builder on the Mac. Owns the engine fork's rendering core - scripts/build.mjs, scripts/lib/*.mjs (not safezone.mjs), qa.py, styles/, library/ manifests, references/ and the engine's Python tools. Use for any new beat type, scene kind, caption style, motion element (Lottie, chart, icon, mockup, particles), transition, render-speed or QA work.
 skills:
   - hyperframes-core
