@@ -1406,9 +1406,10 @@ const placer = makePlacer({ face, faces, takes, zoom: { ...zoom, snapsEdit: snap
 // docs/GRAPHICS-ROUTES.md (phantasic) D2: an HTML graphic obeys the typed route's placement rules, and the build
 // enforces them (refuse, never warn: the automatic path has no reviewer). The rules are checkContract in
 // lib/graphic.mjs; the geometry is the caption placer's own (the face under the camera in force at each sampled
-// instant, the first-choice caption band for this reel's caption height). Layer windows are absolute output seconds;
-// the placer counts from the section start, like hiddenCaps below. A layer that fails dies; a beat is dropped with
-// the problem as a warning and spliced out, like a G / P problem. Then the surviving graphics render, as before.
+// instant, the first-choice caption band for this reel's caption height). Layer windows and the banner are absolute
+// output seconds; the placer, E() and so every beat count from the section start, so those two are moved into it.
+// A layer that fails dies; a beat is dropped with the problem as a warning and spliced out, like a G / P problem.
+// Then the surviving graphics render, as before.
 if (graphicLayers.length || graphicBeats.length) {
   const capH = Math.round((spec.captions?.size ?? brand.capSize) * 2.2);   // the planner's cap_h (designer_validate.Geometry)
   const secOff = SECTION_MODE ? SECTION_START : 0;
@@ -1422,7 +1423,8 @@ if (graphicLayers.length || graphicBeats.length) {
       if (Number.isFinite(s0) && Number.isFinite(e0) && e0 > s0) others.push({ kind: `${b.type} beat`, s: s0, e: e0 });
     } catch { /* a beat whose time cannot be mapped is refused by its own check later; nothing of it is on screen */ }
   }
-  if (spec.banner?.text) others.push({ kind: "title banner", s: spec.banner.from ?? 0, e: Math.min(spec.banner.to ?? TOTAL, TOTAL) });
+  // the banner is written in reel seconds; a section build compares in the section's (mac-58), like everything above
+  if (spec.banner?.text) others.push({ kind: "title banner", s: (spec.banner.from ?? 0) - secOff, e: Math.min(spec.banner.to ?? TOTAL, TOTAL) - secOff });
   // P5 needs captions to protect: a reel that draws none (captions.style "none") has no band
   const noCaps = spec.captions?.style === "none";
   const geo = { faceAt: placer.faceAt, band: noCaps ? null : placer.band, capH, total: SECTION_MODE ? SECTION_TOTAL : TOTAL, others };

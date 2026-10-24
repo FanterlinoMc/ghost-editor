@@ -1250,3 +1250,20 @@ test("checkContract: insert exempt from face and band, washes/camera/graphics ne
   // no face at the instant (null) and no band (null): nothing to refuse
   assert.deepEqual(checkContract({ mode: "overlay", box: onFace, t0: 1, t1: 2 }, { faceAt: () => null, band: null, others: [] }), []);
 });
+
+test("checkContract P4 samples a 0.1 s grid from t0: t1 only when it lies on the grid (mac-58, the spec follows the code)", async () => {
+  const { checkContract, reason } = await import("./graphic.mjs");
+  const asked = [];
+  // the face is on screen only at instants >= 1.25: a window 1..1.25 samples 1, 1.1, 1.2 and never meets it
+  const late = (t) => { asked.push(t); return t >= 1.25 - 1e-9 ? { left: 300, top: 300, right: 700, bottom: 900 } : null; };
+  const geo = { faceAt: late, band: null, total: 10, others: [] };
+  const box = { x: 400, y: 400, w: 100, h: 100 };
+  assert.deepEqual(checkContract({ mode: "overlay", box, t0: 1, t1: 1.25 }, geo), []);
+  assert.deepEqual(asked, [1, 1.1, 1.2], "the grid, accumulated with +(t + 0.1).toFixed(3)");
+  asked.length = 0;
+  assert.deepEqual(checkContract({ mode: "overlay", box, t0: 1, t1: 1.3 }, geo), [reason("P4", { t: 1.3 })], "t1 on the grid is sampled");
+  assert.deepEqual(asked, [1, 1.1, 1.2, 1.3]);
+  asked.length = 0;
+  checkContract({ mode: "overlay", box, t0: 0.95, t1: 1.2 }, { ...geo, faceAt: (t) => (asked.push(t), null) });
+  assert.deepEqual(asked, [0.95, 1.05, 1.15], "the grid starts at t0, not on whole tenths");
+});
