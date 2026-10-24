@@ -3,13 +3,14 @@
 // build/caption_layout.json as `x` and `width` per block. Spec: references/reel-json.md "caption_layout.json: x and
 // width (caption-boxes.mjs)".
 //
-//   node scripts/caption-boxes.mjs <project> [--check]
+//   node scripts/caption-boxes.mjs <project> [--check] [--with-gsap]
 //
 // Why a browser and not a model: the placer only decides y. A block's width is the browser's line layout of the
 // caption font, and 62 shipped styles caption in Arial (a system font the engine does not ship), while Geist, Inter,
 // Montserrat and Oswald ship as VARIABLE fonts, so their bold advances are not the file's default ones. Only the page,
 // in the Chrome that renders it, knows the width. So this loads the built index.html in that Chrome
-// (lib/browser.mjs, the pinned shell first), seeks into each block and takes the union of the drawn rectangles of
+// (lib/browser.mjs, the pinned shell first), JavaScript off and nothing fetched from outside the project (the
+// captions are static HTML; --with-gsap runs the page's script and seeks into each block), and takes the union of the drawn rectangles of
 // every caption element of the block (all caption styles put their blocks on track 5 with data-start), descendants
 // included, so text that overflows its box is counted.
 //
@@ -43,7 +44,7 @@ export function joinBoxes(layoutBlocks, pageBlocks) {
   });
 }
 
-export async function measure(proj, { chrome, puppeteer } = {}) {
+export async function measure(proj, { chrome, puppeteer, withGsap = false } = {}) {
   const layoutFile = path.join(proj, "build", "caption_layout.json");
   const html = path.join(proj, "index.html");
   if (!fs.existsSync(layoutFile) || !fs.existsSync(html)) throw new Error(`no built reel at ${proj} (run build.mjs first)`);
@@ -65,19 +66,26 @@ export async function measure(proj, { chrome, puppeteer } = {}) {
   try {
     const version = (await browser.version()).replace(/^HeadlessChrome\//, "");
     const page = await browser.newPage();
-    await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
-    await page.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: "load", timeout: 60000 });
-    await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 })
-      .catch(() => { throw new Error("the page's timeline did not start (GSAP comes from its CDN until vendoring lands: offline?)"); });
-    const pageBlocks = await page.evaluate(async () => {
+    // Offline by default: the caption markup is static HTML from build.mjs, so the resting layout needs no script.
+    // Every request that is not this project's own server is aborted (GSAP's CDN included), so measuring has no
+    // network dependency. --with-gsap lets the page's script and its CDN GSAP run and seeks into each block instead.
+    const base = `http://127.0.0.1:${server.address().port}/`;
+    await page.setRequestInterception(true);
+    page.on("request", (r) => (r.url().startsWith(base) || /^(data|blob):/.test(r.url()) ? r.continue() : r.abort()));
+    if (withGsap) await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
+    else await page.setJavaScriptEnabled(false);
+    await page.goto(base + "index.html", { waitUntil: "load", timeout: 60000 });
+    if (withGsap) await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 })
+      .catch(() => { throw new Error("--with-gsap: the page's timeline did not start (GSAP comes from its CDN: offline?)"); });
+    const pageBlocks = await page.evaluate(async (withGsap) => {
       await document.fonts.ready;
-      const tl = window.__timelines.main; tl.pause();
+      const tl = withGsap ? window.__timelines.main : null;
+      if (tl) tl.pause();
       const els = [...document.querySelectorAll('[data-track-index="5"][data-start]')];
       const out = [];
       for (const el of els) {
         const start = +el.dataset.start, dur = +el.dataset.duration || 0;
-        tl.seek(start + Math.min(0.3, dur / 2));
-        await new Promise((r) => requestAnimationFrame(() => r()));
+        if (tl) { tl.seek(start + Math.min(0.3, dur / 2)); await new Promise((r) => requestAnimationFrame(() => r())); }
         let x0 = Infinity, x1 = -Infinity;
         for (const n of [el, ...el.querySelectorAll("*")]) {
           const r = n.getBoundingClientRect();
@@ -86,9 +94,9 @@ export async function measure(proj, { chrome, puppeteer } = {}) {
         if (x1 > x0) out.push({ start, x0, x1 });
       }
       return out;
-    });
+    }, withGsap);
     const blocks = joinBoxes(layout.blocks || [], pageBlocks);
-    const next = { ...layout, measured: { by: "caption-boxes", chrome: version, platform: `${os.platform()}-${os.arch()}` }, blocks };
+    const next = { ...layout, measured: { by: "caption-boxes", chrome: version, platform: `${os.platform()}-${os.arch()}`, ...(withGsap ? { gsap: true } : {}) }, blocks };
     fs.writeFileSync(layoutFile, JSON.stringify(next, null, 1));
     const outside = blocks.map((b, i) => ({ i, t0: b.t0, x: b.x, width: b.width })).filter((b) => b.x !== null && (b.x < 0 || b.x + b.width > W));
     return { blocks: blocks.length, measured: blocks.filter((b) => b.x !== null).length, unmatched: blocks.filter((b) => b.x === null).length, W, outside, chrome: version };
@@ -101,9 +109,9 @@ export async function measure(proj, { chrome, puppeteer } = {}) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const proj = args.find((a) => !a.startsWith("--"));
-  if (!proj) { console.error("usage: node scripts/caption-boxes.mjs <project> [--check]"); process.exit(1); }
+  if (!proj) { console.error("usage: node scripts/caption-boxes.mjs <project> [--check] [--with-gsap]"); process.exit(1); }
   try {
-    const r = await measure(proj);
+    const r = await measure(proj, { withGsap: args.includes("--with-gsap") });
     process.stdout.write(JSON.stringify(r) + "\n");
     if (args.includes("--check") && r.outside.length) {
       for (const b of r.outside) console.error(`caption block ${b.i} at ${b.t0}s is drawn at x ${b.x}..${b.x + b.width}px, outside the ${r.W}px canvas`);
