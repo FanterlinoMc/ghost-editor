@@ -30,6 +30,7 @@ import { clippingExtent } from "./lib/caption-metrics.mjs";
 import { wordOwners } from "./lib/words.mjs";
 import { wordsPathFor, facePathFor, cropPathFor, locateTake, medianFaceY } from "./lib/sources.mjs";
 import { compileMotion, resolveColor, LIMITS as MOTION_LIMITS } from "./lib/motion-graphics.mjs";
+import { resolveEmojiEm } from "./lib/emoji-em.mjs";
 import { ROOM_SCALE, ROOM_EXIT_S, ROOM_FILL, normalizeRoom, ROOM_EASE_NAME, roomFrames, roomWindows, roomOrigin, roomCardCss } from "./lib/room.mjs";
 import { computeSections, buildSectionManifest, globalHash } from "./lib/sections.mjs";
 import { loadStyleChain, checkBrandName } from "./lib/style-path.mjs";
@@ -146,6 +147,9 @@ const rgbaOf = (hex, a) => { const h = String(hex).replace("#", ""); return /^[0
 // a stage / set glow of "accent" takes the template's accent colour
 const glowOf = (g) => (g === "accent" ? rgbaOf(brand.accent, 0.3) : g);
 const warn = [...styleWarnings];
+// mac-56: this host's emoji advance for the caption model (CAPTION_EMOJI_EM + its stamp; lib/emoji-em.mjs), else 1.5
+const HOST_EMOJI = resolveEmojiEm();
+if (HOST_EMOJI.warning) warn.push(HOST_EMOJI.warning);
 // mac-54: every graphic the build leaves out, as data: build/graphics-dropped.json (written only when something was
 // dropped, removed otherwise, so the file never outlives the build that wrote it). The warnings are unchanged; this is a
 // second, machine-readable copy for the planner and the review pass. Spec: references/reel-json.md "graphics-dropped.json".
@@ -2984,7 +2988,7 @@ const capHtml = cap.style === "type" ? typeHtml : cap.style === "podcast" ? podc
   // places that band; the group's CSS top is the band's top plus how far the box reaches above it.
   const tiltDeg = cap.tilt ? (gi % 2 ? -cap.tilt : cap.tilt * 0.7) : 0;
   const clipExt = cap.style === "clipping" && fy == null
-    ? (sc = 1) => clippingExtent(g.map((w) => caseOf(w.word)), { size: cap.size ?? 58, maxWidth: W - 2 * placer.sidePad, deg: tiltDeg, scale: sc }) : null;
+    ? (sc = 1) => clippingExtent(g.map((w) => caseOf(w.word)), { size: cap.size ?? 58, maxWidth: W - 2 * placer.sidePad, deg: tiltDeg, scale: sc, ...(HOST_EMOJI.source === "host" ? { emojiEm: HOST_EMOJI.em } : {}) }) : null;
   const reserveH = clipExt ? Math.ceil(clipExt().up) + Math.ceil(clipExt().down) : capSize * (["pill", "box"].includes(cap.style) ? 1.6 : 1.3);
   const pl = fy != null ? { y: Math.round(fy * H / 1920), mode: cap.style, scale: 1 } : placer.place(s, e, reserveH);
   // whole px, rounded outward: the band is ceil(up) + ceil(down) and the top sits ceil(up) into it, so the drawn box

@@ -87,7 +87,8 @@ function family(files, fallbackEm, emojiEm = EMOJI_EM) {
 // each one, the last included). Advances only: no kerning (GPOS), which Gloock applies as small negative pairs, so the
 // estimate runs at or over the drawn width (measured on a real reel's 12 blocks: +3..+23 px, 1-3%) - the safe side for
 // the tilt term, and a wrap only ever comes a little early, never late.
-// `emojiEm` overrides EMOJI_EM (tests only: modelling one platform's real emoji advance; builds never pass it).
+// `emojiEm` overrides EMOJI_EM: tests (one platform's real advance), and a build on a host with a measured, guarded
+// CAPTION_EMOJI_EM (lib/emoji-em.mjs, mac-56).
 export function textWidth(text, size, { files, fallbackEm = 0.6, letterSpacing = 0, emojiEm = EMOJI_EM }) {
   const adv = family(files, fallbackEm, emojiEm);
   let em = 0;
