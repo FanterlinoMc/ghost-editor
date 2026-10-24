@@ -43,7 +43,7 @@ import { matteThreads, cutMatteThreaded, writeAtomically } from "./lib/matte.mjs
 import * as RL from "./lib/relight.mjs";
 import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, layersCss, MEDIA_EXT } from "./lib/layers.mjs";
 import { inspectPlaced, resolveGraphicBeat, prepareGraphics, testDeps, graphicBeatHtml, graphicBeatTweens, crossesUi, graphicLabel as _gl } from "./lib/graphic-place.mjs";
-import { layerProblem as graphicLayerProblem, beatProblem as graphicBeatProblem, reason as graphicReason } from "./lib/graphic.mjs";
+import { layerProblem as graphicLayerProblem, beatProblem as graphicBeatProblem, reason as graphicReason, checkContract, checkContractCoded, NOT_AN_OVERLAY as GRAPHIC_NOT_AN_OVERLAY, CAMERA_BEATS as GRAPHIC_CAMERA_BEATS, LIMITS as GRAPHIC_LIMITS } from "./lib/graphic.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = process.env.PHANTASIC_LIB ? path.resolve(process.env.PHANTASIC_LIB) : path.join(SKILL, "library");   // PHANTASIC_LIB: another library root (tests; a studio with its own sounds)
@@ -758,25 +758,8 @@ for (let i = motionBeats.length - 1; i >= 0; i--) {
   b._graphic = g;
   graphicBeats.unshift(b);
 }
-if (graphicLayers.length || graphicBeats.length) {
-  let gdeps = {};
-  try { gdeps = await testDeps(); } catch (e) { die(e.message); }
-  const gopts = { proj, W, H, fps: FPS, deps: gdeps, log: (m) => console.log(m), done: new Map() };
-  // layers first, one at a time: the first layer that cannot be rendered kills the reel before any beat is rendered
-  for (const l of graphicLayers) {
-    const [r] = await prepareGraphics([l.graphic], gopts);
-    if (!r.ok) die(graphicLayerProblem(l.id, l.graphic.html, r.reasons[0]));
-    Object.assign(l.graphic, { file: r.file, key: r.key });
-  }
-  const res = await prepareGraphics(graphicBeats.map((b) => b._graphic), gopts);
-  graphicBeats.forEach((b, i) => {
-    const r = res[i];
-    if (r.ok) { Object.assign(b._graphic, { file: r.file, key: r.key }); for (const w of b._graphic.warnings) warn.push(w); return; }
-    warn.push(graphicBeatProblem(_gl(b), b.html, r.reasons[0]));
-    recordDrop({ kind: "graphic beat", id: b.id, type: "graphic", at: b.at, to: b.to, t: b._graphic.t0, rule: (r.codes || [])[0] ?? null, why: `The graphic${b.id !== undefined ? ` "${b.id}"` : ""} at ${clock(b._graphic.t0)} was dropped because ${GRAPHIC_WHY((r.codes || [])[0])}.`, warning: graphicBeatProblem(_gl(b), b.html, r.reasons[0]) });
-    motionBeats.splice(motionBeats.indexOf(b), 1);
-  });
-}
+// The render pre-pass for these graphics runs further down, once the caption placer exists: the placement contract
+// (P4-P6: face, caption band, director collision) is checked there first, so a refused graphic is never rendered.
 
 // ---------- motion hold: the camera stays still under a designer graphic ----------
 // Owner decision (Ahmed): on close-up footage the automatic punches and the opening push grow the face
@@ -1418,6 +1401,65 @@ const placer = makePlacer({ face, faces, takes, zoom: { ...zoom, snapsEdit: snap
   placer.card = (t0, t1, h, ...rest) => { const r = placeCard(t0, t1, h, ...rest); if (r) cardRects.push({ t0, t1, y0: r.y, y1: r.y + h }); return r; };
   placer.clash ??= (t0, t1, y, h) => cardRects.find((o) => t0 < o.t1 && t1 > o.t0 && y < o.y1 && y + h > o.y0);
 }
+
+// ---------- Prompt Motion graphics, the placement contract (P4-P6) and the render pre-pass ----------
+// docs/GRAPHICS-ROUTES.md (phantasic) D2: an HTML graphic obeys the typed route's placement rules, and the build
+// enforces them (refuse, never warn: the automatic path has no reviewer). The rules are checkContract in
+// lib/graphic.mjs; the geometry is the caption placer's own (the face under the camera in force at each sampled
+// instant, the first-choice caption band for this reel's caption height). Layer windows are absolute output seconds;
+// the placer counts from the section start, like hiddenCaps below. A layer that fails dies; a beat is dropped with
+// the problem as a warning and spliced out, like a G / P problem. Then the surviving graphics render, as before.
+if (graphicLayers.length || graphicBeats.length) {
+  const capH = Math.round((spec.captions?.size ?? brand.capSize) * 2.2);   // the planner's cap_h (designer_validate.Geometry)
+  const secOff = SECTION_MODE ? SECTION_START : 0;
+  const others = [];
+  for (const b of spec.beats || []) {
+    if (!b || typeof b !== "object" || typeof b.type !== "string") continue;
+    if (GRAPHIC_NOT_AN_OVERLAY.includes(b.type) || GRAPHIC_CAMERA_BEATS.includes(b.type)) continue;
+    try {
+      const s0 = E(b.at, "graphic contract", beatRec(b));
+      const e0 = b.to !== undefined ? E(b.to, "graphic contract", beatRec(b)) : s0 + GRAPHIC_LIMITS.overlayDefaultS;
+      if (Number.isFinite(s0) && Number.isFinite(e0) && e0 > s0) others.push({ kind: `${b.type} beat`, s: s0, e: e0 });
+    } catch { /* a beat whose time cannot be mapped is refused by its own check later; nothing of it is on screen */ }
+  }
+  if (spec.banner?.text) others.push({ kind: "title banner", s: spec.banner.from ?? 0, e: Math.min(spec.banner.to ?? TOTAL, TOTAL) });
+  // P5 needs captions to protect: a reel that draws none (captions.style "none") has no band
+  const noCaps = spec.captions?.style === "none";
+  const geo = { faceAt: placer.faceAt, band: noCaps ? null : placer.band, capH, total: SECTION_MODE ? SECTION_TOTAL : TOTAL, others };
+  for (const l of graphicLayers) {
+    const p = checkContract({ mode: l.graphic.mode, box: l.box, t0: r3(l.t0 - secOff), t1: r3(l.t1 - secOff), hideCaptions: l.hideCaptions, overCaptions: l.overCaptions }, geo);
+    if (p.length) die(graphicLayerProblem(l.id, l.graphic.html, p[0]));
+  }
+  for (let i = graphicBeats.length - 1; i >= 0; i--) {
+    const b = graphicBeats[i], g = b._graphic;
+    const pc = checkContractCoded({ mode: g.mode, box: g.box, t0: g.t0, t1: g.t1, hideCaptions: g.hideCaptions, overCaptions: b.overCaptions === true }, geo);
+    if (!pc.length) continue;
+    warn.push(graphicBeatProblem(_gl(b), b.html, pc[0].text));
+    recordDrop({ kind: "graphic beat", id: b.id, type: "graphic", at: b.at, to: b.to, t: g.t0, rule: pc[0].code, why: `The graphic${b.id !== undefined ? ` "${b.id}"` : ""} at ${clock(g.t0)} was dropped because ${GRAPHIC_WHY(pc[0].code)}.`, warning: graphicBeatProblem(_gl(b), b.html, pc[0].text) });
+    motionBeats.splice(motionBeats.indexOf(b), 1);
+    graphicBeats.splice(i, 1);
+  }
+}
+if (graphicLayers.length || graphicBeats.length) {
+  let gdeps = {};
+  try { gdeps = await testDeps(); } catch (e) { die(e.message); }
+  const gopts = { proj, W, H, fps: FPS, deps: gdeps, log: (m) => console.log(m), done: new Map() };
+  // layers first, one at a time: the first layer that cannot be rendered kills the reel before any beat is rendered
+  for (const l of graphicLayers) {
+    const [r] = await prepareGraphics([l.graphic], gopts);
+    if (!r.ok) die(graphicLayerProblem(l.id, l.graphic.html, r.reasons[0]));
+    Object.assign(l.graphic, { file: r.file, key: r.key });
+  }
+  const res = await prepareGraphics(graphicBeats.map((b) => b._graphic), gopts);
+  graphicBeats.forEach((b, i) => {
+    const r = res[i];
+    if (r.ok) { Object.assign(b._graphic, { file: r.file, key: r.key }); for (const w of b._graphic.warnings) warn.push(w); return; }
+    warn.push(graphicBeatProblem(_gl(b), b.html, r.reasons[0]));
+    recordDrop({ kind: "graphic beat", id: b.id, type: "graphic", at: b.at, to: b.to, t: b._graphic.t0, rule: (r.codes || [])[0] ?? null, why: `The graphic${b.id !== undefined ? ` "${b.id}"` : ""} at ${clock(b._graphic.t0)} was dropped because ${GRAPHIC_WHY((r.codes || [])[0])}.`, warning: graphicBeatProblem(_gl(b), b.html, r.reasons[0]) });
+    motionBeats.splice(motionBeats.indexOf(b), 1);
+  });
+}
+
 
 // legibility gate (OFF unless spec.legibility.behind is set; ported from engine/review-fixes a30d106). The value is the
 // share of a behind-the-head word that must stay visible (e.g. 0.6): the speaker's matte is modelled as head (face

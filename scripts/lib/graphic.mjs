@@ -18,6 +18,7 @@ export const QUALITY = "looks";
 export const LIMITS = {
   htmlBytes: 2097152, mediaBytes: 4194304, mediaFiles: 8, fileBytes: 52428800,
   minDuration: 0.5, maxDuration: 30, minWindow: 0.1, maxWindow: 60, minSize: 16, boxInside: 0.2,
+  faceMargin: 40, captionPad: 24, sampleStep: 0.1, overlayDefaultS: 2.5,   // the placement contract (P4-P6)
 };
 export const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'";
 
@@ -64,6 +65,9 @@ export const REASONS = {
   P1: ({ v }) => `graphic mode '${v}' is not overlay or insert`,
   P2: ({ s }) => `graphic window ${s}s is outside 0.1..60s`,
   P3: ({ W, H }) => `graphic box shows less than 20% inside the ${W}x${H} canvas`,
+  P4: ({ t }) => `graphic box covers the speaker's face at ${t}s (40 px margin)`,
+  P5: ({ top, bottom }) => `graphic box crosses the caption band ${top}..${bottom}px (set hideCaptions or overCaptions to allow it)`,
+  P6: ({ kind, s, e }) => `graphic overlaps the director's ${kind} at ${s}..${e}s (one thing on screen at a time)`,
   R1: ({ url }) => `graphic tried to load ${url} (no network): render refused`,
   R2: ({ message }) => `graphic page error: ${message}`,
   R3: () => `window.seek is not a function after the page loaded`,
@@ -264,6 +268,45 @@ export function checkPlacement({ mode = "overlay", window: win, box } = {}, { W 
     const iw = Math.max(0, Math.min(box.x + box.w, W) - Math.max(box.x, 0));
     const ih = Math.max(0, Math.min(box.y + box.h, H) - Math.max(box.y, 0));
     if ((iw * ih) / (box.w * box.h) < LIMITS.boxInside) return [reason("P3", { W, H })];
+  }
+  return [];
+}
+
+// ---------- the placement contract (P4-P6; docs/GRAPHICS-ROUTES.md in phantasic, "Placement as built" here) ----------
+// Checked by build.mjs once the caption placer exists, BEFORE any graphic is rendered; the first failing one is the problem.
+//   P4 face:      an overlay whose box intersects the face box, grown by 40 px, at ANY sampled instant (every 0.1 s of
+//                 [t0, t1], the placer's own sampling) is refused. The face box is the placer's: the tracked face mapped
+//                 through the crop plan and the camera scale in force at that instant. An insert is exempt by construction
+//                 (full frame on purpose). No face track, or no face at the instant: nothing to hit.
+//   P5 captions:  an overlay whose box crosses the caption band over [t0, t1] (placer.band: the first-choice zone for a
+//                 block of the reel's caption height, padded 24 px) is refused unless the entry sets hideCaptions or
+//                 overCaptions to true explicitly. An insert is exempt (the captions draw over it or are hidden by default).
+//   P6 collision: a graphic (either mode) whose window overlaps in time a director beat that is not a whole-frame wash
+//                 (behind, leak, mood), not a camera beat (zoom, punch, push, snap) and not another graphic or motion
+//                 beat, or the title banner, is refused. A beat with no `to` is 2.5 s (the planner's DEFAULT_OVERLAY_S).
+// Inputs: entry { mode, box, t0, t1, hideCaptions, overCaptions } (output seconds, canvas px); geo { faceAt(t), band(t0, t1, h),
+// capH, total, others: [{ kind, s, e }] (output seconds) }. Pure: no I/O, so the tests and the planner can call it.
+const _r1 = (v) => Math.round(v * 10) / 10;
+const _hit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+export const NOT_AN_OVERLAY = ["behind", "leak", "mood", "motion", "graphic"];
+export const CAMERA_BEATS = ["zoom", "punch", "push", "snap"];
+export const checkContract = (entry, geo) => checkContractCoded(entry, geo).map((x) => x.text);
+// the same, with the rule code: [{ code: "P4" | "P5" | "P6", text }] (mac-54's graphics-dropped.json records the code)
+export function checkContractCoded(entry, geo) {
+  const { mode = "overlay", box, t0, t1 } = entry;
+  const step = LIMITS.sampleStep, m = LIMITS.faceMargin;
+  if (mode === "overlay" && box && typeof geo.faceAt === "function") {
+    for (let t = t0; t <= t1 + 1e-6; t = +(t + step).toFixed(3)) {
+      const f = geo.faceAt(Math.min(t, (geo.total ?? Infinity) - 0.01));
+      if (f && _hit(box, { x: f.left - m, y: f.top - m, w: f.right - f.left + 2 * m, h: f.bottom - f.top + 2 * m })) return [{ code: "P4", text: reason("P4", { t: _r1(t) }) }];
+    }
+  }
+  if (mode === "overlay" && box && entry.hideCaptions !== true && entry.overCaptions !== true && typeof geo.band === "function") {
+    const b = geo.band(t0, t1, geo.capH, LIMITS.captionPad);
+    if (b && box.y < b.bottom && box.y + box.h > b.top) return [{ code: "P5", text: reason("P5", { top: Math.round(b.top), bottom: Math.round(b.bottom) }) }];
+  }
+  for (const o of geo.others || []) {
+    if (t0 < o.e && t1 > o.s) return [{ code: "P6", text: reason("P6", { kind: o.kind, s: _r1(o.s), e: _r1(o.e) }) }];
   }
   return [];
 }
