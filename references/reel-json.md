@@ -1869,7 +1869,9 @@ users build animations). Every reel page now inlines the engine's own runtime, M
 The build's emitted lines are unchanged apart from `gsap.timeline(` -> `tween.timeline(` and the `<script>` tag.
 
 - **The contract: every seek is a pure function of time.** For each (element, property) the tweens form a track sorted
-  by start; the value at `t` is a fold over the started ones (the last started wins). A `to()` starts from the track's
+  by start; the value at `t` is a fold over the started ones: the one that renders LAST in forward playback wins (a
+  running tween over a finished one, then the later start; GSAP's render order, which the engine's tweens, fxAim
+  among them, were written for). A `to()` starts from the track's
   value at its own start (computed, never read from the page during playback); before a track's first tween the
   element's own value is restored (or the `from` of a fromTo that renders immediately). Base values (an element's own
   transform, opacity, ...) are read once, at the first seek, before anything is written. Painters (`onUpdate`) run on
@@ -1887,18 +1889,34 @@ The build's emitted lines are unchanged apart from `gsap.timeline(` -> `tween.ti
   rejects, so GSAP kept whatever filter was written before it (seek-order dependent; measured on the pills and stats
   entrances); the runtime
   floors `blur / brightness / contrast / saturate / grayscale / sepia / invert` at 0.
+- **HyperFrames owns a clip's visibility.** On every frame it sets `style.visibility` on each `[data-start]` element
+  (not video / audio / img) from the clip's window. GSAP wrote visibility only while an autoAlpha tween rendered; the
+  runtime never writes it on a clip (autoAlpha there is its opacity), else restoring state on a seek would undo
+  HyperFrames' `hidden` and show a clip outside its window (measured: two caption groups drawn over each other).
+- **Why GSAP's renders were not a function of time** (measured with a style observer inside a real render): HyperFrames
+  seeks every frame at `t`, then `t + 0.001`, then `t` again, with events on and off. GSAP's lazily captured `to()`
+  starts then depend on that history: in one render of the pills sample GSAP showed opacity 0.9617 and 0.963 at the
+  same t = 4.3, and at t = 4.4667 both 0 (hidden) and 0.2977 (the frame it captured). The runtime gives one answer.
 - **The interface HyperFrames 0.8.81 calls** (measured with a proxy on a real render): `totalTime(t, suppress)`,
   `progress`, `timeScale`, `duration`, `totalDuration`, `pause`, `getChildren`. No `window.gsap` exists, so HyperFrames'
   own GSAP ease hook (`registerEase`, `__hfCustomEaseInstalled`) does not run.
 - **Proof** (`scripts/tween-runtime.test.mjs`, in the gate): eases = GSAP's to 1e-9; the semantics on a page; seek-
   determinism on four built reels (in order, backwards, jumps and fresh pages give identical computed styles).
-  Measured once, 24 Oct, against GSAP 3.14.2 on 164 pages (96 styles, 64 scene-kind samples, the 4 golden reels): **0**
-  seek-order differences in 1.53 million compared values; 134 of the 163 page names within 0.01 px of GSAP, the rest
-  sub-pixel except: the negative-blur floor above (pills, stats), a count's text width (gm-counter, 4.9 px), one
-  rotation (device, 1.4 px). A render of the busy golden reel: 136 of 300 frames bit-identical, worst frame 49 dB, no
-  pixel 64 or more levels off; the fly3d sample: mean 91 dB, worst 61 dB.
-- **The goldens move**: `byte-identity.mjs` reports `index.html` DIFFERS on all four reels (the page carries the
-  runtime instead of the GSAP tag); every `build/*.json` is identical. Not re-recorded: the owner accepts first.
+  Measured 24 Oct against GSAP 3.14.2, on the final runtime:
+  - **seek-determinism**: 164 pages (96 styles, 64 scene-kind samples, the 4 golden reels), 16 times each, in order /
+    shuffled / fresh page: **0** differences in 1,533,792 compared values.
+  - **renders**: the 63 scene-kind samples (one 7 s real clip each) rendered with the runtime vs their GSAP renders
+    (`~/phantasic-samples/m65-gsap-vs-runtime/`: `results.tsv`, `worst-frames.png`): 7,668 of 13,230 frames
+    (58.0 %) bit-identical, 23 samples identical in every frame. Control: the same sample rendered twice with GSAP is
+    bit-identical (210 / 210), so every difference is the runtime's. Where they differ it is a frame GSAP rendered
+    from seek history (above): overlapping exits (uicard, slam, pills: worst frames 24-29 dB), a garbled first-frame
+    caption that GSAP showed and the runtime does not (label, pin, chapter, title: 35.5 dB on frame 1), the
+    negative-blur glitch (stats), a line drawing a frame earlier (gm-flow).
+  - **the busy golden reel**: 136 of 300 frames bit-identical, worst frame 49 dB, no pixel 64 or more levels off.
+- **The goldens move**: `byte-identity.mjs` reports `index.html` DIFFERS on all four reels, each marked "only the
+  tween runtime": with the runtime mapped back to GSAP's `<script src>` (`scripts/lib/page-norm.mjs` `asGsapPage`) every
+  page is its golden byte for byte, and every `build/*.json` is identical. So the gate FAILS on byte-identity alone
+  until the owner accepts the runtime; then `node scripts/byte-identity.mjs --record` (the owner's call, never quiet).
 
 ## Offline: nothing a reel needs comes off the internet (mac-60)
 
