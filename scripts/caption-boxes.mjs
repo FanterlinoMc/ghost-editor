@@ -75,13 +75,17 @@ export async function measure(proj, { chrome, puppeteer, withGsap = false } = {}
     // network dependency. --with-gsap lets the page's script and its CDN GSAP run and seeks into each block instead.
     const base = `http://127.0.0.1:${server.address().port}/`;
     await page.setRequestInterception(true);
-    page.on("request", (r) => (r.url().startsWith(base) || /^(data|blob):/.test(r.url()) ? r.continue() : r.abort()));
+    // media is aborted too: a caption's box does not depend on the footage, and a reel's video files kept the page's
+    // load event from firing for over a minute on a real 150 MB project
+    const MEDIA = /\.(mp4|m4v|mov|webm|mkv|m4a|mp3|wav|aac|ogg|opus)(\?|$)/i;
+    page.on("request", (r) => ((r.url().startsWith(base) && !MEDIA.test(r.url())) || /^(data|blob):/.test(r.url()) ? r.continue() : r.abort()));
     if (withGsap) await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
     else await page.setJavaScriptEnabled(false);
-    await page.goto(base + "index.html", { waitUntil: "load", timeout: 60000 });
+    await page.goto(base + "index.html", { waitUntil: withGsap ? "load" : "domcontentloaded", timeout: 60000 });
     if (withGsap) await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 })
       .catch(() => { throw new Error("--with-gsap: the page's timeline did not start (GSAP comes from its CDN: offline?)"); });
     const pageBlocks = await page.evaluate(async (withGsap) => {
+      void document.body.offsetHeight;   // lay the page out first, so every caption font has started loading
       await document.fonts.ready;
       const tl = withGsap ? window.__timelines.main : null;
       if (tl) tl.pause();
