@@ -64,7 +64,10 @@
   "director": {
     "plan": "core/scripts/podcast_plan.py <project> writes captions.keys/reds, the hook box (+ name label), a pull quote, the Like click and the show logo.",
     "rules": "Everything on screen is spoken, except the show logo and the name label (brand kit data). Footage stays in colour.",
-    "prep": "Landscape two-shots: prep with SPEAKER_CROP=1 (scripts/speaker_crop.py) so the crop frames the person talking, not the nearest face."
+    "prep": "Landscape two-shots: prep with SPEAKER_CROP=1 (scripts/speaker_crop.py) so the crop frames the person talking, not the nearest face.",
+    "style": "The Podcast: a moody, contrasty talking-head cut. Keep whole thoughts and cut hard between them; the picture changes about every 2 s. The footage stays in colour. Everything that appears on screen is a word the speaker actually says.",
+    "restraint": "This look is carried by the captions and the punch-ins, nothing else: no scenes, no pages, no cards, no icons, no B-roll, no stickers, no banner. If nothing is genuinely needed, return empty lists and say so in the summary.",
+    "dont": "Never a name, a company or a logo the speaker does not say."
   },
   "boxline": {
     "dodgeFace": true,

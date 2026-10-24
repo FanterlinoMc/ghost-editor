@@ -53,6 +53,8 @@
   },
   "outro": 0.15,
   "director": {
-    "rules": "hz-title on the hook (the video's promise in 3-6 words, caps), hz-name once early, hz-list whenever the speaker counts points (items = what he says), hz-note only for a short clarifying aside. Keep it clean: no B-roll unless essential, no stickers."
+    "rules": "hz-title on the hook (the video's promise in 3-6 words, caps), hz-name once early, hz-list whenever the speaker counts points (items = what he says), hz-note only for a short clarifying aside. Keep it clean: no B-roll unless essential, no stickers.",
+    "style": "Authority: a clean, hard cut. Alternate a wide and a close framing on hard cuts about every 2.4 s, never a dissolve. Natural grade, no music.",
+    "restraint": "Clean above all: one title on the hook, a list only where he counts, nothing else. No B-roll, no icons, no stickers, no invented names."
   }
 }

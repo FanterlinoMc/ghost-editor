@@ -168,6 +168,44 @@ the build warns on a double booking).
 
 `icon` (the `logo` beat) slugs come from simpleicons.org (CC0), the `icon` **beat type** above from lucide-static (ISC). Both sets are vendored (`vendor/simple-icons/16.35.0`, `vendor/lucide-static/1.61.0`, one sha256-checked `icons.json` each): a build never fetches an icon. A slug the vendored version does not have is the same error as before (`logo`, `icon`) or the same `no logo for <slug>` warning (`toolLogos`). simple-icons 16.0.0 removed 44 brands, among them `openai` and `slack` (two of the `toolLogos` brands): the CDN's `@latest` still served them from 15.22.0, the vendored set does not have them, so a reel that names ChatGPT or Slack now warns `no logo for openai` / `slack`. Re-adding them is the owner's call (a logo its owner had removed); `src` with your own image works today.
 
+### `boxline`: the exact field list (the planner mirrors this; mac-66)
+
+The Podcast's white box with heavy black caps: the hook question near the open, a pull quote later, an optional
+name label off its corner with a hand-drawn arrow. `build.mjs` `case "boxline"`. Measured on real builds (podcast
+style), 24 Oct; "dies" means the whole reel's build exits 1, not just this beat.
+
+| field | type | required | default | what the engine does |
+|---|---|---|---|---|
+| `type` | `"boxline"` | yes | | |
+| `text` | string, non-empty | **yes** | | upper-cased; `quotes` wraps it in ‘ ’. Missing or not a string: **dies** (`TypeError ... toUpperCase`). `""`: renders an EMPTY white box, no error. No quote marks or trailing punctuation of your own (podcast_plan strips `,.;:!` and, for quotes, `?`) |
+| `at` | number, recording s | **yes** | | must lie inside a kept take, else **dies** (`E(at) for boxline at: not inside any take`) |
+| `to` | number, recording s | no | `at` + 2.5 s | must be > `at`: **not checked** (a `to` before `at` builds, with the exit tween scheduled before the entrance) |
+| `quotes` | boolean | no | `false` | `true`: the pull-quote form, the text in ‘ ’ |
+| `label` | string | no | none | a name label under the box's right corner, arrowed. Brand data only (podcast_plan: `spec.guest` or the part after ` · ` / ` \| ` in `spec.show`, and only when the footage shows one framing of people). Never the model's guess |
+| `x`, `y` | number px | no | `70`, `1120` | the box's top-left. With the style's `boxline.dodgeFace` the engine MOVES `y` off the face (measured: 1120 -> 1076 for a long line, 1360 -> 1340 for a quote); `x` is never moved |
+| `w` | number px | no | `640` | the box width; the text wraps inside it (no word limit is enforced: a 20-word line builds) |
+| `size` | number px | no | `54` | the type size |
+| `tilt` | number deg | no | `-1.5` | the resting rotation; it slaps in from `tilt - 6` at 1.25x scale (back.out, 0.18 s) |
+| `prefer` | `"above"` | no | none | with `dodgeFace`: try above the head first (a title over a talking clip) |
+| `hideCaptions` | boolean | no | `true` | the captions are hidden for `at`..`to` unless `false`; with `dodgeFace` they are hidden anyway when the box ends up in the caption band |
+| `labelDy` | number px | no | the box height + 14 (`fitLabel`), else `150` | the label's offset below the box top |
+| `sfx` | sfx id or `"none"` | no | `impact-1` at -8 dB | |
+
+Style keys (top level, not per beat): `boxline.dodgeFace` and `boxline.fitLabel` (podcast sets both): the box and
+label never cover the face over the box's whole life, punch-ins included, and the label stays inside the frame.
+
+**What det_scripts/podcast_plan.py writes, the geometry a planner should copy** rather than the engine defaults
+(which are smaller): the **hook** `{x: 60, y: 1120, w: 760, size: 66}`, 1.6-3.5 s from the first word of a clean
+short line near the open (or a teaser over the first 2.6 s with `prefer: "above"`, `hideCaptions: false`), with
+`label` only as above; the **pull quote** `{quotes: true, x: 80, y: 1360, w: 920, size: 60, tilt: 0}`, a clean
+5-12-word line opening a sentence between 20 % and 85 % of the reel, `at` 0.05 s before its first word, `to` 0.5 s
+after its last (within the take). At most one of each.
+
+**What a model gets wrong, so the validator must hold it:** `text` missing, not a string, or empty; `text` not the
+speaker's words over `at`..`to` (the engine never checks); `at` outside the kept takes; `to` <= `at`; a name in
+`text` or an invented `label`; two hooks or two quotes. A boxline is a director beat for the graphic contract's P6
+(a graphic may not overlap it). It exits with the beats' common exit (fade + 0.9 scale, 0.22 s before `to`).
+
 ## Style, platform, look (top level)
 
 - `style`: a preset from `styles/` (see `references/styles.md`); reel.json overrides it.

@@ -71,6 +71,8 @@
   },
   "director": {
     "plan": "core/scripts/glow_plan.py <project> writes the hook title (top, over a dark grid ground) and a headline about every 5 s.",
-    "rules": "Everything on screen is spoken. One headline at a time, never two within ~4 s. Footage stays in colour, warm."
+    "rules": "Everything on screen is spoken. One headline at a time, never two within ~4 s. Footage stays in colour, warm.",
+    "style": "Podcast Glow: a warm, tense talking-head cut that alternates two framings. Cut on whole thoughts; the picture changes about every 1.8 s, hardest on the word the headline will land on. The footage stays in colour.",
+    "restraint": "One headline at a time and never two within 4 s. Everything on screen is spoken. Nothing else is added: no icons, no B-roll, no stickers."
   }
 }
