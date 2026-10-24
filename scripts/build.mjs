@@ -46,6 +46,7 @@ import { resolveLayers, layerTruth, duckWindows, takeVolumeLane, renderLayer, la
 import { inspectPlaced, resolveGraphicBeat, prepareGraphics, testDeps, graphicBeatHtml, graphicBeatTweens, crossesUi, graphicLabel as _gl } from "./lib/graphic-place.mjs";
 import { layerProblem as graphicLayerProblem, beatProblem as graphicBeatProblem, reason as graphicReason, checkContract, checkContractCoded, NOT_AN_OVERLAY as GRAPHIC_NOT_AN_OVERLAY, CAMERA_BEATS as GRAPHIC_CAMERA_BEATS, LIMITS as GRAPHIC_LIMITS } from "./lib/graphic.mjs";
 import { vendoredIcon } from "./lib/vendor.mjs";
+import * as MC from "./lib/matte-cache.mjs";
 
 const SKILL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = process.env.PHANTASIC_LIB ? path.resolve(process.env.PHANTASIC_LIB) : path.join(SKILL, "library");   // PHANTASIC_LIB: another library root (tests; a studio with its own sounds)
@@ -139,6 +140,14 @@ if (spec.glow?.hookGround && !spec.stage && Array.isArray(spec.beats)) {
     }
   }
 }
+// mac-62: a graphic beat with mode "behind" sits between the picture and the speaker's cut-out. A reel that has one and
+// no "matte" key gets the cut-out ONLY around its behind spans (matteWindows + matteClip, like glow.hookGround above),
+// cut into the frame-keyed cache (BEHIND_MATTE below): never the whole recording. Whether that is possible (one
+// recording, no take transitions, no ramp, no stage) is known once the takes are laid out; if not, the matte is
+// switched back off before anything is cut, and the behind graphics are dropped with the reason.
+const BEHIND_MATTE = Array.isArray(spec.beats) && spec.beats.some((b) => b && b.type === "graphic" && b.mode === "behind") && spec.matte === undefined;
+if (BEHIND_MATTE) Object.assign(spec, { matte: true, matteWindows: spec.matteWindows ?? true, matteClip: spec.matteClip ?? true });
+let behindNo = null;   // why a behind graphic cannot get its cut-out in this reel (null: it can)
 
 const FPS = spec.fps ?? 30;
 // brand kit: one accent (60/30/10), ink for text on light scenes, caption size
@@ -161,6 +170,7 @@ const GRAPHIC_WHY = (code) => !code ? "it could not be placed"
   : /^R\d/.test(code) ? "it could not be rendered safely"
   : ({ P1: "its mode is not overlay or insert", P2: "it is shorter or longer than a graphic window may be", P3: "most of its box is off the canvas",
        P4: "it covered the speaker's face", P5: "it crossed the captions", P6: "it overlapped something the director placed at the same time",
+       matte: "the speaker could not be cut out around it (it goes behind the speaker)",
        time: "its time is not inside the edit", box: "its box is not a valid rectangle", fit: "its fit is not cover or contain" })[code] ?? "it could not be placed";
 const recordDrop = ({ kind, id = null, type = null, at = null, to = null, t = null, rule, why, warning }) =>
   dropped.push({ kind, id: id ?? null, type, at: at ?? null, to: to ?? null, t: Number.isFinite(t) ? Math.round(t * 1000) / 1000 : null, rule, why, warning });
@@ -291,7 +301,7 @@ const takes = spec.takes.map((t, i) => {
 takes.forEach((k, i) => {
   if (!k.ramp) return;
   if (k.hold || i === takes.length - 1) die(`take ${i}: a ramped take can't be the last take or carry a hold`);
-  if (spec.stage || spec.matte) die(`take ${i}: take.ramp is not supported with spec.stage / spec.matte (the cut-out layer cannot follow a speed curve)`);
+  if (spec.stage || (spec.matte && !BEHIND_MATTE)) die(`take ${i}: take.ramp is not supported with spec.stage / spec.matte (the cut-out layer cannot follow a speed curve)`);
 });
 // a position inside a take (source seconds -> edit seconds); a ramped take goes through its warp
 const inTake = (k, x) => k.start + (k.warp ? k.warp(x - k.a) : x - k.a);
@@ -1091,6 +1101,16 @@ let matteHtml = "";
 // spec.stage (below) and ground beats lift the single-source rule: each take reads the matte of its own recording
 // A `ground` beat (speaker cut out over a page) takes the same per-recording route as `stage`: each take reads the matte of its own recording.
 const perSrcMatte = !!spec.stage || (spec.beats || []).some((b) => b.type === "ground");
+// mac-62: the per-span cut-out of a behind graphic needs one recording, no take transition, no ramp and no stage (the
+// clipped cut-out pieces cannot follow any of them); a reel that set "matte" itself decides for itself
+if (spec.stage) behindNo = "the reel has a stage";
+else if (spec.matte === false) behindNo = "the reel sets \"matte\": false";
+else if (!spec.matte) behindNo = "the reel sets no cut-out (\"matte\")";
+else if (BEHIND_MATTE && SOURCES.length > 1) behindNo = `the reel has ${SOURCES.length} recordings`;
+else if (BEHIND_MATTE && takeJoins.length) behindNo = "a take transition (blur / whip) joins two takes";
+else if (BEHIND_MATTE && (spec.takes || []).some((k) => k && k.ramp)) behindNo = "a take is ramped";
+else if (BEHIND_MATTE && RELIGHT) behindNo = "the reel relights the speaker (relight cuts its own whole-recording cut-out)";
+if (BEHIND_MATTE && behindNo) { spec.matte = false; delete spec.matteWindows; delete spec.matteClip; }
 if (spec.matte && SOURCES.length > 1 && !perSrcMatte) {
   die(`spec.matte with ${SOURCES.length} sources is not supported: one matte is cut from ${SRC}, and every take indexes it by its own source time, so takes from the other recording(s) would show the wrong cut-out - drop spec.matte, or keep this reel single-source (MULTIANGLE Gap 6)`);
 }
@@ -1441,7 +1461,8 @@ if (graphicLayers.length || graphicBeats.length) {
   }
   for (let i = graphicBeats.length - 1; i >= 0; i--) {
     const b = graphicBeats[i], g = b._graphic;
-    const pc = checkContractCoded({ mode: g.mode, box: g.box, t0: g.t0, t1: g.t1, hideCaptions: g.hideCaptions, overCaptions: b.overCaptions === true }, geo);
+    // mac-62: a behind graphic with no per-span cut-out would just be a full-bleed overlay over the face: dropped
+    const pc = g.mode === "behind" && behindNo ? [{ code: "matte", text: `a behind graphic needs the speaker cut out per span (${behindNo})` }] : checkContractCoded({ mode: g.mode, box: g.box, t0: g.t0, t1: g.t1, hideCaptions: g.hideCaptions, overCaptions: b.overCaptions === true }, geo);
     if (!pc.length) continue;
     warn.push(graphicBeatProblem(_gl(b), b.html, pc[0].text));
     recordDrop({ kind: "graphic beat", id: b.id, type: "graphic", at: b.at, to: b.to, t: g.t0, rule: pc[0].code, why: `The graphic${b.id !== undefined ? ` "${b.id}"` : ""} at ${clock(g.t0)} was dropped because ${GRAPHIC_WHY(pc[0].code)}.`, warning: graphicBeatProblem(_gl(b), b.html, pc[0].text) });
@@ -2390,7 +2411,10 @@ for (const b of beatsList) {
       // Prompt Motion (lib/graphic-place.mjs): the pre-rendered file in a timed <video>, in its box (an insert: the
       // whole canvas, above the other beats)
       const g = b._graphic;
-      inner = graphicBeatHtml(id, g, { t0, dur, esc, rel: g.file });
+      // mac-62 behind: between the picture (and ground pages / behind words) and the speaker's cut-out, inside the
+      // camera, so a punch-in moves it with them; nothing goes in the beats band (see the `continue` after the switch)
+      if (g.mode === "behind") behindHtml.push(`<div id="${id}" class="behind-graphic" style="position:absolute;inset:0;pointer-events:none">${graphicBeatHtml(id, g, { t0, dur, esc, rel: g.file })}</div>`);
+      else inner = graphicBeatHtml(id, g, { t0, dur, esc, rel: g.file });
       for (const l of graphicBeatTweens(id, g, t0, t1)) tl.push(l);
       if (g.hideCaptions) hiddenCaps.push([r3(Math.max(0, t0 - CAP_FADE)), r3(t1 + CAP_BACK)]);   // gone from t0 to t1 (see CAP_FADE)
       if (g.mode === "overlay" && crossesUi(g.box, PLATFORMS[platform], W, H)) warn.push(`graphic ${_gl(b)}: ${graphicReason("GW7", { platform: PLATFORMS[platform].name })}`);
@@ -2401,7 +2425,7 @@ for (const b of beatsList) {
     default:
       die(`unknown beat type '${b.type}'`);
   }
-  if (b.type === "behind" || b.type === "ground") continue;
+  if (b.type === "behind" || b.type === "ground" || (b.type === "graphic" && b._graphic?.mode === "behind")) continue;
   if (!["endcard", "scene", "motion", "headpage", "photostack", "whiteflash", "cover", "graphic"].includes(b.type) && !(b.type === "meme" && memeLib(b.id).meta.clip) && !(b.type === "popcard" && (b.outFade ?? spec.popcard?.outFade))) tl.push(exit(`#${id}-in`, t1));
   const clipMeme = b.type === "meme" && memeLib(b.id).meta.clip;
   overlays.push({ html: b.type === "graphic"
@@ -3839,7 +3863,7 @@ const vignetteHtml = look.vignette ? `<div class="look-vignette${OV}" style="bac
 // matteWindows (opt-in, with matte): the 4 fps cut-out is only needed while a behind word or a ground page is up; left on for the
 // whole reel it ghosts over the 30 fps plate, so it is shown only in those windows
 if (spec.matte && spec.matteWindows && !spec.stage) {
-  const wins = beatsList.map((b, i) => [b, beatSpans[i]]).filter(([b]) => ["behind", "ground"].includes(b.type)).map(([, sp]) => [sp.t0, sp.t1]).sort((p, q) => p[0] - q[0]);
+  const wins = beatsList.map((b, i) => [b, beatSpans[i]]).filter(([b]) => ["behind", "ground"].includes(b.type) || (b.type === "graphic" && b._graphic?.mode === "behind")).map(([, sp]) => [sp.t0, sp.t1]).sort((p, q) => p[0] - q[0]);
   const merged = []; for (const w of wins) { const m = merged.at(-1); if (m && w[0] <= m[1] + 0.05) m[1] = Math.max(m[1], w[1]); else merged.push([...w]); }
   // never two sets on the same instant (a hide and a show both at 0 left the cut-out hidden in the render)
   if (!merged.length || merged[0][0] > 0.05) tl.push(`tl.set(".matte", { autoAlpha: 0 }, 0);`);
@@ -3852,9 +3876,34 @@ if (spec.matte && spec.matteWindows && !spec.stage) {
     else {
       // the clipped pieces: [take, piece index, edit start, edit end, recording second at the start]
       const pieces = takes.flatMap((k, i) => (perSrcMatte && !stageMatted(k.src)) ? [] : merged.map(([a, b]) => [Math.max(k.start, a > 0.05 ? a - 0.02 : 0), Math.min(k.start + k.dur, b + 0.02)]).filter(([s, e]) => e - s > 0.5 / FPS).map(([s, e], j) => [k, i, j, s, e, k.a + (s - k.start)]));
+      // mac-62: a reel whose cut-out exists only for its behind graphics reads the frame-keyed cache (lib/matte-cache.mjs):
+      // the frames each piece shows + 2 each side, minus what is cached, are cut now; a piece across several cached files
+      // becomes consecutive <video>s. Every other reel: the window cut below, exactly as before.
+      let behindCacheHtml = null;
+      if (BEHIND_MATTE && windowCut) {
+        const key = MC.srcKey(path.resolve(proj, SRC), FPS), dir = MC.cacheDir(proj, key);
+        const fr = (t) => Math.round(t * FPS);
+        const need = pieces.map(([, , , s, e, m0]) => [Math.floor(m0 * FPS + 1e-6), Math.ceil((m0 + (e - s)) * FPS - 1e-6)]);
+        const plan = MC.planCuts(need, MC.listCached(dir), { total: Math.ceil(srcDurOf.get(SRC) * FPS) });
+        if (plan.cut.length) fs.mkdirSync(dir, { recursive: true });
+        const t0c = Date.now();
+        for (const [a, b] of plan.cut) cutWindow({ a: a / FPS, b: b / FPS, rel: MC.cacheRel(key, a, b) });
+        console.log(`behind cut-out: ${plan.frames.needed} recording frames for ${pieces.length} piece(s): ${plan.frames.reused} cached, ${plan.frames.cut} cut now${plan.frames.cut ? ` (${((Date.now() - t0c) / 1000).toFixed(1)} s)` : ""} [assets/matte-cache/${key}]`);
+        const cached = MC.listCached(dir);
+        behindCacheHtml = pieces.map(([k, i, j, s, e, m0]) => {
+          const segs = MC.splitAcross(Math.floor(m0 * FPS + 1e-6), Math.ceil((m0 + (e - s)) * FPS - 1e-6), cached);
+          if (!segs) die(`behind cut-out: recording frames ${fr(m0)}..${fr(m0 + e - s)} are not in assets/matte-cache/${key} after cutting them`);
+          return segs.map((g, n) => {
+            const ss = n === 0 ? s : r3(s + (g.a / FPS - m0)), ee = n === segs.length - 1 ? e : r3(s + (g.b / FPS - m0));
+            const ms = r3(m0 + (ss - s) - g.file.a / FPS);
+            return `
+      <video id="matte-${i}${j ? `-${j}` : ""}${n ? `-c${n}` : ""}" class="matte" src="${MC.cacheRel(key, g.file.a, g.file.b)}" data-start="${r3(ss)}" data-duration="${r3(ee - ss)}" data-media-start="${ms}" data-track-index="2" muted playsinline></video>`;
+          }).join("");
+        }).join("");
+      }
       // window cut: the recording around every piece (+-1 s, frame-aligned, overlapping ones merged), in recording seconds
       let wins = [];
-      if (windowCut) {
+      if (windowCut && behindCacheHtml === null) {
         for (const w of pieces.map(([, , , s, e, m0]) => [Math.max(0, Math.floor((m0 - 1) * FPS) / FPS), Math.ceil((m0 + (e - s) + 1) * FPS) / FPS]).sort((p, q) => p[0] - q[0])) { const m = wins.at(-1); if (m && w[0] <= m[1]) m[1] = Math.max(m[1], w[1]); else wins.push([...w]); }
         wins = wins.map(([a, b]) => ({ a, b, rel: `assets/talk-matte@${Math.round(a * 1000)}-${Math.round(b * 1000)}.webm` }));
         wins.forEach(cutWindow);
@@ -3871,7 +3920,8 @@ if (spec.matte && spec.matteWindows && !spec.stage) {
         relightMatte(k.src);
         return [matteRelOf(k.src), r3(m0)];
       };
-      matteHtml = pieces.map(([k, i, j, s, e, m0]) => {
+      if (behindCacheHtml !== null) matteHtml = behindCacheHtml;
+      else matteHtml = pieces.map(([k, i, j, s, e, m0]) => {
         const [src, ms] = srcOf(k, m0, e - s);
         return `
       <video id="matte-${i}${j ? `-${j}` : ""}" class="matte" src="${src}" data-start="${r3(s)}" data-duration="${r3(e - s)}" data-media-start="${ms}" data-track-index="2" muted playsinline></video>`;
