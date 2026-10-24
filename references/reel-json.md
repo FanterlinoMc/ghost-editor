@@ -1344,7 +1344,7 @@ frames, so a graphic:
 | `kind` / `type` | `"graphic"` | | literal |
 | `html` | string | | `assets/graphics/<name>.html`, `<name>` `[a-z0-9-]{1,48}`, lowercase `.html`, no `..`, no URL, no absolute path, the resolved file inside `<project>/assets/graphics/` (G1, G2) |
 | `src` (beat) | string | the primary recording | the recording the beat's `at`/`to` belong to, exactly as on every beat (multi-source reels). Not the graphic file: v3.1 renamed the graphic file field to `html` so a graphic beat can name its recording. A graphic layer has no `src` (output seconds); a `src` on it is ignored (GW8) |
-| `mode` | string | `"overlay"` | `overlay` (alpha WebM in `box`), `insert` (opaque MP4 over the whole canvas), or (v3.6, beats only) `behind` (alpha WebM drawn between the picture and the speaker's cut-out; "Behind the speaker" below). Else P1 |
+| `mode` | string | `"overlay"` | `overlay` (alpha WebM in `box`), `insert` (opaque MP4 over the whole canvas), or (v3.6, beats only) `behind` (alpha WebM drawn between the picture and the speaker's cut-out; "Behind the speaker" below). Else P1 (a layer) or P1b (a beat) |
 | timing (layer) | | | exactly the layer rules: `pin` + `at`, or `anchor {take, offset}`; clamped to the reel; under 0.1 s once clamped: dropped (existing warnings and dies) |
 | timing (beat) | `at`, `to` | `to` = `at` + the graphic's window | source seconds, the beat rules (`src` for multi-source); `to - at` 0.1..60 s (P2) |
 | `dur` (layer) | number s | `duration - in` | > 0 (existing die); the placement's length. 0.1..60 s (P2) |
@@ -1817,7 +1817,7 @@ has the first `!important` (flag `i`) removed from the list, is trimmed, loses O
 
 | # | `<reason>` (exact) |
 |---|---|
-| P1 | `graphic mode '<v>' is not overlay or insert` (a beat: `is not overlay, insert or behind`) |
+| P1 | `graphic mode '<v>' is not overlay or insert` (a layer); `graphic mode '<v>' is not overlay, insert or behind` (a beat, v3.6) |
 | P2 | `graphic window <s>s is outside 0.1..60s` |
 | P3 | `graphic box shows less than 20% inside the <W>x<H> canvas` |
 | P4 | `graphic box covers the speaker's face at <t>s (40 px margin)` |

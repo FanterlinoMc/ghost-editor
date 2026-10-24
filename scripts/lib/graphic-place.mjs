@@ -66,7 +66,7 @@ export function resolveGraphicBeat(b, insp, { out, fps, W, H }) {
   const drop = (r, code = null) => ({ problem: beatProblem(label, b.html, r), code });   // code: mac-54's record
   if (!insp.ok) return drop(insp.reasons[0], (insp.codes || [])[0] ?? null);
   const meta = insp.meta, mode = b.mode ?? "overlay";
-  if (!BEAT_MODES.includes(mode)) return drop(reason("P1", { v: mode }).replace("overlay or insert", "overlay, insert or behind"), "P1");
+  if (!BEAT_MODES.includes(mode)) return drop(reason("P1b", { v: mode }), "P1");
   const tm = graphicTiming(meta, b, fps);
   const warnings = [...tm.warnings];
   // the window, in source seconds: to - at when both are seconds of the same recording, or the graphic's own length

@@ -32,7 +32,7 @@ test("a graphic beat: to defaults to at + the graphic's window from in; box cent
 test("a graphic beat's problems: the first one, worded as a dropped beat", () => {
   const P = (b, insp = ok) => resolveGraphicBeat({ type: "graphic", html: H, at: 1, ...b }, insp, ctx).problem;
   assert.equal(P({}, { ok: false, reasons: ["graphic file x does not exist"] }), `graphic 1: ${H}: graphic file x does not exist, dropped`);
-  assert.equal(P({ id: "m", mode: "full" }), `graphic m: ${H}: ${reason("P1", { v: "full" }).replace("overlay or insert", "overlay, insert or behind")}, dropped`);
+  assert.equal(P({ id: "m", mode: "full" }), `graphic m: ${H}: ${reason("P1b", { v: "full" })}, dropped`);
   assert.equal(P({ to: 1.05 }), `graphic 1: ${H}: ${reason("P2", { s: 0.05 })}, dropped`);
   assert.equal(P({ box: { x: 2000, y: 0, w: 100, h: 100 } }), `graphic 1: ${H}: ${reason("P3", { W: 1080, H: 1920 })}, dropped`);
   assert.equal(P({ fit: "fill" }), `graphic 1: ${H}: fit must be one of cover|contain, got "fill", dropped`);

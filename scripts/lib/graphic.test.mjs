@@ -1184,7 +1184,7 @@ test("REASONS are word for word the spec's tables (references/reel-json.md)", ()
   const PH = { html: "<html>", match: "<match>", bytes: "<bytes>", path: "<path>", n: "<n>", name: "<name>", value: "<value>", W: "<W>", H: "<H>", w: "<w>", h: "<h>",
     v: "<v>", s: "<s>", url: "<url>", message: "<message>", t: "<t>", a: "<a>", b: "<b>", i: "<i>", L: "<L>", code: "<code>", line: "<last log line>", k: "<k>",
     duration: "<duration>", platform: "<platform name>", cp: "<hex>", ch: "<char>", snippet: "<snippet>", font: "<font>", top: "<top>", bottom: "<bottom>", kind: "<kind>", e: "<e>" };
-  const MORE = { G16: ["G16o"], G17: ["G17n"], R4: ["R4p"], R6: ["R6n", "R6L", "R6o"], R12: ["R12n", "R12c"] };
+  const MORE = { P1: ["P1b"], G16: ["G16o"], G17: ["G17n"], R4: ["R4p"], R6: ["R6n", "R6L", "R6o"], R12: ["R12n", "R12c"] };
   const seen = new Set(), diffs = [];
   for (const line of sec.split("\n")) {
     const m = /^\| (G\d+|P\d+|R\d+|GW\d+)(?: \(v[\d.]+\))? \|/.exec(line);
