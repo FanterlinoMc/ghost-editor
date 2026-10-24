@@ -63,6 +63,7 @@ export const REASONS = {
   G35: ({ html, match }) => `graphic file ${html} starts a ${match} inside another tag (a < inside an attribute value)`,
   G36: ({ html, cp, ch }) => `graphic file ${html} has the character U+${cp} '${ch}' (an emoji or symbol: no engine font has a glyph for it, it renders as a box)`,
   P1: ({ v }) => `graphic mode '${v}' is not overlay or insert`,
+  P1b: ({ v }) => `graphic mode '${v}' is not overlay, insert or behind`,   // v3.6: a beat's modes
   P2: ({ s }) => `graphic window ${s}s is outside 0.1..60s`,
   P3: ({ W, H }) => `graphic box shows less than 20% inside the ${W}x${H} canvas`,
   P4: ({ t }) => `graphic box covers the speaker's face at ${t}s (40 px margin)`,
