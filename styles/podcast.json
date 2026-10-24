@@ -61,13 +61,18 @@
     "base": 1.08
   },
   "outro": 0.15,
+  "showLogo": "fromShow",
   "director": {
     "plan": "core/scripts/podcast_plan.py <project> writes captions.keys/reds, the hook box (+ name label), a pull quote, the Like click and the show logo.",
     "rules": "Everything on screen is spoken, except the show logo and the name label (brand kit data). Footage stays in colour.",
     "prep": "Landscape two-shots: prep with SPEAKER_CROP=1 (scripts/speaker_crop.py) so the crop frames the person talking, not the nearest face.",
     "style": "The Podcast: a moody, contrasty talking-head cut. Keep whole thoughts and cut hard between them; the picture changes about every 2 s. The footage stays in colour. Everything that appears on screen is a word the speaker actually says.",
-    "restraint": "This look is carried by the captions and the punch-ins, nothing else: no scenes, no pages, no cards, no icons, no B-roll, no stickers, no banner. If nothing is genuinely needed, return empty lists and say so in the summary.",
-    "dont": "Never a name, a company or a logo the speaker does not say."
+    "restraint": "Apart from those two boxes the frame is the speaker, the captions and the punch-ins: no scenes, no pages, no cards, no icons, no B-roll, no stickers, no banner. If a box is not genuinely earned, leave it out and say so in the summary.",
+    "dont": "Never a name, a company or a logo the speaker does not say.",
+    "boxline": "One hook box over the opening: a white box of black heavy caps holding the line the speaker says there, in their own words.",
+    "pullquote": "At most one pull quote in the middle of the reel: the same box in quote marks, holding the strongest complete line the speaker says, word for word.",
+    "keyword_treatments": "The captions carry this look: about one strong content word per 7 spoken words gets `bold` (drawn big and yellow), and a genuine danger word - never, wrong, mistake, dead, lose - gets `alarm` (red), at most one per 15 s. EVERY occurrence of a word you mark is coloured, not just the one you timed, so only mark a word the speaker says once or twice; a plain negation (not, don't) stays white, and a filler, contraction or swear word is never a key word.",
+    "likeclick": "One Like click about 40% in, between sentences, on reels of 12 s or more."
   },
   "boxline": {
     "dodgeFace": true,
