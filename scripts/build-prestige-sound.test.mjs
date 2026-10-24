@@ -13,6 +13,7 @@
 //   - the new die(): drop.<sound field> not an id / list of ids / false / "none"
 //   - opt-in: premium-belmar reels without the new fields (no drop, a placed drop) build the same sections.json, sfx_events.json and
 //     index.html as the base engine (git archive of PRESTIGE_BASE_REF, default commit 290994d; skipped only without git or the commit)
+import { asGsapPage } from "./lib/page-norm.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -234,7 +235,8 @@ test(`premium-belmar without the new fields builds byte-identically to ${BASE_RE
     runWith(path.join(HERE, ".."), mine, lib); runWith(baseEngine, base, lib);
     for (const f of ["build/sections.json", "build/sfx_events.json", "index.html"]) {
       // the project folder name differs (p<N>); the bytes may name it, so compare with it masked
-      const read = (d) => fs.readFileSync(path.join(d, f), "utf8").split(path.basename(d)).join("<proj>");
+      // and the page as the GSAP-era engine wrote it (mac-65 inlines the tween runtime in place of GSAP's tag)
+      const read = (d) => { const t = fs.readFileSync(path.join(d, f), "utf8").split(path.basename(d)).join("<proj>"); return f === "index.html" ? asGsapPage(t) : t; };
       assert.ok(read(mine) === read(base), `${label}, ${lib === FULL.lib ? "stub" : "silent"} library: ${f} differs from ${BASE_REF}`);
     }
   }
