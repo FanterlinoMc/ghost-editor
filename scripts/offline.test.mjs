@@ -1,6 +1,6 @@
 // mac-60: nothing a reel needs comes off the internet, at build time or at render time.
-//   - no engine source (build.mjs, scripts/lib) fetches from a remote host, other than the vendored GSAP <script src>
-//     that build.mjs writes into the page (answered from vendor/ by scripts/vendor-offline.cjs at render time)
+//   - no engine source (build.mjs, scripts/lib) fetches from a remote host (since mac-65 the page names no library at
+//     all: its tween runtime is inlined)
 //   - every shipped style builds with the network blocked (curl / wget shimmed to fail, Node fetch() refused, and on
 //     macOS the whole build inside sandbox-exec with outbound network denied), and its index.html names no remote host
 //     but the vendored URLs: no Google Fonts link, no CDN script, no remote image
@@ -101,7 +101,7 @@ test("remoteRefs finds every kind of remote reference and lets the vendored URLs
   assert.deepEqual(remoteRefs(page).sort(), ["https://fonts.googleapis.com/css2?family=Inter", "https://x.example/a.css", "https://x.example/b.png", "https://x.example/c.png"]);
 });
 
-test("no engine source fetches from a remote host (the vendored GSAP <script src> aside)", () => {
+test("no engine source fetches from a remote host", () => {
   const files = [BUILD, ...fs.readdirSync(path.join(HERE, "lib")).filter((f) => f.endsWith(".mjs") && !f.endsWith(".test.mjs")).map((f) => path.join(HERE, "lib", f))]
     // the graphic sandbox's own probes name remote hosts on purpose: they check that a graphic CANNOT reach them
     .filter((f) => !/graphic-(probe|render)\.mjs$/.test(f));
@@ -211,11 +211,10 @@ test(`a reel renders with the network off (${CUT.how})`, { skip: CUT.argv ? fals
   const dir = project("render", { style: "editorial", toolLogos: true, captions: { keywords: { week: "script", hours: "script" } } });
   assert.equal(build(dir).status, 0);
   const out = path.join(dir, "build", "offline.mp4");
-  // render.mjs = runRender(): GSAP from vendor/, and it fails the render if the page used a vendored URL the preload did not serve
+  // render.mjs = runRender(): it fails the render if the page used a vendored URL the preload did not serve (none since mac-65)
   const r = offline(process.execPath, [path.join(HERE, "render.mjs"), "-o", out, "--quiet"],
     { cwd: dir, env: { ...process.env, PATH: `${shim}${path.delimiter}${process.env.PATH}`, npm_config_offline: "true", VENDOR_OFFLINE: "1" } });
   assert.equal(r.status, 0, `offline render failed:\n${(r.stderr + r.stdout).slice(-2500)}`);
-  assert.match(r.stderr, /vendor: served https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@3\.14\.2\/dist\/gsap\.min\.js/);
   assert.match(r.stderr, /vendor: font 'EB Garamond' served/);
   assert.doesNotMatch(r.stderr, /vendor: (blocked|REFUSED)|is not vendored/, "the render asked for something vendor/ does not hold");
   const dur = +execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", out], { encoding: "utf8" });

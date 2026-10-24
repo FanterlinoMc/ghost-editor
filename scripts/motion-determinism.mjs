@@ -125,10 +125,10 @@ async function grab(page, reset = false, after = null) {
 }
 async function open() {
   const page = await browser.newPage();
-  await serveVendoredInPage(page);   // GSAP from vendor/, not jsdelivr
+  await serveVendoredInPage(page);   // vendor/ answers anything the page names (no CDN)
   await page.evaluateOnNewDocument(() => { window.__timelines = {}; });   // the hyperframes runtime creates this registry; the composition only fills it
   await page.goto(pathToFileURL(proj.html).href, { waitUntil: "load", timeout: 60000 });
-  await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 });
+  await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.tween, { timeout: 30000 });
   await page.evaluate(() => document.fonts.ready.then(() => 0));
   await page.evaluate((mode, roomRun, layersRun) => {
     const tl = window.__timelines.main; tl.pause();
@@ -274,7 +274,7 @@ if (isRoom) {
   await serveVendoredInPage(pg2);   // GSAP from vendor/, not jsdelivr
   await pg2.evaluateOnNewDocument(() => { window.__timelines = {}; });
   await pg2.goto(pathToFileURL(ov.html).href, { waitUntil: "load", timeout: 60000 });
-  await pg2.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 });
+  await pg2.waitForFunction(() => window.__timelines && window.__timelines.main && window.tween, { timeout: 30000 });
   const scales = [], ovWins = roomWindows([[60, 197]], FPS);
   for (const t of [2.0, 2.2, 2.4, 3.0, 3.6, 4.0, 4.2, 4.3, 4.6, 5.0, 5.8, 6.0, 6.2, 6.3, 6.4, 6.6]) {
     const a = await pg2.evaluate((x) => { const tl = window.__timelines.main; tl.pause(); tl.totalTime(x + 0.001, true); tl.totalTime(x, false); const m = getComputedStyle(document.getElementById("room")).transform.match(/matrix\(([^)]+)\)/); return m ? +m[1].split(",")[0] : NaN; }, t);

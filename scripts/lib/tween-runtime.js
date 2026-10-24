@@ -21,8 +21,9 @@
  * elastic, bounce; default power1.out), values rounded to 4 decimals, colour channels to integers, a string's exact end
  * value at progress 1 and exact start at 0, transforms composed in GSAP's order (translate(xPercent%, yPercent%)
  * translate(x, y) rotate rotateY rotateX skew scale) with translate3d while a transform tween is mid-flight unless
- * force3D: false, autoAlpha (opacity + visibility hidden at 0, inherit above), and non-numeric strings switching at
- * the end of their tween. Supported vars: duration, ease, immediateRender, repeat, yoyo, stagger (number), keyframes,
+ * force3D: false, autoAlpha (opacity + visibility hidden at 0, inherit above; on a HyperFrames clip, an element with
+ * data-start, visibility is HyperFrames' and only the opacity is written), and non-numeric strings switching to
+ * their end value once their tween has started. Supported vars: duration, ease, immediateRender, repeat, yoyo, stagger (number), keyframes,
  * modifiers, onUpdate (called with the tween's state on every seek once it has started), attr, transformOrigin,
  * svgOrigin, force3D. Anything else in vars is a CSS property (camelCase or --custom) or, on a plain object target, a
  * number. Unsupported keys are listed in tween.unsupported (the parity check reads it).
@@ -66,7 +67,7 @@
     power0: power(1), power1: power(2), power2: power(3), power3: power(4), power4: power(5),
     quad: power(2), cubic: power(3), quart: power(4), quint: power(5), strong: power(5),
     sine: fromIn(function (p) { return p === 1 ? 1 : -Math.cos(p * HALF_PI) + 1; }),
-    expo: fromIn(function (p) { return p ? Math.pow(2, 10 * (p - 1)) : 0; }),
+    expo: fromIn(function (p) { return Math.pow(2, 10 * (p - 1)) * p + p * p * p * p * p * p * (1 - p); }),   // GSAP 3.14's (exactly 0 at 0, 1 at 1)
     circ: fromIn(function (p) { return -(Math.sqrt(1 - p * p) - 1); }),
     bounce: { "in": function (p) { return 1 - bounceOut(1 - p); }, out: bounceOut, inOut: function (p) { return p < 0.5 ? (1 - bounceOut(1 - p * 2)) / 2 : 0.5 + bounceOut((p - 0.5) * 2) / 2; } },
   };
@@ -109,14 +110,14 @@
   }
   function hasColor(s) { COLOR_RE.lastIndex = 0; var r = COLOR_RE.test(s); COLOR_RE.lastIndex = 0; return r; }
   // string interpolation, GSAP-style: the END string's structure, its numbers interpolated from the start's numbers by
-  // position; the exact start at 0 and the exact end at 1; a string with no numbers switches at the end
+  // position; the exact start at 0 and the exact end at 1; a string with no numbers takes its end value once started
   function lerpString(a, b, p, key) {
     if (p <= 0) return a;
     if (p >= 1) return b;
     var A = a, B = b;
     if (hasColor(a) || hasColor(b)) { A = colorize(a); B = colorize(b); }
     var na = A.match(NUM_RE) || [], nb = B.match(NUM_RE) || [];
-    if (!nb.length) return a;
+    if (!nb.length) return b;   // a string with no numbers takes its end value as soon as its tween has started (GSAP)
     var i = 0, inColor = [], cpos = 0;
     // which numbers of B are colour channels (rgb rounded to integers, alpha not)
     B.replace(/rgba\(([^)]*)\)/g, function (all, inner, off) { inColor.push([off, off + all.length]); return all; });
@@ -279,6 +280,10 @@
         rec.tfInline = el.style.getPropertyValue("transform");
         rec.tfAttr = el instanceof SVGElement ? el.getAttribute("transform") : null;
         rec.tf = decompose(el instanceof SVGElement && !(el instanceof SVGSVGElement) ? "none" : cs.transform);
+        // GSAP's reading of a centred element: a translate of exactly minus half its size is xPercent / yPercent -50
+        // (a CSS translate(-50%, -50%)), so a tween's own xPercent: -50 replaces it instead of adding to it
+        if (el.offsetWidth && rec.tf.x && Math.round(el.offsetWidth / 2) === Math.round(-rec.tf.x)) { rec.tf.xPercent = -50; rec.tf.x = 0; }
+        if (el.offsetHeight && rec.tf.y && Math.round(el.offsetHeight / 2) === Math.round(-rec.tf.y)) { rec.tf.yPercent = -50; rec.tf.y = 0; }
       }
       self._baseOf.set(el, rec);
     });
@@ -301,7 +306,11 @@
       return R4(s + (b - s) * p);
     }
     var A = a === null || a === undefined ? "" : String(a), B = String(b);
-    return lerpString(A, B, p, tr.key);
+    var out = lerpString(A, B, p, tr.key);
+    // an overshooting ease (back, elastic) drives blur() etc. below 0, which CSS rejects: the write would be dropped and
+    // the element keep whatever an earlier seek left (GSAP shows the previous value, seek-order dependent). Floored at 0.
+    if (tr.key === "filter" || tr.key === "backdropFilter") out = out.replace(/\b(blur|brightness|contrast|saturate|grayscale|sepia|invert|opacity)\((-[\d.]+)/g, function (all, f) { return f + "(0"; });
+    return out;
   }
   // the track's value at t: { v, seg, p } (seg null: no tween has started)
   function valueAt(tr, t) {
@@ -349,6 +358,7 @@
       }
       if (tr.kind === "tf") { var o = tfOf.get(el); if (!o) tfOf.set(el, o = { comp: {}, started: false, mid: false, f3d: undefined }); o.comp[tr.key] = r.v; if (r.seg) { o.started = true; if (r.p > 0 && r.p < 1 && r.seg.span.dur > 0) { o.mid = true; if (r.seg.span.f3d !== undefined) o.f3d = r.seg.span.f3d; } } return; }
       if (tr.kind === "attr") { var name = tr.key.slice(1); if (r.seg || r.pre) el.setAttribute(name, String(r.v)); else if (tr.base === null) el.removeAttribute(name); else el.setAttribute(name, tr.base); return; }
+      if (tr.key === "visibility" && isClip(el)) return;   // HyperFrames owns a clip's visibility (its data-start window): opacity only
       if (tr.key === "visibility") {
         // autoAlpha (a number: hidden at 0, inherit above) and explicit visibility (a string) share this track
         if (!r.seg && !r.pre) { setInline(el, "visibility", tr.inline); return; }
@@ -395,6 +405,10 @@
     // HyperFrames' seek: a painter's writes then outlive the frame they were made for.)
     this._updates.forEach(function (u) { u.fn(); });
   };
+  // a HyperFrames clip: it sets style.visibility on every [data-start] element (not video / audio / img) on every frame,
+  // from the clip's window. GSAP wrote visibility only while an autoAlpha tween rendered, so the two never fought; a
+  // runtime that restores state on every seek would undo HyperFrames' "hidden" and show a clip outside its window.
+  function isClip(el) { return el.hasAttribute("data-start") && !/^(VIDEO|AUDIO|IMG)$/.test(el.tagName); }
   function setInline(el, css, v) { if (v) el.style.setProperty(css, v); else el.style.removeProperty(css); }
   // SVG: the transform attribute, around svgOrigin (user units) when given, else the element's own origin (0 0)
   function svgTransform(el, g) {

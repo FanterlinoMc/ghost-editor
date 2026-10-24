@@ -217,7 +217,7 @@ A reel that sets none of these builds exactly as before (`scripts/byte-identity.
 - `cadence.faceAnchor: {headroom}`: every punch-in scales around the speaker's face - x = the face centre, y = the top of the head minus `headroom` (default 24) - measured over that snap's hold, using the face track and crop plan of **the take's own source**. A source with no face track gets a plain punch around `zoom.origin`. `edit_truth.json` snaps gain `origin: [x, y]` **only for anchored snaps**. The caption placer (`safezone.mjs`) is not told about the origin and keeps modelling the face around `zoom.origin`; Noir's own captions are fixed-height so it only matters for cards and slots.
 - `music.optional: true` (fork-only): if the named `music.id` is in the manifest but its file is not on disk, the build warns and goes on without a bed. Without it a missing file is still a fatal error (A10). `premium-noir` sets it because `silent-descent` is not shipped.
 
-The rest of Ahmed's premium kit (speed ramps, `sfxDesign`, `drop`, `transitions`, the scorers, `PHANTASIC_PREVIEW_SCALE`) is under "Premium line" below. GSAP is vendored (`vendor/gsap/3.14.2`, mac-10/mac-60): the page names the CDN URL and a render through `scripts/render.mjs` serves it from `vendor/`.
+The rest of Ahmed's premium kit (speed ramps, `sfxDesign`, `drop`, `transitions`, the scorers, `PHANTASIC_PREVIEW_SCALE`) is under "Premium line" below. GSAP is gone (mac-65): the page carries its own tween runtime, inlined ("Tween runtime" below).
 
 ## Premium line (Empire, Signature, Prestige, Noir, kit demo; all opt-in, phase D; hand port of phantasic `engine/core` on origin/main + `template-premium-iman`)
 
@@ -322,7 +322,7 @@ and Geist, Inter, Montserrat and Oswald ship as variable fonts. So a separate st
   **Offline by default:** the page's JavaScript is off and every request outside the project is aborted, so the
   step has no network dependency; it measures the resting layout, which the build writes as static HTML. Measured on
   15 reels (the 12 acceptance styles, keynote-3, clean, f02): identical to `--with-gsap` on 14, within 1 px on
-  podcast (7 of 14 blocks, sub-pixel transforms). `--with-gsap` runs the page's script and its CDN GSAP and seeks to
+  podcast (7 of 14 blocks, sub-pixel transforms). `--with-gsap` (the name is kept) runs the page's script and its tween runtime and seeks to
   `start + min(0.3 s, dur / 2)` in each block instead (`measured.gsap: true`). The file gets `measured: { by: "caption-boxes",
   chrome: <version>, platform: <os-arch> }`; fonts can differ between hosts, so a measurement is the truth for the
   host that renders. A block with no drawn element at its start gets `x: null`, `width: null`.
@@ -332,7 +332,7 @@ and Geist, Inter, Montserrat and Oswald ship as variable fonts. So a separate st
   `caption block <i> at <t0>s is drawn at x <x>..<x + width>px, outside the <W>px canvas`.
 - **stdout:** one JSON line `{ blocks, measured, unmatched, W, outside: [{ i, t0, x, width }], chrome }`.
 - **Needs** Chrome (`CHROME`, else the pinned shell, else the hyperframes / puppeteer caches) and puppeteer-core
-  (`lib/browser.mjs`). No network (`--with-gsap` needs GSAP's CDN).
+  (`lib/browser.mjs`). No network.
 - Test: `scripts/caption-boxes.test.mjs` (the join always; real Chrome when present, required with `CI=1` /
   `REQUIRE_CHROME=1`).
 
@@ -1861,13 +1861,52 @@ Not in this version: sound inside a graphic, audio-reactive visualisers (Music g
 WebGL / three.js, GSAP or any library (owner's pause, licence question), variables passed in at render
 (`--variables`; a template's fields are filled into the HTML by the writer instead), dotLottie inside a graphic.
 
+## Tween runtime (`scripts/lib/tween-runtime.js`, mac-65): the page's animation, in place of GSAP
+
+The owner's decision (24 Oct 2026): **GSAP is removed**, not vendored and kept (its licence restricts tools that let
+users build animations). Every reel page now inlines the engine's own runtime, MIT, no dependency, no network:
+`window.tween.timeline({ paused: true })` with `fromTo` / `to` / `set`, registered as `window.__timelines.main`.
+The build's emitted lines are unchanged apart from `gsap.timeline(` -> `tween.timeline(` and the `<script>` tag.
+
+- **The contract: every seek is a pure function of time.** For each (element, property) the tweens form a track sorted
+  by start; the value at `t` is a fold over the started ones (the last started wins). A `to()` starts from the track's
+  value at its own start (computed, never read from the page during playback); before a track's first tween the
+  element's own value is restored (or the `from` of a fromTo that renders immediately). Base values (an element's own
+  transform, opacity, ...) are read once, at the first seek, before anything is written. Painters (`onUpdate`) run on
+  every seek, and a modifier with a side effect (a count writing its text) shows its start state before it starts;
+  several counts on one text: the latest started wins, before all of them the earliest's start state.
+- **Kept from GSAP**, so the look moves as little as possible: the ease formulas (GSAP 3.14's, including its expo,
+  `2^(10(p-1)) p + p^6 (1-p)`; checked against GSAP's own values, `scripts/fixtures/gsap-eases.json`), 4-decimal
+  rounding, integer colour channels, the transform order (`translate(xP%, yP%) translate(x, y) rotate rotateY rotateX
+  skew scale`, `translate3d` mid-tween unless `force3D: false`, `translate(0px, 0px)` at rest, an identity transform
+  written when a tween names only `force3D`), GSAP's reading of a centred element (a base translate of exactly minus
+  half its size is `xPercent` / `yPercent` -50), `autoAlpha`, a string with no numbers taking its end value once its
+  tween has started.
+- **Deliberately not GSAP's**, where GSAP's result depends on seek order or is invalid: a `to()` captures its start
+  value lazily in GSAP (whatever the previous render left); an overshooting ease drove `blur()` below 0, which CSS
+  rejects, so GSAP kept whatever filter was written before it (seek-order dependent; measured on the pills and stats
+  entrances); the runtime
+  floors `blur / brightness / contrast / saturate / grayscale / sepia / invert` at 0.
+- **The interface HyperFrames 0.8.81 calls** (measured with a proxy on a real render): `totalTime(t, suppress)`,
+  `progress`, `timeScale`, `duration`, `totalDuration`, `pause`, `getChildren`. No `window.gsap` exists, so HyperFrames'
+  own GSAP ease hook (`registerEase`, `__hfCustomEaseInstalled`) does not run.
+- **Proof** (`scripts/tween-runtime.test.mjs`, in the gate): eases = GSAP's to 1e-9; the semantics on a page; seek-
+  determinism on four built reels (in order, backwards, jumps and fresh pages give identical computed styles).
+  Measured once, 24 Oct, against GSAP 3.14.2 on 164 pages (96 styles, 64 scene-kind samples, the 4 golden reels): **0**
+  seek-order differences in 1.53 million compared values; 134 of the 163 page names within 0.01 px of GSAP, the rest
+  sub-pixel except: the negative-blur floor above (pills, stats), a count's text width (gm-counter, 4.9 px), one
+  rotation (device, 1.4 px). A render of the busy golden reel: 136 of 300 frames bit-identical, worst frame 49 dB, no
+  pixel 64 or more levels off; the fly3d sample: mean 91 dB, worst 61 dB.
+- **The goldens move**: `byte-identity.mjs` reports `index.html` DIFFERS on all four reels (the page carries the
+  runtime instead of the GSAP tag); every `build/*.json` is identical. Not re-recorded: the owner accepts first.
+
 ## Offline: nothing a reel needs comes off the internet (mac-60)
 
 A build and a render make no network request. What used to be fetched, and where it comes from now:
 
 | What | When | Was | Now |
 |---|---|---|---|
-| GSAP 3.14.2 | render | `cdn.jsdelivr.net` (the page's `<script src>`) | `vendor/gsap/3.14.2`, served by the `scripts/vendor-offline.cjs` preload; render through `scripts/render.mjs` / `runRender()` |
+| GSAP 3.14.2 | render | `cdn.jsdelivr.net` (the page's `<script src>`) | removed (mac-65): the page's own tween runtime is inlined, `scripts/lib/tween-runtime.js`. `vendor/manifest.json` `libraries` is empty; the preload mechanism stays for the next library |
 | Lucide icons (`icon` beat) | build | `curl` from jsdelivr `lucide-static@latest` | `vendor/lucide-static/1.61.0/icons.json` (ISC) |
 | simple-icons (`logo` beat, `chips` icons, `toolLogos`) | build | `curl` from jsdelivr `simple-icons@latest` | `vendor/simple-icons/16.35.0/icons.json` (CC0; `openai` and `slack` are not in 16.x, see `logo` above) |
 | Google Fonts: EB Garamond, Inter | render | HyperFrames 0.8.81's compiler fetched `fonts.googleapis.com/css2` + `fonts.gstatic.com` for the faces behind a system family the page names (`Georgia` -> EB Garamond, `Arial` / `Helvetica` -> Inter) that its own bundle lacks (italics, other weights, other scripts). Every shipped style asked. When Google did not answer, a `Georgia` italic script keyword rendered another face and its line moved | `vendor/google-fonts/<family>/<version>` (Google's CSS and woff2 bytes, OFL), answered by the same preload; a family that is not vendored gets Google's own 400 for an unknown family (the renderer keeps its bundle) and the log line `vendor: font '<family>' is not vendored` |
@@ -1875,9 +1914,9 @@ A build and a render make no network request. What used to be fetched, and where
 Every vendored file is sha256-checked against `vendor/manifest.json` when it is used; a missing or altered one is refused,
 never replaced by the network. `scripts/offline.test.mjs` (in the gate) proves it: no engine source fetches a remote
 host; every shipped style builds with curl / wget shimmed to fail, Node `fetch()` refused and (macOS) the build inside
-`sandbox-exec` with outbound network denied, and its page names no remote host but the vendored GSAP URL; icon and
+`sandbox-exec` with outbound network denied, and its page names no remote host; icon and
 logo SVGs are the vendored bytes; and an editorial reel with a script keyword renders inside the sandbox (or
-`unshare -rn` on Linux) with GSAP and both fonts served from `vendor/` and no blocked, refused or unvendored request.
+`unshare -rn` on Linux) with both fonts served from `vendor/` and no blocked, refused or unvendored request.
 Measured on 2026-10-24 (HyperFrames 0.8.81, Chrome hardware mode, the Mac mini): the vendored fonts render the
 script-keyword reel frame-identical to a render that got Google's answer (90 of 90 frames); across 78 styles, 72 are
 bit-identical and 6 differ by at most 15 / 255 with no pixel at 16 or more, the same signature as 18 styles that
