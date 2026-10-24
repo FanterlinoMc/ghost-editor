@@ -306,6 +306,30 @@ Test: `scripts/build-prestige-sound.test.mjs` builds a small Prestige reel again
 
 `takes[i].ramp` (the ramp as written; `dur` is already the ramped length, so `dur != b - a` for that take) and a top-level `txTransitions: [{t, kind}]` (the `#tx` whips and zoom-throughs of `transitions`; a join's own `take.transition` stays a take field). Drop ladder scenes are ordinary `beats` (`type: "scene"`, `kind: "image"`). Nothing else changed.
 
+### `caption_layout.json`: `x` and `width` per block (`scripts/caption-boxes.mjs`, mac-51)
+
+The build writes each caption block's `t0`, `t1`, `y`, `h`, `mode`, `scale`, `face`. It cannot write the horizontal
+extent: that is the browser's line layout of the caption font, house captions use Arial (the host's, not shipped)
+and Geist, Inter, Montserrat and Oswald ship as variable fonts. So a separate step measures it in Chrome:
+
+    node scripts/caption-boxes.mjs <project> [--check]     # after build.mjs, before or after the render
+
+- **What it adds.** Every block gets `x` (left edge of what is drawn, px, whole, may be negative) and `width` (px,
+  whole): the union of the drawn rectangles of the block's elements and all their descendants (every caption style
+  puts its blocks on track 5 with `data-start`; a cluster block is several elements), taken at
+  `start + min(0.3 s, dur / 2)` after `document.fonts.ready`. The file gets `measured: { by: "caption-boxes",
+  chrome: <version>, platform: <os-arch> }`; fonts can differ between hosts, so a measurement is the truth for the
+  host that renders. A block with no drawn element at its start gets `x: null`, `width: null`.
+- **Never stale.** `build.mjs` never writes `x`, `width` or `measured`, so a reel built without this step is
+  byte-identical to before, and a rebuild writes the unmeasured file again. A block without `x` is unmeasured.
+- **`--check`** exits 1 when a measured block reaches outside `[0, W]`, one stderr line per block:
+  `caption block <i> at <t0>s is drawn at x <x>..<x + width>px, outside the <W>px canvas`.
+- **stdout:** one JSON line `{ blocks, measured, unmatched, W, outside: [{ i, t0, x, width }], chrome }`.
+- **Needs** Chrome (`CHROME`, else the pinned shell, else the hyperframes / puppeteer caches) and puppeteer-core
+  (`lib/browser.mjs`). GSAP still comes from its CDN (vendoring is paused), so the step needs the network for that one file.
+- Test: `scripts/caption-boxes.test.mjs` (the join always; real Chrome when present, required with `CI=1` /
+  `REQUIRE_CHROME=1`).
+
 ### What the build refuses (`die()`; planner validator checks)
 
 take N has a ramp but contains speech; a ramped take can't be the last take or carry a hold; `take.ramp` with `spec.stage` / `spec.matte`; unknown ramp preset; `sfxDesign.density` not low / med / high; `transitions.kind` not whip / zoom / mix; `drop` without `shots`; `drop` without `hold` or `at`; `drop.riser` / `boom` / `tail` / `cutSfx` not an id, a non-empty list of ids, `false` or `"none"`; `drop.hold` naming a take that does not exist. (A ramp that would run past the end of its source is also checked, but a take's `b` is already checked against the file.)
