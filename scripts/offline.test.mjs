@@ -5,6 +5,8 @@
 //     macOS the whole build inside sandbox-exec with outbound network denied), and its index.html names no remote host
 //     but the vendored URLs: no Google Fonts link, no CDN script, no remote image
 //   - icon, logo and auto-logo (toolLogos) beats take their SVGs from vendor/ (lucide-static, simple-icons), byte for byte
+//   - the render preload answers fonts.googleapis.com / fonts.gstatic.com (HyperFrames asks them for the faces its
+//     bundle lacks behind Georgia, Arial, ...) from vendor/google-fonts, byte for byte, and never the network
 //   - a reel RENDERS with the network off (sandbox-exec on macOS, `unshare -rn` on Linux; skipped, with the reason, when
 //     neither can cut the network here), the same discipline caption-boxes.mjs uses for measuring
 import test from "node:test";
@@ -14,7 +16,8 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { LIBRARIES, ICON_SETS, PRELOAD, vendoredIcon } from "./lib/vendor.mjs";
+import crypto from "node:crypto";
+import { LIBRARIES, ICON_SETS, PRELOAD, VENDOR, vendoredIcon } from "./lib/vendor.mjs";
 import { silentLibrary } from "./lib/silent-library.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -148,6 +151,40 @@ test("icon, logo and auto-logo beats build with the network blocked, their SVGs 
   assert.equal(attempts(), "");
 });
 
+const GOOGLE_FONTS = JSON.parse(fs.readFileSync(path.join(VENDOR, "manifest.json"), "utf8")).googleFonts;
+const sha = (b) => crypto.createHash("sha256").update(b).digest("hex");
+test("the vendored Google Fonts are intact: every file the CSS names is vendored, sha256 as recorded", () => {
+  assert.deepEqual(GOOGLE_FONTS.map((e) => e.family).sort(), ["EB Garamond", "Inter"]);
+  for (const e of GOOGLE_FONTS) {
+    const css = fs.readFileSync(path.join(VENDOR, e.css));
+    assert.equal(sha(css), e.cssSha256, e.css);
+    const urls = [...new Set([...css.toString("utf8").matchAll(/https:\/\/fonts\.gstatic\.com[^)]+/g)].map((m) => m[0]))].sort();
+    assert.deepEqual(e.files.map((f) => f.url).sort(), urls, `${e.family}: the CSS and the file list disagree`);
+    for (const f of e.files) assert.equal(sha(fs.readFileSync(path.join(VENDOR, f.file))), f.sha256, f.file);
+    for (const f of [e.license, e.sources]) assert.ok(fs.statSync(path.join(VENDOR, f)).size > 200, `${e.family}: ${f}`);
+  }
+});
+
+test("the preload answers Google Fonts from vendor/, with Node's network refused", () => {
+  const ebg = GOOGLE_FONTS.find((e) => e.family === "EB Garamond"), file = ebg.files[0];
+  // exactly the request HyperFrames 0.8.81 makes (fetchGoogleFont), text= included
+  const css = "https://fonts.googleapis.com/css2?family=EB%20Garamond:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700&text=%3C!Dd";
+  const PROBE = `const c = require("node:crypto"); (async () => { const o = {};
+    for (const [k, u] of Object.entries(${JSON.stringify({ css, file: file.url, unknown: "https://fonts.googleapis.com/css2?family=Montserrat%20Italic:wght@400", stray: "https://fonts.gstatic.com/s/none/v1/x.woff2" })})) {
+      try { const r = await fetch(u); const b = Buffer.from(await r.arrayBuffer()); o[k] = { status: r.status, sha: c.createHash("sha256").update(b).digest("hex") }; } catch (e) { o[k] = { err: String(e.message) }; } }
+    console.log(JSON.stringify(o)); })();`;
+  const r = spawnSync(process.execPath, ["-e", PROBE], { encoding: "utf8", env: { ...process.env, VENDOR_OFFLINE: "1", NODE_OPTIONS: `--require "${PRELOAD}"` } });
+  assert.equal(r.status, 0, r.stderr);
+  const o = JSON.parse(r.stdout.trim().split("\n").pop());
+  assert.deepEqual(o.css, { status: 200, sha: ebg.cssSha256 });
+  assert.deepEqual(o.file, { status: 200, sha: file.sha256 });
+  assert.equal(o.unknown.status, 400);       // what Google answers for a family it does not have
+  assert.equal(o.stray.status, 404);
+  assert.doesNotMatch(r.stderr, /vendor: blocked/, "a font request reached the network guard");
+  assert.match(r.stderr, /vendor: font 'EB Garamond' served from vendor\/google-fonts\/eb-garamond\/v33\/fonts\.css/);
+  assert.match(r.stderr, /vendor: font 'Montserrat Italic' is not vendored/);
+});
+
 const STYLES = fs.readdirSync(path.join(SKILL, "styles")).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)).sort();
 test(`every shipped style (${STYLES.length}) builds with the network blocked and its page names no remote host but vendored ones`, { timeout: 900000 }, async () => {
   const failed = [], remote = [];
@@ -170,14 +207,17 @@ test(`every shipped style (${STYLES.length}) builds with the network blocked and
 });
 
 test(`a reel renders with the network off (${CUT.how})`, { skip: CUT.argv ? false : CUT.how, timeout: 600000 }, () => {
-  const dir = project("render", { style: "keynote-3", toolLogos: true });
+  // editorial + a script keyword: a "Georgia" italic word, the case that rendered a different face when Google did not answer
+  const dir = project("render", { style: "editorial", toolLogos: true, captions: { keywords: { week: "script", hours: "script" } } });
   assert.equal(build(dir).status, 0);
   const out = path.join(dir, "build", "offline.mp4");
   // render.mjs = runRender(): GSAP from vendor/, and it fails the render if the page used a vendored URL the preload did not serve
   const r = offline(process.execPath, [path.join(HERE, "render.mjs"), "-o", out, "--quiet"],
-    { cwd: dir, env: { ...process.env, PATH: `${shim}${path.delimiter}${process.env.PATH}`, npm_config_offline: "true" } });
+    { cwd: dir, env: { ...process.env, PATH: `${shim}${path.delimiter}${process.env.PATH}`, npm_config_offline: "true", VENDOR_OFFLINE: "1" } });
   assert.equal(r.status, 0, `offline render failed:\n${(r.stderr + r.stdout).slice(-2500)}`);
   assert.match(r.stderr, /vendor: served https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@3\.14\.2\/dist\/gsap\.min\.js/);
+  assert.match(r.stderr, /vendor: font 'EB Garamond' served/);
+  assert.doesNotMatch(r.stderr, /vendor: (blocked|REFUSED)|is not vendored/, "the render asked for something vendor/ does not hold");
   const dur = +execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", out], { encoding: "utf8" });
   assert.ok(Math.abs(dur - SECONDS) < 0.1, `rendered ${dur} s, expected ${SECONDS}`);
 });

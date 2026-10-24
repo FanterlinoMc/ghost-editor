@@ -163,10 +163,10 @@ the build warns on a double booking).
 | `endcard` | `title`, `line`, `url` (usually `at: "outro+0"`) | whoosh | the close |
 | `endcard` + `variant: "caps"` | `title` (`\|` = line break), `accent`, `font` (`"serif"` = italic Instrument Serif that keeps its case, `"mono"`), `size`, `y`, `bg` (`"black"` default, `"none"` = a soft band over the picture, `"smoke"`), `arrow`, `fade`, `color`, `instant` | tick-1 (no arrow) / ding-1 | a chapter card ("I.  Home") or a letter-spaced caps call to action. Opt-in port of Ahmed's Empire / Noir card; hides the captions while it is up |
 | `nametag` | `name`, `title`, `subtitle`, `x`, `y`, `nameSize`, `titleSize`, `color`, `wipe`, `wipeDur` | whoosh (`sound.nametag: false` to silence) | a name + title card in the first few seconds (Alif). `spec.nametagStyle: "byline"` (Broadsheet) swaps it for a newspaper byline - "BY NAME" in spaced caps, an italic outlet/beat line, a brand-colour rule - same fields |
-| `icon` | `name` (a Lucide icon slug, lucide.dev, fetched at build time), `x`, `y`, `ink` | ding-1 | a named concept the speaker made concrete ("working towards" -> `signpost`) |
+| `icon` | `name` (a Lucide icon slug, lucide.dev, from `vendor/lucide-static/1.61.0`), `x`, `y`, `ink` | ding-1 | a named concept the speaker made concrete ("working towards" -> `signpost`) |
 | `slam` | `text`, `pre`, `post`, `size` (auto-fits the width) | burn-whoosh-fast | a type-only pattern break: the footage dims and blurs, one huge serif word (`text`) lands on the charged word as it is spoken, with an optional small line above (`pre`) or below (`post`). Captions hide during it. Once per video (Editorial Collage / R1b) |
 
-`icon` (the `logo` beat) slugs come from simpleicons.org (fetched at build time, CC0). The `icon` **beat type** above fetches from lucide-static instead.
+`icon` (the `logo` beat) slugs come from simpleicons.org (CC0), the `icon` **beat type** above from lucide-static (ISC). Both sets are vendored (`vendor/simple-icons/16.35.0`, `vendor/lucide-static/1.61.0`, one sha256-checked `icons.json` each): a build never fetches an icon. A slug the vendored version does not have is the same error as before (`logo`, `icon`) or the same `no logo for <slug>` warning (`toolLogos`). simple-icons 16.0.0 removed 44 brands, among them `openai` and `slack` (two of the `toolLogos` brands): the CDN's `@latest` still served them from 15.22.0, the vendored set does not have them, so a reel that names ChatGPT or Slack now warns `no logo for openai` / `slack`. Re-adding them is the owner's call (a logo its owner had removed); `src` with your own image works today.
 
 ## Style, platform, look (top level)
 
@@ -217,7 +217,7 @@ A reel that sets none of these builds exactly as before (`scripts/byte-identity.
 - `cadence.faceAnchor: {headroom}`: every punch-in scales around the speaker's face - x = the face centre, y = the top of the head minus `headroom` (default 24) - measured over that snap's hold, using the face track and crop plan of **the take's own source**. A source with no face track gets a plain punch around `zoom.origin`. `edit_truth.json` snaps gain `origin: [x, y]` **only for anchored snaps**. The caption placer (`safezone.mjs`) is not told about the origin and keeps modelling the face around `zoom.origin`; Noir's own captions are fixed-height so it only matters for cards and slots.
 - `music.optional: true` (fork-only): if the named `music.id` is in the manifest but its file is not on disk, the build warns and goes on without a bed. Without it a missing file is still a fatal error (A10). `premium-noir` sets it because `silent-descent` is not shipped.
 
-The rest of Ahmed's premium kit (speed ramps, `sfxDesign`, `drop`, `transitions`, the scorers, `PHANTASIC_PREVIEW_SCALE`) is under "Premium line" below. Not ported: the vendored GSAP (the page still loads GSAP from the CDN).
+The rest of Ahmed's premium kit (speed ramps, `sfxDesign`, `drop`, `transitions`, the scorers, `PHANTASIC_PREVIEW_SCALE`) is under "Premium line" below. GSAP is vendored (`vendor/gsap/3.14.2`, mac-10/mac-60): the page names the CDN URL and a render through `scripts/render.mjs` serves it from `vendor/`.
 
 ## Premium line (Empire, Signature, Prestige, Noir, kit demo; all opt-in, phase D; hand port of phantasic `engine/core` on origin/main + `template-premium-iman`)
 
@@ -379,7 +379,7 @@ The planner side: `signature_plan.py` is the only one that writes a reel; call i
 
 ### Not ported, and missing assets
 
-Not ported: vendored GSAP (the page still loads it from the CDN), `captions.chestFirst` / `captions.prefer`, the `sound.complete` key (see `completeMix`), Ahmed's per-version reels under `engine/docs/templates` (they are history, not code). Not shipped, so the matching features degrade with a warning: the sound packs the scorers name (`e-*`, `s-*`, `old-*` wavs), the music beds (`head-bang`, `silent-descent`, Ahmed's `empire-house-a/b.mp3`), the library sfx audio, and the depth model for Empire (`relight`; `depth_map.py --fetch` downloads it, see "Empire depth relight"). The Signature look also needs per-video art (Ahmed generated it with an image model and an image-to-video model; nothing here does).
+Not ported: `captions.chestFirst` / `captions.prefer`, the `sound.complete` key (see `completeMix`), Ahmed's per-version reels under `engine/docs/templates` (they are history, not code). Not shipped, so the matching features degrade with a warning: the sound packs the scorers name (`e-*`, `s-*`, `old-*` wavs), the music beds (`head-bang`, `silent-descent`, Ahmed's `empire-house-a/b.mp3`), the library sfx audio, and the depth model for Empire (`relight`; `depth_map.py --fetch` downloads it, see "Empire depth relight"). The Signature look also needs per-video art (Ahmed generated it with an image model and an image-to-video model; nothing here does).
 
 ## Empire depth relight (`relight`, opt-in; Depth Anything V2 Small, run locally)
 
@@ -689,7 +689,7 @@ No sound of its own (use `inSfx`).
 |---|---|---|---|
 | `at` | source seconds | **required** (`E(...) for cardpage item` fails the build without it) | when this picture swaps in (a small scale/rotate settle), `click-1` (-8 dB) on each swap |
 | `art` | string | | a `library/art/<key>.jpg` painting that fills the frame; a missing key dies (`art '<key>' not in library/art`) |
-| `logo` | string | | a simple-icons slug on a white tile, fetched at build time (wins over `art`); an unknown slug dies |
+| `logo` | string | | a simple-icons slug on a white tile, from `vendor/simple-icons` (wins over `art`); an unknown slug dies |
 
 The swap clicks are not silenced by the beat's `sfx`.
 
@@ -1858,6 +1858,31 @@ requests and zero packets** (and the R12 probe passes first). One more fixture (
 Not in this version: sound inside a graphic, audio-reactive visualisers (Music graphics draw from seeded data),
 WebGL / three.js, GSAP or any library (owner's pause, licence question), variables passed in at render
 (`--variables`; a template's fields are filled into the HTML by the writer instead), dotLottie inside a graphic.
+
+## Offline: nothing a reel needs comes off the internet (mac-60)
+
+A build and a render make no network request. What used to be fetched, and where it comes from now:
+
+| What | When | Was | Now |
+|---|---|---|---|
+| GSAP 3.14.2 | render | `cdn.jsdelivr.net` (the page's `<script src>`) | `vendor/gsap/3.14.2`, served by the `scripts/vendor-offline.cjs` preload; render through `scripts/render.mjs` / `runRender()` |
+| Lucide icons (`icon` beat) | build | `curl` from jsdelivr `lucide-static@latest` | `vendor/lucide-static/1.61.0/icons.json` (ISC) |
+| simple-icons (`logo` beat, `chips` icons, `toolLogos`) | build | `curl` from jsdelivr `simple-icons@latest` | `vendor/simple-icons/16.35.0/icons.json` (CC0; `openai` and `slack` are not in 16.x, see `logo` above) |
+| Google Fonts: EB Garamond, Inter | render | HyperFrames 0.8.81's compiler fetched `fonts.googleapis.com/css2` + `fonts.gstatic.com` for the faces behind a system family the page names (`Georgia` -> EB Garamond, `Arial` / `Helvetica` -> Inter) that its own bundle lacks (italics, other weights, other scripts). Every shipped style asked. When Google did not answer, a `Georgia` italic script keyword rendered another face and its line moved | `vendor/google-fonts/<family>/<version>` (Google's CSS and woff2 bytes, OFL), answered by the same preload; a family that is not vendored gets Google's own 400 for an unknown family (the renderer keeps its bundle) and the log line `vendor: font '<family>' is not vendored` |
+
+Every vendored file is sha256-checked against `vendor/manifest.json` when it is used; a missing or altered one is refused,
+never replaced by the network. `scripts/offline.test.mjs` (in the gate) proves it: no engine source fetches a remote
+host; every shipped style builds with curl / wget shimmed to fail, Node `fetch()` refused and (macOS) the build inside
+`sandbox-exec` with outbound network denied, and its page names no remote host but the vendored GSAP URL; icon and
+logo SVGs are the vendored bytes; and an editorial reel with a script keyword renders inside the sandbox (or
+`unshare -rn` on Linux) with GSAP and both fonts served from `vendor/` and no blocked, refused or unvendored request.
+Measured on 2026-10-24 (HyperFrames 0.8.81, Chrome hardware mode, the Mac mini): the vendored fonts render the
+script-keyword reel frame-identical to a render that got Google's answer (90 of 90 frames); across 78 styles, 72 are
+bit-identical and 6 differ by at most 15 / 255 with no pixel at 16 or more, the same signature as 18 styles that
+differ between two online renders of the same page (render nondeterminism, not the network).
+
+Not covered here, because they are not part of a build or a render: `depth_map.py --fetch` (the Empire depth model,
+`library/models.json`), `engravings_fetch.py`, `stock_fetch.py` and `meme_add.py` (asset prep, run by hand).
 
 ## What the build enforces (warnings, printed after the SFX table)
 
