@@ -4133,4 +4133,10 @@ if (missingSfx.size) {
 }
 for (const e of sfxEvents) console.log(`  ${e.t.toFixed(2).padStart(6)}s  ${e.id.padEnd(22)} ${e.role.padEnd(6)} vol ${e.vol}  (${e.why})`);
 if (warn.length) console.log("\nWARNINGS:\n  " + [...new Set(warn)].join("\n  "));
+// SFX_STRICT=1 (opt-in; set it where reels ship once the pack is restored): a sound the reel asks for that plays nothing
+// fails the build, one line per id, instead of the warning above. The page is still written; exit 1 says it is silent there.
+if (process.env.SFX_STRICT === "1" && missingSfx.size) {
+  for (const [k, n] of missingSfx) console.error(`SFX_STRICT: ${k} x${n} plays nothing (node scripts/sfx_check.mjs says why)`);
+  process.exit(1);
+}
 console.log(`\n-> ${path.join(proj, "index.html")}`);
