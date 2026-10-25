@@ -113,6 +113,17 @@ if (kitId) {
   preset = deepMerge(preset, layer);
 }
 const spec = deepMerge(preset, rawSpec);
+// showLogo "fromShow" (podcast.json): the pinned show logo is brand data, derived from spec.show exactly as podcast_plan.py does
+// ("AK Consulting" -> small "AK" over big "CONSULTING"; "Show · Guest" keeps only the show; a placeholder or a bad length gives none),
+// so a director-composed reel gets it without the model writing it. An explicit showLogo object in the reel still wins.
+if (spec.showLogo === "fromShow") {
+  const PLACEHOLDER = /^\s*(e\.?g\.?|name|your name|guest|speaker|host|tbd|tba|n\/?a|none|test|xxx+|placeholder|first last|john doe|jane doe|lorem.*|sam, founder|the build show|-+|\?+)\s*$/i;
+  const show = typeof spec.show === "string" ? spec.show.trim().split(/\s+[·|•]\s+/)[0].trim() : "";
+  const parts = show.split(/\s+/);
+  if (show && !PLACEHOLDER.test(show) && show.length >= 2 && show.length <= 32 && /[A-Za-z]/.test(show))
+    spec.showLogo = { small: parts.slice(0, -1).join(" ").toUpperCase(), big: parts[parts.length - 1].toUpperCase() };
+  else delete spec.showLogo;
+}
 // stage (premium, opt-in): the speaker is cut out (matte) and composited on a designed set; the plate is hidden
 if (spec.stage) spec.matte = true;
 // glow.hookGround (opt-in, Podcast Glow; references/reel-json.md): the hook (the earliest pos "top" headline) gets the speaker cut

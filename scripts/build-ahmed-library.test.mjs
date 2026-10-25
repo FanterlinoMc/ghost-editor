@@ -190,6 +190,22 @@ try {
   assert.ok(!h.includes("show-logo"), "no showLogo css/markup without it");
   check("captions podcast: keys / reds / stacks, steps above a uicard, showLogo (only when set)");
 
+  // showLogo "fromShow" (styles/podcast.json): derived from spec.show as podcast_plan.py does, so a director-composed reel has one
+  // the opt-in lives on the REEL (the planner writes it), never in a preset: a preset key would reach every stored
+  // podcast reel carrying `show` and grow a logo on its next rebuild (CP3, 25 Oct)
+  assert.equal(JSON.parse(fs.readFileSync(path.join(HERE, "..", "styles", "podcast.json"), "utf8")).showLogo, undefined, "podcast.json must not set showLogo");
+  const logo = (reel) => { const d = project(reel); build(d); const m = html(d).match(/class="show-logo"[^>]*><i>([^<]*)<\/i><b>([^<]*)<\/b>/); return m ? [m[1], m[2]] : null; };
+  assert.deepEqual(logo({ showLogo: "fromShow", show: "AK Consulting" }), ["AK", "CONSULTING"], "two words -> small over big");
+  assert.deepEqual(logo({ showLogo: "fromShow", show: "The Money Hour · Sam Lee" }), ["THE MONEY", "HOUR"], "the guest after ' · ' is not part of the logo");
+  assert.deepEqual(logo({ showLogo: "fromShow", show: "Dwell" }), ["", "DWELL"], "one word -> big only");
+  assert.equal(logo({ showLogo: "fromShow", show: "TBD" }), null, "a placeholder show gives no logo");
+  assert.equal(logo({ showLogo: "fromShow" }), null, "no show, no logo");
+  assert.deepEqual(logo({ showLogo: { small: "MY", big: "OWN" }, show: "AK Consulting" }), ["MY", "OWN"], "an explicit showLogo still wins");
+  // the one combination that could change existing output: a podcast-style reel WITH show and no showLogo -> no logo
+  assert.equal(logo({ style: "podcast", show: "AK Consulting" }), null, "style podcast + show alone draws no logo");
+  assert.deepEqual(logo({ style: "podcast", show: "AK Consulting", showLogo: "fromShow" }), ["AK", "CONSULTING"], "podcast + the reel's opt-in does");
+  check("showLogo fromShow: derived from spec.show (guest and placeholders dropped), explicit object wins, never from a preset");
+
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
   build(dir); h = html(dir);
   assert.ok(count(h, /class="tc clip/g) >= 5 && h.includes("tc-red") && h.includes("tc-cur") && h.includes('class="tc-ch"'), "type: cards typed letter by letter behind a cursor, red verdicts");
