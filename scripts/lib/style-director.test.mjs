@@ -16,11 +16,15 @@ const resolve = (id, seen = []) => { const s = raw(id); return s.extends && !see
 const walk = (d, pre = "") => fs.readdirSync(path.join(STYLES, pre)).flatMap((f) => fs.statSync(path.join(STYLES, pre, f)).isDirectory()
   ? walk(d, path.join(pre, f)) : f.endsWith(".json") ? [path.join(pre, f.slice(0, -5))] : []);
 const ids = walk(STYLES);
-// the limits keys DOCUMENTED in references/styles.md ("The director block" table), parsed from the doc rather than
+// the limits keys DOCUMENTED in references/styles.md ("The director block" TABLE rows), parsed from the doc rather than
 // listed here, so a style cannot set a key the doc does not explain (which says which are enforced and which are not)
 const DOC = fs.readFileSync(path.join(STYLES, "..", "references", "styles.md"), "utf8");
 const DIRECTOR_DOC = DOC.slice(DOC.indexOf("## The `director` block"), DOC.indexOf("\n## ", DOC.indexOf("## The `director` block") + 5));
-const LIMIT_KEYS = new Set([...DIRECTOR_DOC.matchAll(/`limits\.([a-z_]+)`/g)].map((m) => m[1]));
+// only TABLE ROWS count, keyed by their first cell, and every such row must state a verdict (ENFORCED / NOT ENFORCED /
+// GUIDANCE): a key mentioned only in prose is not documented (CP3, 25 Oct)
+const ROWS = DIRECTOR_DOC.split("\n").filter((l) => l.startsWith("| `limits."));
+const LIMIT_KEYS = new Set(ROWS.flatMap((l) => [...l.split("|")[1].matchAll(/`limits\.([a-z_]+)`/g)].map((m) => m[1])));
+const UNSTATED = ROWS.filter((l) => !/\bENFORCED\b|\bGUIDANCE\b/.test(l));
 
 test("every resolved director block: an object, with a well-formed `limits`", () => {
   let blocks = 0;
@@ -41,6 +45,7 @@ test("every resolved director block: an object, with a well-formed `limits`", ()
   }
   assert.ok(blocks >= 10, `expected the adopted director blocks, found ${blocks}`);
   assert.ok(LIMIT_KEYS.size >= 8 && LIMIT_KEYS.has("keywords_per_min"), `parsed the doc table: ${[...LIMIT_KEYS]}`);
+  assert.deepEqual(UNSTATED, [], "every limits row in the table says ENFORCED, NOT ENFORCED or GUIDANCE");
 });
 
 test("podcast's keyword cap is 24 per minute (the director's default is 6)", () => {
