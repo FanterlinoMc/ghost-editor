@@ -346,6 +346,21 @@ test("P5 captions: an overlay across the caption band is refused unless hideCapt
   assert.equal(build(project({ captions: { style: "none" }, layers: [card({ box })] })).status, 0, "a reel without captions has no band");
 });
 
+test("P5 captions on a BEAT: hideCaptions:true keeps a graphic beat across the band and hides the captions for its window", () => {
+  // The planner's negotiated placement (phantasic planner/graphics-negotiate) writes hideCaptions:true on a graphic BEAT,
+  // not a layer, when its only room off the face crosses the band. graphic-place.mjs reads the beat's own key, the contract
+  // skips P5 for it, and build.mjs hides #caps from t0 - CAP_FADE to t1 + CAP_BACK. Without the key the beat is dropped.
+  const box = { x: 0, y: 1160, w: 280, h: 240 };
+  const dir = project({ beats: [{ type: "graphic", id: "low", html: CARD, at: 2, to: 3, box, hideCaptions: true }] });
+  const r = build(dir);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(!r.stdout.includes("graphic low:"), r.stdout);
+  const caps = fs.readFileSync(path.join(dir, "index.html"), "utf8").match(/tl\.to\("#caps", \{ autoAlpha: [01], duration: [0-9.]+ \}, [0-9.]+\)/g);
+  assert.deepEqual(caps, ['tl.to("#caps", { autoAlpha: 0, duration: 0.08 }, 1.92)', 'tl.to("#caps", { autoAlpha: 1, duration: 0.12 }, 3)']);
+  const r0 = build(project({ beats: [{ type: "graphic", id: "low", html: CARD, at: 2, to: 3, box }] }));
+  assert.ok(r0.stdout.includes("graphic low: assets/graphics/card.html: graphic box crosses the caption band 1176..1365px (set hideCaptions or overCaptions to allow it), dropped"), r0.stdout);
+});
+
 test("P6 collision: a graphic over the title banner is refused; an insert too (the face and band do not apply to it, this does)", () => {
   const banner = { text: "Title", from: 0, to: 3 };
   const box = { x: 0, y: 300, w: 280, h: 500 };
