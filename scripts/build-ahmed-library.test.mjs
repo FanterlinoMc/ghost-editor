@@ -206,6 +206,23 @@ try {
   assert.deepEqual(logo({ style: "podcast", show: "AK Consulting", showLogo: "fromShow" }), ["AK", "CONSULTING"], "podcast + the reel's opt-in does");
   check("showLogo fromShow: derived from spec.show (guest and placeholders dropped), explicit object wins, never from a preset");
 
+  // mac-76: a scene never ends on an empty screen. tv: channels back to back, the last held to t1; fly3d: staggered depths
+  dir = project({ beats: [{ type: "scene", kind: "tv", at: 2, to: 5.5, items: [{ self: 1, dur: 1.2 }, { self: 3, dur: 1.2 }, { src: PIC, dur: 0.6 }] }] });
+  build(dir); h = html(dir);
+  const vis = [...h.matchAll(/tl\.set\("#(b\d+-tv\d)", \{ visibility: "visible" \}, ([\d.]+)\); tl\.set\("#\1", \{ visibility: "hidden" \}, ([\d.]+)\)/g)].map((m) => [+m[2], +m[3]]);
+  assert.equal(vis.length, 3);
+  for (let i = 1; i < vis.length; i++) assert.equal(vis[i][0], vis[i - 1][1], "each channel starts as the previous one ends");
+  assert.equal(vis[2][1], 5.5, `the last channel holds to the scene end (to 5.5): ${JSON.stringify(vis)}`);
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "one", at: 2.1 }, { text: "two", at: 2.9 }, { text: "three", at: 3.6 }] }] });
+  build(dir); h = html(dir);
+  const zs = JSON.parse(h.match(/const items = (\[\{"id":"b\d+-f0".*?\]); const els/)[1]).map((o) => o.z);
+  assert.ok(zs[0] > zs[1] && zs[1] > zs[2], `staggered depths, the last deepest: ${zs}`);
+  assert.equal(zs[2], 420 - 900, "the last item is passed only at t1 (camera 0 -> 900)");
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "one", at: 2.1, z: 0 }, { text: "two", at: 2.9, z: -300 }] }] });
+  build(dir); h = html(dir);
+  assert.deepEqual(JSON.parse(h.match(/const items = (\[\{"id":"b\d+-f0".*?\]); const els/)[1]).map((o) => o.z), [0, -300], "explicit z untouched");
+  check("scene tails: tv channels back to back and the last held to t1; fly3d staggered depths (explicit z untouched)");
+
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
   build(dir); h = html(dir);
   assert.ok(count(h, /class="tc clip/g) >= 5 && h.includes("tc-red") && h.includes("tc-cur") && h.includes('class="tc-ch"'), "type: cards typed letter by letter behind a cursor, red verdicts");
