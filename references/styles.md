@@ -77,10 +77,11 @@ A style's `director` object is what the planner's director call is told about th
 |---|---|---|---|
 | `plan`, `prep` | string | nobody on the model path (`PIPELINE_KEYS` withholds them) | notes to the pipeline, never sent to the model |
 | `limits` | object | `director.validate()` | caps on what the director may place, per minute of kept footage |
-| `limits.keywords_per_min` | number >= 0 | `director.validate()` (`_per_min_cap`) | ENFORCED: keyword treatments kept; default **6**. podcast sets **24** so its own key budget (one per 7 spoken words) binds. **`0` means 0** (planner ea4488f; before, `int(v*min) or 1` gave editorial-collage and alif one keyword they had refused) |
-| `limits.nametags_per_min` | number >= 0 | `director.validate()` | ENFORCED: name tags kept; default **3**; `0` means 0 |
-| `limits.icons_per_min` | number >= 0 | `director.validate()` | ENFORCED (planner ea4488f): icons kept; default **10**; `0` means 0 (alif, editorial-collage) |
-| `limits.ui_per_min` | number >= 0 | `director.validate()` | ENFORCED (planner ea4488f): `ui` scenes only, not scenes as a whole; default **99**; `0` means 0 |
+| `limits.keywords_per_min` | number >= 0 | `director.validate()` (`_per_min_cap`) | ENFORCED, **as a floor** (planner `planner/creative-freedom` a54713f, owner 25 Oct "Lift them"): the cap is max(declared or default **6**, **24**), so every look gets at least 24 per minute; podcast's own 24 does not move. alif and editorial-collage declare **0** and now get 24. The request prints the raised number (`effective_limits()`), so the model is told what is enforced |
+| `limits.nametags_per_min` | number >= 0 | `director.validate()` | ENFORCED as a floor: max(declared or default 3, **8**) |
+| `limits.icons_per_min` | number >= 0 | `director.validate()` | ENFORCED as a floor: max(declared or default 10, **18**); alif and editorial-collage declare 0 and get 18, keynote declares 2 and gets 18 |
+| `limits.ui_per_min` | number >= 0 | `director.validate()` | ENFORCED as a floor: `ui` scenes only, not scenes as a whole; max(declared or default 99, 99) |
+| `limits.hard` | `true` | `director.validate()`, `effective_limits()` | ENFORCED: the look's declared numbers exactly, with no floor, and **`0` means 0** (the `int(v*min) or 1` fix, planner ea4488f). The request prints the declared numbers. No style sets it today; it is how a look that genuinely wants none of something keeps it |
 | `limits.scenes_per_min` | number >= 0 | nobody, deliberately | GUIDANCE, not enforced: a prompt hint about density (28 styles set it; keynote's 2/min is one scene on a 30 s reel). Nothing checks it |
 | `limits.graphics_per_min` | number >= 0 | nobody | **NOT ENFORCED**: the director's own `GRAPHIC_MAX = 3` per reel (director.py) binds instead, whatever this says. `library/headline-hype` sets 16 |
 | `limits.rings_per_reel`, `limits.hero_whoosh_min_gap_s` | number >= 0 | nobody | **NOT ENFORCED, and nothing to enforce**: the director can emit neither a ring nor a hero whoosh, so these limit nothing. Read them as notes about the style, never as a guarantee |
