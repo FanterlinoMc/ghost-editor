@@ -382,6 +382,20 @@ and Geist, Inter, Montserrat and Oswald ship as variable fonts. So a separate st
 - Test: `scripts/caption-boxes.test.mjs` (the join always; real Chrome when present, required with `CI=1` /
   `REQUIRE_CHROME=1`).
 
+### Beat shapes the build checks (`scripts/lib/beat-shapes.mjs`, mac-72)
+
+Shapes a model can plausibly write wrong never reach the screen as "undefined" and never crash with a native-code error.
+Checked at the top of the beat loop, after `at` resolves:
+
+| beat | wrong shape | what the build does |
+|---|---|---|
+| `scene` `gm-nodes` / `card` | `pill` not `{text: string, at: number}` (e.g. a bare string) | **stops**: `ERROR: scene gm-nodes at 30: \`pill\` must be {text: string, at: number} (got string "English")` |
+| `scene` `gm-nodes` | `nodes` not a list of `{n?, at: number}` | **stops**, naming the item |
+| `hz-list` | an item without a `title` string (e.g. `{text}`), or a non-string `sub` | that item is **skipped** with a warning; no item left: the beat is **dropped** (warning + `graphics-dropped.json`, rule `shape`) |
+| `hz-title` / `hz-note` / `hz-name` | `text` / `text` / `name` missing or not a non-empty string | the beat is **dropped** (warning + record) |
+
+Every other beat passes through untouched, so a correct reel builds exactly as before.
+
 ### `graphics-dropped.json`: what the build left out, and why (mac-54)
 
 The build keeps dropping what it cannot place, exactly as before, with the same warnings. It now also writes
@@ -391,9 +405,10 @@ alone, like the other whole-reel files. Shape: `{ "dropped": [ { kind, id, type,
 
 - `kind`: `motion beat` (a designer `motion` beat), `motion element` (one element of a kept motion beat or layer; `id`
   is `<owner id>/<element id>`), `motion tween` (below), `graphic beat` (Prompt Motion), `sticker` (an `emoji`, `logo`, `meme` or `icon` with no
-  room beside the face), `caption treatment` (a `captions.energy` / `serifSpans` / `stairs` span).
+  room beside the face), `caption treatment` (a `captions.energy` / `serifSpans` / `stairs` span), `beat` (a beat whose
+  fields have the wrong shape, rule `shape`; mac-72, below).
 - `at`, `to`: as written in reel.json. `t`: the start in output seconds when it could be resolved, else null.
-- `rule`: `designer-off`, `no-to`, `span`, `take`, `time`, `compile`, `element`, `tween`, `tween-key`, `tween-limit`, `no-room`, or a Prompt Motion code
+- `rule`: `designer-off`, `no-to`, `span`, `take`, `time`, `compile`, `element`, `tween`, `tween-key`, `tween-limit`, `no-room`, `shape`, or a Prompt Motion code
   (`G1`..`G36`, `P1`..`P6`, `R1`..`R14`, `box`, `fit`).
 - `why`: one sentence a person can read, for example `The graphic "unsafe" at 0:04 was dropped because its HTML
   file failed a safety check.` `warning`: the build's own warning, word for word.

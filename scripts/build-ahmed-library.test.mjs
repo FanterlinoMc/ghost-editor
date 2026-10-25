@@ -206,6 +206,23 @@ try {
   assert.deepEqual(logo({ style: "podcast", show: "AK Consulting", showLogo: "fromShow" }), ["AK", "CONSULTING"], "podcast + the reel's opt-in does");
   check("showLogo fromShow: derived from spec.show (guest and placeholders dropped), explicit object wins, never from a preset");
 
+  // mac-72: shapes a model can plausibly write wrong (lib/beat-shapes.mjs), end to end through the build
+  dir = project({ style: "hormozi", beats: [{ type: "hz-list", at: 2, to: 5, items: [{ text: "Sheffield", at: 2.2 }, { text: "France", at: 3 }] }] });
+  log = build(dir); h = html(dir);
+  assert.ok(!/class="h">undefined</.test(h) && !h.includes('class="ov hz-panel"'), "an hz-list of `text` items draws nothing, never \"undefined\"");
+  assert.match(log, /hz-list at 2: no item has a `title`/);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(dir, "build", "graphics-dropped.json"), "utf8")).dropped.some((d) => d.rule === "shape" && d.type === "hz-list"), "recorded as dropped");
+  dir = project({ style: "hormozi", beats: [{ type: "hz-list", at: 2, to: 5, items: [{ title: "Sheffield", at: 2.2 }, { text: "France", at: 3 }] }] });
+  log = build(dir); h = html(dir);
+  assert.ok(h.includes('<div class="h">Sheffield</div>') && !h.includes(">undefined<"), "the good item drawn, the bad one not");
+  assert.match(log, /items\[1\] needs a `title` string/);
+  dir = project({ style: "gadzhi-motion", beats: [{ type: "scene", kind: "gm-nodes", at: 2, to: 5, object: "puzzle", pill: "English", nodes: [{ n: 1, at: 2.2 }] }] });
+  let rr = run(dir);
+  assert.equal(rr.status, 1);
+  assert.match(rr.stderr + rr.stdout, /ERROR: scene gm-nodes at 2: `pill` must be \{text: string, at: number\} \(got string "English"\)/);
+  assert.ok(!/native code/.test(rr.stderr + rr.stdout), "no native-code error");
+  check("beat shapes: hz-list `text` items never draw \"undefined\" (skipped, warned, recorded); a string gm-nodes pill fails with a named shape");
+
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
   build(dir); h = html(dir);
   assert.ok(count(h, /class="tc clip/g) >= 5 && h.includes("tc-red") && h.includes("tc-cur") && h.includes('class="tc-ch"'), "type: cards typed letter by letter behind a cursor, red verdicts");
