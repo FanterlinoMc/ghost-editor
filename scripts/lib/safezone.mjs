@@ -257,5 +257,7 @@ export function makePlacer({ face, faces = null, takes, zoom, TOTAL, platform = 
     return null;
   };
   // faceAt(t): the face box on the canvas at edit time t under the camera in force (null: no face); band(): above
-  return { place, card, slot, span, band, faceAt: screenFace, log, platform: P, safeTop, safeBottom, sidePad: P.right };
+  // a rectangle already on screen that is not a placer.card() (mac-75: the nametag), so captions step around it too
+  const occupy = (t0, t1, y0, y1) => { occupied.push({ t0, t1, y0, y1 }); };
+  return { place, card, slot, span, band, occupy, faceAt: screenFace, log, platform: P, safeTop, safeBottom, sidePad: P.right };
 }
