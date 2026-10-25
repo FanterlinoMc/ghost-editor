@@ -407,7 +407,8 @@ alone, like the other whole-reel files. Shape: `{ "dropped": [ { kind, id, type,
   is `<owner id>/<element id>`), `motion tween` (below), `graphic beat` (Prompt Motion), `sticker` (an `emoji`, `logo`, `meme` or `icon` with no
   room beside the face), `caption treatment` (a `captions.energy` / `serifSpans` / `stairs` span), `beat` (a beat whose
   fields have the wrong shape, rule `shape`; mac-72, below), `collage item` (a `collage` scene item with no x/y that
-  would stack past the bottom, rule `no-room`; mac-73).
+  would stack past the bottom, rule `no-room`; mac-73), `tv channel` (a `tv` scene channel the ones before it push past the
+  scene's end, rule `time`; mac-76), `card` (a `popcard` that would cover a sharp face with no room to move, rule `face`; mac-74).
 - `at`, `to`: as written in reel.json. `t`: the start in output seconds when it could be resolved, else null.
 - `rule`: `designer-off`, `no-to`, `span`, `take`, `time`, `compile`, `element`, `tween`, `tween-key`, `tween-limit`, `no-room`, `shape`, or a Prompt Motion code
   (`G1`..`G36`, `P1`..`P6`, `R1`..`R14`, `box`, `fit`).
