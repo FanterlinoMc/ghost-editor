@@ -285,6 +285,36 @@ try {
   assert.ok(!/chip text "UK"/.test(log), "<= 3 characters is fine");
   assert.ok(html(dir).includes("<span>Sheffield</span>"), "drawn as written, not shrunk");
   check("chips: a word is warned (not shrunk); icons and <= 3 characters are not");
+  // mac-76: a scene never ends on an empty screen. tv: channels back to back, the last held to t1; fly3d: staggered depths
+  dir = project({ beats: [{ type: "scene", kind: "tv", at: 2, to: 5.5, items: [{ self: 1, dur: 1.2 }, { self: 3, dur: 1.2 }, { src: PIC, dur: 0.6 }] }] });
+  build(dir); h = html(dir);
+  const vis = [...h.matchAll(/tl\.set\("#(b\d+-tv\d)", \{ visibility: "visible" \}, ([\d.]+)\); tl\.set\("#\1", \{ visibility: "hidden" \}, ([\d.]+)\)/g)].map((m) => [+m[2], +m[3]]);
+  assert.equal(vis.length, 3);
+  for (let i = 1; i < vis.length; i++) assert.equal(vis[i][0], vis[i - 1][1], "each channel starts as the previous one ends");
+  assert.equal(vis[2][1], 5.5, `the last channel holds to the scene end (to 5.5): ${JSON.stringify(vis)}`);
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "one", at: 2.1 }, { text: "two", at: 2.9 }, { text: "three", at: 3.6 }] }] });
+  build(dir); h = html(dir);
+  const zs = JSON.parse(h.match(/const items = (\[\{"id":"b\d+-f0".*?\]); const els/)[1]).map((o) => o.z);
+  assert.ok(zs[0] > zs[1] && zs[1] > zs[2], `staggered depths, the last deepest: ${zs}`);
+  assert.equal(zs[2], 420 - 900, "the last item is passed only at t1 (camera 0 -> 900)");
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "one", at: 2.1, z: 0 }, { text: "two", at: 2.9, z: -300 }] }] });
+  build(dir); h = html(dir);
+  assert.deepEqual(JSON.parse(h.match(/const items = (\[\{"id":"b\d+-f0".*?\]); const els/)[1]).map((o) => o.z), [0, -300], "explicit z untouched");
+  const zOf = (h_) => JSON.parse(h_.match(/const items = (\[\{"id":"b\d+-f0".*?\]); const els/)[1]).map((o) => o.z);
+  // CP3: one item is passed at t1 too (it used to sit at z 0 and vanish at ~60%); null means "not set"; one explicit z
+  // no longer switches the derivation off for the others
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "one", at: 2.1 }] }] }); build(dir);
+  assert.deepEqual(zOf(html(dir)), [420 - 900], "a single item is passed only at t1, so it is visible the whole window");
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "one", at: 2.1, z: null }, { text: "two", at: 2.9 }] }] }); build(dir);
+  assert.ok(zOf(html(dir)).every((z) => z !== 0) && zOf(html(dir))[1] === 420 - 900, "z: null is derived like an absent z");
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "one", at: 2.1, z: -100 }, { text: "two", at: 2.9 }, { text: "three", at: 3.6 }] }] }); build(dir);
+  { const z = zOf(html(dir)); assert.equal(z[0], -100, "an explicit z is kept"); assert.ok(z[1] > z[2] && z[2] === 420 - 900, `the others are still derived: ${z}`); }
+  // a tv channel pushed past t1 by the ones before it is dropped WITH a warning and a record
+  dir = project({ beats: [{ type: "scene", kind: "tv", at: 2, to: 5.5, items: [{ self: 1, dur: 2 }, { self: 3, dur: 2 }, { src: PIC, dur: 1 }] }] });
+  log = build(dir);
+  assert.match(log, /scene tv at 2: channel 2 starts at or after the scene's end/);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(dir, "build", "graphics-dropped.json"), "utf8")).dropped.some((d) => d.kind === "tv channel"), "recorded");
+  check("scene tails: tv channels back to back, the last held to t1, one pushed past t1 warned + recorded; fly3d depths for every unset/null z, one item included, explicit z kept");
 
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
   build(dir); h = html(dir);
