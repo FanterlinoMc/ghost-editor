@@ -206,6 +206,23 @@ try {
   assert.deepEqual(logo({ style: "podcast", show: "AK Consulting", showLogo: "fromShow" }), ["AK", "CONSULTING"], "podcast + the reel's opt-in does");
   check("showLogo fromShow: derived from spec.show (guest and placeholders dropped), explicit object wins, never from a preset");
 
+  // mac-73: collage items with no x/y stack under the previous item instead of landing on one point; past the bottom: dropped
+  const tops = (h_) => [...h_.matchAll(/id="b\d+-c(\d+)" style="position:absolute;left:(\d+)px;top:(\d+)px/g)].map((m) => [+m[1], +m[2], +m[3]]);
+  dir = project({ beats: [{ type: "scene", kind: "collage", at: 2, to: 5, items: [{ type: "text", style: "headline", text: "STUDYING" }, { type: "text", style: "box", text: "English" }] }] });
+  log = build(dir); let tp = tops(html(dir));
+  assert.deepEqual(tp.map((x) => x[0]), [0, 1]);
+  assert.equal(tp[0][2], 600, "the first item keeps the default spot");
+  assert.equal(tp[1][2], 600 + Math.round(120 * 0.92) + 24, "the second stacks under the first (headline 120 px x .92 + 24 gap)");
+  dir = project({ beats: [{ type: "scene", kind: "collage", at: 2, to: 5, items: [{ type: "text", text: "a", x: 300, y: 200 }, { type: "text", text: "b", x: 300, y: 200 }] }] });
+  build(dir); tp = tops(html(dir));
+  assert.deepEqual(tp.map((x) => [x[1], x[2]]), [[300, 200], [300, 200]], "items that set x/y are placed exactly as written");
+  dir = project({ beats: [{ type: "scene", kind: "collage", at: 2, to: 5, items: Array.from({ length: 9 }, (_, i) => ({ type: "text", style: "italic", text: `w${i}` })) }] });
+  log = build(dir); tp = tops(html(dir));
+  assert.ok(tp.length < 9 && tp.every(([, , y]) => y + 189 <= 1750), "nothing drawn past the bottom safe edge");
+  assert.match(log, /scene collage at 2: item \d+ \(text "w\d+"\) has no x\/y and would stack past the bottom/);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(dir, "build", "graphics-dropped.json"), "utf8")).dropped.some((d) => d.kind === "collage item"), "recorded");
+  check("collage: unpositioned items stack instead of overlapping; positioned ones untouched; past the bottom dropped + recorded");
+
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
   build(dir); h = html(dir);
   assert.ok(count(h, /class="tc clip/g) >= 5 && h.includes("tc-red") && h.includes("tc-cur") && h.includes('class="tc-ch"'), "type: cards typed letter by letter behind a cursor, red verdicts");

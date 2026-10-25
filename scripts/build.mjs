@@ -1668,6 +1668,7 @@ const fxAim = (start, dur) => fxHolds.filter((h) => start < h.b - 1e-6 && start 
 const fxIn = (t) => fxHolds.filter((h) => t >= h.a - 1e-6 && t < h.b - 1e-6).sort((p, q) => p.a - q.a).at(-1);
 const fxRest = (h, bright = 1) => h ? `blur(${h.blur}px) brightness(${r3(h.dim * bright)})` : `blur(0px) brightness(${bright})`;
 const fxLeaks = [];   // leak bloom tweens on #fx (tl index + times), re-aimed after the loop if they land inside a popcard hold
+motionCtx.warn = (msg, rec) => { warn.push(msg); if (rec) recordDrop(rec); };   // lib/motion.mjs: a warning and, when given, a graphics-dropped.json record (required by buildScene)
 for (const b of beatsList) {
   CUR_BEAT = b;
   const id = `b${n++}`;
