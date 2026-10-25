@@ -1669,6 +1669,7 @@ const fxIn = (t) => fxHolds.filter((h) => t >= h.a - 1e-6 && t < h.b - 1e-6).sor
 const fxRest = (h, bright = 1) => h ? `blur(${h.blur}px) brightness(${r3(h.dim * bright)})` : `blur(0px) brightness(${bright})`;
 const fxLeaks = [];   // leak bloom tweens on #fx (tl index + times), re-aimed after the loop if they land inside a popcard hold
 motionCtx.warn = (msg, rec) => { warn.push(msg); if (rec) recordDrop(rec); };   // lib/motion.mjs: a warning and, when given, a graphics-dropped.json record (required by buildScene)
+motionCtx.die = die;   // lib/motion.mjs: a refused scene stops the build with one line (no stack trace)
 for (const b of beatsList) {
   CUR_BEAT = b;
   const id = `b${n++}`;

@@ -235,7 +235,20 @@ try {
   log = build(dir);
   assert.match(log, /scene tv at 2: channel 2 starts at or after the scene's end/);
   assert.ok(JSON.parse(fs.readFileSync(path.join(dir, "build", "graphics-dropped.json"), "utf8")).dropped.some((d) => d.kind === "tv channel"), "recorded");
-  check("scene tails: tv channels back to back, the last held to t1, one pushed past t1 warned + recorded; fly3d depths for every unset/null z, one item included, explicit z kept");
+  // CP3: items that arrive at or after the scene's end are dropped (they used to collapse every earlier depth to one)
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "a", at: 2.1 }, { text: "b", at: 5.6 }, { text: "c", at: 6.9 }, { text: "d", at: 8.0 }] }] });
+  log = build(dir);
+  assert.deepEqual(zOf(html(dir)), [420 - 900], "only the item inside the window is drawn, passed at t1");
+  assert.match(log, /scene fly3d at 2: item 1 \("b"\) arrives at or after the scene's end: dropped/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "build", "graphics-dropped.json"), "utf8")).dropped.filter((d) => d.kind === "fly3d item").length, 3);
+  // an ease the depth maths does not model is refused when a depth must be derived; "none" (linear) is modelled
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, ease: "power2.out", items: [{ text: "a", at: 2.1 }, { text: "b", at: 3.0 }] }] });
+  { const r = run(dir); assert.equal(r.status, 1); assert.match(r.stderr + r.stdout, /ERROR: scene fly3d at 2: `ease` "power2.out" is not one the depth derivation models \(sine.inOut, none\)/); assert.ok(!/at buildScene/.test(r.stderr), "one line, no stack"); }
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, ease: "power2.out", items: [{ text: "a", at: 2.1, z: 0 }, { text: "b", at: 3.0, z: -200 }] }] });
+  build(dir); assert.deepEqual(zOf(html(dir)), [0, -200], "every z set: no derivation, so any ease is fine");
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, ease: "none", items: [{ text: "a", at: 2.1 }, { text: "b", at: 3.75 }] }] });
+  build(dir); assert.deepEqual(zOf(html(dir)), [Math.round(420 - 900 * (3.9 - 2) / 3.5), 420 - 900], "ease none: depths against a linear camera");
+  check("scene tails: tv channels back to back, the last held to t1, one pushed past t1 warned + recorded; fly3d depths for every unset/null z, one item included, explicit z kept; late items dropped; an unmodelled ease refused");
 
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
   build(dir); h = html(dir);
