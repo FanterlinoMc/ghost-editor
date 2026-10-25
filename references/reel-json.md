@@ -410,7 +410,7 @@ alone, like the other whole-reel files. Shape: `{ "dropped": [ { kind, id, type,
   would stack past the bottom, rule `no-room`; mac-73), `tv channel` (a `tv` scene channel the ones before it push past the
   scene's end, rule `time`; mac-76), `card` (a `popcard` that would cover a sharp face with no room to move, rule `face`; mac-74).
 - `at`, `to`: as written in reel.json. `t`: the start in output seconds when it could be resolved, else null.
-- `rule`: `designer-off`, `no-to`, `span`, `take`, `time`, `compile`, `element`, `tween`, `tween-key`, `tween-limit`, `no-room`, `shape`, or a Prompt Motion code
+- `rule`: `designer-off`, `no-to`, `span`, `take`, `time`, `compile`, `element`, `tween`, `tween-key`, `tween-limit`, `no-room`, `shape`, `face`, or a Prompt Motion code
   (`G1`..`G36`, `P1`..`P6`, `R1`..`R14`, `box`, `fit`).
 - `why`: one sentence a person can read, for example `The graphic "unsafe" at 0:04 was dropped because its HTML
   file failed a safety check.` `warning`: the build's own warning, word for word.
