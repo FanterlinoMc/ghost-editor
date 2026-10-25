@@ -90,6 +90,22 @@ and everything that `extends` it. `closer` (and its six variants) deliberately h
 free takes and motion calls through the planner's own overlay, measured identical with or without a file block (mac-66,
 25 Oct). `scripts/lib/style-director.test.mjs` pins both rules.
 
+## When to reach for each element (vocabulary rules, mac-77)
+
+Measured at the pin (`references/vocab-inventory.md`, mac-71) and decided by the lead (25 Oct). The planner mirrors each
+as director guidance and, where it is checkable, a validator refusal.
+
+| element | rule | why |
+|---|---|---|
+| `chips` | items are **icons, logos or <= 3 characters**; words go in `pills` | a chip face is a 130 px square with 70 px type: a word spills out of it, off the left edge for the first chip. The build **warns** (it does not shrink, so the mistake stays visible) |
+| `endcard` `variant: "caps"` | **outro only** | it is a full black page with small serif lines: mid-reel it reads as a broken frame |
+| `headpage` | needs `art` (or a `src` that is a map, an object or a cut-out), **never a footage still** | the picture sits in a soft green glow on a white page (UI Story Ad #10); a talking-head still in it looks like an error |
+| `hz-note` | a **secondary** note under the captions, never the point of the beat | it is small by design (a footnote) |
+| `behind`, `ground` | only where the **cut-out effect is the point** of the moment | each mattes its WHOLE take: **~205 s of build per take** on the M4 (7 s of footage), so about three such moments a reel |
+| `scene` `chapter` | write `num`; the words on the card come from the speech | `text` is not a field (the planner maps text -> num) |
+| `scene` `gm-kinetic` | quiet lines, not emphasis | faint grey type on grey is the gadzhi look itself |
+| `popcard` | reads best over a **defocused** camera (`look.fx`), or with a `y` that clears the face | it is meant to be the one sharp thing in frame; on a sharp close-up the engine moves it off the face or defocuses for it (mac-74) |
+
 ## Picking a style
 
 - The speaker's energy decides more than the topic. A calm explainer in `pop` feels wrong; a hype launch in `clean` feels flat.

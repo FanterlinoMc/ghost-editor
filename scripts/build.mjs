@@ -1723,6 +1723,11 @@ for (const b of beatsList) {
       break;
     }
     case "chips": {
+      // mac-77: a chip face is a 130 px square with 70 px type, made for an icon, a logo or <= 3 characters; a word
+      // spills out of it (off the left edge for the first chip). Warned, NOT shrunk, so the mistake stays visible
+      // (lead, 25 Oct): words belong in `pills`
+      for (const it of b.items || []) if (!it.icon && !it.src && typeof it.text === "string" && [...it.text].length > 3)
+        warn.push(`chips at ${b.at}: chip text "${it.text.slice(0, 24)}" is ${[...it.text].length} characters; a chip holds an icon, a logo or <= 3 characters (words go in a \`pills\` beat)`);
       const items = b.items.map((it, i) => {
         const img = it.icon ? icon(it.icon) : it.src ? userAsset(it.src) : null;
         const face = img ? `<img src="${img}" style="${it.invert ? "filter:invert(1);" : ""}"/>` : `<span>${esc(it.text ?? "")}</span>`;

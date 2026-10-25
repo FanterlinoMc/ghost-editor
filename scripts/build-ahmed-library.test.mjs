@@ -206,6 +206,14 @@ try {
   assert.deepEqual(logo({ style: "podcast", show: "AK Consulting", showLogo: "fromShow" }), ["AK", "CONSULTING"], "podcast + the reel's opt-in does");
   check("showLogo fromShow: derived from spec.show (guest and placeholders dropped), explicit object wins, never from a preset");
 
+  // mac-77: a word in a chip is warned, never shrunk (the chip markup is unchanged)
+  dir = project({ beats: [{ type: "chips", at: 2, to: 5, items: [{ text: "Sheffield" }, { text: "UK" }, { icon: "github" }] }] });
+  log = build(dir);
+  assert.match(log, /chips at 2: chip text "Sheffield" is 9 characters; a chip holds an icon, a logo or <= 3 characters/);
+  assert.ok(!/chip text "UK"/.test(log), "<= 3 characters is fine");
+  assert.ok(html(dir).includes("<span>Sheffield</span>"), "drawn as written, not shrunk");
+  check("chips: a word is warned (not shrunk); icons and <= 3 characters are not");
+
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
   build(dir); h = html(dir);
   assert.ok(count(h, /class="tc clip/g) >= 5 && h.includes("tc-red") && h.includes("tc-cur") && h.includes('class="tc-ch"'), "type: cards typed letter by letter behind a cursor, red verdicts");
