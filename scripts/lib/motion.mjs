@@ -305,6 +305,7 @@ export function pageToCollage(b, ctx) {
 
 // scenes ---------------------------------------------------------------------
 export function buildScene(b, id, t0, t1, ctx) {
+  if (typeof ctx.warn !== "function") throw new Error("buildScene: ctx.warn(msg, record) is required (a dropped scene part must warn and be recorded)");
   if (b.kind === "paper" && b.engraving) b = pageToCollage(b, ctx);  // R1b port
   const { tl, E, r3, esc, addSfx, brand, userAsset, words } = ctx;
   const sid = `${id}-sc`;
@@ -373,10 +374,9 @@ export function buildScene(b, id, t0, t1, ctx) {
     {
       const cam0 = b.cam ?? { from: 0, to: 900 }, ease = b.ease ?? "sine.inOut";
       const camAt = (t) => { const x = Math.min(1, Math.max(0, (t - t0) / Math.max(1e-6, t1 - t0))); const p = ease === "sine.inOut" ? -(Math.cos(Math.PI * x) - 1) / 2 : x; return cam0.from + (cam0.to - cam0.from) * p; };
-      if (items.length > 1 && items.every((it) => it.z === undefined)) {
-        const order = [...items].sort((p, q) => p.at - q.at);
-        order.forEach((it, k) => { const tn = k + 1 < order.length ? order[k + 1].at + 0.15 : t1; it.z = Math.round(420 - camAt(tn)); });
-      }
+      // every item whose z is absent or null gets its depth (one item included: it is passed at t1); a numeric z is kept
+      const order = [...items].sort((p, q) => p.at - q.at);
+      order.forEach((it, k) => { if (it.z != null) return; const tn = k + 1 < order.length ? order[k + 1].at + 0.15 : t1; it.z = Math.round(420 - camAt(tn)); });
     }
     body = `<div class="fly-stage">${items.map((it) => `<div id="${id}-f${it.i}" class="fly-item"><div class="t" style="font-size:${it.size ?? 120}px">${esc(it.text)}</div>${it.sub ? `<div class="u" style="font-size:${Math.round((it.size ?? 120) * 0.3)}px">${esc(it.sub)}</div>` : ""}</div>`).join("")}</div>`;
     const cam = b.cam ?? { from: 0, to: 900 }, focus = b.focus ?? 0;
@@ -587,7 +587,11 @@ export function buildScene(b, id, t0, t1, ctx) {
     const starts = []; for (let i = 0, s = t0 + 0.05; i < items.length; s += items[i].dur ?? each, i++) starts.push(r3(s));
     const screens = items.map((it, i) => {
       const s0 = starts[i], next = i + 1 < items.length && starts[i + 1] < t1 ? starts[i + 1] : t1, d = r3(Math.min(next, t1) - s0);
-      if (s0 >= t1 || d <= 0) return "";
+      if (s0 >= t1 || d <= 0) {
+        const why = `scene tv at ${b.at}: channel ${i} starts at or after the scene's end (the channels before it fill the window): dropped`;
+        ctx.warn(why, { kind: "tv channel", type: "scene", at: b.at, to: b.to, t: s0, rule: "time", why: `A TV channel at ${Math.floor(t0 / 60)}:${String(Math.floor(t0 % 60)).padStart(2, "0")} was left out because the channels before it already fill the scene.`, warning: why });
+        return "";
+      }
       const style = `style="visibility:hidden"`;
       tl.push(`tl.set("#${id}-tv${i}", { visibility: "visible" }, ${s0}); tl.set("#${id}-tv${i}", { visibility: "hidden" }, ${r3(s0 + d)});`);
       if (i > 0) addSfx(s0, b.flipSfx ?? "tick-1", "tv channel flip", { db: -8 });

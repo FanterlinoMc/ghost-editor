@@ -221,7 +221,21 @@ try {
   dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "one", at: 2.1, z: 0 }, { text: "two", at: 2.9, z: -300 }] }] });
   build(dir); h = html(dir);
   assert.deepEqual(JSON.parse(h.match(/const items = (\[\{"id":"b\d+-f0".*?\]); const els/)[1]).map((o) => o.z), [0, -300], "explicit z untouched");
-  check("scene tails: tv channels back to back and the last held to t1; fly3d staggered depths (explicit z untouched)");
+  const zOf = (h_) => JSON.parse(h_.match(/const items = (\[\{"id":"b\d+-f0".*?\]); const els/)[1]).map((o) => o.z);
+  // CP3: one item is passed at t1 too (it used to sit at z 0 and vanish at ~60%); null means "not set"; one explicit z
+  // no longer switches the derivation off for the others
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "one", at: 2.1 }] }] }); build(dir);
+  assert.deepEqual(zOf(html(dir)), [420 - 900], "a single item is passed only at t1, so it is visible the whole window");
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "one", at: 2.1, z: null }, { text: "two", at: 2.9 }] }] }); build(dir);
+  assert.ok(zOf(html(dir)).every((z) => z !== 0) && zOf(html(dir))[1] === 420 - 900, "z: null is derived like an absent z");
+  dir = project({ beats: [{ type: "scene", kind: "fly3d", at: 2, to: 5.5, items: [{ text: "one", at: 2.1, z: -100 }, { text: "two", at: 2.9 }, { text: "three", at: 3.6 }] }] }); build(dir);
+  { const z = zOf(html(dir)); assert.equal(z[0], -100, "an explicit z is kept"); assert.ok(z[1] > z[2] && z[2] === 420 - 900, `the others are still derived: ${z}`); }
+  // a tv channel pushed past t1 by the ones before it is dropped WITH a warning and a record
+  dir = project({ beats: [{ type: "scene", kind: "tv", at: 2, to: 5.5, items: [{ self: 1, dur: 2 }, { self: 3, dur: 2 }, { src: PIC, dur: 1 }] }] });
+  log = build(dir);
+  assert.match(log, /scene tv at 2: channel 2 starts at or after the scene's end/);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(dir, "build", "graphics-dropped.json"), "utf8")).dropped.some((d) => d.kind === "tv channel"), "recorded");
+  check("scene tails: tv channels back to back, the last held to t1, one pushed past t1 warned + recorded; fly3d depths for every unset/null z, one item included, explicit z kept");
 
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
   build(dir); h = html(dir);
