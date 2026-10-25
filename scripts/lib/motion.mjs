@@ -317,12 +317,15 @@ export function buildScene(b, id, t0, t1, ctx) {
     const lines = (b.lines || []).map((l, i) => {
       const at = E(l.at, "card line");
       tl.push(`ft("#${id}-l${i}", { autoAlpha: 0, y: 20, filter: "blur(8px)" }, { autoAlpha: 1, y: 0, filter: "blur(0px)", duration: 0.3, ease: "power3.out" }, ${at});`);
-      return `<div id="${id}-l${i}" class="sc-line" style="font-size:${l.size ?? 96}px;color:${l.color ?? brand.accentDark}">${esc(l.text)}</div>`;
+      const lpx = l.size ?? 96, lfit = fitTextPx(l.text, lpx, pageW(ctx));   // mac-48
+      return `<div id="${id}-l${i}" class="sc-line" style="font-size:${lfit || lpx}px;color:${l.color ?? brand.accentDark}">${esc(l.text)}</div>`;
     }).join("");
     let pill = "", extra = "";
     if (b.pill) {
       const pa = E(b.pill.at, "card pill");
-      pill = `<div id="${id}-p" class="sc-pill" style="font-size:${b.pill.size ?? 92}px;margin-top:${b.pill.gap ?? 18}px">${esc(b.pill.text)}</div>`;
+      const ppx = b.pill.size ?? 92;   // mac-48: .sc-pill's own padding (6px 34px) is 68 px that is not text
+      const pfit = fitTextPx(b.pill.text, ppx, pageW(ctx), { pad: 68 });
+      pill = `<div id="${id}-p" class="sc-pill" style="font-size:${pfit || ppx}px;margin-top:${b.pill.gap ?? 18}px">${esc(b.pill.text)}</div>`;
       tl.push(`ft("#${id}-p", { autoAlpha: 0, scale: 0.5, rotation: -16 }, { autoAlpha: 1, scale: 1, rotation: -6, duration: 0.34, ease: "back.out(1.7)" }, ${pa});`);
       addSfx(pa, "pop", "card pill");
     }
@@ -422,7 +425,9 @@ export function buildScene(b, id, t0, t1, ctx) {
     // align the scene's line words to the spoken words inside [t0, t1]
     const spoken = words.filter((w) => w.start >= t0 - 0.05 && w.start < t1);
     let si = 0;
-    const lines = (b.lines || []).map((line, li) => `<div class="sent-line">${line.split(/\s+/).map((w, wi) => {
+    // mac-48: .sent-line's 64 px is in the CSS, not inline, so write a size ONLY when the line overflows
+    const sentFit = (line) => { const f = fitTextPx(line, 64, pageW(ctx)); return f ? ` style="font-size:${f}px"` : ""; };
+    const lines = (b.lines || []).map((line, li) => `<div class="sent-line"${sentFit(line)}>${line.split(/\s+/).map((w, wi) => {
       let at = null;
       for (let k = si; k < spoken.length; k++) if (norm(spoken[k].word) === norm(w)) { at = spoken[k].start; si = k + 1; break; }
       if (at === null) at = t0 + 0.15 * (li * 4 + wi);
@@ -708,7 +713,8 @@ export function buildScene(b, id, t0, t1, ctx) {
         // b.boxColor / b.boxInk / b.ink (opt-in): a marker-yellow highlight with dark type, grey article text
         return `<span id="${wid}" class="${l.box ? "hl-boxw" : "hl-w"}"${l.box ? ` style="background:${b.boxColor ?? brand.accent}${b.boxInk ? `;color:${b.boxInk}` : ""}"` : ` style="color:${b.ink ?? brand.accent}"`}>${esc(w)}</span>`;
       }).join("");
-      return `<div class="hl-line" style="font-size:${l.size ?? b.size ?? 104}px">${ws}</div>`;
+      const hpx = l.size ?? b.size ?? 104, hfit = fitTextPx(l.text, hpx, pageW(ctx));   // mac-48
+      return `<div class="hl-line" style="font-size:${hfit || hpx}px">${ws}</div>`;
     }).join("");
     body = `<div class="hl-col" style="top:${b.y ?? 800}px">${lines}</div>`;
   }
@@ -1051,6 +1057,41 @@ export function buildScene(b, id, t0, t1, ctx) {
   return `<div id="${sid}" class="scene" style="background:${customBg ?? bg};background-size:${b.kind.startsWith("gm-") ? "auto" : "220% 220%"}">${body}</div>`;
 }
 
+// mac-48: a nowrap PAGE line wider than the canvas is drawn off it, exactly as an editorial caption was before
+// mac-47. `.hl-line`, `.sent-line`, `.sc-line` and `.sc-pill` are all `white-space: nowrap` with no shrink, and a
+// page line IS the speaker's own words trimmed (director.py's SYSTEM says so), so a line of ordinary speech runs
+// off both edges. Measured on 6 real recordings before this, with page lines taken from their own transcripts:
+// 44 of 96 lines off the canvas, worst 1547 px past the frame; even a 3-word highlight line ("most important tip",
+// 104 px) was 1098 px wide. "text fits its box" is a rail this engine states and did not enforce for pages.
+// The estimate is mac-47's and is an ESTIMATE, not a measurement of the real font: 0.56 em per lowercase
+// character, 0.86 em per capital (the page faces are heavy, and a capital runs to ~0.86 em), 0.24 em per word gap
+// - which is exactly the gap the markup sets (.hl-w margin-right .24em, .sent-line span margin 0 .12em). It
+// ignores letter-spacing, which is negative on these classes, so it over-estimates slightly and therefore errs
+// towards shrinking rather than towards leaving a line off the frame. Returns 0 when the line already fits, so
+// the markup of a line that fits is byte-identical.
+export function fitTextPx(text, px, avail, { pad = 0, floor = 24 } = {}) {
+  const t = String(text ?? "").trim();
+  if (!t || !(px > 0) || !(avail > pad)) return 0;
+  let em = 0;
+  for (const ch of t) em += /\p{Lu}/u.test(ch) ? 0.86 : 0.56;
+  em += (t.split(/\s+/).length - 1) * 0.24;
+  if (!(em > 0)) return 0;
+  return em * px + pad > avail ? Math.max(floor, Math.floor((avail - pad) / em)) : 0;
+}
+
+// The width a page line may use: the canvas less the platform's side insets, the same bound the captions already
+// use (build.mjs `max-width: W - 2 * placer.sidePad` on .cap-group). build.mjs sets both on motionCtx; there is no
+// fallback on purpose - mac-47 left a `?? 1080` here and a hardcoded canvas width is how a 16:9 build silently gets
+// a 9:16 bound.
+export function reqW(ctx) {
+  if (!(ctx?.W > 0)) throw new Error("motion: ctx.W is required to fit text to the canvas (build.mjs sets motionCtx.W)");
+  return ctx.W;
+}
+
+export function pageW(ctx) {
+  return reqW(ctx) - 2 * (ctx.sidePad > 0 ? ctx.sidePad : 0);
+}
+
 // fitWipe: a handwritten write-on (clip-path wipe) that would still be drawing when its caption block ends is cut
 // mid-word ("manually" left at "man" when the next block starts). The approved Keynote sample writes an end-of-block
 // script word on WITH the spoken word, fast, and holds it whole until the block changes. So, only when the wipe would
@@ -1202,7 +1243,9 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
       // of 900, e.g. 820 = the .eblock's own width, so the line also stays inside its grey box (The Keynote). Anything else is off.
       // mac-47: the canvas is a limit even with fitLine off. A nowrap line wider than the .eblock starts at its left edge
       // (130 px) and runs right, so past W - 170 it is drawn off the canvas (keynote-3, pop: up to 205 px measured).
-      const canvasW = (ctx.W ?? 1080) - 170;
+      // mac-48 drops mac-47's `?? 1080` fallback: a hardcoded canvas width is how a 16:9 build silently gets a
+      // 9:16 bound. build.mjs always sets motionCtx.W; reqW() says so out loud rather than guessing.
+      const canvasW = reqW(ctx) - 170;
       const optW = cap.fitLine === true ? 900 : (typeof cap.fitLine === "number" && cap.fitLine > 0 ? Math.max(400, cap.fitLine) : 0);
       const fitW = optW ? Math.min(optW, canvasW) : canvasW;
       // the word as drawn (captions.upper / lowercase, as below): a capital is up to ~0.86 em wide in the bold caption face (W, M, D), not 0.56

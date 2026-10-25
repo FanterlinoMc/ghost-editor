@@ -1575,7 +1575,10 @@ const UI_GLYPHS = {
   mask: `<path d="M3 8.5c3-1.5 6-2 9-2s6 .5 9 2v4c0 3.5-4 6.5-9 6.5s-9-3-9-6.5z" fill="#fff"/><path d="M7 11h10M7 14h10" stroke="#1FC24A" stroke-width="1.3" stroke-linecap="round"/>`,
   tree: `<path d="M12 2.5l6.5 9h-3.3l4.3 6H4.5l4.3-6H5.5z" fill="#fff"/><rect x="10.8" y="17" width="2.4" height="4.5" fill="#fff"/>`,
 };
-const motionCtx = { premium: PK, rampScene: (media, ms, t0, t1, ramp, id) => {
+// mac-48: W and sidePad are set HERE, in the literal, not after the beat loop. buildScene() runs at :2077
+// and :2371 - BEFORE the old assignment site - so a page builder asking for the canvas width got undefined,
+// while mac-47's editorial captions are built later and never noticed. `placer` is ready from :1414.
+const motionCtx = { W, sidePad: placer.sidePad, premium: PK, rampScene: (media, ms, t0, t1, ramp, id) => {
   // scene.ramp (premium kit): the B-roll clip's picture is pre-rendered on a speed curve; the scene keeps its at/to window
   let rc;
   try { rc = PK.rampClip({ src: path.resolve(proj, media), mediaStart: ms, D: r3(t1 - t0), ramp, fps: FPS, outDir: A, tag: id, srcDur: parseFloat(execFileSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path.resolve(proj, media)]).toString()) }); } catch (e) { die(`scene ${id}: ${e.message}`); }
@@ -2553,8 +2556,7 @@ const sfxAudioAll = () => sfxEvents.filter((e) => !e.id.startsWith("meme:")).sor
 
 // `bandBottom`: the reserved band's bottom edge (canvas px), for a block anchored by its bottom (mac-47, lower-face)
 motionCtx.placeCaption = (t0, t1, h) => { const p = placer.place(t0, t1, h); return { ...p, bandBottom: Math.round(p.y + h) }; };
-motionCtx.sidePad = placer.sidePad;
-motionCtx.W = W;   // lib/motion.mjs: editorial lines fit inside the canvas (mac-47)
+// (motionCtx.W / .sidePad moved into the literal above - mac-48; scenes are built before this line)
 
 // ---------- captions ----------
 const cap = { style: "house", group: 3, highlight: null, ...(spec.captions || {}) };
