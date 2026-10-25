@@ -206,6 +206,18 @@ try {
   assert.deepEqual(logo({ style: "podcast", show: "AK Consulting", showLogo: "fromShow" }), ["AK", "CONSULTING"], "podcast + the reel's opt-in does");
   check("showLogo fromShow: derived from spec.show (guest and placeholders dropped), explicit object wins, never from a preset");
 
+  // mac-75: captions step around a nametag the way they do around a card (the tag is registered with the placer)
+  const blocks = (d) => { const j = JSON.parse(fs.readFileSync(path.join(d, "build", "caption_layout.json"), "utf8")); return (j.blocks ?? j); };
+  dir = project({ beats: [{ type: "nametag", at: 1, to: 6, name: "James", title: "Student", y: 1180 }] }); build(dir);
+  // the overlap itself is checked against the tag AS DRAWN in scripts/build-nametag-captions.test.mjs (real Chrome);
+  // here: the blocks in the tag's window moved off the tag's line
+  const during = blocks(dir).filter((k) => k.t0 < 6 && k.t1 > 1);
+  assert.ok(during.length && during.every((k) => k.y > 1180), `captions in the tag's window moved under the tag: ${JSON.stringify(during.map((k) => [k.t0, k.y, k.h]))}`);
+  dir = project({ beats: [] }); build(dir); const none = blocks(dir);
+  dir = project({ beats: [{ type: "nametag", at: 1, to: 6, name: "James", title: "Student", y: 300 }] }); build(dir);
+  assert.deepEqual(blocks(dir).map((k) => k.y), none.map((k) => k.y), "a tag clear of the captions moves nothing");
+  check("nametag: captions step around it (no overlap); a tag clear of them moves nothing");
+
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
   build(dir); h = html(dir);
   assert.ok(count(h, /class="tc clip/g) >= 5 && h.includes("tc-red") && h.includes("tc-cur") && h.includes('class="tc-ch"'), "type: cards typed letter by letter behind a cursor, red verdicts");
