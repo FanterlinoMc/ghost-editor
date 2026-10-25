@@ -6,10 +6,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { WEAK, SWEAR, NEVER_KEY } from "./caption-weak.mjs";
+import os from "node:os";
+import { WEAK, SWEAR, NEVER_KEY, loadWeak } from "./caption-weak.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const data = JSON.parse(fs.readFileSync(path.join(HERE, "caption-weak.json"), "utf8"));
+const REPO = path.join(HERE, "..", "..");
+// TEAM.md section 7: the repo venv first (Windows, then POSIX), then the platform launchers
+const PYTHONS = [path.join(REPO, ".venv", "Scripts", "python.exe"), path.join(REPO, ".venv", "bin", "python")].filter((p) => fs.existsSync(p))
+  .concat(process.platform === "win32" ? ["python", "py"] : ["python3", "python"]);
+const tmpList = (obj) => { const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "weak-")), "w.json"); fs.writeFileSync(f, JSON.stringify(obj)); return f; };
+const BAD = { "empty weak": { weak: [], swear: ["shit"] }, "empty swear": { weak: ["actually"], swear: [] },
+  "missing weak": { swear: ["shit"] }, "a non-word": { weak: ["Actually!"], swear: ["shit"] } };
 
 test("the file: lower-case bare words, sorted, no duplicates", () => {
   for (const key of ["weak", "swear"]) {
@@ -41,7 +49,7 @@ test("the Python loader reads the same sets", () => {
   const scripts = path.join(HERE, "..");
   // a missing python is a FAILURE here, not a skip: a check that finds nothing must not pass
   const tried = [];
-  for (const py of process.platform === "win32" ? ["python", "py"] : ["python3", "python"]) {
+  for (const py of PYTHONS) {
     const r = spawnSync(py, ["-c", code, scripts], { encoding: "utf8" });
     tried.push(`${py}: ${r.error ? r.error.code : r.status}`);
     if (r.status !== 0) continue;
@@ -50,4 +58,20 @@ test("the Python loader reads the same sets", () => {
     return;
   }
   assert.fail(`no python ran scripts/caption_weak.py (${tried.join(", ")})`);
+});
+
+test("the JS loader REFUSES an empty, missing or malformed list", () => {
+  for (const [why, obj] of Object.entries(BAD)) assert.throws(() => loadWeak(tmpList(obj)), /non-empty list|not lower-case/, why);
+});
+
+test("the Python loader REFUSES an empty, missing or malformed list", () => {
+  const code = "import sys; sys.path.insert(0, sys.argv[1]); import caption_weak as c\n" +
+    "try:\n    c.load(sys.argv[2])\nexcept ValueError as e:\n    print('REFUSED', e); sys.exit(0)\nprint('ACCEPTED'); sys.exit(3)";
+  const py = PYTHONS.find((p) => spawnSync(p, ["-c", "import sys"]).status === 0);
+  assert.ok(py, `no python to run (${PYTHONS.join(", ")})`);
+  for (const [why, obj] of Object.entries(BAD)) {
+    const r = spawnSync(py, ["-c", code, path.join(HERE, ".."), tmpList(obj)], { encoding: "utf8" });
+    assert.equal(r.status, 0, `${why}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /^REFUSED/, why);
+  }
 });
