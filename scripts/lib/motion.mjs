@@ -611,7 +611,33 @@ export function buildScene(b, id, t0, t1, ctx) {
       kicker: (sz) => `font-family:Inter,system-ui,sans-serif;font-weight:800;text-transform:uppercase;font-size:${sz ?? 40}px;color:${brand.accent};letter-spacing:.14em;line-height:1`,
       deck: (sz) => `font-family:'Instrument Serif',Georgia,serif;font-style:italic;font-size:${sz ?? 88}px;color:#2a2620;letter-spacing:-0.02em;line-height:.95`,
     };
-    const items = (b.items || []).map((it, i) => {
+    // mac-73: an item with neither x nor y stacks under the previous item (they all used to land on 120,600 and overlap,
+    // e.g. "EnglishNG"); one that would run past the bottom safe edge is dropped with a warning and a record
+    const COL_BOTTOM = 1920 - 170, COL_GAP = 24;
+    const itemH = (it) => {
+      if (it.type === "image") { const f = /[\/.]/.test(it.src || "") ? null : path.join(ctx.LIB, "engravings", "png", `${it.src}.png`);
+        const [iw, ih] = f && fs.existsSync(f) ? pngSize(f) : [1, 1]; return Math.round((it.w ?? 760) * ih / iw); }
+      if (it.type === "glasses") return Math.round((it.w ?? 640) * 200 / 640);
+      if (it.type === "sticker") return it.size ?? 420;
+      const base = { serif: [150, 0.9], caps: [64, 0.9 * 1.25], dark: [170, 1], box: [150, 1], marker: [130, 0.8], italic: [210, 0.9], headline: [120, 0.92], kicker: [40, 1], deck: [88, 0.95] }[it.style ?? "serif"] ?? [150, 0.9];
+      return Math.round((it.size ?? base[0]) * base[1] + (it.style === "dark" || it.style === "box" ? 12 : 0));
+    };
+    let colPrev = null;
+    const placed = [];
+    for (const [i, it0] of (b.items || []).entries()) {
+      const it = { ...it0 };
+      if (it.x === undefined && it.y === undefined && colPrev) {
+        it.y = colPrev.y + colPrev.h + COL_GAP;
+        if (it.y + itemH(it) > COL_BOTTOM) {
+          const why = `scene collage at ${b.at}: item ${i} (${it.type ?? "text"}${it.text ? ` "${String(it.text).slice(0, 30)}"` : ""}) has no x/y and would stack past the bottom (y ${it.y} + ${itemH(it)} > ${COL_BOTTOM}): dropped`;
+          ctx.warn?.(why, { kind: "collage item", type: "scene", at: b.at, to: b.to, t: t0, rule: "no-room", why: `A collage item at ${Math.floor(t0 / 60)}:${String(Math.floor(t0 % 60)).padStart(2, "0")} was left out because it would have run off the bottom of the page.`, warning: why });
+          continue;
+        }
+      }
+      placed.push([i, it]);
+      colPrev = { y: it.y ?? 600, h: itemH(it) };
+    }
+    const items = placed.map(([i, it]) => {
       const iid = `${id}-c${i}`;
       // the first item is on the paper from the scene's first frame: never open on blank paper
       const at = i === 0 ? t0 : it.at !== undefined ? Math.max(t0, E(it.at, "collage item")) : r3(t0 + 0.12 * i);
