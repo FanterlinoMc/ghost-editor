@@ -238,6 +238,35 @@ try {
   assert.match(log, /scene collage at 2: item \d+ \(text "w\d+"\) has no x\/y and would stack past the bottom/);
   assert.ok(JSON.parse(fs.readFileSync(path.join(dir, "build", "graphics-dropped.json"), "utf8")).dropped.some((d) => d.kind === "collage item"), "recorded");
   check("collage: unpositioned items stack instead of overlapping; positioned ones untouched; past the bottom dropped + recorded");
+  // mac-74: popcard face check (the test face spans y 300..780): over a sharp camera the card moves off the face
+  const pcTop = (h_) => { const m = h_.match(/class="ov popcard" style="top:(\d+)px/); return m ? +m[1] : null; };
+  const PC = { type: "popcard", at: 2, to: 5, src: PIC, label: "France" };
+  dir = project({ beats: [{ ...PC }] }); build(dir);
+  assert.equal(pcTop(html(dir)), 780 + 40, "no defocus: the card moves below the chin (face bottom 780 + 40)");
+  dir = project({ look: { fx: true }, beats: [{ ...PC }] }); build(dir);
+  assert.equal(pcTop(html(dir)), 300, "a defocused camera: the card stays over the speaker, as designed");
+  dir = project({ beats: [{ ...PC, y: 300 }] }); build(dir);
+  assert.equal(pcTop(html(dir)), 300, "an explicit y is the reel's call");
+  dir = project({ beats: [{ ...PC, stage: "#111" }] }); build(dir);
+  assert.equal(pcTop(html(dir)), 300, "a full-frame stage hides the footage");
+  dir = project({ beats: [{ ...PC, h: 900 }] }); log = build(dir); h = html(dir);
+  assert.equal(pcTop(h), 300, "no room either side: the card stays...");
+  assert.ok(h.includes('id="fx"'), "...and the camera is defocused behind it (#fx written), so it is never on a sharp face");
+  assert.match(log, /popcard at 2: no room beside the face, so the camera is defocused behind the card/);
+  dir = project({ beats: [{ ...PC, h: 900, defocus: false }] }); log = build(dir);
+  assert.equal(pcTop(html(dir)), null, "defocus: false and no room: left out, never drawn on a sharp face");
+  assert.ok(JSON.parse(fs.readFileSync(path.join(dir, "build", "graphics-dropped.json"), "utf8")).dropped.some((d) => d.type === "popcard" && d.rule === "face"), "recorded");
+  dir = project({ look: { fx: false }, beats: [{ ...PC, h: 900 }] }); log = build(dir);
+  assert.equal(pcTop(html(dir)), null, "a style that opted out of #fx (look.fx: false) is never defocused for it: left out");
+  assert.ok(!html(dir).includes('id="fx"'));
+  // CP3: the defocus a popcard forces is ITS layer only - a leak's bloom (inert without #fx) stays inert
+  const bloomTweens = (h_) => (h_.match(/tl\.to\("#fx", \{ filter: "blur\(0px\) brightness\(1\.5\)"/g) || []).length;
+  dir = project({ beats: [{ type: "leak", at: 6, to: 7 }] }); build(dir); const leakAlone = html(dir);
+  dir = project({ beats: [{ ...PC, h: 900 }, { type: "leak", at: 6, to: 7 }] }); build(dir);
+  assert.ok(html(dir).includes('id="fx"'), "the popcard still defocuses");
+  assert.equal(bloomTweens(html(dir)), 0, "no leak bloom on #fx: it was inert before and stays inert");
+  assert.equal(bloomTweens(leakAlone), 1, "a leak on its own still carries its (inert) bloom tween, as at the pin");
+  check("popcard face check: moves off a sharp face; no room -> defocus; defocus:false + no room -> dropped + recorded; defocused/stage/explicit y untouched");
 
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
   build(dir); h = html(dir);
