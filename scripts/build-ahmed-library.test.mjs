@@ -234,6 +234,10 @@ try {
   assert.ok(html(dir).includes('id="fx"'), "the popcard still defocuses");
   assert.equal(bloomTweens(html(dir)), 0, "no leak bloom on #fx: it was inert before and stays inert");
   assert.equal(bloomTweens(leakAlone), 1, "a leak on its own still carries its (inert) bloom tween, as at the pin");
+  // the author's own #fx (look.fx) keeps its leak bloom when a popcard is in the reel too (simplifying the guard to
+  // `if (popcardFx)` must not be able to touch this; today popcardFx cannot be set when FX_BASE is, which this pins)
+  dir = project({ look: { fx: true }, beats: [{ ...PC, h: 900 }, { type: "leak", at: 6, to: 7 }] }); build(dir);
+  assert.equal(bloomTweens(html(dir)), 1, "look.fx + popcard + leak: the leak bloom is still there");
   check("popcard face check: moves off a sharp face; no room -> defocus; defocus:false + no room -> dropped + recorded; defocused/stage/explicit y untouched");
 
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
