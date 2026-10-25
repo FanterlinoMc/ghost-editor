@@ -171,7 +171,7 @@ the build warns on a double booking).
 ### The show logo (`showLogo`, top level)
 
 `{small, big, x?: 70, y?: 150, opacity?: 0.92}` pins a small line over a big one. `"showLogo": "fromShow"`
-(podcast.json sets it; mac-67) derives it from the reel's `show` exactly as podcast_plan.py does: the part before
+(set on the REEL by the planner, never in a style preset; mac-67) derives it from the reel's `show` exactly as podcast_plan.py does: the part before
 ` · ` / ` | ` / ` • `, all words but the last upper-cased as `small`, the last as `big` ("AK Consulting" -> AK /
 CONSULTING). A placeholder (TBD, name, guest, ...), a length outside 2-32 or no `show` gives no logo. An explicit
 object in the reel wins. Brand data: never a model field.

@@ -61,7 +61,6 @@
     "base": 1.08
   },
   "outro": 0.15,
-  "showLogo": "fromShow",
   "director": {
     "plan": "core/scripts/podcast_plan.py <project> writes captions.keys/reds, the hook box (+ name label), a pull quote, the Like click and the show logo.",
     "rules": "Everything on screen is spoken, except the show logo and the name label (brand kit data). Footage stays in colour.",
