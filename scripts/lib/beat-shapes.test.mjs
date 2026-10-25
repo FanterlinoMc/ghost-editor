@@ -20,9 +20,16 @@ test("hz-list items without a title are skipped with a warning; none left skips 
   const r = checkShape(b);
   assert.equal(b.items.length, 1);
   assert.match(r.warnings[0], /items\[1\] needs a `title` string/);
-  assert.match(checkShape({ type: "hz-list", at: 30, items: [{ text: "a", at: 30.2 }] }).skip, /no item has a `title`/);
+  assert.match(checkShape({ type: "hz-list", at: 30, items: [{ text: "a", at: 30.2 }] }).skip, /no item is a valid \{title, sub\?, at\}/);
   assert.match(checkShape({ type: "hz-list", at: 30 }).skip, /`items` must be a list/);
   assert.deepEqual(checkShape({ type: "hz-list", at: 30, items: [{ title: "a", sub: "b", at: 30.2 }] }), { warnings: [] });
+  // CP3: an optional `sub` that is "" or null (the planner's "no value") keeps the item - it used to delete the beat
+  for (const sub of ["", null]) {
+    const b2 = { type: "hz-list", at: 30, items: [{ title: "Sheffield", sub, at: 30.2 }] };
+    assert.deepEqual(checkShape(b2), { warnings: [] }, JSON.stringify(sub));
+    assert.equal(b2.items.length, 1);
+  }
+  assert.match(checkShape({ type: "hz-list", at: 30, items: [{ title: "a", sub: 7, at: 30.2 }] }).skip, /no item is a valid/);
 });
 
 test("hz-title / hz-note / hz-name without their text are skipped, never drawn", () => {

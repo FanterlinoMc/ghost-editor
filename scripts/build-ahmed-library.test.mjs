@@ -210,7 +210,7 @@ try {
   dir = project({ style: "hormozi", beats: [{ type: "hz-list", at: 2, to: 5, items: [{ text: "Sheffield", at: 2.2 }, { text: "France", at: 3 }] }] });
   log = build(dir); h = html(dir);
   assert.ok(!/class="h">undefined</.test(h) && !h.includes('class="ov hz-panel"'), "an hz-list of `text` items draws nothing, never \"undefined\"");
-  assert.match(log, /hz-list at 2: no item has a `title`/);
+  assert.match(log, /hz-list at 2: no item is a valid \{title, sub\?, at\}/);
   assert.ok(JSON.parse(fs.readFileSync(path.join(dir, "build", "graphics-dropped.json"), "utf8")).dropped.some((d) => d.rule === "shape" && d.type === "hz-list"), "recorded as dropped");
   dir = project({ style: "hormozi", beats: [{ type: "hz-list", at: 2, to: 5, items: [{ title: "Sheffield", at: 2.2 }, { text: "France", at: 3 }] }] });
   log = build(dir); h = html(dir);

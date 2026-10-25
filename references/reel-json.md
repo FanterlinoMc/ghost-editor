@@ -391,7 +391,7 @@ Checked at the top of the beat loop, after `at` resolves:
 |---|---|---|
 | `scene` `gm-nodes` / `card` | `pill` not `{text: string, at: number}` (e.g. a bare string) | **stops**: `ERROR: scene gm-nodes at 30: \`pill\` must be {text: string, at: number} (got string "English")` |
 | `scene` `gm-nodes` | `nodes` not a list of `{n?, at: number}` | **stops**, naming the item |
-| `hz-list` | an item without a `title` string (e.g. `{text}`), or a non-string `sub` | that item is **skipped** with a warning; no item left: the beat is **dropped** (warning + `graphics-dropped.json`, rule `shape`) |
+| `hz-list` | an item without a `title` string (e.g. `{text}`), or a `sub` that is set but neither a string nor null (`""` and `null` are fine: they draw no sub line, as before) | that item is **skipped** with a warning; no item left: the beat is **dropped** (warning + `graphics-dropped.json`, rule `shape`) |
 | `hz-title` / `hz-note` / `hz-name` | `text` / `text` / `name` missing or not a non-empty string | the beat is **dropped** (warning + record) |
 
 Every other beat passes through untouched, so a correct reel builds exactly as before.

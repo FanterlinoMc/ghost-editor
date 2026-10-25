@@ -23,10 +23,11 @@ export function checkShape(b) {
     if (!Array.isArray(b.items)) return { skip: `${where}: \`items\` must be a list of {title, sub?, at} (got ${got(b.items)}): skipped` };
     const warnings = [], keep = [];
     b.items.forEach((it, i) => {
-      if (isObj(it) && isStr(it.title) && (it.sub === undefined || isStr(it.sub))) keep.push(it);
-      else warnings.push(`${where}: items[${i}] needs a \`title\` string (items are {title, sub?, at}; got ${got(it)}): item skipped`);
+      // `sub` is optional: absent, null (the planner's "no value") or any string, "" included, draws as before
+      if (isObj(it) && isStr(it.title) && (it.sub === undefined || it.sub === null || typeof it.sub === "string")) keep.push(it);
+      else warnings.push(`${where}: items[${i}] needs a \`title\` string and, if set, a string or null \`sub\` (items are {title, sub?, at}; got ${got(it)}): item skipped`);
     });
-    if (!keep.length) return { skip: `${where}: no item has a \`title\` (items are {title, sub?, at}): skipped, nothing drawn` };
+    if (!keep.length) return { skip: `${where}: no item is a valid {title, sub?, at} (a \`title\` string; \`sub\` absent, null or a string): skipped, nothing drawn` };
     b.items = keep;
     return { warnings };
   }
