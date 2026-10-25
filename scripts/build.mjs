@@ -1680,6 +1680,7 @@ motionCtx.warn = (msg, rec) => { warn.push(msg); if (rec) recordDrop(rec); };   
 // #fx is added here once and all three agree (CP3: it used to be spelled three times, two ways)
 const FX_BASE = spec.look?.fx === true || !!spec.look?.refocus || ((spec.captions?.style ?? "house") === "duo" && !!spec.captions?.energyPunch);
 let popcardFx = false;   // mac-74: a popcard with no room beside the face turns the #fx defocus layer on
+motionCtx.die = die;   // lib/motion.mjs: a refused scene stops the build with one line (no stack trace)
 for (const b of beatsList) {
   CUR_BEAT = b;
   const id = `b${n++}`;
