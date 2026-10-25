@@ -1,5 +1,5 @@
 {
-  "_about": "Empire (style id premium-iman; the Iman Gadzhi shorts look), Phantasic Premium, BETA. A dark, high-contrast talking head (empire-noir grade: crushed blacks, teal shadows) with ONE phrase at a time in glowing heavy ALL-CAPS typed on behind a cursor bar; calm lines white, verdict lines red, bigger, slammed in with a shake and a low hit. Key nouns become glowing cut-out objects on a near-black stage. Punch-ins alternate 1.0 / 1.12 with eased motion blur. The talk ends on a riser, 3 frames of silence and a boom, then the music bed's own drop takes over: a beat-locked cut ladder (2, 1, then half beats) of cinematic stills and the speaker's own shots with white flash cuts. Ends on a black caps CTA card with a green arrow and a fade to black. v0.6 hook (photo plate + relight via reel stage.plate/fg); v0.4 hook (10 Oct): the speaker is cut out (matte) and composited on a designed dark neon set (red bar, blue lamp, haze) with red/blue light wraps; captions sit BETWEEN the set and the speaker so the head covers part of the type (DtFS). Engine: premium kit + captions.style 'type', endcard variant 'caps', drop.bpm/beats, music.alignDrop/dropLift (references/reel-json.md, Premium line). Port notes: stage.room 300 and music.optional are set HERE (the engine defaults stay 150 / required) sound.completeMix is on so the card hits and ticks that the type captions add after the early mix are not dropped; so Podcast Glow and every other style are unchanged; head-bang is not shipped, so the bed is skipped with a warning..",
+  "_about": "Empire (style id premium-iman; the Iman Gadzhi shorts look), Phantasic Premium, BETA. Since 19 Oct 2026 (owner, 10 Oct: \"just have the same background and then maybe add some of the lights on the side, but not totally add the fake background lights\"): the speaker's REAL room stays; no stage, no plate, no drawn neon set, no props. The side light is the depth relight (`relight` look empire: red from the left, blue from the right, falling off with depth, the far room a little darker), under a neutral contrast grade (Ahmed's Empire v1.6-v1.9: the empire-noir preset turned skin magenta and the type is graded with the footage). ONE glowing heavy ALL-CAPS phrase at a time, typed on, hung BEHIND the head: the cut-out (`matte`) is only an invisible occluder over the real footage (captions.behind without a stage, references/reel-json.md), one line first, the head covering the lower part of the line (overlap 0.8, but never more than 45% of a card's height: maxHidden 0.45); a tight close-up with no room above the crown gets the card in front instead. Calm lines white, verdict lines red, bigger, slammed in with a shake and a low hit. Key nouns become glowing cut-out objects. Punch-ins alternate 1.0 / 1.12 with eased motion blur. The talk ends on a riser, 3 frames of silence and a boom, then the music bed's own drop takes over: a beat-locked cut ladder (2, 1, then half beats) of cinematic stills and the speaker's own shots with white flash cuts. Ends on a black caps CTA card with a green arrow and a fade to black. Engine: premium kit + captions.style 'type', endcard variant 'caps', drop.bpm/beats, music.alignDrop/dropLift (references/reel-json.md, Premium line). Port notes: music.optional and sound.completeMix are set HERE (engine defaults stay required / off), so Podcast Glow and every other style are unchanged; head-bang is not shipped, so the bed is skipped with a warning. The neon-set look (stage) is gone from the style; a reel can still set `stage` itself.",
   "brand": {
     "accent": "#FF2A2A",
     "accentDark": "#B81C1C",
@@ -10,7 +10,7 @@
   "captions": {
     "style": "type",
     "group": 3,
-    "size": 230,
+    "size": 150,
     "y": 1160,
     "upper": true,
     "tail": 0.25,
@@ -20,21 +20,22 @@
     "maxChars": 16,
     "tickGap": 0.8,
     "behind": true,
-    "overlap": 0.35,
+    "overlap": 0.8,
+    "maxHidden": 0.45,
     "redInstant": true,
     "wordReveal": true,
     "cursor": false,
     "blurIn": 10,
     "slam": 1.35,
-    "redMaxWidth": 900,
-    "maxWidth": 980,
+    "redMaxWidth": 920,
+    "maxWidth": 920,
     "minSize": 90,
     "glow": 26,
     "glowA": 0.6,
-    "safeTop": 215,
+    "safeTop": 200,
     "redGlow": 40,
     "redGlowA": 0.85,
-    "charW": 0.8
+    "charW": 0.86
   },
   "cadence": {
     "every": 3,
@@ -54,7 +55,18 @@
     "ease": "power3.out"
   },
   "look": {
-    "preset": "empire-noir"
+    "grade": "contrast(1.12) saturate(.92)",
+    "vignette": 0.45,
+    "grain": 0.03
+  },
+  "matte": true,
+  "relight": {
+    "look": "empire",
+    "left": "#ff3a48",
+    "right": "#5a78ff",
+    "strength": 0.9,
+    "room": 0.3,
+    "roomDim": 0.3
   },
   "popcard": {
     "w": 700,
@@ -121,20 +133,5 @@
       0.5,
       0.5
     ]
-  },
-  "stage": {
-    "bg": "neon",
-    "wrapR": 1,
-    "wrapB": 0.95,
-    "subjectGrade": "brightness(.7) contrast(1.16) saturate(1.05)",
-    "practicalBlur": 2,
-    "barX": 1000,
-    "barY": 360,
-    "barH": 1100,
-    "bulbX": 40,
-    "bulbY": 470,
-    "wrapSpan": 62,
-    "shade": 0.55,
-    "room": 300
   }
 }

@@ -4,8 +4,9 @@
     empire_finish.py <project> <takes.mp4> <depth.mp4> <takes.json> <out.mp4>
                      [--music f.mp3] [--music-start 7.25] [--pack DIR] [--force-relight] [--no-render]
 
-<project>     a built Empire project: reel.json (style premium-iman, with a `stage`), and assets/talk-matte.webm from the
-              first build (hyperframes remove-background, run by build.mjs)
+<project>     a built OLD-look Empire project: reel.json with a `stage` (the neon set; the style no longer sets one since
+              19 Oct 2026), and assets/talk-matte.webm from the first build. Without a `stage` it exits 3 and writes nothing:
+              the real-room Empire gets its side light from build.mjs's `relight`.
 <takes.mp4>   the reel's takes cut from the source with the takes.json handle and concatenated (one depth job)
 <depth.mp4>   a depth map video of takes.mp4 (8-bit, 1080x1920 after resampling). INPUT: Ahmed made it with a depth model
               (Depth Anything video, a paid Higgsfield job). This script never calls it.
@@ -43,6 +44,15 @@ for label, path in (("project", os.path.join(P, "reel.json")), ("takes video", T
     if not os.path.exists(path):
         sys.exit(f"empire_finish.py: {label} not found: {path}")
 
+# the neon relight + splice below rewrite assets/talk-matte.webm for a cut-out composited on a set (`stage`). Since 19 Oct 2026
+# Empire keeps the speaker's real room (no stage; the side light is build.mjs's own `relight`), so a project without a stage is
+# left untouched: checked BEFORE anything is written.
+if not json.load(open(os.path.join(P, "reel.json"), encoding="utf-8")).get("stage"):
+    print("empire_finish.py: reel.json sets no `stage`, so there is nothing to finish: this pass is for the old neon-set Empire "
+          "and would overwrite assets/talk-matte.webm. The real-room Empire (style premium-iman since 19 Oct 2026) gets its side "
+          "light from `relight` in build.mjs; build and render the project as usual. Nothing was changed.", file=sys.stderr)
+    sys.exit(3)
+
 
 def run(cmd, **kw):
     r = subprocess.run(cmd, text=True, encoding="utf-8", errors="replace", capture_output=True, **kw)
@@ -69,8 +79,6 @@ print("".join(l + "\n" for l in r.stdout.splitlines() if l.startswith("frames"))
 
 rp = os.path.join(P, "reel.json")
 reel = json.load(open(rp, encoding="utf-8"))
-if "stage" not in reel:
-    sys.exit("empire_finish.py: reel.json has no `stage` (the Empire look composites the cut-out on a set)")
 reel["stage"].update(wrap=False, shade=0, subjectGrade="brightness(1) contrast(1.04)")   # the relight replaces the faked wraps
 with open(rp, "w", encoding="utf-8") as fh:
     json.dump(reel, fh, indent=1)
