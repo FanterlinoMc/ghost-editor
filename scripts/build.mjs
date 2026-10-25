@@ -2459,7 +2459,11 @@ for (const l of LAYERS) beatSpans.push({ t0: l.t0, t1: l.t1 });
 // a leak bloom inside a popcard hold blooms the defocused camera and settles back on the defocus, not on sharp (fxAim); a leak
 // outside every hold keeps its exact tweens, so a reel without that overlap builds byte-identically. L.i is the bloom's index in
 // tl, pushed in the leak case above (the return is L.i + 1); nothing between there and here removes or reorders tl lines.
+// mac-74 (CP3): when #fx exists ONLY because a popcard had no room beside the face, it is that popcard's defocus
+// layer and nothing else: the leak bloom tweens stay as inert as they were before (no #fx), not newly visible
+const fxOnBase = spec.look?.fx === true || !!spec.look?.refocus || (spec.captions?.style === "duo" && !!spec.captions?.energyPunch);
 for (const L of fxLeaks) {
+  if (popcardFx && !fxOnBase) { tl[L.i] = ""; tl[L.i + 1] = ""; continue; }
   const back = r3(Math.max(L.t0 + 0.12, L.t1 - 0.25)), hb = fxAim(L.t0, 0.1), hr = fxAim(back, 0.25);
   if (hb) tl[L.i] = `tl.to("#fx", { filter: "${fxRest(hb, L.bloom)}", duration: 0.1, ease: "power2.out" }, ${L.t0});`;
   if (hr) tl[L.i + 1] = `tl.to("#fx", { filter: "${fxRest(hr)}", duration: 0.25, ease: "power2.in" }, ${back});`;

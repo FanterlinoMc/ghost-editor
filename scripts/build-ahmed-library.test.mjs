@@ -227,6 +227,13 @@ try {
   dir = project({ look: { fx: false }, beats: [{ ...PC, h: 900 }] }); log = build(dir);
   assert.equal(pcTop(html(dir)), null, "a style that opted out of #fx (look.fx: false) is never defocused for it: left out");
   assert.ok(!html(dir).includes('id="fx"'));
+  // CP3: the defocus a popcard forces is ITS layer only - a leak's bloom (inert without #fx) stays inert
+  const bloomTweens = (h_) => (h_.match(/tl\.to\("#fx", \{ filter: "blur\(0px\) brightness\(1\.5\)"/g) || []).length;
+  dir = project({ beats: [{ type: "leak", at: 6, to: 7 }] }); build(dir); const leakAlone = html(dir);
+  dir = project({ beats: [{ ...PC, h: 900 }, { type: "leak", at: 6, to: 7 }] }); build(dir);
+  assert.ok(html(dir).includes('id="fx"'), "the popcard still defocuses");
+  assert.equal(bloomTweens(html(dir)), 0, "no leak bloom on #fx: it was inert before and stays inert");
+  assert.equal(bloomTweens(leakAlone), 1, "a leak on its own still carries its (inert) bloom tween, as at the pin");
   check("popcard face check: moves off a sharp face; no room -> defocus; defocus:false + no room -> dropped + recorded; defocused/stage/explicit y untouched");
 
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
