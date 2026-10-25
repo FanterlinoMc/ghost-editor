@@ -308,6 +308,29 @@ Test: `scripts/build-prestige-sound.test.mjs` builds a small Prestige reel again
 
 `takes[i].ramp` (the ramp as written; `dur` is already the ramped length, so `dur != b - a` for that take) and a top-level `txTransitions: [{t, kind}]` (the `#tx` whips and zoom-throughs of `transitions`; a join's own `take.transition` stays a take field). Drop ladder scenes are ordinary `beats` (`type: "scene"`, `kind: "image"`). Nothing else changed.
 
+### `build/timeline.json` (`build.mjs <project> --timeline`, mac-59)
+
+`node scripts/build.mjs <project> --timeline` measures the reel's length from `reel.json` as it is now, **without
+building it**, and writes `build/timeline.json` (and the same JSON as the last line of stdout):
+
+```json
+{ "speech": 6.9, "outro": 2, "total": 8.9, "fps": 30 }
+```
+
+- `speech`: the take layout in whole frames, holds and ramps included (`SPEECH`, rounded to 0.001 s).
+- `outro`: `outro` after the style is merged under `reel.json` (`styles/<name>.json`, its `extends` chain and brand
+  kit included), else `3`. This is the number a caller cannot know without resolving the style.
+- `total`: `speech + outro` rounded to 0.001 s, the build's `TOTAL`: what an open-ended `banner.to`, a beat `at: "end"`
+  and the placement contract's `faceAt` clamp read.
+- A blank project (`origin: "blank"`, no takes) gives `{ speech: 0, outro: 0, total: 1 }`, its 1 s black page.
+
+It stops straight after `TOTAL` is known: no other file is written, no media is made, and the same `die()` a build
+would hit before that point (a bad take, a missing layer file) fails it the same way. A full build never writes
+`timeline.json`, so every existing output is byte-identical. A **built** reel already carries `total`, `speech` and
+`fps` in `edit_truth.json`; `--timeline` is for a reel that has not been built yet, or whose takes changed since.
+Test: `scripts/build-timeline.test.mjs` (`--timeline` equals the full build's `edit_truth.json`; the style's outro,
+the default and the reel's own; the blank page).
+
 ### `caption_layout.json`: `x` and `width` per block (`scripts/caption-boxes.mjs`, mac-51)
 
 The build writes each caption block's `t0`, `t1`, `y`, `h`, `mode`, `scale`, `face`. It cannot write the horizontal
