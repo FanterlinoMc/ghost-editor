@@ -278,6 +278,13 @@ try {
   dir = project({ beats: [{ type: "nametag", at: 1, to: 6, name: "James", title: "Student", y: 300 }] }); build(dir);
   assert.deepEqual(blocks(dir).map((k) => k.y), none.map((k) => k.y), "a tag clear of the captions moves nothing");
   check("nametag: captions step around it (no overlap); a tag clear of them moves nothing");
+  // mac-77: a word in a chip is warned, never shrunk (the chip markup is unchanged)
+  dir = project({ beats: [{ type: "chips", at: 2, to: 5, items: [{ text: "Sheffield" }, { text: "UK" }, { icon: "github" }] }] });
+  log = build(dir);
+  assert.match(log, /chips at 2: chip text "Sheffield" is 9 characters; a chip holds an icon, a logo or <= 3 characters/);
+  assert.ok(!/chip text "UK"/.test(log), "<= 3 characters is fine");
+  assert.ok(html(dir).includes("<span>Sheffield</span>"), "drawn as written, not shrunk");
+  check("chips: a word is warned (not shrunk); icons and <= 3 characters are not");
 
   dir = project({ captions: { style: "type", reds: ["scary", "remarkable."] } });
   build(dir); h = html(dir);

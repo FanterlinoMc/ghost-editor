@@ -77,15 +77,35 @@ A style's `director` object is what the planner's director call is told about th
 |---|---|---|---|
 | `plan`, `prep` | string | nobody on the model path (`PIPELINE_KEYS` withholds them) | notes to the pipeline, never sent to the model |
 | `limits` | object | `director.validate()` | caps on what the director may place, per minute of kept footage |
-| `limits.keywords_per_min` | number >= 0 | `director.py:1785` (`int(v * minutes) or 1`) | ENFORCED: keyword treatments kept; default **6**. podcast sets **24** so its own key budget (one per 7 spoken words) binds instead. **`0` still allows 1** (`or 1`): editorial-collage and alif set 0 and get one |
-| `limits.nametags_per_min` | number >= 0 | `director.py:1883` | ENFORCED: name tags kept; default **3** (same `or 1` floor) |
-| `limits.scenes_per_min`, `icons_per_min`, `ui_per_min`, `graphics_per_min`, `rings_per_reel`, `hero_whoosh_min_gap_s` | number >= 0 | nobody (no code reads them, planner @5bd75fd or engine) | ADVISORY only: they reach the model as prompt text inside `limits`, nothing checks them. 28 styles set `scenes_per_min` |
+| `limits.keywords_per_min` | number >= 0 | `director.validate()` (`_per_min_cap`) | ENFORCED: keyword treatments kept; default **6**. podcast sets **24** so its own key budget (one per 7 spoken words) binds. **`0` means 0** (planner ea4488f; before, `int(v*min) or 1` gave editorial-collage and alif one keyword they had refused) |
+| `limits.nametags_per_min` | number >= 0 | `director.validate()` | ENFORCED: name tags kept; default **3**; `0` means 0 |
+| `limits.icons_per_min` | number >= 0 | `director.validate()` | ENFORCED (planner ea4488f): icons kept; default **10**; `0` means 0 (alif, editorial-collage) |
+| `limits.ui_per_min` | number >= 0 | `director.validate()` | ENFORCED (planner ea4488f): `ui` scenes only, not scenes as a whole; default **99**; `0` means 0 |
+| `limits.scenes_per_min` | number >= 0 | nobody, deliberately | GUIDANCE, not enforced: a prompt hint about density (28 styles set it; keynote's 2/min is one scene on a 30 s reel). Nothing checks it |
+| `limits.graphics_per_min` | number >= 0 | nobody | **NOT ENFORCED**: the director's own `GRAPHIC_MAX = 3` per reel (director.py) binds instead, whatever this says. `library/headline-hype` sets 16 |
+| `limits.rings_per_reel`, `limits.hero_whoosh_min_gap_s` | number >= 0 | nobody | **NOT ENFORCED, and nothing to enforce**: the director can emit neither a ring nor a hero whoosh, so these limit nothing. Read them as notes about the style, never as a guarantee |
 
 **A `director` block costs money.** `preflight()` skips the director call only when the resolved block is empty, so adding
 ANY key (even `style` alone) to a style that has none turns it from free into one paid Opus call per reel, for that style
 and everything that `extends` it. `closer` (and its six variants) deliberately has none: its cut guidance reaches the
 free takes and motion calls through the planner's own overlay, measured identical with or without a file block (mac-66,
 25 Oct). `scripts/lib/style-director.test.mjs` pins both rules.
+
+## When to reach for each element (vocabulary rules, mac-77)
+
+Measured at the pin (`references/vocab-inventory.md`, mac-71) and decided by the lead (25 Oct). The planner mirrors each
+as director guidance and, where it is checkable, a validator refusal.
+
+| element | rule | why |
+|---|---|---|
+| `chips` | items are **icons, logos or <= 3 characters**; words go in `pills` | a chip face is a 130 px square with 70 px type: a word spills out of it, off the left edge for the first chip. The build **warns** (it does not shrink, so the mistake stays visible) |
+| `endcard` `variant: "caps"` | **outro only** | it is a full black page with small serif lines: mid-reel it reads as a broken frame |
+| `headpage` | needs `art` (or a `src` that is a map, an object or a cut-out), **never a footage still** | the picture sits in a soft green glow on a white page (UI Story Ad #10); a talking-head still in it looks like an error |
+| `hz-note` | a **secondary** note under the captions, never the point of the beat | it is small by design (a footnote) |
+| `behind`, `ground` | only where the **cut-out effect is the point** of the moment | each mattes its WHOLE take: **~205 s of build per take** on the M4 (7 s of footage), so about three such moments a reel |
+| `scene` `chapter` | write `num`; the words on the card come from the speech | `text` is not a field (the planner maps text -> num) |
+| `scene` `gm-kinetic` | quiet lines, not emphasis | faint grey type on grey is the gadzhi look itself |
+| `popcard` | reads best over a **defocused** camera (`look.fx`), or with a `y` that clears the face | it is meant to be the one sharp thing in frame; on a sharp close-up the engine moves it off the face or defocuses for it (mac-74) |
 
 ## Picking a style
 
