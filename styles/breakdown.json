@@ -31,7 +31,14 @@
   "master": { "lufs": -15, "ratio": 3, "threshold": -20, "lra": 6 },
   "director": {
     "plan": "core/scripts/breakdown_plan.py <project> writes every beat: title card, label, chapter cards, CTA pin, serif words.",
-    "chapters": "{type:scene, kind:chapter, num, tone: navy|paper|blue|cream, serif:[words]} from the spoken 'number one/two/three', 'first/second/third', 'step one...' to the end of that clause (1.2-2.4 s).",
-    "rules": "Everything on screen is spoken. SFX only on the title, chapters and the CTA. Footage keeps its own colour."
+    "chapters": "A `chapter` scene from the spoken 'number one/two/three', 'first/second/third', 'step one...' to the end of that clause (1.2-2.4 s). `text` is the numeral (\"1\", \"2\", \"3\").",
+    "rules": "Everything on screen is spoken. SFX only on the title, chapters and the CTA. Footage keeps its own colour.",
+    "style": "The Breakdown: a numbered teaching cut on navy and paper. Cut on sentence starts so each point begins cleanly; no talking-head stretch runs longer than about 3.5 s without the picture changing.",
+    "restraint": "The structure is the numerals; the words are the speaker's. Everything on screen is spoken. No icons, no B-roll, no stickers, no invented names.",
+    "hook": "One `title` scene over the first seconds: the strongest one or two words said in the first 4 s, at most 2 s long.",
+    "pages": "Fill the gaps so no stretch of plain footage runs past ~3.5 s: a `wordpage` for a short punchy clause, a `highlight` page for a longer line the point rests on.",
+    "chapters_when_unspoken": "Where the speaker never counts points out loud, still break the body into 2 or 3 numbered `chapter` scenes at sentence starts, spread evenly - the numerals are this style's structure, and every Breakdown reel keeps them. `text` is the numeral (\"1\", \"2\", \"3\"), running in order from 1 with no gaps.",
+    "boxlabel": "One `boxlabel` before chapter 1: the sentence just before it, trimmed to a 2-5 word phrase of the speaker's own words that starts and ends on a real word.",
+    "ctapin": "One `ctapin` only when the speaker makes a real closing ask in the last ~10 s - \"comment\", \"follow\", \"subscribe\", \"save this\", \"share this\", \"DM me\". `text` is that one spoken word. Usually there is none."
   }
 }

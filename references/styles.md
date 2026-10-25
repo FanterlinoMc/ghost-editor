@@ -68,6 +68,25 @@ content.json` is `"extends": "editorial-collage", "brandKit": "ak-consulting"`
 - both mechanisms at once: the base style's look, the brand's colours and
 auto name tag.
 
+## The `director` block (planner guidance; build.mjs never reads it)
+
+A style's `director` object is what the planner's director call is told about this look (phantasic
+`engine/planner/director.py` `style_rules()`, after `extends`). Every key is a plain-English rule string, except:
+
+| key | shape | read by | meaning |
+|---|---|---|---|
+| `plan`, `prep` | string | nobody on the model path (`PIPELINE_KEYS` withholds them) | notes to the pipeline, never sent to the model |
+| `limits` | object | `director.validate()` | caps on what the director may place, per minute of kept footage |
+| `limits.keywords_per_min` | number >= 0 | `director.py:1785` (`int(v * minutes) or 1`) | ENFORCED: keyword treatments kept; default **6**. podcast sets **24** so its own key budget (one per 7 spoken words) binds instead. **`0` still allows 1** (`or 1`): editorial-collage and alif set 0 and get one |
+| `limits.nametags_per_min` | number >= 0 | `director.py:1883` | ENFORCED: name tags kept; default **3** (same `or 1` floor) |
+| `limits.scenes_per_min`, `icons_per_min`, `ui_per_min`, `graphics_per_min`, `rings_per_reel`, `hero_whoosh_min_gap_s` | number >= 0 | nobody (no code reads them, planner @5bd75fd or engine) | ADVISORY only: they reach the model as prompt text inside `limits`, nothing checks them. 28 styles set `scenes_per_min` |
+
+**A `director` block costs money.** `preflight()` skips the director call only when the resolved block is empty, so adding
+ANY key (even `style` alone) to a style that has none turns it from free into one paid Opus call per reel, for that style
+and everything that `extends` it. `closer` (and its six variants) deliberately has none: its cut guidance reaches the
+free takes and motion calls through the planner's own overlay, measured identical with or without a file block (mac-66,
+25 Oct). `scripts/lib/style-director.test.mjs` pins both rules.
+
 ## Picking a style
 
 - The speaker's energy decides more than the topic. A calm explainer in `pop` feels wrong; a hype launch in `clean` feels flat.

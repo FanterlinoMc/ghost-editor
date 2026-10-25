@@ -15,6 +15,9 @@
   "designer": true,
   "director": {
     "plan": "scripts/explainer_plan.py <project>: hook title (effect beat) + cutout concept pages on clauses that name a concept in the art library.",
-    "rules": "Everything on screen is spoken. Paintings only where the clause names their concept."
+    "rules": "Everything on screen is spoken. Paintings only where the clause names their concept.",
+    "style": "The Explainer: calm, clear teaching. Long, unhurried takes; the picture changes about every 2.4 s and never on an unfinished clause. The footage keeps its colour and its grade.",
+    "restraint": "Paintings and word pages only where the clause actually names the concept they show. Everything on screen is spoken. No B-roll, no stickers, and no title card: this look opens on the speaker.",
+    "concepts": "On a clause that names one concept, a `cutout` scene whose `text` is that single spoken key word, set big over the textured ground; 1.5-3 s, wholly inside one take, and never two within 5 s."
   }
 }

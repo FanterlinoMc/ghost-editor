@@ -55,7 +55,9 @@
   "matte": false,
   "outro": 0.15,
   "director": {
-    "rules": "Only 3-4 full-screen graphics per ~25 s, on the strongest beats (hook, a number, a list, the payoff); the rest is the speaker's real footage with small captions. Never two graphics back to back. All type on graphics is spoken. No real people, companies or logos."
+    "rules": "Only 3-4 full-screen graphics per ~25 s, on the strongest beats (hook, a number, a list, the payoff); the rest is the speaker's real footage with small captions. Never two graphics back to back. All type on graphics is spoken. No real people, companies or logos.",
+    "style": "Chrome Motion: the speaker cut out onto a dark studio, with a clean cinematic grade. Cut about every 2.2 s; put the strongest beats (the hook, a number, a list, the payoff) wholly inside a take with a second of plain footage either side, because that is where a full-screen graphic lands.",
+    "restraint": "Only 3-4 full-screen graphics per ~25 s and never two back to back; the rest is the speaker's real footage with small captions. All type on a graphic is spoken. No real people, companies or logos."
   },
   "gm": {
     "theme": "blue"
