@@ -101,3 +101,17 @@ test("captions.backingUntil on the cap-group path (a non-editorial style): cap-b
   const { html: h0 } = buildReel("clean", {});
   assert.ok(!/ cap-shadow"/.test(h0) && / cap-backed"/.test(h0));
 });
+
+test("mac-47: with fitLine off, an editorial line too wide for the canvas still shrinks (keynote-3 lowercase, pop upper-case)", () => {
+  // keynote-3 pins fitLine: false and pop never sets it; both drew real lines off the right edge (keynote-3 up to 200 px,
+  // pop up to 205 px, measured with caption-boxes.mjs on 3 real reels). A nowrap line starts at the .eblock's left edge
+  // (130 px), so the canvas allows W - 170 px; pop's upper-case words are estimated at 0.86 em per capital.
+  for (const style of ["keynote-3", "pop"]) {
+    const { html } = buildReel(style, {});
+    const lines = [...html.matchAll(/<span id="eb\d+l\d+" class="eline"( style="font-size:(\d+)px")?>(.*?)<\/span><\/span>/g)];
+    const long = lines.find((l) => />presumptive</i.test(l[3]));
+    assert.ok(long, `${style}: the "presumptive approach are" line was not built`);
+    assert.ok(long[2], `${style}: the line "presumptive approach are" kept its full size and runs off the canvas`);
+    assert.ok(lines.some((l) => !l[1]), `${style}: every line was shrunk; only the ones too wide for the canvas should be`);
+  }
+});

@@ -1200,8 +1200,15 @@ export function buildEditorialCaptions(words, cap, ctx, hidden) {
       // captions.fitLine (opt-in; Ahmed's f88943d): a line wider than the safe width (long words, a big keyword) shrinks to fit
       // instead of running off the frame. fitLine: <px> (opt-in, a number > 0, raised to at least 400) sets that width instead
       // of 900, e.g. 820 = the .eblock's own width, so the line also stays inside its grey box (The Keynote). Anything else is off.
-      const fitW = cap.fitLine === true ? 900 : (typeof cap.fitLine === "number" && cap.fitLine > 0 ? Math.max(400, cap.fitLine) : 0);
-      const estW = fitW ? ln.words.reduce((n, w) => { const kk = isKey(w) ? (cap.keywords || {})[norm(w.word)] : null; const em = kk === "bold" ? (brand.boldScale ?? 1.9) : kk === "script" ? (brand.serifScale ?? 1) * 0.85 : 1; return n + (w.word.length * 0.56 * em + 0.26) * brand.capSize; }, 0) : 0;
+      // mac-47: the canvas is a limit even with fitLine off. A nowrap line wider than the .eblock starts at its left edge
+      // (130 px) and runs right, so past W - 170 it is drawn off the canvas (keynote-3, pop: up to 205 px measured).
+      const canvasW = (ctx.W ?? 1080) - 170;
+      const optW = cap.fitLine === true ? 900 : (typeof cap.fitLine === "number" && cap.fitLine > 0 ? Math.max(400, cap.fitLine) : 0);
+      const fitW = optW ? Math.min(optW, canvasW) : canvasW;
+      // the word as drawn (captions.upper / lowercase, as below): a capital is up to ~0.86 em wide in the bold caption face (W, M, D), not 0.56
+      // (measured: pop's upper-case "SHOWN THAT PEDIATRICIANS" is 1037 px at 56 px, 205 px off the canvas before this)
+      const drawnEm = (w) => { const t = cap.upper ? w.word.toUpperCase() : cap.lowercase === false ? w.word : w.word.toLowerCase(); let n = 0; for (const ch of t) n += /\p{Lu}/u.test(ch) ? 0.86 : 0.56; return n; };
+      const estW = fitW ? ln.words.reduce((n, w) => { const kk = isKey(w) ? (cap.keywords || {})[norm(w.word)] : null; const em = kk === "bold" ? (brand.boldScale ?? 1.9) : kk === "script" ? (brand.serifScale ?? 1) * 0.85 : 1; return n + (drawnEm(w) * em + 0.26) * brand.capSize; }, 0) : 0;
       const fitPx = estW > fitW ? Math.max(40, Math.floor(brand.capSize * fitW / estW)) : 0;
       return `<span id="${lid}" class="eline"${fitPx ? ` style="font-size:${fitPx}px"` : ""}>${ln.words.map((w, wi) => {
         const wid = `${lid}w${wi}`;

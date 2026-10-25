@@ -2554,6 +2554,7 @@ const sfxAudioAll = () => sfxEvents.filter((e) => !e.id.startsWith("meme:")).sor
 // `bandBottom`: the reserved band's bottom edge (canvas px), for a block anchored by its bottom (mac-47, lower-face)
 motionCtx.placeCaption = (t0, t1, h) => { const p = placer.place(t0, t1, h); return { ...p, bandBottom: Math.round(p.y + h) }; };
 motionCtx.sidePad = placer.sidePad;
+motionCtx.W = W;   // lib/motion.mjs: editorial lines fit inside the canvas (mac-47)
 
 // ---------- captions ----------
 const cap = { style: "house", group: 3, highlight: null, ...(spec.captions || {}) };
