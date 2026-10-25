@@ -305,6 +305,7 @@ export function pageToCollage(b, ctx) {
 
 // scenes ---------------------------------------------------------------------
 export function buildScene(b, id, t0, t1, ctx) {
+  if (typeof ctx.warn !== "function") throw new Error("buildScene: ctx.warn(msg, record) is required (a dropped scene part must warn and be recorded)");
   if (b.kind === "paper" && b.engraving) b = pageToCollage(b, ctx);  // R1b port
   const { tl, E, r3, esc, addSfx, brand, userAsset, words } = ctx;
   const sid = `${id}-sc`;
@@ -630,7 +631,7 @@ export function buildScene(b, id, t0, t1, ctx) {
         it.y = colPrev.y + colPrev.h + COL_GAP;
         if (it.y + itemH(it) > COL_BOTTOM) {
           const why = `scene collage at ${b.at}: item ${i} (${it.type ?? "text"}${it.text ? ` "${String(it.text).slice(0, 30)}"` : ""}) has no x/y and would stack past the bottom (y ${it.y} + ${itemH(it)} > ${COL_BOTTOM}): dropped`;
-          ctx.warn?.(why, { kind: "collage item", type: "scene", at: b.at, to: b.to, t: t0, rule: "no-room", why: `A collage item at ${Math.floor(t0 / 60)}:${String(Math.floor(t0 % 60)).padStart(2, "0")} was left out because it would have run off the bottom of the page.`, warning: why });
+          ctx.warn(why, { kind: "collage item", type: "scene", at: b.at, to: b.to, t: t0, rule: "no-room", why: `A collage item at ${Math.floor(t0 / 60)}:${String(Math.floor(t0 % 60)).padStart(2, "0")} was left out because it would have run off the bottom of the page.`, warning: why });
           continue;
         }
       }
