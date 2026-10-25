@@ -1,0 +1,48 @@
+// node --test scripts/lib/style-director.test.mjs
+// The `director` block of every style, resolved through `extends` (references/styles.md, "The director block"):
+// its shape, podcast's keyword cap, and that closer and its variants stay free (no block = no paid director call).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const STYLES = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "styles");
+const isObj = (x) => x && typeof x === "object" && !Array.isArray(x);
+const merge = (a, b) => { const o = { ...a }; for (const [k, v] of Object.entries(b || {})) o[k] = isObj(v) && isObj(o[k]) ? merge(o[k], v) : v; return o; };
+const raw = (id) => JSON.parse(fs.readFileSync(path.join(STYLES, `${id}.json`), "utf8"));
+const resolve = (id, seen = []) => { const s = raw(id); return s.extends && !seen.includes(s.extends) ? merge(resolve(s.extends, [...seen, id]), s) : s; };
+const ids = fs.readdirSync(STYLES).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5));
+// enforced by director.validate(): keywords_per_min, nametags_per_min; the rest are prompt-only (references/styles.md)
+const LIMIT_KEYS = new Set(["keywords_per_min", "nametags_per_min", "scenes_per_min", "icons_per_min", "ui_per_min", "graphics_per_min", "rings_per_reel", "hero_whoosh_min_gap_s"]);
+
+test("every resolved director block: an object, with a well-formed `limits`", () => {
+  let blocks = 0;
+  for (const id of ids) {
+    const d = resolve(id).director;
+    if (d === undefined) continue;
+    blocks++;
+    assert.ok(isObj(d), `${id}: director must be an object`);
+    for (const [k, v] of Object.entries(d)) {
+      if (k === "limits") {
+        assert.ok(isObj(v), `${id}: limits must be an object`);
+        for (const [lk, lv] of Object.entries(v)) {
+          assert.ok(LIMIT_KEYS.has(lk), `${id}: unknown limits key ${lk} (document it in references/styles.md first)`);
+          assert.ok(typeof lv === "number" && lv >= 0, `${id}: limits.${lk} must be a number >= 0`);
+        }
+      }
+    }
+  }
+  assert.ok(blocks >= 10, `expected the adopted director blocks, found ${blocks}`);
+});
+
+test("podcast's keyword cap is 24 per minute (the director's default is 6)", () => {
+  assert.equal(resolve("podcast").director.limits.keywords_per_min, 24);
+});
+
+test("closer and every style extending it have NO director block (a block = a paid director call per reel)", () => {
+  const chain = (id) => { const out = [id]; let s = raw(id); while (s.extends && !out.includes(s.extends)) { out.push(s.extends); s = raw(s.extends); } return out; };
+  const closers = ids.filter((id) => chain(id).includes("closer"));
+  assert.ok(closers.length >= 7, closers.join(","));
+  for (const id of closers) assert.equal(resolve(id).director, undefined, id);
+});

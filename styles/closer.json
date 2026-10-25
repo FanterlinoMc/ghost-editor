@@ -27,9 +27,5 @@
     "sfx": "whoosh",
     "sfxEvery": 3,
     "sfxDb": -6
-  },
-  "director": {
-    "style": "The Closer: keep WHOLE SENTENCES. Never cut inside a sentence and never trim a sentence's first or last word - a half-sentence breaks this look outright. Drop a sentence entirely rather than shortening it. The picture changes about every 2.4 s, alternating two framings and going bigger on the emphasis word.",
-    "restraint": "Nothing is added to the frame. The whole look is the caption box and the punch-ins: no scenes, no pages, no cards, no icons, no B-roll, no stickers, no banner. If nothing is genuinely needed, return empty lists and say so in the summary."
   }
 }
