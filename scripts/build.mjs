@@ -1668,6 +1668,11 @@ const fxAim = (start, dur) => fxHolds.filter((h) => start < h.b - 1e-6 && start 
 const fxIn = (t) => fxHolds.filter((h) => t >= h.a - 1e-6 && t < h.b - 1e-6).sort((p, q) => p.a - q.a).at(-1);
 const fxRest = (h, bright = 1) => h ? `blur(${h.blur}px) brightness(${r3(h.dim * bright)})` : `blur(0px) brightness(${bright})`;
 const fxLeaks = [];   // leak bloom tweens on #fx (tl index + times), re-aimed after the loop if they land inside a popcard hold
+// the ONE definition of "this reel writes the #fx layer for its own sake" (look.fx / look.refocus / duo energyPunch).
+// FX_ON (below) = FX_BASE || popcardFx; the popcard face check and the leak-bloom guard read FX_BASE, so a new reason for
+// #fx is added here once and all three agree (CP3: it used to be spelled three times, two ways)
+const FX_BASE = spec.look?.fx === true || !!spec.look?.refocus || ((spec.captions?.style ?? "house") === "duo" && !!spec.captions?.energyPunch);
+let popcardFx = false;   // mac-74: a popcard with no room beside the face turns the #fx defocus layer on
 for (const b of beatsList) {
   CUR_BEAT = b;
   const id = `b${n++}`;
@@ -2111,7 +2116,31 @@ for (const b of beatsList) {
       // a framed picture flips in over the speaker with the spoken word on an accent label; the camera behind
       // softly defocuses and dims so the card is the one sharp thing in frame
       const img = b.ui ? null : b.art ? artAsset(b.art) : userAsset(b.src);
-      const w = b.w ?? spec.popcard?.w ?? 620, h = b.h ?? spec.popcard?.h ?? 560, y = b.y ?? spec.popcard?.y ?? 300;
+      const w = b.w ?? spec.popcard?.w ?? 620, h = b.h ?? spec.popcard?.h ?? 560;
+      let y = b.y ?? spec.popcard?.y ?? 300;
+      // mac-74, the face check: over a SHARP camera a card on the face is a broken frame. The card is meant to sit over
+      // the speaker only when the camera behind it defocuses (#fx written: look.fx / look.refocus / duo energyPunch, the
+      // FX_ON rule below) or a full-frame stage hides the footage. Otherwise, with no y given, the card box (its max
+      // height, + 110 px with a label) may not meet the face grown by 40 px over the beat's window: it moves below the
+      // chin, else above the head; with no room either side the camera is DEFOCUSED for it (#fx is written, so the card
+      // is the one sharp thing in frame, as designed), and only a beat that sets defocus: false is left out instead.
+      if (b.y === undefined && spec.popcard?.y === undefined && !(b.stage ?? spec.popcard?.stage) && !(FX_BASE && b.defocus !== false)) {
+        const sp = placer.span(t0, t1), H_ = h + (b.label ? 110 : 0), M = 40;
+        if (sp.seen && y < sp.bottom + M && y + H_ > sp.top - M) {
+          const below = Math.round(sp.bottom + M), above = Math.round(sp.top - M - H_);
+          if (below + H_ <= placer.safeBottom) y = below;
+          else if (above >= placer.safeTop) y = above;
+          else if (b.defocus !== false && spec.look?.fx !== false) {   // an explicit look.fx: false (owner, 19 Oct) keeps the camera sharp
+            popcardFx = true;
+            warn.push(`popcard at ${b.at}: no room beside the face, so the camera is defocused behind the card (the #fx layer is written)`);
+          } else {
+            const msg = `popcard at ${b.at}: the card would cover a sharp face (${b.defocus === false ? "defocus: false" : "look.fx: false"}) and there is no room above or below it: skipped`;
+            warn.push(msg);
+            recordDrop({ kind: "card", id: b.id, type: "popcard", at: b.at, to: b.to, t: t0, rule: "face", why: `The pop card at ${clock(t0)} was left out because it would have covered the speaker's face.`, warning: msg });
+            continue;
+          }
+        }
+      }
       // opt-in (popcard.object / objectFilter / glow / stage / outFade / dim, hand port of Ahmed's build.mjs): object mode shows a cut-out PNG with no photo frame, stage is a page behind the card, outFade lets the card leave before the focus returns
       const obj = b.object ?? spec.popcard?.object;
       const objFx = obj ? `;border:none;border-radius:0;box-shadow:none;filter:${spec.popcard?.objectFilter ?? "grayscale(1) brightness(1.15)"} drop-shadow(0 0 28px ${spec.popcard?.glow ?? brand.accent}) drop-shadow(0 18px 40px rgba(0,0,0,.6))` : "";
@@ -2433,7 +2462,11 @@ for (const l of LAYERS) beatSpans.push({ t0: l.t0, t1: l.t1 });
 // a leak bloom inside a popcard hold blooms the defocused camera and settles back on the defocus, not on sharp (fxAim); a leak
 // outside every hold keeps its exact tweens, so a reel without that overlap builds byte-identically. L.i is the bloom's index in
 // tl, pushed in the leak case above (the return is L.i + 1); nothing between there and here removes or reorders tl lines.
+// mac-74 (CP3): when #fx exists ONLY because a popcard had no room beside the face, it is that popcard's defocus
+// layer and nothing else: the leak bloom tweens stay as inert as they were before (no #fx), not newly visible
 for (const L of fxLeaks) {
+  if (popcardFx && !FX_BASE) {   // (popcardFx implies !FX_BASE today: a popcard only forces #fx when the camera would not defocus; kept explicit)
+    tl[L.i] = ""; tl[L.i + 1] = ""; continue; }
   const back = r3(Math.max(L.t0 + 0.12, L.t1 - 0.25)), hb = fxAim(L.t0, 0.1), hr = fxAim(back, 0.25);
   if (hb) tl[L.i] = `tl.to("#fx", { filter: "${fxRest(hb, L.bloom)}", duration: 0.1, ease: "power2.out" }, ${L.t0});`;
   if (hr) tl[L.i + 1] = `tl.to("#fx", { filter: "${fxRest(hr)}", duration: 0.25, ease: "power2.in" }, ${back});`;
@@ -3840,7 +3873,7 @@ const look = spec.look || {};
 // when one of them is on. (The popcard defocus and the leak bloom also tween "#fx"; on a reel that has none of these keys they find no
 // element and do nothing - as before.) look.fx === true (opt-in style key, set only in styles whose approved sample shows the popcard
 // defocus / leak bloom) turns the layer on by itself, so those two tweens land.
-const FX_ON = look.fx === true || !!look.refocus || (cap.style === "duo" && !!cap.energyPunch);
+const FX_ON = FX_BASE || popcardFx;
 if (look.exposure && look.exposure !== 1) tl.push(`tl.set("#pip", { filter: "brightness(${look.exposure}) contrast(${look.contrast ?? 1.04})" }, 0);`);
 const grainHtml = look.grain ? `<div id="grain" class="look-grain${OV}" style="opacity:${look.grain}"></div>` : "";
 // spec.letterbox { h }: black cinema bars top + bottom (h px each, 9:16 pixels scaled to the format), above the picture and
