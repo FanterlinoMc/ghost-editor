@@ -669,10 +669,15 @@ const voiceP95 = (() => {
 const volFor = (role, extraDb = 0) => r3(Math.min(1, Math.pow(10, (voiceP95 + ROLE_DB[role] + extraDb + 1) / 20)));
 const VARIANTS = { pop: ["pop-1", "pop-2", "pop-3"], whoosh: ["whoosh-1", "whoosh-2", "whoosh-3"], impact: ["impact-1", "impact-2"] };
 const rr = {};
+// mac-78: a bare id (whoosh / pop / impact) rotates through the variants that can PLAY (a measured manifest entry whose
+// file is on disk), so partial sound coverage is quieter, never broken: with whoosh-1 and -2 but no -3, every third
+// bare whoosh used to be silent. When none of the variants can play, it rotates through all of them exactly as before
+// (so the missing-sound report, and every build on a machine without the library, are unchanged).
 const pick = (id) => {
   if (!VARIANTS[id]) return id;
-  rr[id] = ((rr[id] ?? -1) + 1) % VARIANTS[id].length;
-  return VARIANTS[id][rr[id]];
+  const live = VARIANTS[id].filter((v) => sfxOk_(v)), pool = live.length ? live : VARIANTS[id];
+  rr[id] = ((rr[id] ?? -1) + 1) % pool.length;
+  return pool[rr[id]];
 };
 const sfxEvents = []; // {t, id, role, vol, src, why}
 // sfxProfile: restrained keeps only structural hits (scene changes, hero words,
