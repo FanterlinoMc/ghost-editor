@@ -1819,6 +1819,9 @@ for (const b of beatsList) {
         tl.push(`ft("#${id}-scrim", { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3 }, ${t0});`);
         tl.push(`ft("#${id}-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.4, ease: "power2.out" }, ${r3(t0 + 0.05)});`);
         if (spec.sound?.nametag !== false) beatSfx(b, t0, "whoosh", "nametag (byline)", { db: -10 });
+        { // mac-75: captions step around the byline (rule + "BY NAME" + the italic lines), as they do around a card
+          const bh = 7 + 14 + 50 + 6 + Math.round(66 * 1.02) * ((b.title ? 1 : 0) + (b.subtitle ? 1 : 0));
+          placer.occupy(t0, t1, y, y + bh); uiRects.push({ t0, t1, y0: y, y1: y + bh }); }
         break;
       }
       // Measured against Alif's tags at the same scale: an extra-bold grotesque name with the letters touching,
@@ -1836,6 +1839,10 @@ for (const b of beatsList) {
       // the box fills from the left once the words are up, like ink being laid down (Alif)
       if (b.wipe !== false) tl.push(`ft("#${id}-bg", { scaleX: 0 }, { scaleX: 1, duration: ${b.wipeDur ?? 0.42}, ease: "power2.out" }, ${r3(t0 + 0.08)});`);
       if (spec.sound?.nametag !== false) beatSfx(b, t0, "whoosh", "nametag", { db: -10 });
+      { // mac-75: captions step around the tag (the name line + the boxed title lines), as they do around a card
+        const nl = [b.title, b.subtitle].filter(Boolean).length;
+        const th = nameSize + 2 + (nl ? Math.round(titleSize * 0.88 * nl) + 20 : 0);
+        placer.occupy(t0, t1, y, y + th); uiRects.push({ t0, t1, y0: y, y1: y + th }); }
       break;
     }
     case "icon": {
