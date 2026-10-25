@@ -82,6 +82,7 @@ A style's `director` object is what the planner's director call is told about th
 | `limits.icons_per_min` | number >= 0 | `director.validate()` | ENFORCED (planner ea4488f): icons kept; default **10**; `0` means 0 (alif, editorial-collage) |
 | `limits.ui_per_min` | number >= 0 | `director.validate()` | ENFORCED (planner ea4488f): `ui` scenes only, not scenes as a whole; default **99**; `0` means 0 |
 | `limits.scenes_per_min` | number >= 0 | nobody, deliberately | GUIDANCE, not enforced: a prompt hint about density (28 styles set it; keynote's 2/min is one scene on a 30 s reel). Nothing checks it |
+| `limits.graphics_per_min` | number >= 0 | nobody | **NOT ENFORCED**: the director's own `GRAPHIC_MAX = 3` per reel (director.py) binds instead, whatever this says. `library/headline-hype` sets 16 |
 | `limits.rings_per_reel`, `limits.hero_whoosh_min_gap_s` | number >= 0 | nobody | **NOT ENFORCED, and nothing to enforce**: the director can emit neither a ring nor a hero whoosh, so these limit nothing. Read them as notes about the style, never as a guarantee |
 
 **A `director` block costs money.** `preflight()` skips the director call only when the resolved block is empty, so adding
