@@ -77,9 +77,12 @@ A style's `director` object is what the planner's director call is told about th
 |---|---|---|---|
 | `plan`, `prep` | string | nobody on the model path (`PIPELINE_KEYS` withholds them) | notes to the pipeline, never sent to the model |
 | `limits` | object | `director.validate()` | caps on what the director may place, per minute of kept footage |
-| `limits.keywords_per_min` | number >= 0 | `director.py:1785` (`int(v * minutes) or 1`) | ENFORCED: keyword treatments kept; default **6**. podcast sets **24** so its own key budget (one per 7 spoken words) binds instead. **`0` still allows 1** (`or 1`): editorial-collage and alif set 0 and get one |
-| `limits.nametags_per_min` | number >= 0 | `director.py:1883` | ENFORCED: name tags kept; default **3** (same `or 1` floor) |
-| `limits.scenes_per_min`, `icons_per_min`, `ui_per_min`, `graphics_per_min`, `rings_per_reel`, `hero_whoosh_min_gap_s` | number >= 0 | nobody (no code reads them, planner @5bd75fd or engine) | ADVISORY only: they reach the model as prompt text inside `limits`, nothing checks them. 28 styles set `scenes_per_min` |
+| `limits.keywords_per_min` | number >= 0 | `director.validate()` (`_per_min_cap`) | ENFORCED: keyword treatments kept; default **6**. podcast sets **24** so its own key budget (one per 7 spoken words) binds. **`0` means 0** (planner ea4488f; before, `int(v*min) or 1` gave editorial-collage and alif one keyword they had refused) |
+| `limits.nametags_per_min` | number >= 0 | `director.validate()` | ENFORCED: name tags kept; default **3**; `0` means 0 |
+| `limits.icons_per_min` | number >= 0 | `director.validate()` | ENFORCED (planner ea4488f): icons kept; default **10**; `0` means 0 (alif, editorial-collage) |
+| `limits.ui_per_min` | number >= 0 | `director.validate()` | ENFORCED (planner ea4488f): `ui` scenes only, not scenes as a whole; default **99**; `0` means 0 |
+| `limits.scenes_per_min` | number >= 0 | nobody, deliberately | GUIDANCE, not enforced: a prompt hint about density (28 styles set it; keynote's 2/min is one scene on a 30 s reel). Nothing checks it |
+| `limits.rings_per_reel`, `limits.hero_whoosh_min_gap_s` | number >= 0 | nobody | **NOT ENFORCED, and nothing to enforce**: the director can emit neither a ring nor a hero whoosh, so these limit nothing. Read them as notes about the style, never as a guarantee |
 
 **A `director` block costs money.** `preflight()` skips the director call only when the resolved block is empty, so adding
 ANY key (even `style` alone) to a style that has none turns it from free into one paid Opus call per reel, for that style
