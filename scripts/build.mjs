@@ -25,6 +25,7 @@ import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { MOTION_CSS, buildScene, buildEditorialCaptions, buildMusic, uiCard, isLightColor, fitWipe } from "./lib/motion.mjs";
+import { checkShape } from "./lib/beat-shapes.mjs";
 import { makePlacer, PLATFORMS, FORMATS } from "./lib/safezone.mjs";
 import { clippingExtent } from "./lib/caption-metrics.mjs";
 import { wordOwners } from "./lib/words.mjs";
@@ -1672,6 +1673,11 @@ for (const b of beatsList) {
   CUR_BEAT = b;
   const id = `b${n++}`;
   const t0 = EB(b, "at", `${b.type} at`);
+  // shapes a model can plausibly write wrong (lib/beat-shapes.mjs): never draw "undefined", never a native-code crash
+  { const sh = checkShape(b);
+    if (sh.fatal) die(sh.fatal);
+    if (sh.skip) { warn.push(sh.skip); recordDrop({ kind: "beat", id: b.id, type: b.type, at: b.at, to: b.to, t: t0, rule: "shape", why: `The ${b.type} at ${clock(t0)} was left out because its fields have the wrong shape.`, warning: sh.skip }); continue; }
+    for (const w of sh.warnings || []) warn.push(w); }
   let t1 = b.to === undefined ? (b.type === "endcard" ? TOTAL : t0 + (b.type === "meme" ? 1.8 : 2.5)) : EB(b, "to", `${b.type} to`);
   if (b.type === "scene" && beatsList.some((o) => o !== b && o.type === "scene" && ["expand", "wipe"].includes(o.in) && Math.abs(EB(o, "at") - t1) < 0.06)) t1 = r3(Math.min(TOTAL, t1 + HANDOVER));
   if (b.type === "graphic") t1 = b._graphic.t1;   // its resolved end: the default window, or shortened by after "cut"
