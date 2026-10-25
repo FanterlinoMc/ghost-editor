@@ -168,6 +168,14 @@ the build warns on a double booking).
 
 `icon` (the `logo` beat) slugs come from simpleicons.org (CC0), the `icon` **beat type** above from lucide-static (ISC). Both sets are vendored (`vendor/simple-icons/16.35.0`, `vendor/lucide-static/1.61.0`, one sha256-checked `icons.json` each): a build never fetches an icon. A slug the vendored version does not have is the same error as before (`logo`, `icon`) or the same `no logo for <slug>` warning (`toolLogos`). simple-icons 16.0.0 removed 44 brands, among them `openai` and `slack` (two of the `toolLogos` brands): the CDN's `@latest` still served them from 15.22.0, the vendored set does not have them, so a reel that names ChatGPT or Slack now warns `no logo for openai` / `slack`. Re-adding them is the owner's call (a logo its owner had removed); `src` with your own image works today.
 
+### The show logo (`showLogo`, top level)
+
+`{small, big, x?: 70, y?: 150, opacity?: 0.92}` pins a small line over a big one. `"showLogo": "fromShow"`
+(podcast.json sets it; mac-67) derives it from the reel's `show` exactly as podcast_plan.py does: the part before
+` · ` / ` | ` / ` • `, all words but the last upper-cased as `small`, the last as `big` ("AK Consulting" -> AK /
+CONSULTING). A placeholder (TBD, name, guest, ...), a length outside 2-32 or no `show` gives no logo. An explicit
+object in the reel wins. Brand data: never a model field.
+
 ## Style, platform, look (top level)
 
 - `style`: a preset from `styles/` (see `references/styles.md`); reel.json overrides it.
