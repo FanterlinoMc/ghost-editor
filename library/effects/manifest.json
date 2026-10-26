@@ -1,0 +1,66 @@
+{
+  "v": 1,
+  "note": "Ready-to-add effects. Each entry is a BEAT (or layer) in the engine's own grammar with its variable parts named in `params`. `scripts/add-effect.mjs` stamps one into a reel.json; nothing here is new engine code - every effect is an existing primitive, so a reel using them renders on any engine that has that primitive. Replicated from the owner's reference edit (25 Oct): a podcast breakdown whose effects map one-to-one onto kinds the engine already builds.",
+  "effects": {
+    "word-tiles": {
+      "what": "A text page on grid paper: a small kicker, a big headline, a serif line under it. The reference's stacked word tiles.",
+      "params": ["at", "to", "kicker", "headline", "serif"],
+      "note": "Hand-written collage items need explicit x/y - the auto-stack only runs on the paper->collage path, so items with no position all land at 120,600 on top of each other.",
+      "beat": { "type": "scene", "kind": "collage", "paper": "grid", "at": 0, "to": 0,
+        "items": [
+          { "type": "text", "style": "kicker", "text": "KICKER", "x": 110, "y": 430 },
+          { "type": "text", "style": "headline", "text": "Headline", "x": 110, "y": 520 },
+          { "type": "text", "style": "serif", "text": "a serif line", "x": 110, "y": 700, "rotate": -2 }
+        ] }
+    },
+    "keyword-takeover": {
+      "what": "One huge serif word over dimmed, blurred footage. The reference's big coloured keyword.",
+      "params": ["at", "to", "text"],
+      "note": "`size` auto-fits the width, so a long word shrinks rather than running off frame. 2-3 words reads best.",
+      "beat": { "type": "slam", "text": "WORD", "at": 0, "to": 0 }
+    },
+    "ring-badge": {
+      "what": "A glass ring badge with a number, which shrinks into a row with its label typed beside it. The reference's percentage ring.",
+      "params": ["at", "to", "value", "sub", "label", "labelAt"],
+      "note": "`label` takes **bold part** markup. `labelAt` is when the badge shrinks and the label types in.",
+      "beat": { "type": "scene", "kind": "stats", "bg": "accent", "at": 0, "to": 0,
+        "badges": [ { "value": "10", "sub": "percent", "at": 0, "label": "of the **audience**", "labelAt": 0 } ] }
+    },
+    "box-words": {
+      "what": "Lines inking in word by word, one of them growing an accent box under the words as they land. The reference's highlighted box words.",
+      "params": ["at", "to", "lines"],
+      "note": "Every line's words must be SPOKEN while the page is up or the build warns that it will lag the voice.",
+      "beat": { "type": "scene", "kind": "highlight", "at": 0, "to": 0,
+        "lines": [ { "text": "a spoken line", "at": 0 }, { "text": "the point", "at": 0, "box": true } ] }
+    },
+    "card-word": {
+      "what": "A word on a navy card in condensed serif caps. The reference's word on black.",
+      "params": ["at", "to", "lines"],
+      "note": "This kind takes `lines`, NOT `text`. A `text` field builds an empty card with no warning.",
+      "beat": { "type": "scene", "kind": "title", "at": 0, "to": 0,
+        "lines": [ { "text": "WORD", "at": 0 } ] }
+    },
+    "text-behind": {
+      "what": "Two to four big words BEHIND the speaker, their head and shoulders cutting the letters.",
+      "params": ["at", "to", "text"],
+      "needs": "reel.matte: true. Add matteWindows and matteClip and the cut-out is computed only around each behind window (seconds, not the whole clip).",
+      "beat": { "type": "behind", "text": "TWO WORDS", "at": 0, "to": 0 }
+    },
+    "chrome-overlay": {
+      "what": "A Chrome Motion graphic over live footage instead of replacing the speaker; several can be on screen at once (mac-79).",
+      "params": ["at", "dur", "box", "gm"],
+      "note": "A LAYER, not a beat: goes in reel.layers[]. Times are finished-video seconds. All five gm kinds work.",
+      "layer": { "id": "gfx", "kind": "gm", "pin": true, "at": 0, "dur": 0, "z": 5, "enter": "pop", "exit": "fade", "by": "user",
+        "box": { "x": 60, "y": 200, "w": 440, "h": 640 },
+        "gm": { "kind": "gm-counter", "icon": "dollar", "value": 100, "label": "a label" } }
+    },
+    "window-grid": {
+      "what": "A 2x2 grid of video windows landing one after another over the footage.",
+      "params": ["at", "dur", "srcs", "in"],
+      "note": "Four video LAYERS with staggered `at`. Each needs a box; `audio: off` keeps the voice clean.",
+      "layer": { "id": "w1", "kind": "video", "src": "assets/w1.mp4", "pin": true, "at": 0, "dur": 0, "in": 0,
+        "box": { "x": 60, "y": 470, "w": 470, "h": 420 },
+        "fit": "cover", "radius": 22, "shadow": true, "z": 2, "audio": "off", "enter": "pop", "exit": "fade", "by": "user" }
+    }
+  }
+}
