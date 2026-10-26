@@ -281,7 +281,11 @@ export function renderLayer(l, ctx, n = 0) {
       if (!g) return { html: "", lines: [], audio: "", warnings: [...warnings, `layer ${l.id} dropped: gm.kind ${JSON.stringify(l.gm?.kind)} is not a Chrome Motion graphic`], dropped: true };
       const s = Math.min(b.w / W, b.h / H);
       const ox = r3((b.w - W * s) / 2), oy = r3((b.h - H * s) / 2);
-      content = `<div id="${wid}_gm" class="lyr-gm${g.cls ? " " + g.cls : ""}" style="position:absolute;left:${ox}px;top:${oy}px;width:${W}px;height:${H}px;transform:scale(${r3(s)});transform-origin:0 0;${g.bg ? `background:${g.bg};` : ""}overflow:hidden">${g.body}</div>`;
+      // The gm kinds paint a full-bleed background because a SCENE owns the frame. In a box that
+      // background becomes a hard rectangle sitting on the footage, which is the opposite of an overlay:
+      // the graphic should float. So a layer drops it unless it asks for it back with `plate: true`.
+      const plate = l.plate === true && g.bg ? `background:${g.bg};` : "";
+      content = `<div id="${wid}_gm" class="lyr-gm${g.cls ? " " + g.cls : ""}" style="position:absolute;left:${ox}px;top:${oy}px;width:${W}px;height:${H}px;transform:scale(${r3(s)});transform-origin:0 0;${plate}overflow:hidden">${g.body}</div>`;
     } else if (l.kind === "text") {
       const size = Math.round(clamp(fin(l.size) ? l.size : 64, 8, 400)), color = resolveColor(l.color ?? "#ffffff", brand) ?? "#ffffff";
       const bg = l.bg ? resolveColor(l.bg, brand) : null;
