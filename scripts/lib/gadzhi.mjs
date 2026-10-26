@@ -28,6 +28,10 @@ const objAspect = (o) => { try { const f = o.includes("/") ? o : path.join(OBJ_D
 const OBJ_DIR = process.env.PHANTASIC_GM_OBJECTS || path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "library", "gm-objects");
 // colour themes: one preset per accent (gadzhi-purple, -blue, -yellow, -red, -green). ink = big serif type on paper,
 // glow = halo behind objects, deep = dark ground for flow/counter/nodes, pill = label pill, light = serif on dark
+// The five Chrome Motion graphic kinds, in one place so the scene path (motion.mjs) and the layer path
+// (layers.mjs, mac-79) agree on what gmScene() will answer to. gmScene returns null for anything else.
+export const GM_KINDS = ["gm-object", "gm-kinetic", "gm-flow", "gm-counter", "gm-nodes"];
+
 export const GM_THEMES = {
   purple: { ink: "#4B1F7A", light: "#C4AEF0", glow: "170,135,255", deep: ["#1B0B2C", "#3A1460"], pill: "#7B3FE4" },
   blue:   { ink: "#123E9C", light: "#A9C4FF", glow: "90,150,255",  deep: ["#07132B", "#123A7A"], pill: "#2F6BFF" },

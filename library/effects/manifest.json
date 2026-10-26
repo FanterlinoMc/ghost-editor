@@ -1,0 +1,672 @@
+{
+  "v": 1,
+  "note": "Ready-to-add effects. Each entry is a BEAT (or layer) in the engine's own grammar with its variable parts named in `params`. `scripts/add-effect.mjs` stamps one into a reel.json; nothing here is new engine code - every effect is an existing primitive, so a reel using them renders on any engine that has that primitive. Replicated from the owner's reference edit (25 Oct): a podcast breakdown whose effects map one-to-one onto kinds the engine already builds. Each effect carries `frame`: \"overlay\" sits over the footage with the speaker visible, \"full\" replaces him for its window, \"full-dimmed\" keeps him behind a dim. An edit built only from `full` effects keeps cutting away from the speaker, which is the single thing that stops it reading like a composited reference edit. Three things recorded as impossible on 25 Oct are now built: a progress arc (progress-arc), letterpress type (letterpress), and an outline on the cut-out (cutout-outline) - the last needed no engine change at all, because `matteFilter` already exposed it and the limitation was recorded wrongly. The last three gaps closed on 26 Oct with the owner's own files: his product shots, a YouTube screenshot, and - his idea, better than mine - a split made from two moments of the SAME clip rather than a second one.",
+  "effects": {
+    "word-tiles": {
+      "what": "A text page on grid paper: a small kicker, a big headline, a serif line under it. The reference's stacked word tiles.",
+      "params": [
+        "at",
+        "to",
+        "kicker",
+        "headline",
+        "serif"
+      ],
+      "note": "Hand-written collage items need explicit x/y - the auto-stack only runs on the paper->collage path, so items with no position all land at 120,600 on top of each other.",
+      "beat": {
+        "type": "scene",
+        "kind": "collage",
+        "paper": "grid",
+        "at": 0,
+        "to": 0,
+        "items": [
+          {
+            "type": "text",
+            "style": "kicker",
+            "text": "KICKER",
+            "x": 110,
+            "y": 430
+          },
+          {
+            "type": "text",
+            "style": "headline",
+            "text": "Headline",
+            "x": 110,
+            "y": 520
+          },
+          {
+            "type": "text",
+            "style": "serif",
+            "text": "a serif line",
+            "x": 110,
+            "y": 700,
+            "rotate": -2
+          }
+        ]
+      },
+      "needs": "nothing: type only",
+      "frame": "full"
+    },
+    "keyword-takeover": {
+      "what": "One huge serif word over dimmed, blurred footage. The reference's big coloured keyword.",
+      "params": [
+        "at",
+        "to",
+        "text"
+      ],
+      "note": "`size` auto-fits the width, so a long word shrinks rather than running off frame. 2-3 words reads best.",
+      "beat": {
+        "type": "slam",
+        "text": "WORD",
+        "at": 0,
+        "to": 0
+      },
+      "needs": "nothing: one spoken word",
+      "frame": "full-dimmed"
+    },
+    "ring-badge": {
+      "what": "A glass ring badge with a number, which shrinks into a row with its label typed beside it. The reference's percentage ring.",
+      "params": [
+        "at",
+        "to",
+        "value",
+        "sub",
+        "label",
+        "labelAt"
+      ],
+      "note": "`label` takes **bold part** markup. `labelAt` is when the badge shrinks and the label types in.",
+      "beat": {
+        "type": "scene",
+        "kind": "stats",
+        "bg": "accent",
+        "at": 0,
+        "to": 0,
+        "badges": [
+          {
+            "value": "10",
+            "sub": "percent",
+            "at": 0,
+            "label": "of the **audience**",
+            "labelAt": 0
+          }
+        ]
+      },
+      "needs": "nothing: a number and a label",
+      "frame": "full"
+    },
+    "box-words": {
+      "what": "Lines inking in word by word, one of them growing an accent box under the words as they land. The reference's highlighted box words.",
+      "params": [
+        "at",
+        "to",
+        "lines"
+      ],
+      "note": "Every line's words must be SPOKEN while the page is up or the build warns that it will lag the voice.",
+      "beat": {
+        "type": "scene",
+        "kind": "highlight",
+        "at": 0,
+        "to": 0,
+        "lines": [
+          {
+            "text": "a spoken line",
+            "at": 0
+          },
+          {
+            "text": "the point",
+            "at": 0,
+            "box": true
+          }
+        ]
+      },
+      "needs": "nothing, but every line must be words SPOKEN while it is up",
+      "frame": "full"
+    },
+    "card-word": {
+      "what": "A word on a navy card in condensed serif caps. The reference's word on black.",
+      "params": [
+        "at",
+        "to",
+        "lines"
+      ],
+      "note": "This kind takes `lines`, NOT `text`. A `text` field builds an empty card with no warning.",
+      "beat": {
+        "type": "scene",
+        "kind": "title",
+        "at": 0,
+        "to": 0,
+        "lines": [
+          {
+            "text": "WORD",
+            "at": 0
+          }
+        ]
+      },
+      "needs": "nothing: one or two words",
+      "frame": "full"
+    },
+    "text-behind": {
+      "what": "Two to four big words BEHIND the speaker, their head and shoulders cutting the letters.",
+      "params": [
+        "at",
+        "to",
+        "text"
+      ],
+      "needs": "reel.matte - the speaker is cut out. ~26 min per 10 s of footage on this CPU, so matteWindows + matteClip keep it to the seconds that need it",
+      "beat": {
+        "type": "behind",
+        "text": "TWO WORDS",
+        "at": 0,
+        "to": 0
+      },
+      "frame": "overlay"
+    },
+    "chrome-overlay": {
+      "what": "A Chrome Motion graphic over live footage instead of replacing the speaker; several can be on screen at once (mac-79).",
+      "params": [
+        "at",
+        "dur",
+        "box",
+        "gm"
+      ],
+      "note": "A LAYER, not a beat: goes in reel.layers[]. Times are finished-video seconds. All five gm kinds work.",
+      "layer": {
+        "id": "gfx",
+        "kind": "gm",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "z": 5,
+        "enter": "pop",
+        "exit": "fade",
+        "by": "user",
+        "box": {
+          "x": 60,
+          "y": 200,
+          "w": 440,
+          "h": 640
+        },
+        "gm": {
+          "kind": "gm-counter",
+          "icon": "dollar",
+          "value": 100,
+          "label": "a label"
+        }
+      },
+      "needs": "nothing",
+      "frame": "overlay"
+    },
+    "window-grid": {
+      "what": "A 2x2 grid of video windows landing one after another over the footage.",
+      "params": [
+        "at",
+        "dur",
+        "srcs",
+        "in"
+      ],
+      "note": "Four video LAYERS with staggered `at`. Each needs a box; `audio: off` keeps the voice clean.",
+      "layer": {
+        "id": "w1",
+        "kind": "video",
+        "src": "assets/w1.mp4",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "in": 0,
+        "box": {
+          "x": 60,
+          "y": 470,
+          "w": 470,
+          "h": 420
+        },
+        "fit": "cover",
+        "radius": 22,
+        "shadow": true,
+        "z": 2,
+        "audio": "off",
+        "enter": "pop",
+        "exit": "fade",
+        "by": "user"
+      },
+      "needs": "YOUR OWN CLIPS - one video file per window, in assets/",
+      "cannot": "the engine supplies none: four windows need four files.",
+      "frame": "overlay"
+    },
+    "grey-room": {
+      "what": "The reference's signature frame: the room drops to greyscale with a grid over it and the speaker stays in COLOUR on top, with type beside him.",
+      "params": [
+        "at",
+        "to",
+        "text",
+        "textColor",
+        "textSize",
+        "textY",
+        "lead",
+        "leadColor",
+        "leadSize",
+        "leadY",
+        "gridColor",
+        "gridSize"
+      ],
+      "needs": "reel.matte - the speaker is cut out, same cost note as text-behind",
+      "note": "`backdrop` is a CSS filter on the room only; the cut-out speaker is drawn over it unfiltered, which is what keeps him in colour.",
+      "beat": {
+        "type": "ground",
+        "at": 0,
+        "to": 0,
+        "backdrop": "grayscale(1) contrast(1.12)",
+        "paper": "grid",
+        "gridColor": "rgba(0,0,0,.10)",
+        "gridSize": 96,
+        "text": "100",
+        "textColor": "#C8102E",
+        "textSize": 260,
+        "textY": 300,
+        "lead": "a lead line",
+        "leadColor": "#111111",
+        "leadSize": 64,
+        "leadY": 600
+      },
+      "frame": "overlay"
+    },
+    "bw-sentence": {
+      "what": "One sentence drops to black and white, hard cut in and out, like a grade change between shots. The reference's desaturated lines.",
+      "params": [
+        "at",
+        "to"
+      ],
+      "needs": "nothing",
+      "note": "Filters the whole picture for the window; there is no per-region version.",
+      "beat": {
+        "type": "mood",
+        "at": 0,
+        "to": 0
+      },
+      "frame": "overlay"
+    },
+    "caption-plate": {
+      "what": "A tinted plate over the footage: a rule draws under it and two lines slide up word by word. The speaker stays on screen - this is the shape that makes an edit read like the reference.",
+      "params": [
+        "at",
+        "dur",
+        "lines",
+        "box"
+      ],
+      "frame": "overlay",
+      "needs": "nothing",
+      "note": "hideCaptions is on: the plate IS the line, and a caption under it prints the words twice. Move it with --set elements.N.y; the default sits in the lower third.",
+      "layer": {
+        "id": "plate",
+        "kind": "motion",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "z": 4,
+        "enter": "slide-up",
+        "exit": "fade",
+        "hideCaptions": true,
+        "by": "user",
+        "elements": [
+          {
+            "id": "plate",
+            "shape": "rect",
+            "x": 70,
+            "y": 1400,
+            "w": 900,
+            "h": 300,
+            "fill": "ink",
+            "fill2": "accent",
+            "gradientAngle": 120,
+            "radius": 28,
+            "opacity": 0.92,
+            "z": 1
+          },
+          {
+            "id": "rule",
+            "shape": "line",
+            "x": 104,
+            "y": 1668,
+            "x2": 936,
+            "y2": 1668,
+            "stroke": "accent",
+            "strokeWidth": 7,
+            "cap": "round",
+            "z": 3
+          },
+          {
+            "id": "l0",
+            "shape": "text",
+            "x": 110,
+            "y": 1428,
+            "w": 820,
+            "h": 110,
+            "text": "First line",
+            "font": "Montserrat",
+            "size": 66,
+            "weight": 800,
+            "upper": true,
+            "align": "left",
+            "color": "#ffffff",
+            "shadow": "strong",
+            "split": "words",
+            "z": 4
+          },
+          {
+            "id": "l1",
+            "shape": "text",
+            "x": 110,
+            "y": 1540,
+            "w": 820,
+            "h": 110,
+            "text": "Second line",
+            "font": "Montserrat",
+            "size": 66,
+            "weight": 800,
+            "upper": true,
+            "align": "left",
+            "color": "accent",
+            "shadow": "strong",
+            "split": "words",
+            "z": 4
+          }
+        ],
+        "tweens": [
+          {
+            "target": "plate",
+            "at": 0,
+            "dur": 0.42,
+            "ease": "power3.out",
+            "from": {
+              "reveal": 0
+            },
+            "to": {
+              "reveal": 1
+            },
+            "revealFrom": "left"
+          },
+          {
+            "target": "rule",
+            "at": 0.3,
+            "dur": 0.5,
+            "ease": "power2.inOut",
+            "from": {
+              "draw": 0
+            },
+            "to": {
+              "draw": 1
+            }
+          },
+          {
+            "target": "l0",
+            "at": 0.18,
+            "dur": 0.42,
+            "stagger": 0.07,
+            "ease": "back.out",
+            "from": {
+              "y": 48,
+              "opacity": 0,
+              "blur": 10
+            },
+            "to": {
+              "y": 0,
+              "opacity": 1,
+              "blur": 0
+            }
+          },
+          {
+            "target": "l1",
+            "at": 0.3,
+            "dur": 0.42,
+            "stagger": 0.07,
+            "ease": "back.out",
+            "from": {
+              "y": 48,
+              "opacity": 0,
+              "blur": 10
+            },
+            "to": {
+              "y": 0,
+              "opacity": 1,
+              "blur": 0
+            }
+          }
+        ]
+      }
+    },
+    "progress-arc": {
+      "what": "A percentage badge with a progress ring that sweeps to its share as the badge lands. The reference's red 32% arc.",
+      "params": [
+        "at",
+        "to",
+        "value",
+        "sub",
+        "arc",
+        "arcColor",
+        "arcWidth",
+        "label",
+        "labelAt"
+      ],
+      "frame": "full",
+      "needs": "nothing: a number and a percentage",
+      "note": "`arc` is 0..100 and is the share the ring sweeps to; the value text is yours to write (\"32%\"). Without `arc` the badge is the plain glass disc it always was.",
+      "beat": {
+        "type": "scene",
+        "kind": "stats",
+        "bg": "accent",
+        "at": 0,
+        "to": 0,
+        "badges": [
+          {
+            "value": "32%",
+            "sub": "of them",
+            "at": 0,
+            "arc": 32,
+            "arcColor": "#C8102E",
+            "arcWidth": 16
+          }
+        ]
+      }
+    },
+    "letterpress": {
+      "what": "Serif caps pressed into a paper plate over the footage - the reference's engraved AUDIENCE line.",
+      "params": [
+        "at",
+        "dur",
+        "text",
+        "size",
+        "color"
+      ],
+      "frame": "overlay",
+      "needs": "nothing",
+      "cannot": "the effect is light and shade, so it only reads on a light or mid plate: on near-black it disappears.",
+      "note": "shadow `engrave` presses the word in, `emboss` lifts it out. Both are motion-text shadows, so any text element can use them.",
+      "layer": {
+        "id": "press",
+        "kind": "motion",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "z": 4,
+        "enter": "fade",
+        "exit": "fade",
+        "hideCaptions": true,
+        "by": "user",
+        "elements": [
+          {
+            "id": "bg",
+            "shape": "rect",
+            "x": 0,
+            "y": 1180,
+            "w": 1080,
+            "h": 300,
+            "fill": "paper",
+            "opacity": 0.96,
+            "z": 1
+          },
+          {
+            "id": "t",
+            "shape": "text",
+            "x": 60,
+            "y": 1250,
+            "w": 960,
+            "h": 150,
+            "text": "AUDIENCE",
+            "font": "Gloock",
+            "size": 132,
+            "weight": 700,
+            "upper": true,
+            "align": "center",
+            "color": "#6E6E73",
+            "shadow": "engrave",
+            "z": 3
+          }
+        ],
+        "tweens": [
+          {
+            "target": "bg",
+            "at": 0,
+            "dur": 0.4,
+            "ease": "power3.out",
+            "from": {
+              "reveal": 0
+            },
+            "to": {
+              "reveal": 1
+            },
+            "revealFrom": "left"
+          },
+          {
+            "target": "t",
+            "at": 0.25,
+            "dur": 0.5,
+            "stagger": 0.06,
+            "ease": "back.out",
+            "from": {
+              "opacity": 0,
+              "y": 26
+            },
+            "to": {
+              "opacity": 1,
+              "y": 0
+            }
+          }
+        ]
+      }
+    },
+    "cutout-outline": {
+      "what": "A coloured outline traced round the cut-out speaker, the rotoscope look in the reference.",
+      "params": [
+        "color",
+        "width"
+      ],
+      "frame": "overlay",
+      "needs": "reel.matte - the speaker is cut out. This is a REEL-level field, not a beat: it applies wherever the cut-out is shown, so pair it with text-behind or grey-room.",
+      "note": "`matteFilter` is a CSS filter on the cut-out. The outline is drop-shadows in 8 directions; raise the offsets for a thicker line.",
+      "reel": {
+        "matteFilter": "drop-shadow(3px 0 0 #C8102E) drop-shadow(-3px 0 0 #C8102E) drop-shadow(0 3px 0 #C8102E) drop-shadow(0 -3px 0 #C8102E) drop-shadow(2px 2px 0 #C8102E) drop-shadow(-2px -2px 0 #C8102E) drop-shadow(2px -2px 0 #C8102E) drop-shadow(-2px 2px 0 #C8102E)"
+      }
+    },
+    "photo-collage": {
+      "what": "Your own photos tiled over the footage, landing one after another. The reference's image collage.",
+      "params": [
+        "at",
+        "dur",
+        "src",
+        "box"
+      ],
+      "frame": "overlay",
+      "needs": "YOUR photos, in assets/. One image layer per tile - add it once per photo and give each its own box.",
+      "note": "An image LAYER takes any file in the project; the collage SCENE's `image` items are different - those read library/engravings, a fixed set, which is why layers are the route for your own pictures.",
+      "layer": {
+        "id": "photo",
+        "kind": "image",
+        "src": "assets/photo.jpg",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "box": {
+          "x": 60,
+          "y": 420,
+          "w": 460,
+          "h": 610
+        },
+        "fit": "cover",
+        "radius": 18,
+        "shadow": "strong",
+        "z": 3,
+        "enter": "slide-up",
+        "exit": "fade",
+        "by": "user"
+      }
+    },
+    "ui-mockup": {
+      "what": "A real app screenshot across the frame with the speaker inset INTO it - him playing inside the YouTube player, as in the reference.",
+      "params": [
+        "at",
+        "dur",
+        "src",
+        "box",
+        "player"
+      ],
+      "frame": "overlay",
+      "needs": "YOUR screenshot, in assets/. Two layers: the image, then a video layer boxed over the part of it the speaker should fill.",
+      "note": "Work the inset box out from the screenshot's own pixels: box_x = panel_x * (1080 / screenshot_width), and the same scale for y, w, h, plus wherever you place the image. `ui` draws a synthetic app instead and needs no file.",
+      "layer": {
+        "id": "ui",
+        "kind": "image",
+        "src": "assets/screenshot.jpg",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "box": {
+          "x": 0,
+          "y": 640,
+          "w": 1080,
+          "h": 506
+        },
+        "fit": "cover",
+        "radius": 14,
+        "shadow": "strong",
+        "z": 3,
+        "enter": "slide-up",
+        "exit": "fade",
+        "by": "user"
+      }
+    },
+    "split-screen": {
+      "what": "Two moments side by side, full height. The reference uses two people; the owner's answer was better - cut two moments out of the SAME clip.",
+      "params": [
+        "at",
+        "dur",
+        "in",
+        "src"
+      ],
+      "frame": "overlay",
+      "needs": "nothing if you split one clip: add it twice with a different --set in=<seconds> on each. A second person needs their clip in assets/.",
+      "note": "`in` seeks into the source, so the same file can show two different moments at once. Left box x 0 w 540, right box x 540 w 540, both full height.",
+      "layer": {
+        "id": "split-l",
+        "kind": "video",
+        "src": "assets/talk.mp4",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "in": 0,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 540,
+          "h": 1920
+        },
+        "fit": "cover",
+        "z": 3,
+        "audio": "off",
+        "enter": "fade",
+        "exit": "fade",
+        "by": "user"
+      }
+    }
+  },
+  "limitations": [
+    "Nothing in the reference is out of reach now. What each effect still needs from you is on the effect itself, under `needs` - photos, a screenshot, or a second clip where one is genuinely wanted."
+  ]
+}

@@ -36,7 +36,7 @@ import { computeSections, buildSectionManifest, globalHash } from "./lib/section
 import { loadStyleChain, checkBrandName } from "./lib/style-path.mjs";
 import { takeEndAt } from "./lib/caption-span.mjs";
 import * as PK from "./lib/premium.mjs";
-import { GM_CSS } from "./lib/gadzhi.mjs";
+import { GM_CSS, gmScene } from "./lib/gadzhi.mjs";
 import { HZ_CSS, hzBeat } from "./lib/hormozi.mjs";
 import { createHash } from "node:crypto";
 import { joinDurProblem, joinDurations } from "./lib/joins.mjs";
@@ -2029,7 +2029,13 @@ for (const b of beatsList) {
       if (!spec.matte) die("a 'behind' beat needs \"matte\": true (a person cut-out of talk.mp4)");
       // fit the frame width (display type runs ~0.8 em per char), and sit where the
       // head is so the matte actually covers part of the letters
-      const size = Math.min(b.size ?? 300, Math.floor(1180 / Math.max(1, b.text.length * 0.8)));
+      // mac-81: fit the CANVAS, not a hardcoded 1180. The old target was 100 px wider than a 1080 frame,
+      // and 0.8 em per character is short for display caps - mac-48 measured ~0.86 em on the bold faces,
+      // and the -6px letter-spacing below only claws back ~0.03 em at these sizes. Both errors ran the same
+      // way, so a 7-character word came out past both edges: measured on the owner's own reel, the ink for
+      // "QUALIFY" ran x=0 to x=1079 on a 1080 canvas, clipped on both sides. Third of this family after
+      // mac-47 (captions) and mac-48 (pages); see .claude/TEAM.md section 9 in the planner repo.
+      const size = Math.min(b.size ?? 300, Math.floor(W / Math.max(1, b.text.length * 0.84)));
       let y = b.y;
       if (y === undefined) { const sp = face ? placer.span(t0, t1) : null; y = sp && sp.seen ? Math.round(Math.max(placer.safeTop, sp.top + (sp.eyes - sp.top) * 0.35 - size * 0.55)) : 380; }
       const g = gateBehind(b.text, size, y, t0, t1, 0.74, `behind word "${b.text}" at ${b.at}`);
@@ -3228,7 +3234,17 @@ if (LAYERS.length) {
     if (SECTION_MODE && !(l.t0 >= SECTION_START - 1e-6 && l.t0 < SECTION_END - 1e-6)) continue;   // another section's layer
     // mac-55: a motion layer's left-out elements and tweens are recorded like a beat's (the layer itself never drops: it dies)
     const compileLayerMotion = (beat, c) => { const mg = compileMotion(beat, c); if (mg.ok) recordMotionParts({ id: l.id, type: "motion layer", at: l.at, to: l.to ?? null }, mg, l.t0); return mg; };
-    const r = renderLayer(l, { W, H, brand, uiFont: UI_FONT, esc, compileMotion: compileLayerMotion, resolveColor, resolveImage: resolveLayerImage, off: SECTION_MODE ? SECTION_START : 0 }, l.index);
+    // mac-79: a gm layer is built by the SAME gmScene() the scene path uses, with motionCtx, so the two
+    // paths cannot drift. renderLayer only scales what comes back into the layer's box.
+    const gmLayer = (beat, id, t0, t1) => gmScene(beat, id, t0, t1, {
+      ...motionCtx,
+      // A layer's clock IS the output clock (layers are placed in finished-video seconds), so the
+      // source->edit map that a SCENE needs is the identity here. The scene path still gets the real E().
+      // A time the author gives outside the layer's own window is clamped to it rather than throwing:
+      // E() exists to refuse a source time that fell in a cut, and a layer has no source time to fall out of.
+      E: (t) => (typeof t === "number" && Number.isFinite(t) ? Math.min(Math.max(t, t0), t1) : t0),
+    });
+    const r = renderLayer(l, { W, H, brand, uiFont: UI_FONT, esc, compileMotion: compileLayerMotion, gmLayer, resolveColor, resolveImage: resolveLayerImage, off: SECTION_MODE ? SECTION_START : 0 }, l.index);
     for (const m of r.warnings) warn.push(m);
     if (r.dropped) continue;
     if (l.kind === "graphic" && l.graphic.mode === "overlay" && crossesUi(l.box, PLATFORMS[platform], W, H)) warn.push(`layer ${l.id}: ${graphicReason("GW7", { platform: PLATFORMS[platform].name })}`);
@@ -4014,7 +4030,7 @@ ${FX_ON ? `  #fx { position: absolute; inset: 0; transform-origin: 540px ${faceY
   .compact .l-line { font-size: 36px; margin: 2px 0; }
   .compact .strike-x { font-size: 80px; top: 8px; }
   .w { display: inline-block; margin: 0 0.2em; transform-origin: 50% 80%; }
-  ${(spec.beats || []).some((b) => b.type === "scene" && String(b.kind).startsWith("gm-")) ? GM_CSS : ""}${(spec.beats || []).some((b) => String(b.type).startsWith("hz-")) ? `\n  :root { --hz-accent: ${brand.accent}; }\n  ${HZ_CSS}` : ""}${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}${EXPLAINER_CSS(spec, beatsList)}${LIBRARY_CSS(beatsList, spec)}${spec.captions?.editorialShadow === "strong" ? `
+  ${(spec.beats || []).some((b) => b.type === "scene" && String(b.kind).startsWith("gm-")) || (spec.layers || []).some((l) => l && l.kind === "gm") ? GM_CSS : ""}${(spec.beats || []).some((b) => String(b.type).startsWith("hz-")) ? `\n  :root { --hz-accent: ${brand.accent}; }\n  ${HZ_CSS}` : ""}${MOTION_CSS(brand, rtl)}${LAYERS.length ? layersCss() : ""}${EXPLAINER_CSS(spec, beatsList)}${LIBRARY_CSS(beatsList, spec)}${spec.captions?.editorialShadow === "strong" ? `
   /* captions.editorialShadow "strong" (opt-in; Ahmed's f88943d): editorial captions legible on bright or busy footage */
   .ew { text-shadow: 0 1px 2px rgba(0,0,0,.9), 0 3px 8px rgba(0,0,0,.7), 0 6px 26px rgba(0,0,0,.6); }
   .ew.ebold { text-shadow: 0 2px 3px rgba(0,0,0,.85), 0 6px 24px rgba(0,0,0,.65); }
