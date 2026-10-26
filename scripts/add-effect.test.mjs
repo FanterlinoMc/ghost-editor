@@ -160,3 +160,16 @@ test("add-effect: a reel-level effect merges into the reel, not into beats or la
   assert.equal((x.beats ?? []).length, 0, "a reel-level effect must not add a beat");
   assert.equal((x.layers ?? []).length, 0, "nor a layer");
 });
+
+test("add-effect: mac-83 - the three asset effects, and the id rule the engine pins", () => {
+  for (const n of ["photo-collage", "ui-mockup", "split-screen"]) {
+    const x = LIB.effects[n];
+    assert.ok(x, `${n} missing`);
+    assert.ok(x.layer, `${n} must be a layer: these all place a file over the footage`);
+    // the engine refuses an id outside [a-z0-9-]{1,24}; a template that ships a bad one dies on build
+    assert.match(x.layer.id, /^[a-z0-9-]{1,24}$/, `${n}: id ${JSON.stringify(x.layer.id)} would be refused`);
+    assert.match(x.needs, /YOUR|nothing/, `${n}: needs must say whose files it wants`);
+  }
+  // split-screen works off one clip: its note has to say how, because that is the whole trick
+  assert.match(LIB.effects["split-screen"].note, /\bin\b/, "split-screen must explain the seek offset");
+});

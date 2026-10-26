@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "note": "Ready-to-add effects. Each entry is a BEAT (or layer) in the engine's own grammar with its variable parts named in `params`. `scripts/add-effect.mjs` stamps one into a reel.json; nothing here is new engine code - every effect is an existing primitive, so a reel using them renders on any engine that has that primitive. Replicated from the owner's reference edit (25 Oct): a podcast breakdown whose effects map one-to-one onto kinds the engine already builds. Each effect carries `frame`: \"overlay\" sits over the footage with the speaker visible, \"full\" replaces him for its window, \"full-dimmed\" keeps him behind a dim. An edit built only from `full` effects keeps cutting away from the speaker, which is the single thing that stops it reading like a composited reference edit. Three things recorded as impossible on 25 Oct are now built: a progress arc (progress-arc), letterpress type (letterpress), and an outline on the cut-out (cutout-outline) - the last needed no engine change at all, because `matteFilter` already exposed it and the limitation was recorded wrongly.",
+  "note": "Ready-to-add effects. Each entry is a BEAT (or layer) in the engine's own grammar with its variable parts named in `params`. `scripts/add-effect.mjs` stamps one into a reel.json; nothing here is new engine code - every effect is an existing primitive, so a reel using them renders on any engine that has that primitive. Replicated from the owner's reference edit (25 Oct): a podcast breakdown whose effects map one-to-one onto kinds the engine already builds. Each effect carries `frame`: \"overlay\" sits over the footage with the speaker visible, \"full\" replaces him for its window, \"full-dimmed\" keeps him behind a dim. An edit built only from `full` effects keeps cutting away from the speaker, which is the single thing that stops it reading like a composited reference edit. Three things recorded as impossible on 25 Oct are now built: a progress arc (progress-arc), letterpress type (letterpress), and an outline on the cut-out (cutout-outline) - the last needed no engine change at all, because `matteFilter` already exposed it and the limitation was recorded wrongly. The last three gaps closed on 26 Oct with the owner's own files: his product shots, a YouTube screenshot, and - his idea, better than mine - a split made from two moments of the SAME clip rather than a second one.",
   "effects": {
     "word-tiles": {
       "what": "A text page on grid paper: a small kicker, a big headline, a serif line under it. The reference's stacked word tiles.",
@@ -564,11 +564,109 @@
       "reel": {
         "matteFilter": "drop-shadow(3px 0 0 #C8102E) drop-shadow(-3px 0 0 #C8102E) drop-shadow(0 3px 0 #C8102E) drop-shadow(0 -3px 0 #C8102E) drop-shadow(2px 2px 0 #C8102E) drop-shadow(-2px -2px 0 #C8102E) drop-shadow(2px -2px 0 #C8102E) drop-shadow(-2px 2px 0 #C8102E)"
       }
+    },
+    "photo-collage": {
+      "what": "Your own photos tiled over the footage, landing one after another. The reference's image collage.",
+      "params": [
+        "at",
+        "dur",
+        "src",
+        "box"
+      ],
+      "frame": "overlay",
+      "needs": "YOUR photos, in assets/. One image layer per tile - add it once per photo and give each its own box.",
+      "note": "An image LAYER takes any file in the project; the collage SCENE's `image` items are different - those read library/engravings, a fixed set, which is why layers are the route for your own pictures.",
+      "layer": {
+        "id": "photo",
+        "kind": "image",
+        "src": "assets/photo.jpg",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "box": {
+          "x": 60,
+          "y": 420,
+          "w": 460,
+          "h": 610
+        },
+        "fit": "cover",
+        "radius": 18,
+        "shadow": "strong",
+        "z": 3,
+        "enter": "slide-up",
+        "exit": "fade",
+        "by": "user"
+      }
+    },
+    "ui-mockup": {
+      "what": "A real app screenshot across the frame with the speaker inset INTO it - him playing inside the YouTube player, as in the reference.",
+      "params": [
+        "at",
+        "dur",
+        "src",
+        "box",
+        "player"
+      ],
+      "frame": "overlay",
+      "needs": "YOUR screenshot, in assets/. Two layers: the image, then a video layer boxed over the part of it the speaker should fill.",
+      "note": "Work the inset box out from the screenshot's own pixels: box_x = panel_x * (1080 / screenshot_width), and the same scale for y, w, h, plus wherever you place the image. `ui` draws a synthetic app instead and needs no file.",
+      "layer": {
+        "id": "ui",
+        "kind": "image",
+        "src": "assets/screenshot.jpg",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "box": {
+          "x": 0,
+          "y": 640,
+          "w": 1080,
+          "h": 506
+        },
+        "fit": "cover",
+        "radius": 14,
+        "shadow": "strong",
+        "z": 3,
+        "enter": "slide-up",
+        "exit": "fade",
+        "by": "user"
+      }
+    },
+    "split-screen": {
+      "what": "Two moments side by side, full height. The reference uses two people; the owner's answer was better - cut two moments out of the SAME clip.",
+      "params": [
+        "at",
+        "dur",
+        "in",
+        "src"
+      ],
+      "frame": "overlay",
+      "needs": "nothing if you split one clip: add it twice with a different --set in=<seconds> on each. A second person needs their clip in assets/.",
+      "note": "`in` seeks into the source, so the same file can show two different moments at once. Left box x 0 w 540, right box x 540 w 540, both full height.",
+      "layer": {
+        "id": "split-l",
+        "kind": "video",
+        "src": "assets/talk.mp4",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "in": 0,
+        "box": {
+          "x": 0,
+          "y": 0,
+          "w": 540,
+          "h": 1920
+        },
+        "fit": "cover",
+        "z": 3,
+        "audio": "off",
+        "enter": "fade",
+        "exit": "fade",
+        "by": "user"
+      }
     }
   },
   "limitations": [
-    "A real UI mockup (a YouTube or Instagram page) needs YOUR screenshot: `ui` draws a synthetic app, `device` frames an image you supply.",
-    "A split screen with a second person needs YOUR second clip.",
-    "A photo collage needs YOUR photos: collage `image` items read library/engravings, a fixed set."
+    "Nothing in the reference is out of reach now. What each effect still needs from you is on the effect itself, under `needs` - photos, a screenshot, or a second clip where one is genuinely wanted."
   ]
 }
