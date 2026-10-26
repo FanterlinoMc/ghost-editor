@@ -24,7 +24,12 @@ const lib = JSON.parse(fs.readFileSync(MANIFEST, "utf8"));
 const argv = process.argv.slice(2);
 if (argv.includes("--list") || !argv.length) {
   console.log("ready-to-add effects (library/effects/manifest.json):\n");
-  for (const [name, e] of Object.entries(lib.effects)) {
+  const order = (e) => (String(e.frame ?? "").startsWith("overlay") ? 0 : 1);
+  const sorted = Object.entries(lib.effects).sort((a, b) => order(a[1]) - order(b[1]) || a[0].localeCompare(b[0]));
+  let head = null;
+  for (const [name, e] of sorted) {
+    const band = order(e) === 0 ? "OVER the footage - the speaker stays on screen" : "FULL frame - it replaces the speaker for its window";
+    if (band !== head) { console.log(`--- ${band}\n`); head = band; }
     console.log(`  ${name.padEnd(18)} ${e.what}`);
     console.log(`  ${" ".repeat(18)} params: ${e.params.join(", ")}${e.needs ? `   needs: ${e.needs}` : ""}`);
     if (e.note) console.log(`  ${" ".repeat(18)} note: ${e.note}`);
@@ -63,8 +68,29 @@ if (opt.text && typeof opt.text === "string") {
   if ("text" in node) node.text = opt.text;
   else if (Array.isArray(node.lines)) node.lines[0].text = opt.text;
 }
+// A nested `at: 0` means "the start", and for a beat's own items (a stats badge, a collage item, a
+// highlight line) that start is an ABSOLUTE time, so it has to be stamped. A motion tween's `at` is
+// NOT: it is seconds from the layer's own start, so stamping it pushes every tween past the end and
+// the compiler drops them. Found by building a reel from the library - the first plate worked because
+// it happened to start at 0.15 s, and the next two were silently stripped of all movement.
 const stampTimes = (o) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") stampTimes(v); else if ((k === "at" || k === "labelAt") && v === 0) o[k] = node.at; } };
-for (const v of Object.values(node)) if (v && typeof v === "object") stampTimes(v);
+for (const [k, v] of Object.entries(node)) if (v && typeof v === "object" && k !== "tweens") stampTimes(v);
+
+// --y <px>: put the TOP of the whole effect at px, moving every y and y2 together. Without it, moving
+// a composited card means setting six coordinates by hand and a missed `y2` leaves the rule drawing
+// diagonally across the frame - which it did, on the first reel built from this library.
+if (opt.y !== undefined) {
+  const ys = [];
+  const collect = (o) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") collect(v); else if ((k === "y" || k === "y2") && Number.isFinite(v)) ys.push(v); } };
+  // tweens carry y as a MOVEMENT (`from: {y: 48}`, `to: {y: 0}`), not a position, so they are skipped
+  // here exactly as in the time stamping above - counting a tween's y: 0 as the top made --y an offset
+  // instead of a placement, which is how this was caught.
+  for (const [k, v] of Object.entries(node)) if (v && typeof v === "object" && k !== "tweens") collect(v);
+  if (!ys.length) die(`${name} has no y to move`);
+  const dy = num(opt.y) - Math.min(...ys);
+  const shift = (o) => { for (const [k, v] of Object.entries(o)) { if (v && typeof v === "object") shift(v); else if ((k === "y" || k === "y2") && Number.isFinite(v)) o[k] = Math.round(v + dy); } };
+  for (const [k, v] of Object.entries(node)) if (v && typeof v === "object" && k !== "tweens") shift(v);
+}
 
 // --set a.b=c, so anything in the template can be overridden without editing the file
 for (const s of sets) {
@@ -99,6 +125,7 @@ if (eff.needs && /matte/.test(eff.needs) && reel.matte !== true) {
 }
 fs.writeFileSync(rp, JSON.stringify(reel, null, 2) + "\n");
 console.log(`added ${name} -> ${isLayer ? `layers[] as "${node.id}"` : "beats[]"} at ${node.at}${isLayer ? ` for ${node.dur}s` : `-${node.to}`}`);
+if (eff.frame) console.log(`  frame: ${eff.frame === "overlay" ? "OVER the footage, speaker stays on screen" : eff.frame === "full-dimmed" ? "FULL frame, speaker dimmed behind it" : "FULL frame, it replaces the speaker for this window"}`);
 for (const w of warn) console.log(`  ${w}`);
 if (eff.needs) console.log(`  needs: ${eff.needs}`);
 if (eff.cannot) console.log(`  cannot: ${eff.cannot}`);

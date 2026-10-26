@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "note": "Ready-to-add effects. Each entry is a BEAT (or layer) in the engine's own grammar with its variable parts named in `params`. `scripts/add-effect.mjs` stamps one into a reel.json; nothing here is new engine code - every effect is an existing primitive, so a reel using them renders on any engine that has that primitive. Replicated from the owner's reference edit (25 Oct): a podcast breakdown whose effects map one-to-one onto kinds the engine already builds.",
+  "note": "Ready-to-add effects. Each entry is a BEAT (or layer) in the engine's own grammar with its variable parts named in `params`. `scripts/add-effect.mjs` stamps one into a reel.json; nothing here is new engine code - every effect is an existing primitive, so a reel using them renders on any engine that has that primitive. Replicated from the owner's reference edit (25 Oct): a podcast breakdown whose effects map one-to-one onto kinds the engine already builds. Each effect carries `frame`: \"overlay\" sits over the footage with the speaker visible, \"full\" replaces him for its window, \"full-dimmed\" keeps him behind a dim. An edit built only from `full` effects keeps cutting away from the speaker, which is the single thing that stops it reading like a composited reference edit.",
   "effects": {
     "word-tiles": {
       "what": "A text page on grid paper: a small kicker, a big headline, a serif line under it. The reference's stacked word tiles.",
@@ -43,7 +43,8 @@
           }
         ]
       },
-      "needs": "nothing: type only"
+      "needs": "nothing: type only",
+      "frame": "full"
     },
     "keyword-takeover": {
       "what": "One huge serif word over dimmed, blurred footage. The reference's big coloured keyword.",
@@ -59,7 +60,8 @@
         "at": 0,
         "to": 0
       },
-      "needs": "nothing: one spoken word"
+      "needs": "nothing: one spoken word",
+      "frame": "full-dimmed"
     },
     "ring-badge": {
       "what": "A glass ring badge with a number, which shrinks into a row with its label typed beside it. The reference's percentage ring.",
@@ -89,7 +91,8 @@
         ]
       },
       "needs": "nothing: a number and a label",
-      "cannot": "the badge is a full glass CIRCLE. A partial progress ARC, like the reference's red 32% arc, does not exist."
+      "cannot": "the badge is a full glass CIRCLE. A partial progress ARC, like the reference's red 32% arc, does not exist.",
+      "frame": "full"
     },
     "box-words": {
       "what": "Lines inking in word by word, one of them growing an accent box under the words as they land. The reference's highlighted box words.",
@@ -116,7 +119,8 @@
           }
         ]
       },
-      "needs": "nothing, but every line must be words SPOKEN while it is up"
+      "needs": "nothing, but every line must be words SPOKEN while it is up",
+      "frame": "full"
     },
     "card-word": {
       "what": "A word on a navy card in condensed serif caps. The reference's word on black.",
@@ -138,7 +142,8 @@
           }
         ]
       },
-      "needs": "nothing: one or two words"
+      "needs": "nothing: one or two words",
+      "frame": "full"
     },
     "text-behind": {
       "what": "Two to four big words BEHIND the speaker, their head and shoulders cutting the letters.",
@@ -154,7 +159,8 @@
         "at": 0,
         "to": 0
       },
-      "cannot": "no outline around the cut-out: the .matte class takes a CSS filter but no beat field exposes it."
+      "cannot": "no outline around the cut-out: the .matte class takes a CSS filter but no beat field exposes it.",
+      "frame": "overlay"
     },
     "chrome-overlay": {
       "what": "A Chrome Motion graphic over live footage instead of replacing the speaker; several can be on screen at once (mac-79).",
@@ -188,7 +194,8 @@
           "label": "a label"
         }
       },
-      "needs": "nothing"
+      "needs": "nothing",
+      "frame": "overlay"
     },
     "window-grid": {
       "what": "A 2x2 grid of video windows landing one after another over the footage.",
@@ -223,7 +230,8 @@
         "by": "user"
       },
       "needs": "YOUR OWN CLIPS - one video file per window, in assets/",
-      "cannot": "the engine supplies none: four windows need four files."
+      "cannot": "the engine supplies none: four windows need four files.",
+      "frame": "overlay"
     },
     "grey-room": {
       "what": "The reference's signature frame: the room drops to greyscale with a grid over it and the speaker stays in COLOUR on top, with type beside him.",
@@ -259,7 +267,8 @@
         "leadColor": "#111111",
         "leadSize": 64,
         "leadY": 600
-      }
+      },
+      "frame": "overlay"
     },
     "bw-sentence": {
       "what": "One sentence drops to black and white, hard cut in and out, like a grade change between shots. The reference's desaturated lines.",
@@ -273,6 +282,156 @@
         "type": "mood",
         "at": 0,
         "to": 0
+      },
+      "frame": "overlay"
+    },
+    "caption-plate": {
+      "what": "A tinted plate over the footage: a rule draws under it and two lines slide up word by word. The speaker stays on screen - this is the shape that makes an edit read like the reference.",
+      "params": [
+        "at",
+        "dur",
+        "lines",
+        "box"
+      ],
+      "frame": "overlay",
+      "needs": "nothing",
+      "note": "hideCaptions is on: the plate IS the line, and a caption under it prints the words twice. Move it with --set elements.N.y; the default sits in the lower third.",
+      "layer": {
+        "id": "plate",
+        "kind": "motion",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "z": 4,
+        "enter": "slide-up",
+        "exit": "fade",
+        "hideCaptions": true,
+        "by": "user",
+        "elements": [
+          {
+            "id": "plate",
+            "shape": "rect",
+            "x": 70,
+            "y": 1400,
+            "w": 900,
+            "h": 300,
+            "fill": "ink",
+            "fill2": "accent",
+            "gradientAngle": 120,
+            "radius": 28,
+            "opacity": 0.92,
+            "z": 1
+          },
+          {
+            "id": "rule",
+            "shape": "line",
+            "x": 104,
+            "y": 1668,
+            "x2": 936,
+            "y2": 1668,
+            "stroke": "accent",
+            "strokeWidth": 7,
+            "cap": "round",
+            "z": 3
+          },
+          {
+            "id": "l0",
+            "shape": "text",
+            "x": 110,
+            "y": 1428,
+            "w": 820,
+            "h": 110,
+            "text": "First line",
+            "font": "Montserrat",
+            "size": 66,
+            "weight": 800,
+            "upper": true,
+            "align": "left",
+            "color": "#ffffff",
+            "shadow": "strong",
+            "split": "words",
+            "z": 4
+          },
+          {
+            "id": "l1",
+            "shape": "text",
+            "x": 110,
+            "y": 1540,
+            "w": 820,
+            "h": 110,
+            "text": "Second line",
+            "font": "Montserrat",
+            "size": 66,
+            "weight": 800,
+            "upper": true,
+            "align": "left",
+            "color": "accent",
+            "shadow": "strong",
+            "split": "words",
+            "z": 4
+          }
+        ],
+        "tweens": [
+          {
+            "target": "plate",
+            "at": 0,
+            "dur": 0.42,
+            "ease": "power3.out",
+            "from": {
+              "reveal": 0
+            },
+            "to": {
+              "reveal": 1
+            },
+            "revealFrom": "left"
+          },
+          {
+            "target": "rule",
+            "at": 0.3,
+            "dur": 0.5,
+            "ease": "power2.inOut",
+            "from": {
+              "draw": 0
+            },
+            "to": {
+              "draw": 1
+            }
+          },
+          {
+            "target": "l0",
+            "at": 0.18,
+            "dur": 0.42,
+            "stagger": 0.07,
+            "ease": "back.out",
+            "from": {
+              "y": 48,
+              "opacity": 0,
+              "blur": 10
+            },
+            "to": {
+              "y": 0,
+              "opacity": 1,
+              "blur": 0
+            }
+          },
+          {
+            "target": "l1",
+            "at": 0.3,
+            "dur": 0.42,
+            "stagger": 0.07,
+            "ease": "back.out",
+            "from": {
+              "y": 48,
+              "opacity": 0,
+              "blur": 10
+            },
+            "to": {
+              "y": 0,
+              "opacity": 1,
+              "blur": 0
+            }
+          }
+        ]
       }
     }
   },

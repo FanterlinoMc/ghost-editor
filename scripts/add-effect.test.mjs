@@ -96,3 +96,34 @@ test("add-effect: --set reaches into the template, and refuses what it cannot pl
   assert.notEqual(run(dir, ".", "no-such-effect", "--at", "1", "--to", "2").status, 0);
   assert.notEqual(run(dir, ".", "keyword-takeover", "--at", "1").status, 0, "a beat with no --to must fail");
 });
+
+test("add-effect: a motion tween's time and y are RELATIVE, so neither is stamped or moved", () => {
+  const dir = project();
+  assert.equal(run(dir, ".", "caption-plate", "--at", "9.1", "--dur", "1.9", "--y", "150").status, 0);
+  const l = reel(dir).layers[0];
+  // the first tween starts at 0 = the layer's own start. Stamped to 9.1 it would sit past a 1.9 s
+  // layer and the compiler drops every tween, silently stripping the movement.
+  assert.equal(l.tweens[0].at, 0, "a tween's at must stay relative to the layer");
+  assert.equal(l.tweens[2].from.y, 48, "a tween's y is a movement, not a position: --y must not touch it");
+  // --y places the TOP of the card, and moves every y and y2 together
+  const ys = l.elements.map((e) => e.y);
+  assert.equal(Math.min(...ys), 150, `--y 150 must put the top at 150, got ${JSON.stringify(ys)}`);
+  assert.equal(l.elements[1].y2, l.elements[1].y, "the rule's y2 must move with its y or it draws diagonally");
+});
+
+test("add-effect: every effect says whether it replaces the speaker", () => {
+  for (const [n, e] of Object.entries(LIB.effects)) {
+    assert.ok(["overlay", "full", "full-dimmed"].includes(e.frame), `${n}: frame is ${JSON.stringify(e.frame)}`);
+    assert.ok(typeof e.needs === "string" && e.needs.length, `${n}: no needs line`);
+  }
+  assert.ok(Array.isArray(LIB.limitations) && LIB.limitations.length >= 5, "the manifest must record what cannot be done");
+  const r = run(os.tmpdir(), "--list");
+  assert.match(r.stdout, /OVER the footage/, "--list must group by frame");
+  assert.match(r.stdout, /cannot do/, "--list must print the limitations");
+});
+
+test("add-effect: the caption plate's two lines fit inside its plate", () => {
+  const els = LIB.effects["caption-plate"].layer.elements;
+  const plate = els[0], last = els.at(-1);
+  assert.ok(last.y + last.h <= plate.y + plate.h, `line 2 ends at ${last.y + last.h}, plate ends at ${plate.y + plate.h}`);
+});
