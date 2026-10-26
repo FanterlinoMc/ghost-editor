@@ -2029,7 +2029,13 @@ for (const b of beatsList) {
       if (!spec.matte) die("a 'behind' beat needs \"matte\": true (a person cut-out of talk.mp4)");
       // fit the frame width (display type runs ~0.8 em per char), and sit where the
       // head is so the matte actually covers part of the letters
-      const size = Math.min(b.size ?? 300, Math.floor(1180 / Math.max(1, b.text.length * 0.8)));
+      // mac-81: fit the CANVAS, not a hardcoded 1180. The old target was 100 px wider than a 1080 frame,
+      // and 0.8 em per character is short for display caps - mac-48 measured ~0.86 em on the bold faces,
+      // and the -6px letter-spacing below only claws back ~0.03 em at these sizes. Both errors ran the same
+      // way, so a 7-character word came out past both edges: measured on the owner's own reel, the ink for
+      // "QUALIFY" ran x=0 to x=1079 on a 1080 canvas, clipped on both sides. Third of this family after
+      // mac-47 (captions) and mac-48 (pages); see .claude/TEAM.md section 9 in the planner repo.
+      const size = Math.min(b.size ?? 300, Math.floor(W / Math.max(1, b.text.length * 0.84)));
       let y = b.y;
       if (y === undefined) { const sp = face ? placer.span(t0, t1) : null; y = sp && sp.seen ? Math.round(Math.max(placer.safeTop, sp.top + (sp.eyes - sp.top) * 0.35 - size * 0.55)) : 380; }
       const g = gateBehind(b.text, size, y, t0, t1, 0.74, `behind word "${b.text}" at ${b.at}`);
