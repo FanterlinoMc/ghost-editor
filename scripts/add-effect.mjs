@@ -46,6 +46,7 @@ const [project, name, ...rest] = argv;
 if (!project || !name) die("usage: add-effect.mjs <project> <effect> --at <s> [--to <s>] [--text ...] [--set path=value]\n       add-effect.mjs --list");
 const eff = lib.effects[name];
 if (!eff) die(`unknown effect ${JSON.stringify(name)}; have: ${Object.keys(lib.effects).join(", ")}`);
+if (!eff.beat && !eff.layer && !eff.reel) die(`${name} has no template`);
 
 // --flags
 const opt = {}; const sets = [];
@@ -54,8 +55,36 @@ for (let i = 0; i < rest.length; i++) {
   if (rest[i].startsWith("--")) opt[rest[i].slice(2)] = rest[i + 1] !== undefined && !rest[i + 1].startsWith("--") ? rest[++i] : true;
 }
 const num = (v) => (v === undefined ? undefined : Number(v));
-const node = structuredClone(eff.beat ?? eff.layer);
+// Three shapes: a beat (beats[]), a layer (layers[]), and a REEL-level setting - some effects are a
+// property of the whole reel rather than a moment in it, and `cutout-outline` is one: it styles the
+// cut-out wherever the cut-out is shown.
+const isReel = !!eff.reel && !eff.beat && !eff.layer;
+const node = structuredClone(eff.beat ?? eff.layer ?? eff.reel);
 const isLayer = !!eff.layer;
+
+if (isReel) {
+  const rp0 = path.join(project, "reel.json");
+  if (!fs.existsSync(rp0)) die(`no reel.json in ${project}`);
+  const r0 = JSON.parse(fs.readFileSync(rp0, "utf8"));
+  for (const s2 of sets) {
+    const i2 = s2.indexOf("=");
+    if (i2 < 0) die(`--set wants path=value, got ${JSON.stringify(s2)}`);
+    let v2; try { v2 = JSON.parse(s2.slice(i2 + 1)); } catch { v2 = s2.slice(i2 + 1); }
+    node[s2.slice(0, i2)] = v2;
+  }
+  if (opt.color && typeof opt.color === "string" && typeof node.matteFilter === "string") {
+    node.matteFilter = node.matteFilter.replace(/#[0-9A-Fa-f]{3,8}/g, opt.color);
+  }
+  Object.assign(r0, node);
+  if (/matte/.test(eff.needs ?? "") && r0.matte !== true) { r0.matte = true; r0.matteWindows = true; r0.matteClip = true; }
+  fs.writeFileSync(rp0, JSON.stringify(r0, null, 2) + "\n");
+  console.log(`added ${name} -> reel settings: ${Object.keys(node).join(", ")}`);
+  if (eff.frame) console.log(`  frame: OVER the footage, speaker stays on screen`);
+  if (eff.needs) console.log(`  needs: ${eff.needs}`);
+  if (eff.cannot) console.log(`  cannot: ${eff.cannot}`);
+  if (eff.note) console.log(`  note: ${eff.note}`);
+  process.exit(0);
+}
 
 // time: a beat takes at/to, a layer takes at/dur
 if (opt.at === undefined) die(`${name} needs --at`);

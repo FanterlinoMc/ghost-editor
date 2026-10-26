@@ -29,14 +29,17 @@ function project() {
 }
 const reel = (dir) => JSON.parse(fs.readFileSync(path.join(dir, "reel.json"), "utf8"));
 
-test("add-effect: every template in the manifest is a beat or a layer, and names its params", () => {
+test("add-effect: every template is a beat, a layer or a reel setting, and names its params", () => {
   const names = Object.keys(LIB.effects);
   assert.ok(names.length >= 8, `expected the eight reference effects, got ${names.length}`);
   for (const [n, e] of Object.entries(LIB.effects)) {
-    assert.ok(e.beat || e.layer, `${n}: neither a beat nor a layer`);
+    assert.ok(e.beat || e.layer || e.reel, `${n}: no beat, layer or reel template`);
     assert.ok(Array.isArray(e.params) && e.params.length, `${n}: no params listed`);
     assert.ok(typeof e.what === "string" && e.what.length > 20, `${n}: no description`);
-    assert.ok((e.beat ?? e.layer).type || (e.beat ?? e.layer).kind, `${n}: the template has no type/kind`);
+    // mac-82: a reel-level effect is a SETTING, not a moment, so it has no type/kind - cutout-outline
+    // styles the cut-out wherever it is shown. Only the timed shapes must name what they build.
+    if (e.beat || e.layer) assert.ok((e.beat ?? e.layer).type || (e.beat ?? e.layer).kind, `${n}: the template has no type/kind`);
+    else assert.ok(Object.keys(e.reel).length, `${n}: an empty reel template sets nothing`);
   }
 });
 
@@ -115,8 +118,12 @@ test("add-effect: every effect says whether it replaces the speaker", () => {
   for (const [n, e] of Object.entries(LIB.effects)) {
     assert.ok(["overlay", "full", "full-dimmed"].includes(e.frame), `${n}: frame is ${JSON.stringify(e.frame)}`);
     assert.ok(typeof e.needs === "string" && e.needs.length, `${n}: no needs line`);
+    assert.ok(typeof e.what === "string", `${n}: no description`);
   }
-  assert.ok(Array.isArray(LIB.limitations) && LIB.limitations.length >= 5, "the manifest must record what cannot be done");
+  // Pin the PROPERTY, not a count: a count goes stale the moment a limitation is lifted, which is
+  // exactly what happened when mac-82 built three of them and this line failed for the right reason.
+  assert.ok(Array.isArray(LIB.limitations) && LIB.limitations.length, "the manifest must record what cannot be done");
+  for (const l of LIB.limitations) assert.ok(typeof l === "string" && l.length > 20, `a limitation must say what and why: ${JSON.stringify(l)}`);
   const r = run(os.tmpdir(), "--list");
   assert.match(r.stdout, /OVER the footage/, "--list must group by frame");
   assert.match(r.stdout, /cannot do/, "--list must print the limitations");
@@ -126,4 +133,30 @@ test("add-effect: the caption plate's two lines fit inside its plate", () => {
   const els = LIB.effects["caption-plate"].layer.elements;
   const plate = els[0], last = els.at(-1);
   assert.ok(last.y + last.h <= plate.y + plate.h, `line 2 ends at ${last.y + last.h}, plate ends at ${plate.y + plate.h}`);
+});
+
+test("add-effect: mac-82 - the three effects that were recorded as impossible now exist", () => {
+  for (const n of ["progress-arc", "letterpress", "cutout-outline"]) assert.ok(LIB.effects[n], `${n} missing`);
+  // the arc is a share of a circle, so it has to be bounded
+  const arc = LIB.effects["progress-arc"].beat.badges[0];
+  assert.ok(arc.arc >= 0 && arc.arc <= 100, `arc is ${arc.arc}`);
+  // letterpress is light and shade: it needs one of the two press shadows
+  assert.match(JSON.stringify(LIB.effects["letterpress"].layer), /"shadow":"(engrave|emboss)"/);
+  // and none of the three is still listed as something that cannot be done
+  const left = LIB.limitations.join(" ");
+  for (const gone of ["progress ARC", "Engraved or embossed", "outline around the cut-out"]) {
+    assert.ok(!left.includes(gone), `"${gone}" is built now but still listed as a limitation`);
+  }
+});
+
+test("add-effect: a reel-level effect merges into the reel, not into beats or layers", () => {
+  const dir = project();
+  const r = run(dir, ".", "cutout-outline", "--color", "#00A3FF");
+  assert.equal(r.status, 0, r.stderr);
+  const x = reel(dir);
+  assert.ok(typeof x.matteFilter === "string" && x.matteFilter.includes("#00A3FF"), "--color must recolour every drop-shadow");
+  assert.ok(!x.matteFilter.includes("#C8102E"), "the template's default colour must be gone");
+  assert.equal(x.matte, true, "and it must turn the cut-out on, since the outline is drawn on it");
+  assert.equal((x.beats ?? []).length, 0, "a reel-level effect must not add a beat");
+  assert.equal((x.layers ?? []).length, 0, "nor a layer");
 });

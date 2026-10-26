@@ -1,6 +1,6 @@
 {
   "v": 1,
-  "note": "Ready-to-add effects. Each entry is a BEAT (or layer) in the engine's own grammar with its variable parts named in `params`. `scripts/add-effect.mjs` stamps one into a reel.json; nothing here is new engine code - every effect is an existing primitive, so a reel using them renders on any engine that has that primitive. Replicated from the owner's reference edit (25 Oct): a podcast breakdown whose effects map one-to-one onto kinds the engine already builds. Each effect carries `frame`: \"overlay\" sits over the footage with the speaker visible, \"full\" replaces him for its window, \"full-dimmed\" keeps him behind a dim. An edit built only from `full` effects keeps cutting away from the speaker, which is the single thing that stops it reading like a composited reference edit.",
+  "note": "Ready-to-add effects. Each entry is a BEAT (or layer) in the engine's own grammar with its variable parts named in `params`. `scripts/add-effect.mjs` stamps one into a reel.json; nothing here is new engine code - every effect is an existing primitive, so a reel using them renders on any engine that has that primitive. Replicated from the owner's reference edit (25 Oct): a podcast breakdown whose effects map one-to-one onto kinds the engine already builds. Each effect carries `frame`: \"overlay\" sits over the footage with the speaker visible, \"full\" replaces him for its window, \"full-dimmed\" keeps him behind a dim. An edit built only from `full` effects keeps cutting away from the speaker, which is the single thing that stops it reading like a composited reference edit. Three things recorded as impossible on 25 Oct are now built: a progress arc (progress-arc), letterpress type (letterpress), and an outline on the cut-out (cutout-outline) - the last needed no engine change at all, because `matteFilter` already exposed it and the limitation was recorded wrongly.",
   "effects": {
     "word-tiles": {
       "what": "A text page on grid paper: a small kicker, a big headline, a serif line under it. The reference's stacked word tiles.",
@@ -91,7 +91,6 @@
         ]
       },
       "needs": "nothing: a number and a label",
-      "cannot": "the badge is a full glass CIRCLE. A partial progress ARC, like the reference's red 32% arc, does not exist.",
       "frame": "full"
     },
     "box-words": {
@@ -159,7 +158,6 @@
         "at": 0,
         "to": 0
       },
-      "cannot": "no outline around the cut-out: the .matte class takes a CSS filter but no beat field exposes it.",
       "frame": "overlay"
     },
     "chrome-overlay": {
@@ -433,12 +431,142 @@
           }
         ]
       }
+    },
+    "progress-arc": {
+      "what": "A percentage badge with a progress ring that sweeps to its share as the badge lands. The reference's red 32% arc.",
+      "params": [
+        "at",
+        "to",
+        "value",
+        "sub",
+        "arc",
+        "arcColor",
+        "arcWidth",
+        "label",
+        "labelAt"
+      ],
+      "frame": "full",
+      "needs": "nothing: a number and a percentage",
+      "note": "`arc` is 0..100 and is the share the ring sweeps to; the value text is yours to write (\"32%\"). Without `arc` the badge is the plain glass disc it always was.",
+      "beat": {
+        "type": "scene",
+        "kind": "stats",
+        "bg": "accent",
+        "at": 0,
+        "to": 0,
+        "badges": [
+          {
+            "value": "32%",
+            "sub": "of them",
+            "at": 0,
+            "arc": 32,
+            "arcColor": "#C8102E",
+            "arcWidth": 16
+          }
+        ]
+      }
+    },
+    "letterpress": {
+      "what": "Serif caps pressed into a paper plate over the footage - the reference's engraved AUDIENCE line.",
+      "params": [
+        "at",
+        "dur",
+        "text",
+        "size",
+        "color"
+      ],
+      "frame": "overlay",
+      "needs": "nothing",
+      "cannot": "the effect is light and shade, so it only reads on a light or mid plate: on near-black it disappears.",
+      "note": "shadow `engrave` presses the word in, `emboss` lifts it out. Both are motion-text shadows, so any text element can use them.",
+      "layer": {
+        "id": "press",
+        "kind": "motion",
+        "pin": true,
+        "at": 0,
+        "dur": 0,
+        "z": 4,
+        "enter": "fade",
+        "exit": "fade",
+        "hideCaptions": true,
+        "by": "user",
+        "elements": [
+          {
+            "id": "bg",
+            "shape": "rect",
+            "x": 0,
+            "y": 1180,
+            "w": 1080,
+            "h": 300,
+            "fill": "paper",
+            "opacity": 0.96,
+            "z": 1
+          },
+          {
+            "id": "t",
+            "shape": "text",
+            "x": 60,
+            "y": 1250,
+            "w": 960,
+            "h": 150,
+            "text": "AUDIENCE",
+            "font": "Gloock",
+            "size": 132,
+            "weight": 700,
+            "upper": true,
+            "align": "center",
+            "color": "#6E6E73",
+            "shadow": "engrave",
+            "z": 3
+          }
+        ],
+        "tweens": [
+          {
+            "target": "bg",
+            "at": 0,
+            "dur": 0.4,
+            "ease": "power3.out",
+            "from": {
+              "reveal": 0
+            },
+            "to": {
+              "reveal": 1
+            },
+            "revealFrom": "left"
+          },
+          {
+            "target": "t",
+            "at": 0.25,
+            "dur": 0.5,
+            "stagger": 0.06,
+            "ease": "back.out",
+            "from": {
+              "opacity": 0,
+              "y": 26
+            },
+            "to": {
+              "opacity": 1,
+              "y": 0
+            }
+          }
+        ]
+      }
+    },
+    "cutout-outline": {
+      "what": "A coloured outline traced round the cut-out speaker, the rotoscope look in the reference.",
+      "params": [
+        "color",
+        "width"
+      ],
+      "frame": "overlay",
+      "needs": "reel.matte - the speaker is cut out. This is a REEL-level field, not a beat: it applies wherever the cut-out is shown, so pair it with text-behind or grey-room.",
+      "note": "`matteFilter` is a CSS filter on the cut-out. The outline is drop-shadows in 8 directions; raise the offsets for a thicker line.",
+      "reel": {
+        "matteFilter": "drop-shadow(3px 0 0 #C8102E) drop-shadow(-3px 0 0 #C8102E) drop-shadow(0 3px 0 #C8102E) drop-shadow(0 -3px 0 #C8102E) drop-shadow(2px 2px 0 #C8102E) drop-shadow(-2px -2px 0 #C8102E) drop-shadow(2px -2px 0 #C8102E) drop-shadow(-2px 2px 0 #C8102E)"
+      }
     }
   },
   "limitations": [
-    "A progress ARC (the reference's red 32%) - `stats` draws a full glass circle only.",
-    "Engraved or embossed type (the reference's AUDIENCE caps) - motion text offers shadow soft/strong, no emboss.",
-    "An outline around the cut-out speaker - .matte takes a CSS filter, but no field exposes it.",
     "A real UI mockup (a YouTube or Instagram page) needs YOUR screenshot: `ui` draws a synthetic app, `device` frames an image you supply.",
     "A split screen with a second person needs YOUR second clip.",
     "A photo collage needs YOUR photos: collage `image` items read library/engravings, a fixed set."
