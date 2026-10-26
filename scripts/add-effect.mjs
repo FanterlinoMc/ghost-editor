@@ -30,6 +30,11 @@ if (argv.includes("--list") || !argv.length) {
     if (e.note) console.log(`  ${" ".repeat(18)} note: ${e.note}`);
     console.log("");
   }
+  if (Array.isArray(lib.limitations) && lib.limitations.length) {
+    console.log("what these cannot do (you would have to build it):");
+    for (const l of lib.limitations) console.log(`  - ${l}`);
+    console.log("");
+  }
   process.exit(0);
 }
 const [project, name, ...rest] = argv;
@@ -95,4 +100,6 @@ if (eff.needs && /matte/.test(eff.needs) && reel.matte !== true) {
 fs.writeFileSync(rp, JSON.stringify(reel, null, 2) + "\n");
 console.log(`added ${name} -> ${isLayer ? `layers[] as "${node.id}"` : "beats[]"} at ${node.at}${isLayer ? ` for ${node.dur}s` : `-${node.to}`}`);
 for (const w of warn) console.log(`  ${w}`);
+if (eff.needs) console.log(`  needs: ${eff.needs}`);
+if (eff.cannot) console.log(`  cannot: ${eff.cannot}`);
 if (eff.note) console.log(`  note: ${eff.note}`);
