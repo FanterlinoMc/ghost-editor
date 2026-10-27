@@ -11,7 +11,9 @@ whatever system font has the glyph:
 No media is committed. `make-project.sh` makes the clip with ffmpeg (testsrc2 colour bars + a 180 Hz tone, 8 s,
 the same synthetic clip as `scripts/byte-identity.mjs`) and copies in the hand-written transcript
 (`words.whisper.json`) and a static face box (`face.json`). No paid calls; the only downloads are
-`hyperframes@0.8.81` (npx) and the fonts its compiler fetches (cached after the first render).
+`hyperframes@0.8.81` and the fonts its compiler fetches (cached after the first render). Render through
+`scripts/render.mjs` (the CLI of `runRender()`), never `npx hyperframes render` directly: it serves every
+vendored library from `vendor/` and fails the render if the page reaches for a CDN instead.
 
 ## Build and render (from the fork's root)
 
@@ -19,9 +21,9 @@ the same synthetic clip as `scripts/byte-identity.mjs`) and copies in the hand-w
 P=/tmp/emoji-check
 bash scripts/fixtures/emoji-check/make-project.sh $P
 node scripts/build.mjs $P                       # prints the caption "... this deal is 🔥 okay", no WARNINGS
-cd $P && npx -y hyperframes@0.8.81 render -o build/reel.mp4 --quiet
-# shared machine: prefix the render with the lock, e.g. on the Mac  lockf -k /tmp/phantasic-render.lock npx ...
-#                                                  on Linux        flock /tmp/phantasic-render.lock npx ...
+cd $P && node <fork>/scripts/render.mjs -o build/reel.mp4 --quiet
+# shared machine: prefix the render with the lock, e.g. on the Mac  lockf -k /tmp/phantasic-render.lock node ...
+#                                                  on Linux        flock /tmp/phantasic-render.lock node ...
 ```
 
 ## What to inspect
