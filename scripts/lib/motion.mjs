@@ -363,7 +363,24 @@ export function buildScene(b, id, t0, t1, ctx) {
         tl.push(`tl.set("#${id}-lab${i}", { x: ${ROWX + 110}, y: ${rowY(i + 1, i) - 34} }, 0);`);
         tl.push(`ft("#${id}-lab${i} span", { autoAlpha: 0, x: -14, filter: "blur(6px)" }, { autoAlpha: 1, x: 0, filter: "blur(0px)", duration: 0.28, ease: "power3.out", stagger: 0.07 }, ${r3(la + 0.1)});`);
       }
-      return `<div id="${id}-b${i}" class="badge"><div class="v">${esc(bd.value)}</div>${bd.sub ? `<div class="s">${esc(bd.sub)}</div>` : ""}</div>${lab}`;
+      // mac-82: `arc` (0..100) draws a progress ring round the badge and sweeps it to that share as the
+      // badge lands. The badge itself is a full glass disc, which could show a share of nothing; this is
+      // the partial ring a percentage actually needs. `arcColor` defaults to the brand accent, `arcWidth`
+      // to 14 px. Nothing is drawn when `arc` is absent, so every existing stats beat is untouched.
+      let arc = "";
+      if (typeof bd.arc === "number" && Number.isFinite(bd.arc)) {
+        const pct = Math.max(0, Math.min(100, bd.arc)), R = 150, C = r3(2 * Math.PI * R);
+        const sw = bd.arcWidth ?? 14, col = bd.arcColor ?? brand.accent;
+        // inline, NOT a stylesheet rule: a rule in MOTION_CSS is written for every reel that uses motion
+        // css at all, so it moved index.html for reels with no arc in them (caught by the premium-belmar
+        // byte-identity test, which pins its output against 290994d).
+        arc = `<svg id="${id}-arc${i}" style="position:absolute;left:0;top:0;width:330px;height:330px;pointer-events:none" viewBox="0 0 330 330" width="330" height="330">`
+            + `<circle cx="165" cy="165" r="${R}" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="${sw}"/>`
+            + `<circle id="${id}-arcf${i}" cx="165" cy="165" r="${R}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-linecap="round"`
+            + ` transform="rotate(-90 165 165)" stroke-dasharray="${C}" stroke-dashoffset="${C}"/></svg>`;
+        tl.push(`ft("#${id}-arcf${i}", { strokeDashoffset: ${C} }, { strokeDashoffset: ${r3(C * (1 - pct / 100))}, duration: 0.8, ease: "power2.out" }, ${r3(at + 0.2)});`);
+      }
+      return `<div id="${id}-b${i}" class="badge">${arc}<div class="v">${esc(bd.value)}</div>${bd.sub ? `<div class="s">${esc(bd.sub)}</div>` : ""}</div>${lab}`;
     }).join("");
     if (n && b.drift !== false) tl.push(`ft("#${sid}", { backgroundPosition: "0% 0%" }, { backgroundPosition: "100% 100%", duration: ${r3(t1 - t0)}, ease: "none" }, ${t0});`);
   }

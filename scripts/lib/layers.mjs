@@ -16,10 +16,11 @@
 // uses: both values given, force3D:false, ~0.3 s, so a frame is a pure function of time.
 
 import { DESIGNER_FONTS } from "./motion-graphics.mjs";
+import { GM_KINDS } from "./gadzhi.mjs";
 import { reason, layerProblem, checkPlacement } from "./graphic.mjs";
 import { graphicTiming, cutFrames, ignoredWarnings, centredBox, MODES as GRAPHIC_MODES } from "./graphic-place.mjs";
 
-export const LAYER_KINDS = ["video", "image", "logo", "motion", "text", "graphic"];
+export const LAYER_KINDS = ["video", "image", "logo", "motion", "text", "graphic", "gm"];
 export const ENTERS = ["fade", "slide-up", "pop", "none"];
 export const EXITS = ["fade", "none"];
 export const FITS = ["cover", "contain"];
@@ -128,6 +129,14 @@ export function resolveLayers(raw, { takes, total, fps, W, H, graphic }) {
     if (MEDIA_EXT[kind] && !MEDIA_EXT[kind].test(L.src)) return bad(`${kind} src ${JSON.stringify(L.src)} has the wrong extension (want ${kind === "video" ? "mp4/mov/webm/m4v" : "png/jpg/webp/gif/svg"})`);
     if (kind === "motion" && (!Array.isArray(L.elements) || !L.elements.length)) return bad("motion needs elements[]");
     if (kind === "text" && !cleanText(L.text)) return bad("text needs a non-empty text");
+    // mac-79: a Chrome Motion graphic as a LAYER. `gm` is the same beat a gm-* scene takes; the layer's box is
+    // where it is drawn. The beat's own geometry is canvas-absolute (gadzhi.mjs writes 1080x1920), so renderLayer
+    // scales the whole thing into the box rather than re-laying it out - which is why a gm layer needs a box and
+    // why the full-screen scene path is untouched (same builder, same output, scale 1).
+    if (kind === "gm") {
+      if (!L.gm || typeof L.gm !== "object") return bad("gm needs a `gm` object (the same beat a gm-* scene takes)");
+      if (!GM_KINDS.includes(L.gm.kind)) return bad(`gm.kind ${JSON.stringify(L.gm.kind)}; have: ${GM_KINDS.join(", ")}`);
+    }
     // P3 replaces the generic "20% of the box inside the canvas" rule for a graphic (only P3 is reported)
     if (g && g.mode === "overlay") { const p = checkPlacement({ mode: "overlay", box }, { W, H }); if (p.length) return gp(p[0]); }
     for (const [k, list] of [["enter", ENTERS], ["exit", EXITS], ["fit", FITS], ...(g ? [] : [["audio", AUDIOS]])]) {
@@ -262,6 +271,22 @@ export function renderLayer(l, ctx, n = 0) {
       else if (l.audio !== "off") warnings.push(`layer ${l.id}: ${l.src} has no audio stream, audio ${l.audio} ignored`);
     } else if (l.kind === "image" || l.kind === "logo") {
       content = `<img id="${wid}_i" src="${esc(l.src)}" style="${fitCss}" alt="">`;
+    } else if (l.kind === "gm") {
+      // mac-79: Chrome Motion's five graphics as an OVERLAY. gadzhi.mjs lays them out against a whole
+      // 1080x1920 canvas (two of its SVGs even hardcode that viewBox), so re-laying them out inside a box
+      // would be a rewrite of the look. Instead the builder is called unchanged and the result is scaled
+      // into the box with one CSS transform: deterministic, no reflow, every frame still a pure function of
+      // time, and the full-screen scene path keeps producing byte-identical output because nothing there moved.
+      // The scale is uniform (min of the two ratios) so the graphic never stretches; it is centred in the box.
+      const g = ctx.gmLayer ? ctx.gmLayer({ ...l.gm, at: t0, to: r3(t0 + dur) }, `${wid}_g`, t0, r3(t0 + dur)) : null;
+      if (!g) return { html: "", lines: [], audio: "", warnings: [...warnings, `layer ${l.id} dropped: gm.kind ${JSON.stringify(l.gm?.kind)} is not a Chrome Motion graphic`], dropped: true };
+      const s = Math.min(b.w / W, b.h / H);
+      const ox = r3((b.w - W * s) / 2), oy = r3((b.h - H * s) / 2);
+      // The gm kinds paint a full-bleed background because a SCENE owns the frame. In a box that
+      // background becomes a hard rectangle sitting on the footage, which is the opposite of an overlay:
+      // the graphic should float. So a layer drops it unless it asks for it back with `plate: true`.
+      const plate = l.plate === true && g.bg ? `background:${g.bg};` : "";
+      content = `<div id="${wid}_gm" class="lyr-gm${g.cls ? " " + g.cls : ""}" style="position:absolute;left:${ox}px;top:${oy}px;width:${W}px;height:${H}px;transform:scale(${r3(s)});transform-origin:0 0;${plate}overflow:hidden">${g.body}</div>`;
     } else if (l.kind === "text") {
       const size = Math.round(clamp(fin(l.size) ? l.size : 64, 8, 400)), color = resolveColor(l.color ?? "#ffffff", brand) ?? "#ffffff";
       const bg = l.bg ? resolveColor(l.bg, brand) : null;

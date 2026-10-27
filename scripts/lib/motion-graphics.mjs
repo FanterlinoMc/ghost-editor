@@ -41,6 +41,11 @@ const SHADOWS = {
   none: "none",
   soft: "0 4px 18px rgba(0,0,0,.45)",
   strong: "0 4px 18px rgba(0,0,0,.55), 0 1px 3px rgba(0,0,0,.7)",
+  // mac-82: letterpress type. `emboss` lifts the word off the surface (a light edge above, a dark one
+  // below); `engrave` presses it in (the lights and darks swap). Both read only against a light or
+  // mid ground - on near-black they do nothing, which is the look's own limit, not a bug.
+  emboss: "0 -1px 0 rgba(255,255,255,.55), 0 1px 0 rgba(0,0,0,.45), 0 2px 1px rgba(0,0,0,.30), 0 6px 18px rgba(0,0,0,.28)",
+  engrave: "0 1px 0 rgba(255,255,255,.60), 0 -1px 0 rgba(0,0,0,.45), 0 -2px 2px rgba(0,0,0,.22)",
 };
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
