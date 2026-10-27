@@ -383,7 +383,7 @@
         "founders",
         "high-end ads"
       ],
-      "note": "Ported from Ahmed's Empire (premium-iman). Needs the person cut-out, too slow on our CPU to offer yet; Ahmed also relit each video from a depth map (relight.py / empire_finish.py). Change status to beta when the cut-out is fast."
+      "note": "Ported from Ahmed's Empire (premium-iman). Since 19 Oct 2026 the speaker's real room is kept (no neon set): the side light is build.mjs's own depth relight (`relight`, needs the depth model; skipped with a warning when it is missing) and the person cut-out is only an occluder for the captions behind the head. Needs the person cut-out, too slow on our CPU to offer yet. empire_finish.py is for the old neon-set look only (it refuses a project without `stage`). Change status to beta when the cut-out is fast."
     },
     {
       "id": "signature",
