@@ -14,7 +14,10 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { inspectGraphic, graphicFrames, checkPlacement, reason, beatProblem, graphicName } from "./graphic.mjs";
 import { renderGraphic } from "./graphic-render.mjs";
 
-export const MODES = ["overlay", "insert"];
+export const MODES = ["overlay", "insert"];                 // a layer's modes
+export const BEAT_MODES = [...MODES, "behind"];             // v3.6: a beat may also go behind the speaker's cut-out
+// behind renders exactly as an overlay (alpha WebM, same checks, same cache key): only where it is drawn differs
+export const renderMode = (mode) => (mode === "behind" ? "overlay" : mode);
 export const FIXTURES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 export const STUB_CHROME = "0.0.0-stub";   // the Chrome version every test-deps render is keyed (and checked, R13) under
 export const GRAPHIC_FITS = ["cover", "contain"];
@@ -25,7 +28,7 @@ const goodBox = (b) => isObj(b) && ["x", "y", "w", "h"].every((k) => fin(b[k])) 
 
 /** The static check (G1-G35) of the file a layer or beat names. -> inspectGraphic's { ok, reasons, meta } */
 export const inspectPlaced = (entry, { proj, W, H }) =>
-  inspectGraphic(null, { html: entry.html, projectDir: proj, W, H, mode: entry.mode ?? "overlay" });
+  inspectGraphic(null, { html: entry.html, projectDir: proj, W, H, mode: renderMode(entry.mode ?? "overlay") });
 
 /** The default overlay box: the design size, centred on the canvas. */
 export const centredBox = (size, W, H) => ({ x: r3((W - size.w) / 2), y: r3((H - size.h) / 2), w: size.w, h: size.h });
@@ -63,7 +66,7 @@ export function resolveGraphicBeat(b, insp, { out, fps, W, H }) {
   const drop = (r, code = null) => ({ problem: beatProblem(label, b.html, r), code });   // code: mac-54's record
   if (!insp.ok) return drop(insp.reasons[0], (insp.codes || [])[0] ?? null);
   const meta = insp.meta, mode = b.mode ?? "overlay";
-  if (!MODES.includes(mode)) return drop(reason("P1", { v: mode }), "P1");
+  if (!BEAT_MODES.includes(mode)) return drop(reason("P1b", { v: mode }), "P1");
   const tm = graphicTiming(meta, b, fps);
   const warnings = [...tm.warnings];
   // the window, in source seconds: to - at when both are seconds of the same recording, or the graphic's own length
@@ -93,6 +96,8 @@ export function resolveGraphicBeat(b, insp, { out, fps, W, H }) {
   if (mode === "insert") {
     if (b.box !== undefined) warnings.push(reason("GW4"));
     box = { x: 0, y: 0, w: W, h: H };
+  } else if (mode === "behind" && b.box === undefined) {
+    box = { x: 0, y: 0, w: W, h: H };   // full-bleed: the cut-out covers the face, so there is no free box to fit
   } else {
     if (b.box !== undefined && !goodBox(b.box)) return drop(`box must be { x, y, w, h } numbers with w, h > 0, got ${JSON.stringify(b.box)}`, "box");
     box = b.box !== undefined ? { x: b.box.x, y: b.box.y, w: b.box.w, h: b.box.h } : centredBox(meta.size, W, H);
@@ -120,11 +125,11 @@ export async function prepareGraphics(jobs, { proj, W, H, fps, deps = {}, log = 
   // done: pass the same Map to several calls (layers first, then beats) to keep one render per placement across them
   const results = [];
   for (const j of jobs) {
-    const id = JSON.stringify([j.html, j.mode, j.L, j.inF, j.after]);
+    const id = JSON.stringify([j.html, renderMode(j.mode), j.L, j.inF, j.after]);
     if (!done.has(id)) {
       const name = graphicName(j.html);
       const t = Date.now();
-      const r = await render({ html: j.html, projectDir: proj, mode: j.mode, W, H, fps, inS: j.inF / fps, after: j.after, frames: j.L,
+      const r = await render({ html: j.html, projectDir: proj, mode: renderMode(j.mode), W, H, fps, inS: j.inF / fps, after: j.after, frames: j.L,
         log: (m) => log(`graphic ${name}: ${m}`) }, deps);
       const rel = r.ok && r.file ? path.relative(proj, r.file).split(path.sep).join("/") : null;
       const res = { ok: !!r.ok, file: rel, key: r.key ?? null, reasons: r.reasons || [], codes: r.codes || [], cached: !!r.cached };

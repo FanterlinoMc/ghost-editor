@@ -110,10 +110,10 @@ if (!opt("skip-frames", false)) {
   const browser = await puppeteer.launch({ executablePath: findChrome(), headless: "shell", args: ["--no-sandbox", "--force-device-scale-factor=1", "--hide-scrollbars", ...(capture === "beginframe" ? BEGINFRAME_ARGS : [])], defaultViewport: { width: 1080, height: 1920, deviceScaleFactor: 1 } });
   for (const v of variants) {
     const page = await browser.newPage();
-    await serveVendoredInPage(page);   // GSAP from vendor/, not jsdelivr
+    await serveVendoredInPage(page);   // vendor/ answers anything the page names (no CDN)
     await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
     await page.goto(pathToFileURL(proj[v].html).href, { waitUntil: "load", timeout: 60000 });
-    await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 });
+    await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.tween, { timeout: 30000 });
     await page.evaluate(() => document.fonts.ready.then(() => 0));
     await page.evaluate(() => {
       const tl = window.__timelines.main; tl.pause();

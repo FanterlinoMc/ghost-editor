@@ -213,6 +213,49 @@ speaker's words over `at`..`to` (the engine never checks); `at` outside the kept
 ` · ` / ` | ` / ` • `, all words but the last upper-cased as `small`, the last as `big` ("AK Consulting" -> AK /
 CONSULTING). A placeholder (TBD, name, guest, ...), a length outside 2-32 or no `show` gives no logo. An explicit
 object in the reel wins. Brand data: never a model field.
+### `boxline`: the exact field list (the planner mirrors this; mac-66)
+
+The Podcast's white box with heavy black caps: the hook question near the open, a pull quote later, an optional
+name label off its corner with a hand-drawn arrow. `build.mjs` `case "boxline"`. Measured on real builds (podcast
+style), 24 Oct; "dies" means the whole reel's build exits 1, not just this beat.
+
+| field | type | required | default | what the engine does |
+|---|---|---|---|---|
+| `type` | `"boxline"` | yes | | |
+| `text` | string, non-empty | **yes** | | upper-cased; `quotes` wraps it in ‘ ’. Missing or not a string: **dies** (`TypeError ... toUpperCase`). `""`: renders an EMPTY white box, no error. No quote marks or trailing punctuation of your own (podcast_plan strips `,.;:!` and, for quotes, `?`) |
+| `at` | number, recording s | **yes** | | must lie inside a kept take, else **dies** (`E(at) for boxline at: not inside any take`) |
+| `to` | number, recording s | no | `at` + 2.5 s | must be > `at`: **not checked** (a `to` before `at` builds, with the exit tween scheduled before the entrance) |
+| `quotes` | boolean | no | `false` | `true`: the pull-quote form, the text in ‘ ’ |
+| `label` | string | no | none | a name label under the box's right corner, arrowed. Brand data only (podcast_plan: `spec.guest` or the part after ` · ` / ` \| ` in `spec.show`, and only when the footage shows one framing of people). Never the model's guess |
+| `x`, `y` | number px | no | `70`, `1120` | the box's top-left. With the style's `boxline.dodgeFace` the engine MOVES `y` off the face (measured: 1120 -> 1076 for a long line, 1360 -> 1340 for a quote); `x` is never moved |
+| `w` | number px | no | `640` | the box width; the text wraps inside it (no word limit is enforced: a 20-word line builds) |
+| `size` | number px | no | `54` | the type size |
+| `tilt` | number deg | no | `-1.5` | the resting rotation; it slaps in from `tilt - 6` at 1.25x scale (back.out, 0.18 s) |
+| `prefer` | `"above"` | no | none | with `dodgeFace`: try above the head first (a title over a talking clip) |
+| `hideCaptions` | boolean | no | `true` | the captions are hidden for `at`..`to` unless `false`; with `dodgeFace` they are hidden anyway when the box ends up in the caption band |
+| `labelDy` | number px | no | the box height + 14 (`fitLabel`), else `150` | the label's offset below the box top |
+| `sfx` | sfx id or `"none"` | no | `impact-1` at -8 dB | |
+
+Style keys (top level, not per beat): `boxline.dodgeFace` and `boxline.fitLabel` (podcast sets both): the box and
+label never cover the face over the box's whole life, punch-ins included, and the label stays inside the frame.
+
+**What det_scripts/podcast_plan.py writes, the geometry a planner should copy** rather than the engine defaults
+(which are smaller): the **hook** `{x: 60, y: 1120, w: 760, size: 66}`, 1.6-3.5 s from the first word of a clean
+short line near the open (or a teaser over the first 2.6 s with `prefer: "above"`, `hideCaptions: false`), with
+`label` only as above; the **pull quote** `{quotes: true, x: 80, y: 1360, w: 920, size: 60, tilt: 0}`, a clean
+5-12-word line opening a sentence between 20 % and 85 % of the reel, `at` 0.05 s before its first word, `to` 0.5 s
+after its last (within the take). At most one of each.
+
+**What a model gets wrong, so the validator must hold it:** `text` missing, not a string, or empty; `text` not the
+speaker's words over `at`..`to` (the engine never checks); `at` outside the kept takes; `to` <= `at`; a name in
+`text` or an invented `label`; two hooks or two quotes. A boxline is a director beat for the graphic contract's P6
+(a graphic may not overlap it). It exits with the beats' common exit (fade + 0.9 scale, 0.22 s before `to`).
+
+**The show logo** (`showLogo`, top level): `{small, big, x?: 70, y?: 150, opacity?: 0.92}` pins a small line over a
+big one. `"showLogo": "fromShow"` (podcast.json sets it; mac-67) derives it from the reel's `show` exactly as
+podcast_plan.py does: the part before ` · ` / ` | ` / ` • `, all words but the last upper-cased as `small`, the last as
+`big` ("AK Consulting" -> AK / CONSULTING). A placeholder (TBD, name, guest, ...), a length outside 2-32 or no
+`show` gives no logo. An explicit object in the reel wins. Brand data: never a model field.
 
 ## Style, platform, look (top level)
 
@@ -263,7 +306,7 @@ A reel that sets none of these builds exactly as before (`scripts/byte-identity.
 - `cadence.faceAnchor: {headroom}`: every punch-in scales around the speaker's face - x = the face centre, y = the top of the head minus `headroom` (default 24) - measured over that snap's hold, using the face track and crop plan of **the take's own source**. A source with no face track gets a plain punch around `zoom.origin`. `edit_truth.json` snaps gain `origin: [x, y]` **only for anchored snaps**. The caption placer (`safezone.mjs`) is not told about the origin and keeps modelling the face around `zoom.origin`; Noir's own captions are fixed-height so it only matters for cards and slots.
 - `music.optional: true` (fork-only): if the named `music.id` is in the manifest but its file is not on disk, the build warns and goes on without a bed. Without it a missing file is still a fatal error (A10). `premium-noir` sets it because `silent-descent` is not shipped.
 
-The rest of Ahmed's premium kit (speed ramps, `sfxDesign`, `drop`, `transitions`, the scorers, `PHANTASIC_PREVIEW_SCALE`) is under "Premium line" below. GSAP is vendored (`vendor/gsap/3.14.2`, mac-10/mac-60): the page names the CDN URL and a render through `scripts/render.mjs` serves it from `vendor/`.
+The rest of Ahmed's premium kit (speed ramps, `sfxDesign`, `drop`, `transitions`, the scorers, `PHANTASIC_PREVIEW_SCALE`) is under "Premium line" below. GSAP is gone (mac-65): the page carries its own tween runtime, inlined ("Tween runtime" below).
 
 ## Premium line (Empire, Signature, Prestige, Noir, kit demo; all opt-in, phase D; hand port of phantasic `engine/core` on origin/main + `template-premium-iman`)
 
@@ -368,7 +411,7 @@ and Geist, Inter, Montserrat and Oswald ship as variable fonts. So a separate st
   **Offline by default:** the page's JavaScript is off and every request outside the project is aborted, so the
   step has no network dependency; it measures the resting layout, which the build writes as static HTML. Measured on
   15 reels (the 12 acceptance styles, keynote-3, clean, f02): identical to `--with-gsap` on 14, within 1 px on
-  podcast (7 of 14 blocks, sub-pixel transforms). `--with-gsap` runs the page's script and its CDN GSAP and seeks to
+  podcast (7 of 14 blocks, sub-pixel transforms). `--with-gsap` (the name is kept) runs the page's script and its tween runtime and seeks to
   `start + min(0.3 s, dur / 2)` in each block instead (`measured.gsap: true`). The file gets `measured: { by: "caption-boxes",
   chrome: <version>, platform: <os-arch> }`; fonts can differ between hosts, so a measurement is the truth for the
   host that renders. A block with no drawn element at its start gets `x: null`, `width: null`.
@@ -378,7 +421,7 @@ and Geist, Inter, Montserrat and Oswald ship as variable fonts. So a separate st
   `caption block <i> at <t0>s is drawn at x <x>..<x + width>px, outside the <W>px canvas`.
 - **stdout:** one JSON line `{ blocks, measured, unmatched, W, outside: [{ i, t0, x, width }], chrome }`.
 - **Needs** Chrome (`CHROME`, else the pinned shell, else the hyperframes / puppeteer caches) and puppeteer-core
-  (`lib/browser.mjs`). No network (`--with-gsap` needs GSAP's CDN).
+  (`lib/browser.mjs`). No network.
 - Test: `scripts/caption-boxes.test.mjs` (the join always; real Chrome when present, required with `CI=1` /
   `REQUIRE_CHROME=1`).
 
@@ -1390,7 +1433,7 @@ frames, so a graphic:
 | `kind` / `type` | `"graphic"` | | literal |
 | `html` | string | | `assets/graphics/<name>.html`, `<name>` `[a-z0-9-]{1,48}`, lowercase `.html`, no `..`, no URL, no absolute path, the resolved file inside `<project>/assets/graphics/` (G1, G2) |
 | `src` (beat) | string | the primary recording | the recording the beat's `at`/`to` belong to, exactly as on every beat (multi-source reels). Not the graphic file: v3.1 renamed the graphic file field to `html` so a graphic beat can name its recording. A graphic layer has no `src` (output seconds); a `src` on it is ignored (GW8) |
-| `mode` | string | `"overlay"` | `overlay` (alpha WebM in `box`) or `insert` (opaque MP4 over the whole canvas). Else P1 |
+| `mode` | string | `"overlay"` | `overlay` (alpha WebM in `box`), `insert` (opaque MP4 over the whole canvas), or (v3.6, beats only) `behind` (alpha WebM drawn between the picture and the speaker's cut-out; "Behind the speaker" below). Else P1 (a layer) or P1b (a beat) |
 | timing (layer) | | | exactly the layer rules: `pin` + `at`, or `anchor {take, offset}`; clamped to the reel; under 0.1 s once clamped: dropped (existing warnings and dies) |
 | timing (beat) | `at`, `to` | `to` = `at` + the graphic's window | source seconds, the beat rules (`src` for multi-source); `to - at` 0.1..60 s (P2) |
 | `dur` (layer) | number s | `duration - in` | > 0 (existing die); the placement's length. 0.1..60 s (P2) |
@@ -1515,6 +1558,8 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
     written at reel seconds, a known I-25 gap outside the contract.)
   - **Inserts** (`mode: "insert"`) are exempt from P4 and P5 **by construction**: full frame on purpose, with the
     captions hidden by default. P6 applies to them.
+  - **Behind graphics** (`mode: "behind"`, v3.6) are exempt from P4 and P5 **by construction**: the speaker's
+    cut-out is drawn over the graphic, so it cannot cover the face, and the captions are drawn over both. P6 applies.
   - **The spans are unchanged, deliberately** (beat or layer 0.1-60 s, P2; a typed motion beat 0.6-8 s): different
     containers, recorded as a decision, not drift.
   - **Blast radius.** A reel with no graphic layer or beat never reaches this code (byte-identity unchanged). The
@@ -1538,6 +1583,38 @@ is part of the hash of the section it starts in. `edit_truth.json`: a graphic la
   <...>/scripts/fixtures/ (got <value>)`). After its deps are spread, `chromeVersion` is forced to `0.0.0-stub`, so a
   test render is keyed under a Chrome that does not exist and a real Chrome launched under it is refused by R13:
   nothing is ever cached under a real key. `scripts/fixtures/graphic-stub-deps.mjs` writes a small ffmpeg clip.
+
+### Behind the speaker (`mode: "behind"`, v3.6, mac-62)
+
+The owner's reference look: a giant word, full-bleed, with the speaker's head and shoulders in front of it.
+A graphic **beat** with `mode: "behind"` is that shot. (A layer cannot be `behind`: P1, `graphic mode 'behind' is a
+beat mode only`.)
+
+- **Render.** Exactly an overlay's: the same file, checks (G1-G36), render, alpha WebM and cache key (keyed as
+  `overlay`, so an overlay and a behind placement of the same graphic share one file). Only where it is drawn differs.
+- **Compositing order**, bottom to top: the picture (takes), `ground` pages and `behind` words, **the behind
+  graphic**, the speaker cut-out (the matte), then everything as before (beats, captions, layers). It sits inside the
+  camera (`#push` / `#snap`), with the picture and the cut-out, so a punch-in moves all three together.
+- **Box.** Default: the whole canvas (`{x: 0, y: 0, w: W, h: H}`, **full-bleed**); `fit` default `contain`. A `box`
+  may be anything P3 accepts, including larger than the canvas. No free-box minimum, no face clearance (P4) and no
+  caption clearance (P5): the cut-out covers the face and the captions are on top. `hideCaptions` default `false`.
+- **The cut-out, per span, cached.** A reel with a behind graphic and no `"matte"` key gets the speaker cut out
+  **only around its behind spans**: `matte`, `matteWindows` and `matteClip` are switched on for it (as
+  `glow.hookGround` does), and the frames are cut into a frame-keyed cache, `assets/matte-cache/<srcKey>/`, one file per
+  run of frames (`f<first>-<last>.webm`, recording frame indices at the reel's fps; `<srcKey>` = sha256 of the
+  recording's size and its first and last MiB, so a replaced recording never reuses a stale cut-out). A span needs
+  the recording frames it shows **plus 2 frames each side**; any of them already in the cache are reused, and only the
+  missing runs are cut. A piece that spans several cached files is shown as consecutive `<video>`s, frame-exact.
+  The other behind / ground beats of such a reel use the same cache. A reel that sets `"matte": true` itself keeps
+  the existing cut-out exactly as before (whole recording, or `matteWindows` / `matteClip` windows).
+- **Budget.** The cut-out costs ~1.6 s a frame here; a reel matted end to end is never a default. The design budget
+  is about three behind moments of ~2 s a reel (~190 frames with the margins, ~5 min, once). The build prints the
+  frames it cut and the frames it reused.
+- **When it cannot.** The beat is dropped (warned, and recorded in `graphics-dropped.json`, rule `matte`), never
+  matted whole, when: the reel sets `"matte": false`; it has a `stage`; it has more than one recording; a take
+  transition (`blur`, `whip`) joins two takes; a take is ramped. Text: `graphic <id or at>: <html>: a behind graphic
+  needs the speaker cut out per span (<why>), dropped`.
+- **Blast radius.** Nothing changes for a reel without a behind graphic (byte-identity unchanged).
 
 ### Cache key
 
@@ -1829,7 +1906,7 @@ has the first `!important` (flag `i`) removed from the list, is trimmed, loses O
 
 | # | `<reason>` (exact) |
 |---|---|
-| P1 | `graphic mode '<v>' is not overlay or insert` |
+| P1 | `graphic mode '<v>' is not overlay or insert` (a layer); `graphic mode '<v>' is not overlay, insert or behind` (a beat, v3.6) |
 | P2 | `graphic window <s>s is outside 0.1..60s` |
 | P3 | `graphic box shows less than 20% inside the <W>x<H> canvas` |
 | P4 | `graphic box covers the speaker's face at <t>s (40 px margin)` |
@@ -1946,13 +2023,70 @@ Not in this version: sound inside a graphic, audio-reactive visualisers (Music g
 WebGL / three.js, GSAP or any library (owner's pause, licence question), variables passed in at render
 (`--variables`; a template's fields are filled into the HTML by the writer instead), dotLottie inside a graphic.
 
+## Tween runtime (`scripts/lib/tween-runtime.js`, mac-65): the page's animation, in place of GSAP
+
+The owner's decision (24 Oct 2026): **GSAP is removed**, not vendored and kept (its licence restricts tools that let
+users build animations). Every reel page now inlines the engine's own runtime, MIT, no dependency, no network:
+`window.tween.timeline({ paused: true })` with `fromTo` / `to` / `set`, registered as `window.__timelines.main`.
+The build's emitted lines are unchanged apart from `gsap.timeline(` -> `tween.timeline(` and the `<script>` tag.
+
+- **The contract: every seek is a pure function of time.** For each (element, property) the tweens form a track sorted
+  by start; the value at `t` is a fold over the started ones: the one that renders LAST in forward playback wins (a
+  running tween over a finished one, then the later start; GSAP's render order, which the engine's tweens, fxAim
+  among them, were written for). A `to()` starts from the track's
+  value at its own start (computed, never read from the page during playback); before a track's first tween the
+  element's own value is restored (or the `from` of a fromTo that renders immediately). Base values (an element's own
+  transform, opacity, ...) are read once, at the first seek, before anything is written. Painters (`onUpdate`) run on
+  every seek, and a modifier with a side effect (a count writing its text) shows its start state before it starts;
+  several counts on one text: the latest started wins, before all of them the earliest's start state.
+- **Kept from GSAP**, so the look moves as little as possible: the ease formulas (GSAP 3.14's, including its expo,
+  `2^(10(p-1)) p + p^6 (1-p)`; checked against GSAP's own values, `scripts/fixtures/gsap-eases.json`), 4-decimal
+  rounding, integer colour channels, the transform order (`translate(xP%, yP%) translate(x, y) rotate rotateY rotateX
+  skew scale`, `translate3d` mid-tween unless `force3D: false`, `translate(0px, 0px)` at rest, an identity transform
+  written when a tween names only `force3D`), GSAP's reading of a centred element (a base translate of exactly minus
+  half its size is `xPercent` / `yPercent` -50), `autoAlpha`, a string with no numbers taking its end value once its
+  tween has started.
+- **Deliberately not GSAP's**, where GSAP's result depends on seek order or is invalid: a `to()` captures its start
+  value lazily in GSAP (whatever the previous render left); an overshooting ease drove `blur()` below 0, which CSS
+  rejects, so GSAP kept whatever filter was written before it (seek-order dependent; measured on the pills and stats
+  entrances); the runtime
+  floors `blur / brightness / contrast / saturate / grayscale / sepia / invert` at 0.
+- **HyperFrames owns a clip's visibility.** On every frame it sets `style.visibility` on each `[data-start]` element
+  (not video / audio / img) from the clip's window. GSAP wrote visibility only while an autoAlpha tween rendered; the
+  runtime never writes it on a clip (autoAlpha there is its opacity), else restoring state on a seek would undo
+  HyperFrames' `hidden` and show a clip outside its window (measured: two caption groups drawn over each other).
+- **Why GSAP's renders were not a function of time** (measured with a style observer inside a real render): HyperFrames
+  seeks every frame at `t`, then `t + 0.001`, then `t` again, with events on and off. GSAP's lazily captured `to()`
+  starts then depend on that history: in one render of the pills sample GSAP showed opacity 0.9617 and 0.963 at the
+  same t = 4.3, and at t = 4.4667 both 0 (hidden) and 0.2977 (the frame it captured). The runtime gives one answer.
+- **The interface HyperFrames 0.8.81 calls** (measured with a proxy on a real render): `totalTime(t, suppress)`,
+  `progress`, `timeScale`, `duration`, `totalDuration`, `pause`, `getChildren`. No `window.gsap` exists, so HyperFrames'
+  own GSAP ease hook (`registerEase`, `__hfCustomEaseInstalled`) does not run.
+- **Proof** (`scripts/tween-runtime.test.mjs`, in the gate): eases = GSAP's to 1e-9; the semantics on a page; seek-
+  determinism on four built reels (in order, backwards, jumps and fresh pages give identical computed styles).
+  Measured 24 Oct against GSAP 3.14.2, on the final runtime:
+  - **seek-determinism**: 164 pages (96 styles, 64 scene-kind samples, the 4 golden reels), 16 times each, in order /
+    shuffled / fresh page: **0** differences in 1,533,792 compared values.
+  - **renders**: the 63 scene-kind samples (one 7 s real clip each) rendered with the runtime vs their GSAP renders
+    (`~/phantasic-samples/m65-gsap-vs-runtime/`: `results.tsv`, `worst-frames.png`): 7,668 of 13,230 frames
+    (58.0 %) bit-identical, 23 samples identical in every frame. Control: the same sample rendered twice with GSAP is
+    bit-identical (210 / 210), so every difference is the runtime's. Where they differ it is a frame GSAP rendered
+    from seek history (above): overlapping exits (uicard, slam, pills: worst frames 24-29 dB), a garbled first-frame
+    caption that GSAP showed and the runtime does not (label, pin, chapter, title: 35.5 dB on frame 1), the
+    negative-blur glitch (stats), a line drawing a frame earlier (gm-flow).
+  - **the busy golden reel**: 136 of 300 frames bit-identical, worst frame 49 dB, no pixel 64 or more levels off.
+- **The goldens move**: `byte-identity.mjs` reports `index.html` DIFFERS on all four reels, each marked "only the
+  tween runtime": with the runtime mapped back to GSAP's `<script src>` (`scripts/lib/page-norm.mjs` `asGsapPage`) every
+  page is its golden byte for byte, and every `build/*.json` is identical. So the gate FAILS on byte-identity alone
+  until the owner accepts the runtime; then `node scripts/byte-identity.mjs --record` (the owner's call, never quiet).
+
 ## Offline: nothing a reel needs comes off the internet (mac-60)
 
 A build and a render make no network request. What used to be fetched, and where it comes from now:
 
 | What | When | Was | Now |
 |---|---|---|---|
-| GSAP 3.14.2 | render | `cdn.jsdelivr.net` (the page's `<script src>`) | `vendor/gsap/3.14.2`, served by the `scripts/vendor-offline.cjs` preload; render through `scripts/render.mjs` / `runRender()` |
+| GSAP 3.14.2 | render | `cdn.jsdelivr.net` (the page's `<script src>`) | removed (mac-65): the page's own tween runtime is inlined, `scripts/lib/tween-runtime.js`. `vendor/manifest.json` `libraries` is empty; the preload mechanism stays for the next library |
 | Lucide icons (`icon` beat) | build | `curl` from jsdelivr `lucide-static@latest` | `vendor/lucide-static/1.61.0/icons.json` (ISC) |
 | simple-icons (`logo` beat, `chips` icons, `toolLogos`) | build | `curl` from jsdelivr `simple-icons@latest` | `vendor/simple-icons/16.35.0/icons.json` (CC0; `openai` and `slack` are not in 16.x, see `logo` above) |
 | Google Fonts: EB Garamond, Inter | render | HyperFrames 0.8.81's compiler fetched `fonts.googleapis.com/css2` + `fonts.gstatic.com` for the faces behind a system family the page names (`Georgia` -> EB Garamond, `Arial` / `Helvetica` -> Inter) that its own bundle lacks (italics, other weights, other scripts). Every shipped style asked. When Google did not answer, a `Georgia` italic script keyword rendered another face and its line moved | `vendor/google-fonts/<family>/<version>` (Google's CSS and woff2 bytes, OFL), answered by the same preload; a family that is not vendored gets Google's own 400 for an unknown family (the renderer keeps its bundle) and the log line `vendor: font '<family>' is not vendored` |
@@ -1960,9 +2094,9 @@ A build and a render make no network request. What used to be fetched, and where
 Every vendored file is sha256-checked against `vendor/manifest.json` when it is used; a missing or altered one is refused,
 never replaced by the network. `scripts/offline.test.mjs` (in the gate) proves it: no engine source fetches a remote
 host; every shipped style builds with curl / wget shimmed to fail, Node `fetch()` refused and (macOS) the build inside
-`sandbox-exec` with outbound network denied, and its page names no remote host but the vendored GSAP URL; icon and
+`sandbox-exec` with outbound network denied, and its page names no remote host; icon and
 logo SVGs are the vendored bytes; and an editorial reel with a script keyword renders inside the sandbox (or
-`unshare -rn` on Linux) with GSAP and both fonts served from `vendor/` and no blocked, refused or unvendored request.
+`unshare -rn` on Linux) with both fonts served from `vendor/` and no blocked, refused or unvendored request.
 Measured on 2026-10-24 (HyperFrames 0.8.81, Chrome hardware mode, the Mac mini): the vendored fonts render the
 script-keyword reel frame-identical to a render that got Google's answer (90 of 90 frames); across 78 styles, 72 are
 bit-identical and 6 differ by at most 15 / 255 with no pixel at 16 or more, the same signature as 18 styles that
@@ -1970,6 +2104,49 @@ differ between two online renders of the same page (render nondeterminism, not t
 
 Not covered here, because they are not part of a build or a render: `depth_map.py --fetch` (the Empire depth model,
 `library/models.json`), `engravings_fetch.py`, `stock_fetch.py` and `meme_add.py` (asset prep, run by hand).
+
+## Partial rendering (`scripts/render-partial.mjs`, mac-63, opt-in)
+
+`node scripts/render-partial.mjs <project> [-o build/reel.mp4] [--max 10] [--min 3] [--jobs 2] [--verify <full.mp4>]`,
+after `build.mjs`, in place of `scripts/render.mjs`. It re-renders only the part of the reel an edit changed. Nothing
+calls it by default, and `build.mjs`'s outputs are unchanged (byte-identity 4/4).
+
+- **Windows** are `build/sections.json`'s sections (each starts at a take cut that no beat, push or take-join
+  transition straddles), frame-aligned, with shorter than `--min` s merged into the one before and longer than `--max` s
+  split evenly.
+- **A window renders from the reel's own `index.html`, time-shifted.** It does not use a `GE_SECTION_*` section build,
+  which does not cover beats. The root's `data-duration` becomes the window length; every timed element moves by `-a`;
+  a clip starting before the window is trimmed, with `data-media-start` moved too; an element the window never shows is
+  untimed and hidden (a `<video>` becomes a src-less `<div>`: a src-less `<video>` makes HyperFrames 0.8.81 wait 45 s to
+  "decode" it, in calibration and in every capture worker). The page's timeline is replayed with
+  `main.tweenFromTo(a, b)`, so window time `t` is reel time `a + t`.
+- **Sound**: one render of the page with every `<video>` off at 1 fps, muxed onto the joined picture.
+- **Cache** (`build/render-cache/<key>.mp4`, `audio-<key>.m4a`): a window's key hashes the page head, the root, the
+  static body, the outerHTML and window-relative timing of the timed elements on screen in it, every script line that
+  names one of them or names no element, the bytes of the assets they load, and the render settings (HyperFrames pin,
+  fps, vendor preload and manifest). The sound's key hashes the `<audio>` elements and their assets. `sections.json`'s
+  own section hash is not used: it hashes a beat's `{type, kind, at, to, in, out}` only, so editing a graphic's text
+  would not move it.
+- **Join**: the windows are concatenated by stream copy (no re-encode), then the sound is muxed.
+- **Same output as a full render** (`scripts/render-partial.test.mjs`, in the gate): the captured frames are identical
+  (PNG sequences, md5 per frame), the frame count is the same, and the decoded sound is identical sample for sample.
+  The joined mp4 differs from a full render's mp4 only by encoding, because each window is its own x264 run.
+  Measured on a 60 s 1080x1920 reel with noisy 16 Mbit/s footage: PSNR min 43.3 dB, mean 47.8 dB, no pixel at 64 or
+  more. On a clean source: min 51.3 dB.
+- **Measured** (Mac mini M4, 2026-10-24; 60 s reel, 12 takes, 6 graphics, style `clean`, inside the render lock):
+
+  | | 60 s, camera-weight footage | 60 s, light footage |
+  |---|---|---|
+  | full render (`render.mjs`) | 87.6 s | 45.7 s |
+  | partial, empty cache (12 windows + sound, 2 at a time) | 82.7 s | n/a |
+  | one graphic's text edited: 1 of 12 windows + join, sound reused | **10.2 s** | n/a |
+  | nothing changed | 0.6 s | n/a |
+
+- **Limits**: a window is as small as the reel's cuts allow (sections never split a beat), so a reel of one long take
+  is one window per `--max` seconds. A change to the page head (style CSS, fonts) or to a line naming no element (the
+  timeline's helpers, its total) invalidates every window, which is correct. A beat whose sound changes re-renders the
+  sound (about 9 s here). Styles that render nondeterministically run to run (keynote*, closer*, broadsheet,
+  premium-*, podcast-glow-*: up to 15/255, measured in mac-60) do so in windows as well.
 
 ## What the build enforces (warnings, printed after the SFX table)
 

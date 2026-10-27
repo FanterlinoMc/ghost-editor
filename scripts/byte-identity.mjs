@@ -19,6 +19,7 @@
 // The golden file was recorded with the build.mjs of designer/engine a4b0661 (before any blank
 // work). Re-record it ONLY for a deliberate, reviewed change to single-source output.
 
+import { asGsapPage } from "./lib/page-norm.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -101,7 +102,10 @@ if (RECORD) {
       if ((want[name] || {})[k] === got[name][k]) continue;
       const near = k === "build/sfx_events.json" && want[name]?.[k] ? measuredMatch(fs.readFileSync(path.join(root, `${name}-a`, k), "utf8"), want[name][k]) : null;
       if (near) { console.log(`within tolerance: ${name} ${k} (${near})`); tolerated++; continue; }
-      console.error(`DIFFERS: ${name} ${k}`); bad++;
+      // mac-65: say whether the page differs ONLY by the inlined tween runtime (GSAP's tag in the golden). Still a
+      // DIFFERS: the goldens move until the owner accepts the runtime and they are recorded (never here, never quietly)
+      const onlyRuntime = k === "index.html" && sha(asGsapPage(fs.readFileSync(path.join(root, `${name}-a`, k), "utf8"))) === (want[name] || {})[k];
+      console.error(`DIFFERS: ${name} ${k}${onlyRuntime ? " (only the tween runtime: with it mapped back to GSAP's <script src> the page is the golden, byte for byte)" : ""}`); bad++;
     }
   }
   console.log(bad ? `byte-identity: ${bad} problem(s)` : `byte-identity: ${Object.keys(REELS).length} reels, every output identical to the golden hashes${tolerated ? ` (${tolerated} measured voiceP95 within ${VOICE_TOL_DB} dB)` : ""}`);

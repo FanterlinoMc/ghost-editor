@@ -155,8 +155,8 @@ test("real Chrome: every drawn caption box lies inside its reserved band, above 
     const page = await browser.newPage();
     await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
     await page.goto(`http://127.0.0.1:${server.address().port}/index.html`, { waitUntil: "load", timeout: 60000 });
-    try { await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 }); }
-    catch { return skipOrFail(t, "GSAP did not load (offline?)"); }
+    try { await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.tween, { timeout: 30000 }); }
+    catch { return skipOrFail(t, "the page timeline did not start"); }
     if (EMOJI_FONT) {
       await page.addStyleTag({ content: `@font-face { font-family: "EmojiFontTest"; src: url(/__emoji-font) format("truetype"); }
         .cap-group, .cap-group * { font-family: Gloock, "EmojiFontTest", "Noto Sans Arabic", Georgia, serif !important; }` });

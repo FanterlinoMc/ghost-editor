@@ -175,4 +175,4 @@ boxes (`drawnTop` / `drawnBottom`, after this anchoring) against the safe area.
 `premium-noir` (and `premium-noir-ice|jade|red|rose|silver`, which extend it and change only the gold word's colour) was
 hand-ported from Ahmed's Noir (phantasic `origin/template-hormozi`, `engine/core/styles/premium-noir.json`) with the
 engine features it needs - see "Premium kit: Noir" in `references/reel-json.md`. It differs from his JSON in one key:
-`music.optional: true`. His `noir_score.py` sound pass is ported too (`scripts/noir_score.py`); the vendored GSAP is not. The other premium looks (Empire, Signature, Prestige) and the kit are under "Premium line" in the same file.
+`music.optional: true`. His `noir_score.py` sound pass is ported too (`scripts/noir_score.py`) (the page's animation is the engine's own tween runtime, `scripts/lib/tween-runtime.js`). The other premium looks (Empire, Signature, Prestige) and the kit are under "Premium line" in the same file.

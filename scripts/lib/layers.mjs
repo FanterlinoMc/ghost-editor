@@ -90,6 +90,7 @@ export function resolveLayers(raw, { takes, total, fps, W, H, graphic }) {
       const insp = graphic ? graphic(L) : { ok: false, reasons: ["graphic layers need the build's file check"] };
       if (!insp.ok) return gp(insp.reasons[0]);
       const mode = L.mode ?? "overlay";
+      if (mode === "behind") return gp("graphic mode 'behind' is a beat mode only");   // v3.6: needs the per-span cut-out a beat gets
       if (!GRAPHIC_MODES.includes(mode)) return gp(reason("P1", { v: mode }));
       g = { mode, meta: insp.meta, tm: graphicTiming(insp.meta, L, fps) };
       for (const w of g.tm.warnings) warnings.push(`layer ${L.id}: ${w}`);

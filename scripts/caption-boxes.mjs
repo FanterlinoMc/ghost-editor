@@ -82,8 +82,8 @@ export async function measure(proj, { chrome, puppeteer, withGsap = false } = {}
     if (withGsap) await page.evaluateOnNewDocument(() => { window.__timelines = {}; });
     else await page.setJavaScriptEnabled(false);
     await page.goto(base + "index.html", { waitUntil: withGsap ? "load" : "domcontentloaded", timeout: 60000 });
-    if (withGsap) await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.gsap, { timeout: 30000 })
-      .catch(() => { throw new Error("--with-gsap: the page's timeline did not start (GSAP comes from its CDN: offline?)"); });
+    if (withGsap) await page.waitForFunction(() => window.__timelines && window.__timelines.main && window.tween, { timeout: 30000 })
+      .catch(() => { throw new Error("--with-gsap: the page's timeline did not start"); });
     const pageBlocks = await page.evaluate(async (withGsap) => {
       void document.body.offsetHeight;   // lay the page out first, so every caption font has started loading
       await document.fonts.ready;
