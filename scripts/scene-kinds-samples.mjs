@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// mac-64: one rendered sample of every beat type and every scene kind the engine renders, all on the same clip, so the
+// mac-64 (+ mac-71: build_s / render_s, a no-beat control `none`): one rendered sample of every beat type and every scene kind the engine renders, all on the same clip, so the
 // planner's director can be widened against evidence (references/scene-kinds.md is the inventory these samples back).
 //
 //   node scripts/scene-kinds-samples.mjs <prepped project> <out dir> [--only a,b] [--no-render] [--frames]
@@ -30,6 +30,7 @@ const B = (type, extra = {}, style, reel = {}) => ({ group: "beat", style, reel,
 const MATTE = { matte: true };
 
 export const SAMPLES = {
+  none: { group: "control", beat: null },
   // ---- beat types (build.mjs `switch (b.type)`) ----
   big: B("big", { text: "3x", sub: "faster edits" }),
   chips: B("chips", { items: [{ text: "Sheffield" }, { text: "English" }, { text: "France" }] }),
@@ -72,6 +73,12 @@ export const SAMPLES = {
     { id: "t", shape: "text", x: 130, y: 1300, w: 820, h: 200, text: "Sheffield → France", font: "Montserrat", size: 84, weight: 800, align: "left", color: "#ffffff", split: "words", z: 2 },
   ] }, undefined, { designer: true }),
   graphic: B("graphic", { id: "g1", html: "assets/graphics/kinetic-type.html", mode: "overlay", box: { x: 240, y: 1200, w: 600, h: 600 } }),   // the engine's own fixture file
+  // ---- mac-71 misuse variants: the shapes a model will plausibly write, to show what the engine does with them ----
+  "emoji-auto": B("emoji", { emoji: "🎓" }),                  // no x/y: the engine places it
+  "icon-auto": B("icon", { name: "graduation-cap" }),
+  "logo-auto": B("logo", { icon: "github" }),
+  "hz-list-text": B("hz-list", { items: [{ text: "Sheffield", at: 30.2 }, { text: "France", at: 31.0 }] }, "hormozi"),
+  "scene-gm-nodes-pillstr": S("gm-nodes", { object: "puzzle", pill: "English", nodes: [{ n: 1, at: 30.2 }, { n: 2, at: 30.8 }] }, "gadzhi-motion"),
   // ---- scene kinds (motion.mjs buildScene) ----
   "scene-card": S("card", { lines: [{ text: "Born in", at: 30.1 }, { text: "Sheffield", at: 30.5, size: 120 }], pill: { text: "then France", at: 31.2 }, cursor: { clickAt: 32.0 } }),
   "scene-stats": S("stats", { bg: "accent", badges: [{ value: "5", sub: "years old", at: 30.2 }, { value: "2", sub: "countries", at: 30.9 }] }),
@@ -124,13 +131,15 @@ function sample(name, s) {
   prepAssets(dir);
   for (const f of ["words.whisper.json", "face.json"]) fs.copyFileSync(path.resolve(SRC, "build", f), path.join(dir, "build", f));
   const reel = { title: `scene-kinds ${name}`, source: "assets/talk.mp4", words: "build/words.whisper.json", face: "build/face.json", fps: 30, outro: 0,
-    music: null, takes: [TAKE], zoom: {}, ...(s.style ? { style: s.style } : { style: "clean" }), ...s.reel, beats: [s.beat] };
+    music: null, takes: [TAKE], zoom: {}, ...(s.style ? { style: s.style } : { style: "clean" }), ...s.reel, beats: s.beat ? [s.beat] : [] };
   fs.writeFileSync(path.join(dir, "reel.json"), JSON.stringify(reel, null, 2));
-  const res = { group: s.group, type: s.beat.type, kind: s.beat.kind ?? null, style: reel.style };
+  const res = { group: s.group, type: s.beat?.type ?? null, kind: s.beat?.kind ?? null, style: reel.style };
+  const tb = Date.now();
   const b = sh(process.execPath, [BUILD, "."], { cwd: dir, env: { ...process.env, MATTE_THREADS: process.env.MATTE_THREADS || "6" } });
   const log = (b.stdout || "") + (b.stderr || "");
   fs.writeFileSync(path.join(dir, "build.log"), log);
   res.build = b.status === 0 ? "ok" : "FAIL";
+  res.build_s = +((Date.now() - tb) / 1000).toFixed(1);
   const wi = log.indexOf("WARNINGS:");
   res.warnings = wi >= 0 ? log.slice(wi + 9).split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("->")).slice(0, 8) : [];
   const dropped = path.join(dir, "build", "graphics-dropped.json");
@@ -138,9 +147,11 @@ function sample(name, s) {
   if (res.build !== "ok") { res.why = log.trim().split("\n").filter(Boolean).slice(-3).join(" | ").slice(0, 400); return res; }
   if (NO_RENDER) return res;
   const out = path.join(dir, "build", "sample.mp4");
+  const tr = Date.now();
   const r = sh("lockf", ["-k", "/tmp/phantasic-render.lock", process.execPath, RENDER, "-o", out, "--quiet"], { cwd: dir });
   fs.writeFileSync(path.join(dir, "render.log"), (r.stdout || "") + (r.stderr || ""));
   res.render = r.status === 0 && fs.existsSync(out) ? "ok" : "FAIL";
+  res.render_s = +((Date.now() - tr) / 1000).toFixed(1);
   if (res.render !== "ok") { res.why = ((r.stderr || "") + (r.stdout || "")).trim().split("\n").slice(-3).join(" | ").slice(0, 400); return res; }
   // a 3-frame strip: just in, middle, late
   const frames = STRIP_T.map((t, i) => { const f = path.join(dir, `f${i}.png`); execFileSync("ffmpeg", ["-v", "error", "-y", "-ss", String(t), "-i", out, "-frames:v", "1", "-vf", "scale=360:-1", f]); return f; });
