@@ -890,9 +890,11 @@ Helpers:
 - Scene times may sit up to 1.2 s inside a removed pause; they snap to the next kept moment.
 - Each whisper word belongs to the one take it overlaps most, so boundary words are never duplicated.
 
-## Lottie element (`shape: "lottie"` in a motion beat or motion layer): spec, compiler on `mac/lottie`, not in this release
+## Lottie element (`shape: "lottie"` in a motion beat or motion layer): spec, compiler archived, not in this release
 
-Status: **spec, as built on `mac/lottie` @ d8a474a (fork PR #9, not merged: on hold with GSAP, owner 19 Oct).**
+Status: **spec, as built on `mac/archive/lottie` @ d8a474a — an ARCHIVE REF, not a branch: history, not work in
+progress (fork PR #9, never merged; on hold with GSAP, owner 19 Oct, and parked for good on 26 Oct — the engine it
+vendored a dependency for is being replaced by one that forbids dependencies outright).**
 This release has no Lottie compiler: nothing below is read by `build.mjs` here, and a reel that uses it gets the
 existing `unknown shape 'lottie', dropped` warning. The text is the built section word for word so the planner's
 validator (`lottie_checks.py`) and `test_engine_contract.py` compare against it instead of skipping; the
@@ -2019,7 +2021,7 @@ confirmed; GW7's `<platform name>` and GW8 are v3.1.
 | GW7 | `graphic box crosses the <platform name> UI zone`: `<platform name>` is the DISPLAY name, `safezone.mjs` `PLATFORMS[platform].name` (e.g. `Instagram Reels`, `TikTok`, `YouTube Shorts`), not the key. Any part of the box above `top`, below `H - bottom` or right of `W - right` |
 | GW8 | `graphic src is ignored on a layer (a layer is in output seconds; the graphic file is html)` |
 
-Lottie's W7 (the "Lottie element" section) uses the same display name. The paused `origin/mac/lottie` code
+Lottie's W7 (the "Lottie element" section) uses the same display name. The paused `origin/mac/archive/lottie` code
 already prints it (`lottie box crosses the ${sz.name} UI zone`; its test expects `... the Instagram Reels UI
 zone`), so nothing there changes; this section's `<platform name>` means the display name in both places.
 
